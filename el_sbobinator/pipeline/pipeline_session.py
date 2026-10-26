@@ -90,9 +90,9 @@ class SaveSessionGuard:
             if self._consecutive_failures >= self.THRESHOLD:
                 self._fatal = True
                 msg = (
-                    f"[!!] ERRORE CRITICO: autosalvataggio sessione fallito "
-                    f"{self.THRESHOLD} volte di seguito. "
-                    "Disco pieno o directory non scrivibile? Elaborazione interrotta."
+                    "❌ Salvataggio automatico non riuscito per "
+                    f"{self.THRESHOLD} volte di seguito: elaborazione interrotta. "
+                    "Controlla che il disco non sia pieno e che la cartella sia scrivibile."
                 )
                 self._on_fatal(msg)
                 raise AutosaveFailedError("autosave_failed")
@@ -103,6 +103,28 @@ class SaveSessionGuard:
             if delay > 0:
                 self._sleep_fn(delay)
         return ok
+
+
+def report_save_failures(
+    save_fn: Callable[[], bool], warn: Callable[[str, str | None], None]
+) -> Callable[[], bool]:
+    """Wrap a save so the banner shows a failed autosave until a later save succeeds."""
+    failing = False
+
+    def _save() -> bool:
+        nonlocal failing
+        ok = save_fn()
+        if ok == failing:
+            failing = not ok
+            warn(
+                "autosave_failed",
+                None
+                if ok
+                else "Salvataggio automatico non riuscito: riprovo al prossimo passaggio",
+            )
+        return ok
+
+    return _save
 
 
 @dataclass
@@ -140,7 +162,7 @@ class PipelineSessionContext:
             save_session_data(self.session_path, self.session)
             return True
         except Exception as exc:
-            print(f"   [!] Autosave sessione fallito: {exc}")
+            print(f"⚠ Salvataggio automatico della sessione non riuscito: {exc}")
             return False
 
 
@@ -369,6 +391,7 @@ def ensure_preconverted_audio(
     cancel_event,
     cancelled,
     phase_callback,
+    warn: Callable[[str, str | None], None] | None = None,
 ) -> tuple[bool, str | None]:
     preconv_enabled = bool(context.settings.preconvert_audio)
     preconv_path = os.path.join(context.session_dir, PRECONVERTED_AUDIO_FINAL)
@@ -385,7 +408,7 @@ def ensure_preconverted_audio(
 
     try:
         if os.path.exists(preconv_path) and os.path.getsize(preconv_path) > 1024:
-            print("[*] Pre-conversione: file gia' presente. Riutilizzo.")
+            print("Audio già convertito: lo riutilizzo.")
             return preconv_enabled, preconv_path
     except Exception:
         pass
@@ -393,7 +416,7 @@ def ensure_preconverted_audio(
     _cleanup_partial()
 
     phase_callback("Fase 0/3: pre-conversione audio")
-    print("[*] Pre-conversione unica dell'audio (mono, 16kHz) in corso...")
+    print("Conversione dell'audio in formato leggero (mono, 16 kHz)...")
     ok, err = preconvert_media_to_mp3(
         input_path=input_path,
         output_path=partial_path,
@@ -404,17 +427,21 @@ def ensure_preconverted_audio(
     if not ok:
         _cleanup_partial()
         if str(err or "").strip().lower() == "cancelled" or cancelled():
-            print("   [*] Operazione annullata dall'utente.")
             return preconv_enabled, None
-        print("[!] Pre-conversione fallita. Continuo senza pre-conversione.")
+        print("⚠ Conversione dell'audio non riuscita: continuo con il file originale.")
+        if warn is not None:
+            warn(
+                "preconversion_failed",
+                "Pre-conversione audio non riuscita: continuo con il file originale",
+            )
         if err:
-            print(err)
+            print(f"Dettaglio: {err}")
         return False, None
 
     try:
         if os.path.exists(partial_path) and os.path.getsize(partial_path) > 1024:
             os.replace(partial_path, preconv_path)
-            print("[*] Pre-conversione completata.")
+            print("✅ Audio convertito.")
             context.session.setdefault("phase1", {})
             context.session["phase1"]["preconverted_path"] = preconv_path
             context.session["phase1"]["preconverted_done"] = True
@@ -559,11 +586,13 @@ def check_disk_space(
     settings: PipelineSettings,
     stage: str,
     next_start_sec: int = 0,
+    warn: Callable[[str, str | None], None] | None = None,
 ) -> None:
     """Probe available disk space and print a warning if estimated usage may exceed free space.
 
     Only active when stage == 'phase1'. Never raises — warnings only.
     """
+    warned = False
     for estimate in estimate_disk_space(
         session_dir,
         total_duration_sec,
@@ -573,24 +602,30 @@ def check_disk_space(
     ):
         if estimate.free_bytes >= estimate.needed_bytes:
             continue
+        if warn is not None and not warned:
+            warned = True
+            warn(
+                "low_disk_space",
+                f"Spazio su disco quasi esaurito: servono ~{_fmt_bytes(estimate.needed_bytes)},"
+                f" liberi {_fmt_bytes(estimate.free_bytes)}",
+            )
         if estimate.kind == "combined":
             print(
-                f"[!] ATTENZIONE — Spazio su disco potenzialmente insufficiente.\n"
-                f"    Stimato necessario (audio pre-convertito + chunk temporanei): ~{_fmt_bytes(estimate.needed_bytes)}\n"
-                f"    Disponibile: {_fmt_bytes(estimate.free_bytes)}\n"
-                f"    Libera spazio prima di continuare per evitare errori durante l'elaborazione."
+                "⚠ Spazio su disco forse insufficiente: servono circa "
+                f"{_fmt_bytes(estimate.needed_bytes)} per l'audio convertito e i blocchi temporanei, "
+                f"disponibili {_fmt_bytes(estimate.free_bytes)}. Libera spazio per evitare errori."
             )
         elif estimate.kind == "session":
             print(
-                f"[!] ATTENZIONE — Spazio insufficiente per la pre-conversione audio.\n"
-                f"    Stimato: ~{_fmt_bytes(estimate.needed_bytes)} · Disponibile in {estimate.location}: {_fmt_bytes(estimate.free_bytes)}\n"
-                f"    Libera spazio prima di continuare."
+                "⚠ Spazio insufficiente per convertire l'audio: servono circa "
+                f"{_fmt_bytes(estimate.needed_bytes)}, disponibili {_fmt_bytes(estimate.free_bytes)} "
+                f"in {estimate.location}. Libera spazio prima di continuare."
             )
         else:
             print(
-                f"[!] ATTENZIONE — Spazio insufficiente nella cartella temporanea ({estimate.location}).\n"
-                f"    Stimato per i chunk audio: ~{_fmt_bytes(estimate.needed_bytes)} · Disponibile: {_fmt_bytes(estimate.free_bytes)}\n"
-                f"    Libera spazio prima di continuare."
+                "⚠ Spazio insufficiente nella cartella temporanea: servono circa "
+                f"{_fmt_bytes(estimate.needed_bytes)} per i blocchi audio, disponibili "
+                f"{_fmt_bytes(estimate.free_bytes)} in {estimate.location}. Libera spazio prima di continuare."
             )
 
 

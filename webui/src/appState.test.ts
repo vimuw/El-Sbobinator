@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createInitialProcessingState, getDoneFiles, getPendingFiles, initialProcessingState, isSuccessfulProcessDone, processingReducer, type FileItem } from './appState';
+import { createInitialProcessingState, getDoneFiles, getPendingFiles, initialProcessingState, isSuccessfulProcessDone, processingReducer, type FileItem, type ProcessingAction } from './appState';
 
 
 function makeFile(overrides: Partial<FileItem> = {}): FileItem {
@@ -231,18 +231,76 @@ describe('processingReducer', () => {
     expect(finished.files[0].isRetryingBlocks).toBe(false);
   });
 
-  it('queue/clear_completed removes only done files, leaving queued and error intact', () => {
+  it('keeps an old archive session in Recenti once its retry finishes, even with three newer completions', () => {
+    const recent = [4000, 5000, 6000].map((completedAt, i) => makeFile({ id: `recent-${i}`, status: 'done', completedAt }));
+    const old = makeFile({ id: 'archive-old', status: 'processing', isRetryingBlocks: true, completedAt: 1000 });
+    const state = { ...initialProcessingState, files: [old, ...recent], structuralVersion: 1 };
+
+    const finished = processingReducer(state, { type: 'queue/set_retrying_blocks', id: 'archive-old', value: false });
+
+    const done = getDoneFiles(finished.files);
+    expect(done).toHaveLength(3);
+    expect(done[0].id).toBe('archive-old');
+    expect(done[0].completedAt).toBeGreaterThan(6000);
+  });
+
+  it('does not refresh completedAt when a file that is not retrying is reset again', () => {
+    const file = makeFile({ id: 'done-1', status: 'done', isRetryingBlocks: false, completedAt: 1000 });
+    const state = { ...initialProcessingState, files: [file], structuralVersion: 1 };
+    const next = processingReducer(state, { type: 'queue/set_retrying_blocks', id: 'done-1', value: false });
+    expect(next.files[0].completedAt).toBe(1000);
+  });
+
+  it('keeps only the three latest completions when a new file finishes', () => {
     const files = [
       makeFile({ id: 'q1', status: 'queued' }),
-      makeFile({ id: 'd1', status: 'done', progress: 100, phase: 3 }),
+      makeFile({ id: 'd1', status: 'done', progress: 100, phase: 3, completedAt: 1 }),
+      makeFile({ id: 'd2', status: 'done', progress: 100, phase: 3, completedAt: 2 }),
       makeFile({ id: 'e1', status: 'error', progress: 0, phase: 0 }),
-      makeFile({ id: 'd2', status: 'done', progress: 100, phase: 3 }),
+      makeFile({ id: 'd3', status: 'done', progress: 100, phase: 3, completedAt: 3 }),
+      makeFile({ id: 'p1', status: 'processing' }),
     ];
     const state = processingReducer(
       { ...initialProcessingState, files },
-      { type: 'queue/clear_completed' },
+      { type: 'bridge/file_done', data: { id: 'p1', output_html: '/s/p1/out.html', output_dir: '/s/p1' } } as ProcessingAction,
     );
-    expect(state.files.map(f => f.id)).toEqual(['q1', 'e1']);
+    // The oldest completion leaves Recenti; queued and failed files are untouched.
+    expect(state.files.map(f => f.id)).toEqual(['q1', 'd2', 'e1', 'd3', 'p1']);
+    expect(state.structuralVersion).toBe(initialProcessingState.structuralVersion + 1);
+  });
+
+  it('drops a deleted archive session from Recenti but never queued work for it', () => {
+    const files = [
+      makeFile({ id: 'd1', status: 'done', progress: 100, phase: 3, completedAt: 1, outputDir: 'C:\\S\\one' }),
+      makeFile({ id: 'd2', status: 'done', progress: 100, phase: 3, completedAt: 2, outputDir: 'C:\\S\\two' }),
+      makeFile({ id: 'q1', status: 'queued', outputDir: 'C:\\S\\one' }),
+    ];
+    const state = processingReducer(
+      { ...initialProcessingState, files },
+      { type: 'queue/remove_sessions', sessionDirs: ['c:/s/one/'] },
+    );
+    expect(state.files.map(f => f.id)).toEqual(['d2', 'q1']);
+    const unchanged = { ...initialProcessingState, files };
+    expect(processingReducer(unchanged, { type: 'queue/remove_sessions', sessionDirs: ['c:/s/other'] })).toBe(unchanged);
+  });
+
+  it('shows an archive rename in Recenti while keeping the audio name for duplicate checks', () => {
+    const files = [
+      makeFile({ id: 'd1', name: 'lezione.mp3', status: 'done', progress: 100, phase: 3, completedAt: 1, outputDir: '/s/one' }),
+    ];
+    const state = processingReducer(
+      { ...initialProcessingState, files },
+      { type: 'queue/rename_session', sessionDir: '/s/one/', title: 'Cardio 1' },
+    );
+    expect(state.files[0]).toMatchObject({ name: 'lezione.mp3', title: 'Cardio 1' });
+  });
+
+  it('caps completions restored from an older, longer queue', () => {
+    const restored = Array.from({ length: 5 }, (_, i) =>
+      makeFile({ id: `d${i}`, status: 'done', progress: 100, phase: 3, completedAt: i }),
+    );
+    const state = processingReducer(initialProcessingState, { type: 'queue/add', files: restored });
+    expect(state.files.map(f => f.id)).toEqual(['d2', 'd3', 'd4']);
   });
 
   it('queue/reorder returns same state when fromIndex equals toIndex', () => {
@@ -543,6 +601,38 @@ describe('processingReducer', () => {
     expect(state.files[1].outputHtml).toBe('D:\\other\\sess2\\out.html');
   });
 
+  describe('processing warnings', () => {
+    const warn = (state: ReturnType<typeof createInitialProcessingState>, code: string, message: string | null) =>
+      processingReducer(state, { type: 'bridge/processing_warning', data: { code, message } });
+
+    it('adds, updates in place and clears warnings by code', () => {
+      let state = warn(initialProcessingState, 'low_disk_space', 'Spazio su disco quasi esaurito');
+      state = warn(state, 'unrevised_blocks', '1 sezione inclusa senza revisione (sezione 2)');
+      state = warn(state, 'low_disk_space', 'Spazio su disco quasi esaurito: liberi 10 MB');
+      expect(state.processingWarnings).toEqual([
+        { code: 'low_disk_space', message: 'Spazio su disco quasi esaurito: liberi 10 MB' },
+        { code: 'unrevised_blocks', message: '1 sezione inclusa senza revisione (sezione 2)' },
+      ]);
+
+      state = warn(state, 'low_disk_space', null);
+      expect(state.processingWarnings.map(warning => warning.code)).toEqual(['unrevised_blocks']);
+    });
+
+    it('keeps the same state for repeated or empty events', () => {
+      const once = warn(initialProcessingState, 'autosave_failed', 'Salvataggio automatico non riuscito');
+      expect(warn(once, 'autosave_failed', 'Salvataggio automatico non riuscito')).toBe(once);
+      expect(warn(once, 'preconversion_failed', null)).toBe(once);
+      expect(warn(once, '  ', 'senza codice')).toBe(once);
+    });
+
+    it('starts each file with a clean list', () => {
+      let state = processingReducer(initialProcessingState, { type: 'queue/add', files: [makeFile({ id: 'next' })] });
+      state = warn(state, 'fallback_key_in_use', 'Quota della chiave principale esaurita');
+      state = processingReducer(state, { type: 'bridge/set_current_file', data: { id: 'next', index: 0, total: 1 } });
+      expect(state.processingWarnings).toEqual([]);
+    });
+  });
+
   describe('createInitialProcessingState', () => {
     it('initializes with default empty files when no arguments provided', () => {
       const state = createInitialProcessingState();
@@ -557,6 +647,13 @@ describe('processingReducer', () => {
       expect(state.files).toEqual(customFiles);
       expect(state.structuralVersion).toBe(0);
       expect(state.appState).toBe('idle');
+    });
+
+    it('caps a restored queue to the latest three completions, keeping pending files', () => {
+      const done = [1000, 2000, 3000, 4000, 5000].map((completedAt, i) => makeFile({ id: `d${i}`, status: 'done', completedAt }));
+      const queued = makeFile({ id: 'q', status: 'queued' });
+      const state = createInitialProcessingState([queued, ...done]);
+      expect(state.files.map(f => f.id)).toEqual(['q', 'd2', 'd3', 'd4']);
     });
   });
 });

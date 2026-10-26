@@ -44,7 +44,8 @@ if (process.env.TEST_WORKER_INDEX === undefined) {
 export default defineConfig({
   testDir: './e2e',
   // _smoke/ is gitignored scratch space; its ad-hoc specs are not part of the suite.
-  testIgnore: '**/_smoke/**',
+  // web/ runs against the static web build (playwright.web.config.ts), not the FastAPI host.
+  testIgnore: ['**/_smoke/**', '**/web/**'],
   outputDir: portOffset === 0 ? 'test-results' : `test-results-offset-${portOffset}`,
   timeout: 45000,
   expect: {

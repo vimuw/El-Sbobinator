@@ -9,9 +9,7 @@ test('renames archived lessons in root and collections while preserving files an
     buffer: Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'),
   });
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  await expect(page.getByText('Sbobine completate')).toBeVisible({ timeout: 15_000 });
-  await page.getByRole('button', { name: 'Pulisci tutto' }).click();
-  await page.getByRole('button', { name: 'Conferma pulizia' }).click();
+  await expect(page.getByRole('heading', { name: 'Recenti' })).toBeVisible({ timeout: 15_000 });
   const original = await page.evaluate(async () => {
     const listing = await window.pywebview?.api?.get_completed_sessions?.(0);
     const session = listing?.sessions?.[0];

@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import { ChevronDown, MoreVertical, X } from 'lucide-react';
 import { getSearchMatches, type SearchMatch } from '../editorExtensions';
+import { shortcutLabel } from '../keyboardLabels';
 
 export const FindReplacePanel = ({
   editor,
@@ -184,6 +185,13 @@ export const FindReplacePanel = ({
     updateSearch(val, -1);
   };
 
+  // Escape closes only the search: the full-page editor closes itself on a window-level Escape.
+  const closeFromKeyboard = (e: React.KeyboardEvent) => {
+    e.stopPropagation();
+    onClose();
+    editor.commands.focus();
+  };
+
   if (!expanded) {
     return (
       <div className="find-bar-float">
@@ -195,14 +203,14 @@ export const FindReplacePanel = ({
           onChange={e => findInputChange(e.target.value)}
           onKeyDown={e => {
             if (e.key === 'Enter') { e.preventDefault(); e.shiftKey ? handlePrev() : handleNext(); }
-            if (e.key === 'Escape') onClose();
+            if (e.key === 'Escape') closeFromKeyboard(e);
           }}
           className="find-bar-input"
         />
         <span className="find-bar-count">
           {findText ? (matchCount > 0 ? `${currentMatch} di ${matchCount}` : 'Nessun risultato') : ''}
         </span>
-        <button type="button" onClick={handlePrev} className="find-bar-btn" title="Precedente (Shift+Invio)" disabled={matchCount === 0}>
+        <button type="button" onClick={handlePrev} className="find-bar-btn" title={shortcutLabel('Precedente (Shift+Invio)')} disabled={matchCount === 0}>
           <ChevronDown size={15} style={{ transform: 'rotate(180deg)' }} />
         </button>
         <button type="button" onClick={handleNext} className="find-bar-btn" title="Successivo (Invio)" disabled={matchCount === 0}>
@@ -236,7 +244,7 @@ export const FindReplacePanel = ({
             onChange={e => findInputChange(e.target.value)}
             onKeyDown={e => {
               if (e.key === 'Enter') { e.preventDefault(); handleNext(); }
-              if (e.key === 'Escape') onClose();
+              if (e.key === 'Escape') closeFromKeyboard(e);
             }}
             className="find-replace-dialog-input"
           />
@@ -254,7 +262,7 @@ export const FindReplacePanel = ({
             onChange={e => setReplaceText(e.target.value)}
             onKeyDown={e => {
               if (e.key === 'Enter') { e.preventDefault(); handleReplace(); }
-              if (e.key === 'Escape') onClose();
+              if (e.key === 'Escape') closeFromKeyboard(e);
             }}
             className="find-replace-dialog-input"
           />

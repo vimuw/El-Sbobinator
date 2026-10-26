@@ -20,9 +20,11 @@ from el_sbobinator.services import usage_service
 from el_sbobinator.services.generation_service import (
     QuotaDailyLimitError,
     create_gemini_client,
+    describe_response_timing,
     extract_response_text,
     retry_with_quota,
     sleep_with_cancel,
+    warn_runtime,
 )
 from el_sbobinator.services.session_audio_service import session_metadata_lock
 from el_sbobinator.utils.dedup_utils import local_macro_cleanup
@@ -103,6 +105,7 @@ def _revise_single_macro_block(
     """Call Gemini to revise a single text macro block."""
 
     def _call(current_client):
+        request_t0 = time.monotonic()
         response = current_client.models.generate_content(
             model=model_name,
             contents=[block_text],
@@ -111,6 +114,7 @@ def _revise_single_macro_block(
                 temperature=0.1,
             ),
         )
+        print(describe_response_timing(response, time.monotonic() - request_t0))
         current_text = extract_response_text(response)
         if not current_text:
             raise RuntimeError("Risposta vuota dal modello in revisione.")
@@ -151,9 +155,8 @@ def _run_macro_retry_pass(
     if not pending_retry:
         return client, failed_blocks, revised_done, False
 
-    print(
-        f"\n[*] Retry pass: {len(pending_retry)} blocco/i senza revisione. Riprovo..."
-    )
+    noun = "sezione" if len(pending_retry) == 1 else "sezioni"
+    print(f"Riprovo la revisione di {len(pending_retry)} {noun}...")
     _update_session(
         session, {"revision_pending_blocks": [idx for idx, _, _ in pending_retry]}
     )
@@ -161,7 +164,6 @@ def _run_macro_retry_pass(
 
     for index, raw_path, rev_path in pending_retry:
         if cancelled():
-            print("   [*] Operazione annullata dall'utente (retry pass).")
             return client, failed_blocks, revised_done, True
 
         try:
@@ -195,7 +197,6 @@ def _run_macro_retry_pass(
         block_for_ai_retry = (block_local or block_src).strip()
 
         runtime.phase(f"Fase 2/3: retry revisione (blocco {index}/{macro_total})")
-        print(f"   -> Retry revisione blocco {index}/{macro_total}...")
         step_t0 = time.monotonic()
         retry_success = False
 
@@ -220,7 +221,7 @@ def _run_macro_retry_pass(
                 os.remove(raw_path)
             except Exception:
                 pass
-            print(f"   [OK] Retry blocco {index}: revisione completata.")
+            print(f"✅ Sezione {index} revisionata al secondo tentativo.")
             retry_success = True
             revised_done += 1
             _update_session(
@@ -242,7 +243,9 @@ def _run_macro_retry_pass(
                 session, "macro", _macro_secs, done=revised_done, total=macro_total
             )
         except QuotaDailyLimitError:
-            print("   Interruzione: quota giornaliera raggiunta durante retry pass.")
+            print(
+                "⚠ Quota giornaliera esaurita: progressi salvati, potrai riprendere più tardi."
+            )
             session["last_error"] = "quota_daily_limit_phase2"
             if session.get("last_error_detail") != "api_key_prompt_timeout":
                 session["last_error_detail"] = None
@@ -259,9 +262,7 @@ def _run_macro_retry_pass(
                 )
 
         if not retry_success:
-            print(
-                f"   [!!] Blocco {index}: revisione definitivamente fallita. Incluso non revisionato."
-            )
+            print(f"⚠ Sezione {index} non revisionata: la includo così com'è.")
             try:
                 with open(raw_path, encoding="utf-8") as _fh:
                     _raw_content = _fh.read().rstrip("\n")
@@ -356,11 +357,10 @@ def _process_macro_block_item(
     block_for_ai = (block_local or block_src).strip()
     if removed_exact or removed_adj:
         print(
-            f"   -> Pre-clean locale ({index}/{macro_total}): {removed_exact + removed_adj} duplicati rimossi."
+            f"Sezione {index}/{macro_total}: {removed_exact + removed_adj} ripetizioni rimosse prima della revisione."
         )
 
     step_t0 = time.monotonic()
-    print(f"   -> Revisione Macro-blocco {index}/{macro_total}...")
     success = False
 
     try:
@@ -386,7 +386,7 @@ def _process_macro_block_item(
 
         _atomic_write_text(rev_path, current_text + "\n")
         session.setdefault("settings", {})["effective_model"] = model_name
-        print(f"   [autosave] Revisione salvata: {os.path.basename(rev_path)}")
+        print(f"✅ Sezione {index}/{macro_total} revisionata.")
 
         new_revised_done = revised_done + 1
         _update_session(
@@ -417,7 +417,9 @@ def _process_macro_block_item(
         )
 
     except QuotaDailyLimitError:
-        print("   Interruzione: progressi salvati. Potrai riprendere più tardi.")
+        print(
+            "⚠ Quota giornaliera esaurita: progressi salvati, potrai riprendere più tardi."
+        )
         session["last_error"] = "quota_daily_limit_phase2"
         if session.get("last_error_detail") != "api_key_prompt_timeout":
             session["last_error_detail"] = None
@@ -440,9 +442,7 @@ def _process_macro_block_item(
             )
 
     if not success:
-        print(
-            f"   [!] Revisione blocco {index} fallita. Salvo provvisoriamente come raw (sarà riprovato)."
-        )
+        print(f"⚠ Revisione della sezione {index} non riuscita: la riprovo alla fine.")
         _atomic_write_text(raw_path, block_src + "\n")
         _macro_secs = max(0.0, time.monotonic() - float(step_t0))
         record_step_metric(
@@ -459,6 +459,13 @@ def _process_macro_block_item(
     return MacroBlockProcessResult(
         client=client, appended_text=None, revised_done=revised_done
     )
+
+
+def unrevised_blocks_message(failed_blocks: list) -> str:
+    numbers = ", ".join(str(block) for block in failed_blocks)
+    if len(failed_blocks) == 1:
+        return f"1 sezione inclusa senza revisione (sezione {numbers})"
+    return f"{len(failed_blocks)} sezioni incluse senza revisione (sezioni {numbers})"
 
 
 def process_macro_revision_phase(
@@ -497,7 +504,6 @@ def process_macro_revision_phase(
 
     for index, block in enumerate(macro_blocks, 1):
         if cancelled():
-            print("   [*] Operazione annullata dall'utente.")
             return client, revised_text
 
         res = _process_macro_block_item(
@@ -527,7 +533,6 @@ def process_macro_revision_phase(
             return client, revised_text
 
         if not sleep_with_cancel(cancelled, 5):
-            print("   [*] Operazione annullata dall'utente.")
             return client, revised_text
 
     # ---- RETRY PASS: second attempt on provisionally-failed blocks ----
@@ -550,8 +555,9 @@ def process_macro_revision_phase(
         return client, revised_text
 
     if failed_blocks:
-        print(
-            f"\n[!!] ATTENZIONE: i seguenti blocchi sono stati inclusi non revisionati: {failed_blocks}"
+        # The completion line reports them in the console; the banner keeps them visible.
+        warn_runtime(
+            runtime, "unrevised_blocks", unrevised_blocks_message(failed_blocks)
         )
 
     session_update: dict = {

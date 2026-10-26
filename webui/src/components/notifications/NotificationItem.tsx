@@ -15,7 +15,7 @@ import {
   getActionColor,
   getCategoryBadgeStyle,
   getCategoryLabel,
-  getItemBackground,
+  getItemTone,
 } from './notificationTheme';
 
 export interface NotificationItemProps {
@@ -139,39 +139,22 @@ export function NotificationItem({
         if (!notification.read) onMarkAsRead(notification.id);
         onNotificationClick?.(notification);
       }}
-      className={`notification-item ${!notification.read ? 'is-unread ' : ''}group relative flex items-start gap-3 px-4 py-3 border-b border-[var(--border-subtle)] last:border-b-0 cursor-pointer transition-all duration-150 hover:brightness-[0.98] dark:hover:brightness-[1.08]`}
-      style={{
-        background: getItemBackground(notification.type, notification.category),
-      }}
+      data-tone={getItemTone(notification.category, notification.type)}
+      className={`notification-item ${!notification.read ? 'is-unread ' : ''}group`}
     >
       {/* Type icon in soft squircle badge */}
       {getIconBadge()}
 
       {/* Main content body */}
       <div className="flex flex-1 flex-col gap-1 min-w-0 pr-6">
-        {/* Top line: unread dot + title + category */}
+        {/* Top line: title + category; unread rows are marked by their tinted gradient */}
         <div className="flex items-center gap-1.5 min-w-0">
-          {!notification.read && (
-            <span
-              className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse"
-              style={{
-                background:
-                  notification.category === 'update' || notification.type === 'info'
-                    ? 'var(--accent-text)'
-                    : notification.type === 'warning'
-                    ? 'var(--warning-text)'
-                    : notification.type === 'error'
-                    ? 'var(--error-text)'
-                    : 'var(--accent-text)',
-              }}
-              title="Non letta"
-            />
-          )}
+          {!notification.read && <span className="sr-only">Non letta</span>}
           <h4 className="text-xs leading-snug truncate font-semibold text-[var(--text-primary)]">
             {notification.title}
           </h4>
           <span
-            className="text-[9px] font-medium px-1.5 py-0.2 rounded shrink-0"
+            className="text-[9px] font-medium px-1.5 py-0.2 rounded-full shrink-0"
             style={getCategoryBadgeStyle(notification.category, notification.type)}
           >
             {getCategoryLabel(notification.category)}
@@ -234,7 +217,7 @@ export function NotificationItem({
         </div>
       </div>
 
-      {/* Quick Dismiss / Archive Button (hover) */}
+      {/* Quick Dismiss / Archive Button: shown on hover, keyboard focus, and always on touch screens. */}
       <button
         onClick={(e) => {
           e.stopPropagation();
@@ -242,7 +225,7 @@ export function NotificationItem({
           onDelete(notification.id);
         }}
         disabled={isLoading}
-        className="absolute top-3 right-3 p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-neutral-500/15 transition-all text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+        className="absolute top-2.5 right-2.5 p-1 rounded-full opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 hover:bg-neutral-500/15 transition-all text-[var(--text-muted)] hover:text-[var(--text-primary)]"
         title="Archivia"
         aria-label="Archivia notifica"
         style={{ cursor: isLoading ? 'default' : 'pointer' }}

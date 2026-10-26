@@ -111,3 +111,29 @@ describe('FindReplacePanel initial query', () => {
     expect(editor.view.dom.querySelectorAll('.search-highlight')).toHaveLength(1);
   });
 });
+
+describe('FindReplacePanel Escape', () => {
+  it.each([
+    ['compact find field', 'find' as const, () => screen.getByPlaceholderText('Trova nel documento...')],
+    ['dialog find field', 'replace' as const, () => document.querySelector<HTMLInputElement>('.find-replace-dialog-input')!],
+    ['dialog replace field', 'replace' as const, () => screen.getByPlaceholderText('Sostituisci con...')],
+  ])('closes only the search from the %s and refocuses the editor', async (_label, mode, getField) => {
+    const host = document.body.appendChild(document.createElement('div'));
+    const editor = new Editor({ element: host, extensions: [StarterKit, SearchHighlight], content: '<p>energia</p>' });
+    editors.push(editor);
+    const onClose = vi.fn();
+    // EditorFullPage closes the whole editor on a window-level Escape.
+    const windowEscape = vi.fn();
+    window.addEventListener('keydown', windowEscape);
+    try {
+      render(<FindReplacePanel editor={editor} onClose={onClose} initialMode={mode} />);
+      fireEvent.keyDown(getField(), { key: 'Escape' });
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(windowEscape).not.toHaveBeenCalled();
+      await waitFor(() => expect(editor.view.dom.contains(document.activeElement)).toBe(true));
+    } finally {
+      window.removeEventListener('keydown', windowEscape);
+      host.remove();
+    }
+  });
+});

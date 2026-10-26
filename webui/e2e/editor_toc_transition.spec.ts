@@ -99,6 +99,7 @@ test('index fades out before its reopen button appears and supports interrupted 
     await expect(open).toBeVisible();
   }
 
+  // Windows reduced motion is ignored app-wide, so the index keeps its normal transition.
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await open.click();
   await expect(column).toHaveCSS('width', '260px');
@@ -106,6 +107,6 @@ test('index fades out before its reopen button appears and supports interrupted 
   await expect(column).toHaveCSS('width', '44px');
   await expect(content).toBeHidden();
   await expect(trigger).toHaveCSS('opacity', '1');
-  await expect(column).toHaveCSS('transition-duration', '0s');
-  await expect(trigger).toHaveCSS('transition-delay', '0s');
+  await expect(column).toHaveCSS('transition-duration', '0.25s');
+  await expect(trigger).toHaveCSS('transition-delay', '0.17s, 0.17s');
 });

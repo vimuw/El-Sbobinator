@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import { getLastHighlightColor } from '../editorUtils';
 import { HighlightIcon } from './HighlightIcon';
+import { editorIsBold } from '../editorBold';
+import { shortcutLabel } from '../keyboardLabels';
 
 interface EditorBubbleMenuProps {
   editor: TiptapEditor | null;
@@ -177,8 +179,8 @@ export const EditorBubbleMenu: React.FC<EditorBubbleMenuProps> = ({ editor, isCo
         <button
           type="button"
           onMouseDown={e => { e.preventDefault(); editor.chain().focus().toggleBold().run(); }}
-          className={btn(editor.isActive('bold'))}
-          title="Grassetto (Ctrl+B)"
+          className={btn(editorIsBold(editor))}
+          title={shortcutLabel('Grassetto (Ctrl+B)')}
         >
           <Bold className="h-3.5 w-3.5 shrink-0" />
         </button>
@@ -187,7 +189,7 @@ export const EditorBubbleMenu: React.FC<EditorBubbleMenuProps> = ({ editor, isCo
           type="button"
           onMouseDown={e => { e.preventDefault(); editor.chain().focus().toggleItalic().run(); }}
           className={btn(editor.isActive('italic'))}
-          title="Corsivo (Ctrl+I)"
+          title={shortcutLabel('Corsivo (Ctrl+I)')}
         >
           <Italic className="h-3.5 w-3.5 shrink-0" />
         </button>
@@ -196,7 +198,7 @@ export const EditorBubbleMenu: React.FC<EditorBubbleMenuProps> = ({ editor, isCo
           type="button"
           onMouseDown={e => { e.preventDefault(); editor.chain().focus().toggleUnderline().run(); }}
           className={btn(editor.isActive('underline'))}
-          title="Sottolineato (Ctrl+U)"
+          title={shortcutLabel('Sottolineato (Ctrl+U)')}
         >
           <UnderlineIcon className="h-3.5 w-3.5 shrink-0" />
         </button>
@@ -277,7 +279,7 @@ export const EditorBubbleMenu: React.FC<EditorBubbleMenuProps> = ({ editor, isCo
           type="button"
           onMouseDown={e => { e.preventDefault(); toggleLink(); }}
           className={btn(editor.isActive('link'))}
-          title="Inserisci link (Ctrl+K)"
+          title={shortcutLabel('Inserisci link (Ctrl+K)')}
         >
           {editor.isActive('link') ? (
             <Link2Off className="h-3.5 w-3.5 shrink-0" />
@@ -290,7 +292,7 @@ export const EditorBubbleMenu: React.FC<EditorBubbleMenuProps> = ({ editor, isCo
           type="button"
           onMouseDown={e => { e.preventDefault(); editor.chain().focus().clearDocumentFormatting().run(); }}
           className="editor-bubble-btn"
-          title="Rimuovi formattazione (Ctrl+\)"
+          title={shortcutLabel('Rimuovi formattazione (Ctrl+\\)')}
         >
           <RemoveFormatting className="h-3.5 w-3.5 shrink-0" />
         </button>

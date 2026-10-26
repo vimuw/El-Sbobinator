@@ -5,6 +5,7 @@ import type { FileItem, ProcessingAction } from '../appState';
 import { filterArchiveSessionsByInputPath } from '../duplicateDetection';
 import { getFolderPresentation } from '../archiveFolders';
 import type { ActivePage } from '../components/NavSidebar';
+import { getHostCapabilities } from '../hostCapabilities';
 
 export type PendingArchiveReplacement = {
   fileName: string;
@@ -109,7 +110,8 @@ export function useArchiveSync({
     const key = normalizeSessionDir(sessionDir);
     setArchiveSessions(prev => prev.map(session => normalizeSessionDir(session.session_dir) === key ? { ...session, name: title } : session));
     prevSessionDirsRef.current.set(key, title);
-  }, [normalizeSessionDir]);
+    dispatch({ type: 'queue/rename_session', sessionDir, title });
+  }, [dispatch, normalizeSessionDir]);
 
   const handleLoadAll = useCallback(() => {
     archiveLimitRef.current = 0;
@@ -119,7 +121,9 @@ export function useArchiveSync({
   const handleOpenFailed = useCallback((_htmlPath: string, sessionDir: string) => {
     addNotification(
       'File non disponibile',
-      'La sbobina non è più disponibile: il file è stato eliminato dal disco.',
+      getHostCapabilities().kind === 'web'
+        ? 'La sbobina non è più in questo browser: forse è stata eliminata o il browser ha svuotato i dati del sito.'
+        : 'La sbobina non è più disponibile: il file è stato eliminato dal disco.',
       'warning',
       'system',
     );
@@ -318,7 +322,8 @@ export function useArchiveSync({
   }, [handleRetryFailedRevisionBlocks, normalizeSessionDir, addNotification, setActivePage, dispatch]);
 
   const archiveFiltered = useMemo(() => {
-    const activeHtmlPaths = new Set(files.map(f => normalizeSessionDir(f.outputHtml)).filter(Boolean));
+    // Completed files show in Recenti and in the archive; only work still in progress is hidden here.
+    const activeHtmlPaths = new Set(files.filter(f => f.status !== 'done').map(f => normalizeSessionDir(f.outputHtml)).filter(Boolean));
     const currentFileIds = new Set(files.map(f => f.id));
     const pendingSessionDirs = new Set<string>();
     const pendingHtmlPaths = new Set<string>();

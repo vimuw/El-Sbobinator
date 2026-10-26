@@ -1,4 +1,5 @@
 import os
+import stat
 import sys
 import tempfile
 import unittest
@@ -353,13 +354,81 @@ class CheckWritableDirTests(unittest.TestCase):
 
     def test_returns_true_even_when_remove_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
-            with patch("os.remove", side_effect=OSError("locked")):
+            with (
+                patch("os.remove", side_effect=OSError("locked")) as remove,
+                patch("el_sbobinator.services.validation_service.time.sleep") as sleep,
+                patch(
+                    "el_sbobinator.services.validation_service.record_incident"
+                ) as incident,
+            ):
                 ok, msg = _check_writable_dir(tmp)
-            probe = os.path.join(tmp, ".el_sbobinator_write_test")
-            if os.path.exists(probe):
-                os.remove(probe)
+            for name in os.listdir(tmp):
+                os.remove(os.path.join(tmp, name))
         self.assertTrue(ok)
         self.assertIn("consentita", msg)
+        # Retried once, then reported: a unique probe would otherwise be left silently.
+        self.assertEqual(remove.call_count, 2)
+        sleep.assert_called_once()
+        incident.assert_called_once()
+        self.assertEqual(incident.call_args.args[0], "writable-dir-probe")
+
+    def test_retries_a_briefly_held_probe_instead_of_leaving_it(self):
+        # Regression: unique probe names are never reused, so each validation
+        # that met a transiently locked probe left another file in the folder.
+        real_remove = os.remove
+        attempts: list[str] = []
+
+        def _locked_once(path):
+            attempts.append(path)
+            if len(attempts) == 1:
+                raise PermissionError("held by antivirus")
+            real_remove(path)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with (
+                patch("os.remove", side_effect=_locked_once),
+                patch("el_sbobinator.services.validation_service.time.sleep"),
+                patch(
+                    "el_sbobinator.services.validation_service.record_incident"
+                ) as incident,
+            ):
+                self.assertTrue(_check_writable_dir(tmp)[0])
+            self.assertEqual(os.listdir(tmp), [])
+        self.assertEqual(len(attempts), 2)
+        incident.assert_not_called()
+
+    def test_uses_a_distinct_probe_per_call_and_cleans_it_up(self):
+        removed: list[str] = []
+        real_remove = os.remove
+
+        def _record_remove(path):
+            removed.append(path)
+            real_remove(path)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("os.remove", side_effect=_record_remove):
+                self.assertTrue(_check_writable_dir(tmp)[0])
+                self.assertTrue(_check_writable_dir(tmp)[0])
+            self.assertEqual(os.listdir(tmp), [])
+        self.assertEqual(len(removed), 2)
+        self.assertNotEqual(removed[0], removed[1])
+
+    def test_ignores_a_probe_left_unwritable_by_another_validation(self):
+        # Regression: a fixed probe name made concurrent validations (parallel
+        # pytest workers, two app instances) collide on Windows and report a
+        # writable folder as unwritable. A stale, read-only legacy probe models
+        # another process holding that shared name.
+        with tempfile.TemporaryDirectory() as tmp:
+            stale = os.path.join(tmp, ".el_sbobinator_write_test")
+            with open(stale, "w", encoding="utf-8") as handle:
+                handle.write("held")
+            os.chmod(stale, stat.S_IREAD)
+            try:
+                ok, msg = _check_writable_dir(tmp)
+            finally:
+                os.chmod(stale, stat.S_IREAD | stat.S_IWRITE)
+            self.assertEqual(os.listdir(tmp), [".el_sbobinator_write_test"])
+        self.assertTrue(ok, msg)
 
     def test_returns_false_when_write_fails(self):
         with tempfile.TemporaryDirectory() as tmp:

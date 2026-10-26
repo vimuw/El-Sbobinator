@@ -56,12 +56,12 @@ export const AlignDropdownButton = ({ editor }: { editor: TiptapEditor }) => {
       {isOpen && createPortal(
         <div
           ref={panelRef}
-          className="editor-dropdown-panel"
+          className="kebab-panel editor-dropdown-panel"
           style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 9999 }}
         >
           <button
             type="button"
-            className={`editor-dropdown-item${!isCenter && !isRight && !isJustify ? ' is-active' : ''}`}
+            className={`kebab-item editor-dropdown-item${!isCenter && !isRight && !isJustify ? ' is-active' : ''}`}
             onClick={() => { setIsOpen(false); editor.chain().focus().setTextAlign('left').run(); }}
           >
             <AlignLeft className="h-4 w-4" />
@@ -69,7 +69,7 @@ export const AlignDropdownButton = ({ editor }: { editor: TiptapEditor }) => {
           </button>
           <button
             type="button"
-            className={`editor-dropdown-item${isCenter ? ' is-active' : ''}`}
+            className={`kebab-item editor-dropdown-item${isCenter ? ' is-active' : ''}`}
             onClick={() => { setIsOpen(false); editor.chain().focus().setTextAlign('center').run(); }}
           >
             <AlignCenter className="h-4 w-4" />
@@ -77,7 +77,7 @@ export const AlignDropdownButton = ({ editor }: { editor: TiptapEditor }) => {
           </button>
           <button
             type="button"
-            className={`editor-dropdown-item${isRight ? ' is-active' : ''}`}
+            className={`kebab-item editor-dropdown-item${isRight ? ' is-active' : ''}`}
             onClick={() => { setIsOpen(false); editor.chain().focus().setTextAlign('right').run(); }}
           >
             <AlignRight className="h-4 w-4" />
@@ -85,7 +85,7 @@ export const AlignDropdownButton = ({ editor }: { editor: TiptapEditor }) => {
           </button>
           <button
             type="button"
-            className={`editor-dropdown-item${isJustify ? ' is-active' : ''}`}
+            className={`kebab-item editor-dropdown-item${isJustify ? ' is-active' : ''}`}
             onClick={() => { setIsOpen(false); editor.chain().focus().setTextAlign('justify').run(); }}
           >
             <AlignJustify className="h-4 w-4" />

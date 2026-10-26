@@ -25,6 +25,7 @@ from google.genai import types
 from el_sbobinator.core.model_registry import (
     MODEL_OPTIONS,
 )
+from el_sbobinator.core.prompts import CHUNK_PROMPT, CHUNK_PROMPT_CONTINUATION
 from el_sbobinator.services import network_service, usage_service
 from el_sbobinator.services.config_service import load_config
 from el_sbobinator.services.gemini_errors import (
@@ -309,7 +310,7 @@ def try_rotate_key(
                 "Chiave di fallback valida, rotazione completata.",
                 extra={"stage": "key_rotation"},
             )
-            print(f"   [OK] Chiave di riserva valida! ({len(fallback_keys)} rimanenti)")
+            print(f"✅ Passo a una chiave di riserva ({len(fallback_keys)} rimanenti).")
             return new_client, True, key
         except Exception as err:
             error = _error_text(err)
@@ -321,10 +322,7 @@ def try_rotate_key(
                     "Validazione chiave di fallback temporaneamente non riuscita.",
                     extra={"stage": "key_rotation"},
                 )
-                print(
-                    "   [!] Validazione temporanea fallita per chiave di riserva: "
-                    f"{safe_err}"
-                )
+                print(f"⚠ Impossibile verificare ora una chiave di riserva: {safe_err}")
                 continue
             fallback_keys.pop(0)
             if _is_invalid_key_probe_failure(
@@ -334,12 +332,12 @@ def try_rotate_key(
                     "Chiave di fallback non utilizzabile.",
                     extra={"stage": "key_rotation"},
                 )
-                print(f"   [!] Chiave di riserva non utilizzabile: {safe_err}")
+                print(f"⚠ Chiave di riserva non utilizzabile: {safe_err}")
             else:
                 log.warning(
                     "Chiave di fallback non valida.", extra={"stage": "key_rotation"}
                 )
-                print(f"   [!] Chiave di riserva non valida: {safe_err}")
+                print(f"⚠ Chiave di riserva non valida: {safe_err}")
     return current_client, False, None
 
 
@@ -397,7 +395,7 @@ def request_new_api_key(
     timeout_seconds: float | None = _NEW_API_KEY_TIMEOUT_SECONDS,
     on_timeout: Callable[[], None] | None = None,
 ):
-    print("   [In attesa di una nuova chiave API dall'utente nel popup...]")
+    print("In attesa di una nuova chiave API...")
     event = threading.Event()
     result = {"new_key": None}
     deadline = (
@@ -411,7 +409,7 @@ def request_new_api_key(
         event.set()
 
     if not runtime.ask_new_api_key(handler):
-        print("ERRORE: Funzione webview non trovata per il popup.")
+        print("❌ Impossibile chiedere una nuova chiave API: finestra non disponibile.")
         return None
 
     while not event.is_set():
@@ -426,8 +424,10 @@ def request_new_api_key(
                 except Exception:
                     pass
                 if on_timeout is not None:
+                    # The caller owns the timeout and reports it with its outcome.
                     on_timeout()
-                print("   [!] Attesa nuova API Key scaduta.")
+                else:
+                    print("⚠ Nessuna nuova chiave API inserita in tempo.")
                 return None
             wait_seconds = min(wait_seconds, remaining)
         event.wait(wait_seconds)
@@ -439,6 +439,15 @@ def _phase1_temperature(model_name: str) -> float:
         if opt["id"] == model_name:
             return float(opt.get("phase1_temperature", 0.35))
     return 0.35
+
+
+def _phase1_thinking_config(model_name: str) -> types.ThinkingConfig | None:
+    for opt in MODEL_OPTIONS:
+        if opt["id"] == model_name and "phase1_thinking_budget" in opt:
+            return types.ThinkingConfig(
+                thinking_budget=int(opt["phase1_thinking_budget"])
+            )
+    return None
 
 
 def _retry_on_model_unavailable(
@@ -466,10 +475,6 @@ def _retry_on_model_unavailable(
             attempt=retry_idx + 1,
         )
         usage_service.record_retry_event("503")
-        print(
-            f"      [Modello {current_model} temporaneamente occupato (503)."
-            f" Riprovo tra {int(wait)}s... (tentativo {retry_idx + 1}/{total_retries + 1})]"
-        )
         if runtime is not None:
             runtime.phase(
                 f"Server Gemini occupato — riprovo tra {int(wait)}s (tentativo {retry_idx + 1}/{total_retries + 1})"
@@ -477,7 +482,6 @@ def _retry_on_model_unavailable(
             if hasattr(runtime, "retry_state"):
                 runtime.retry_state(gov.get_state_payload())
         if not sleep_with_cancel(cancelled, wait):
-            print("   [*] Operazione annullata dall'utente.")
             return client, None, None
         restore_phase()
         gov.state = "probing"
@@ -493,7 +497,6 @@ def _retry_on_model_unavailable(
             return client, result, None
         except Exception as retry_exc:
             if cancelled():
-                print("   [*] Operazione annullata dall'utente.")
                 return client, None, None
             retry_error = _error_text(retry_exc)
             retry_code = _error_code(retry_exc)
@@ -508,6 +511,12 @@ def _retry_on_model_unavailable(
             else:
                 return client, None, retry_exc
     return client, None, None
+
+
+def warn_runtime(runtime, code: str, message: str | None) -> None:
+    """Report a lasting problem to the processing banner; test runtimes may not support it."""
+    if runtime is not None and hasattr(runtime, "warning"):
+        runtime.warning(code, message)
 
 
 def _retry_on_quota(
@@ -558,15 +567,11 @@ def _retry_on_quota(
             current_model, sleep_dur if sleep_dur > 0 else 65.0
         )
         usage_service.record_retry_event("429")
-        print(
-            f"      [Rilevato rate limit ({kind_429}). Attesa di {display_dur}s per il reset quota...]"
-        )
         if runtime is not None:
             runtime.phase(phase_msg)
             if hasattr(runtime, "retry_state"):
                 runtime.retry_state(gov.get_state_payload())
         if not sleep_with_cancel(cancelled, sleep_dur):
-            print("   [*] Operazione annullata dall'utente.")
             return False, client
         restore_phase()
         gov.state = "probing"
@@ -592,7 +597,7 @@ def _retry_on_quota(
             recommended_retry_after_seconds=1800.0,
         ) from exc
 
-    print("\n[!!] CHIAVE API ESAURITA O QUOTA GIORNALIERA RAGGIUNTA!")
+    print("⚠ Quota giornaliera della chiave API esaurita.")
 
     old_key = extract_client_api_key(client) or ""
     if is_exhausted_key or kind_429 == "quota_exceeded":
@@ -601,7 +606,6 @@ def _retry_on_quota(
             old_key, current_model, reason="quota_exceeded", is_final=True
         )
     if cancelled():
-        print("   [*] Operazione annullata dall'utente.")
         return False, client
 
     new_c, rotated, rotated_key = try_rotate_key(
@@ -613,6 +617,11 @@ def _retry_on_quota(
     )
     if rotated:
         client = new_c
+        warn_runtime(
+            runtime,
+            "fallback_key_in_use",
+            "Quota della chiave principale esaurita: continuo con una chiave di riserva",
+        )
         if runtime is not None and hasattr(runtime, "set_effective_api_key"):
             runtime.set_effective_api_key(rotated_key)
         if on_key_rotated is not None:
@@ -620,7 +629,6 @@ def _retry_on_quota(
         return True, client
 
     if cancelled():
-        print("   [*] Operazione annullata dall'utente.")
         return False, client
 
     # Explicit user-driven key replacement on quota exhaustion if fallback keys are exhausted.
@@ -630,17 +638,21 @@ def _retry_on_quota(
             test_c = create_gemini_client(new_api_key.strip())
             test_c.models.get(model=current_model)
             if cancelled():
-                print("   [*] Operazione annullata dall'utente.")
                 return False, client
             client = test_c
+            warn_runtime(
+                runtime,
+                "fallback_key_in_use",
+                "Quota della chiave principale esaurita: continuo con la nuova chiave inserita",
+            )
             if runtime is not None and hasattr(runtime, "set_effective_api_key"):
                 runtime.set_effective_api_key(new_api_key.strip())
             if on_key_rotated is not None:
                 on_key_rotated(client)
-            print("   [OK] Nuova API Key valida! Ripresa confermata dall'utente...")
+            print("✅ Nuova chiave API valida: riprendo.")
             return True, client
         except Exception as err:
-            print(f"   [!] Chiave non valida fornita: {redact_secrets(err)}")
+            print(f"⚠ La chiave inserita non è valida: {redact_secrets(err)}")
 
     raise QuotaDailyLimitError(str(exc)) from exc
 
@@ -696,16 +708,12 @@ def _handle_offline_network(
 ) -> bool:
     """Returns True to continue main retry loop, False if cancelled."""
     usage_service.record_retry_event("network")
-    print(
-        "      [Connessione assente: impossibile raggiungere i server Google. In attesa di rete (controllo ogni 10s)...]"
-    )
     if runtime is not None:
         runtime.phase(
             "Connessione assente — verifica rete in corso (riprovo ogni 10s)..."
         )
     while not network_service.is_network_online():
         if not sleep_with_cancel(cancelled, 10.0):
-            print("   [*] Operazione annullata dall'utente.")
             return False
     restore_phase()
     return True
@@ -822,6 +830,8 @@ def _handle_generic_transient_retry(
     max_attempts: int,
     retry_sleep_seconds: float,
     cancelled,
+    runtime=None,
+    restore_phase=None,
 ) -> bool:
     """Returns True if sleep succeeded and should continue retry loop, False if cancelled.
 
@@ -837,13 +847,32 @@ def _handle_generic_transient_retry(
         raise exc
 
     usage_service.record_retry_event("other")
-    print(
-        f"      [Errore: {redact_secrets(exc)}. Riprovo in {int(retry_sleep_seconds)}s...]"
-    )
+    if runtime is not None:
+        runtime.phase(
+            _generic_retry_phase_text(
+                exc, int(retry_sleep_seconds), attempts + 1, max_attempts
+            )
+        )
+    # The phase line already says that we retry; only the cause is new here.
+    print(f"Dettaglio: {redact_secrets(exc)}")
     if not sleep_with_cancel(cancelled, retry_sleep_seconds):
-        print("   [*] Operazione annullata dall'utente.")
         return False
+    if restore_phase is not None:
+        restore_phase()
     return True
+
+
+def _generic_retry_phase_text(
+    exc: Exception, wait_seconds: int, next_attempt: int, max_attempts: int
+) -> str:
+    """Banner text for retries that previously surfaced only in the console."""
+    # The processing banner matches these prefixes; keep them in sync with ProcessingStatusBanner.tsx.
+    label = (
+        "Risposta vuota da Gemini"
+        if "risposta vuota" in _error_text(exc)
+        else "Errore temporaneo di Gemini"
+    )
+    return f"{label} — riprovo tra {wait_seconds}s (tentativo {next_attempt}/{max_attempts})"
 
 
 def retry_with_quota(
@@ -883,7 +912,6 @@ def retry_with_quota(
         if cancelled():
             return client, None
         if not gov.wait_if_needed(cancelled, runtime=runtime):
-            print("   [*] Operazione annullata dall'utente.")
             return client, None
 
         current_model = model_name
@@ -899,7 +927,6 @@ def retry_with_quota(
             return client, result
         except Exception as exc:
             if cancelled():
-                print("   [*] Operazione annullata dall'utente.")
                 return client, None
             error = _error_text(exc)
             error_code = _error_code(exc)
@@ -996,6 +1023,8 @@ def retry_with_quota(
                 max_attempts,
                 retry_sleep_seconds,
                 cancelled,
+                runtime,
+                _restore_phase,
             ):
                 return client, None
     return client, None
@@ -1028,19 +1057,37 @@ def extract_response_text(response) -> str:
     return ""
 
 
+def _token_count(usage, field: str) -> int | None:
+    value = getattr(usage, field, None)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None
+    return value
+
+
+def describe_response_timing(response, seconds: float) -> str:
+    """One console line on how long Gemini took and where its tokens went.
+
+    Thinking tokens versus answer tokens separate a model that reasons long
+    from one that waits in a server queue; both look the same as wall time.
+    """
+    total = max(0, round(float(seconds)))
+    minutes, secs = divmod(total, 60)
+    elapsed = f"{minutes}m {secs:02}s" if minutes else f"{secs}s"
+    usage = getattr(response, "usage_metadata", None)
+    details = []
+    for field, label in (
+        ("thoughts_token_count", "ragionamento"),
+        ("candidates_token_count", "testo"),
+    ):
+        count = _token_count(usage, field)
+        if count is not None:
+            details.append(f"{label} {count:,} token".replace(",", "."))
+    suffix = f" ({', '.join(details)})" if details else ""
+    return f"Risposta di Gemini in {elapsed}{suffix}."
+
+
 def build_chunk_prompt(previous_tail: str) -> str:
-    prompt = (
-        "Trascrivi TUTTO il contenuto di questo blocco audio seguendo rigorosamente le istruzioni di sistema. "
-        "Non omettere nessun concetto, esempio, cifra o termine tecnico. "
-        "Non riassumere: la lunghezza dell'output deve essere proporzionale a quella dell'audio. "
-        "Ogni paragrafo generato deve essere unico: non ripetere mai lo stesso paragrafo o frase."
-    )
+    prompt = CHUNK_PROMPT
     if previous_tail:
-        prompt += (
-            "\n\nATTENZIONE: Stai continuando una stesura. Questo è l'ultimo paragrafo che hai generato nel blocco precedente:\n"
-            f'"...{previous_tail}"\n\n'
-            "Riprendi il discorso da qui IN MODO FLUIDO. Usa la stessa grandezza per i titoli. "
-            "Se all'inizio di questo blocco c'è sovrapposizione, NON ripetere testualmente le frasi già dette, "
-            "ma se compare anche solo un dettaglio nuovo includilo."
-        )
+        prompt += CHUNK_PROMPT_CONTINUATION.replace("{previous_tail}", previous_tail)
     return prompt

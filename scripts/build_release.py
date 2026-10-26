@@ -295,13 +295,14 @@ def pyinstaller_command(target: str, ui: str) -> list[str]:
 
     metadata = ROOT / "build" / "diagnostic_build.json"
     command.extend(["--add-data", f"{metadata}{';' if os.name == 'nt' else ':'}."])
-    command.extend(
-        [
-            "--add-data",
-            f"{ROOT / 'el_sbobinator' / 'document_formatting.json'}"
-            f"{';' if os.name == 'nt' else ':'}el_sbobinator",
-        ]
-    )
+    for shared_profile in ("document_formatting.json", "generation_profile.json"):
+        command.extend(
+            [
+                "--add-data",
+                f"{ROOT / 'el_sbobinator' / shared_profile}"
+                f"{';' if os.name == 'nt' else ':'}el_sbobinator",
+            ]
+        )
     command.extend(
         [
             "--add-data",

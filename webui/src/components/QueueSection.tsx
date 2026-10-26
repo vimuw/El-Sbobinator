@@ -1,11 +1,12 @@
-import { memo, useMemo, useRef, useState, useEffect, type Dispatch, type SetStateAction } from 'react';
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { DndContext, closestCenter, useSensors, type DragEndEvent, type SensorDescriptor, type SensorOptions } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { restrictToParentElement, restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { motion, AnimatePresence } from 'motion/react';
-import { FileAudio, MoreVertical, Play, RotateCcw, Square, Trash2, Check, Zap, Plus } from 'lucide-react';
+import { fade, fadeUp } from '../motion';
+import { AlertTriangle, Play, RotateCcw, Trash2, Plus } from 'lucide-react';
 import type { AppStatus, FileItem } from '../appState';
-import { shortModelName } from '../utils';
+import { formatDuration, shortModelName } from '../utils';
 import { QueueFileCard } from './QueueFileCard';
 
 export interface QueueSectionProgressProps {
@@ -43,7 +44,6 @@ export interface QueueSectionActionProps {
   onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string, sessionDir?: string) => void;
   onOpenFile: (path: string) => void;
   onStart: () => void;
-  onStop: () => void;
   onOpenSettings?: () => void;
   onAddFiles?: () => void;
 }
@@ -87,7 +87,6 @@ export const QueueSection = memo(function QueueSection({
     onPreview,
     onOpenFile,
     onStart,
-    onStop,
     onOpenSettings,
     onAddFiles,
   } = actions;
@@ -99,106 +98,104 @@ export const QueueSection = memo(function QueueSection({
       : pendingFiles.length;
     return nonProcessingCount >= 2;
   }, [isBusy, pendingFiles]);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const hintId = useId();
 
+  const isVisible = pendingFiles.length > 0 || appState !== 'idle';
+
+  // The list scrolls inside a scrolling page, so files past the fold get a fade that says "there is more".
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const [hasMoreBelow, setHasMoreBelow] = useState(false);
+  const updateMoreBelow = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setHasMoreBelow(el.scrollHeight - el.scrollTop - el.clientHeight > 4);
+  }, []);
   useEffect(() => {
-    if (!menuOpen) return;
-    const handler = (e: MouseEvent | PointerEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    };
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setMenuOpen(false);
-      }
-    };
-    document.addEventListener('pointerdown', handler, true);
-    document.addEventListener('mousedown', handler, true);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', handler, true);
-      document.removeEventListener('mousedown', handler, true);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [menuOpen]);
+    updateMoreBelow();
+    const list = listRef.current;
+    if (!list || typeof ResizeObserver === 'undefined') return;
+    // Cards collapse on exit, so the height changes after pendingFiles does.
+    const observer = new ResizeObserver(updateMoreBelow);
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, [isVisible, updateMoreBelow]);
+
+  // Total audio still to transcribe; files without a known duration are left out and flagged with "+".
+  const audioTotal = useMemo(() => {
+    const waiting = pendingFiles.filter(f => f.status !== 'processing' && f.status !== 'done');
+    const known = waiting.filter(f => f.duration > 0);
+    const seconds = known.reduce((sum, f) => sum + f.duration, 0);
+    if (seconds <= 0) return '';
+    return `${formatDuration(seconds)}${known.length < waiting.length ? '+' : ''}`;
+  }, [pendingFiles]);
+
+  const blockedReason = !isOnline
+    ? 'Connessione Internet assente: ricollegati per avviare.'
+    : !hasApiKey
+      ? 'Inserisci API Key nelle impostazioni per avviare.'
+      : !isApiKeyValid
+        ? 'API Key non valida: controllala nelle impostazioni.'
+        : null;
+  const needsSettings = isOnline && (!hasApiKey || !isApiKeyValid);
+  const showStart = appState === 'idle' && queuedCount > 0;
+  const showResumeAll = appState === 'idle' && queuedCount === 0 && failedCount > 0 && Boolean(onResumeAll);
+  const startHint = showStart && !canStart
+    ? blockedReason ?? 'Nessun file pronto da avviare.'
+    : showResumeAll && !canResumeAll
+      ? blockedReason ?? 'Nessun file da riprendere.'
+      : null;
+  const activeModel = isBusy && currentModel ? currentModel : preferredModel;
 
   return (
     <>
-      {(pendingFiles.length > 0 || appState !== 'idle') && (
+      {isVisible && (
         <motion.div
           key="batch-queue"
-          className="premium-panel p-5 sm:p-6 space-y-4"
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0, transition: { duration: 0.2, ease: 'easeOut' } }}
+          className="dashboard-section"
+          {...fadeUp}
         >
-          <div className="flex items-center justify-between gap-3 border-b pb-5" style={{ borderColor: 'var(--border-subtle)' }}>
+          <div className="dashboard-section-header">
             <div className="flex items-center gap-2 min-w-0">
-              <h2 className="text-2xl font-semibold tracking-tight flex items-center gap-2 shrink-0" style={{ color: 'var(--text-primary)' }}>
-                <FileAudio className="w-5 h-5" style={{ color: 'var(--text-muted)' }} />
-                Coda di elaborazione
-              </h2>
+              <h2 className="dashboard-section-title shrink-0">In coda</h2>
               {pendingFiles.length > 0 && (
                 <>
-                  <span className="status-pill shrink-0">{pendingFiles.length}</span>
-                  {((appState === 'processing' || appState === 'canceling') && currentModel) ? (
-                    <span className="status-pill shrink-0 whitespace-nowrap">{shortModelName(currentModel)}</span>
-                  ) : preferredModel ? (
-                    <span className="status-pill shrink-0 whitespace-nowrap">{shortModelName(preferredModel)}</span>
-                  ) : null}
+                  <span className="status-pill is-quiet is-count shrink-0">{pendingFiles.length}</span>
+                  {activeModel && (
+                    <span className="status-pill is-quiet shrink-0 whitespace-nowrap" title={activeModel}>{shortModelName(activeModel)}</span>
+                  )}
                 </>
               )}
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-3 shrink-0">
+              {appState === 'idle' && pendingFiles.length > 0 && (
+                <button type="button" onClick={onClearAll} className="queue-text-button is-danger shrink-0">
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Svuota coda
+                </button>
+              )}
+              <button
+                type="button"
+                role="switch"
+                aria-checked={autoContinue}
+                onClick={() => setAutoContinue(v => !v)}
+                title="Avvia automaticamente il file successivo al termine di ogni sbobinatura"
+                className="queue-switch"
+              >
+                <span className="queue-switch-track" aria-hidden="true"><span className="queue-switch-thumb" /></span>
+                Coda automatica
+              </button>
               {onAddFiles && appState === 'processing' && (
                 <button
                   type="button"
                   onClick={onAddFiles}
-                  className="icon-button compact-icon-button"
+                  className="icon-button compact-icon-button shrink-0"
                   title="Aggiungi file audio alla coda"
                   aria-label="Aggiungi audio"
                 >
                   <Plus className="w-4 h-4" />
                 </button>
               )}
-              <div className="relative shrink-0" ref={menuRef}>
-                <button
-                  type="button"
-                  className="icon-button compact-icon-button"
-                  aria-label="Opzioni coda"
-                  title="Opzioni coda"
-                  onClick={() => setMenuOpen(v => !v)}
-                >
-                  <MoreVertical className="w-4 h-4" />
-                </button>
-                {menuOpen && (
-                  <div role="menu" className="kebab-dropdown">
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => setAutoContinue(v => !v)}
-                      title="Avvia automaticamente il file successivo al termine di ogni sbobinatura"
-                      className={`kebab-item ${autoContinue ? 'is-active' : ''}`}
-                    >
-                      <Zap className="w-4 h-4 shrink-0" style={{ color: autoContinue ? 'var(--accent-text)' : 'var(--text-muted)' }} />
-                      <span className="grow whitespace-nowrap">Coda automatica</span>
-                      {autoContinue && <Check className="w-4 h-4 shrink-0" style={{ color: 'var(--accent-text)' }} />}
-                    </button>
-                    {appState === 'idle' && pendingFiles.length > 0 && (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => { onClearAll(); setMenuOpen(false); }}
-                        className="kebab-item is-danger"
-                      >
-                        <Trash2 className="w-4 h-4 shrink-0" />
-                        <span>Svuota coda</span>
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
             </div>
           </div>
 
@@ -210,10 +207,12 @@ export const QueueSection = memo(function QueueSection({
             modifiers={[restrictToVerticalAxis, restrictToParentElement]}
           >
             <div
-              className="overflow-x-hidden overflow-y-auto app-scroll is-chainable max-h-[390px] px-1.5 py-1"
+              ref={scrollRef}
+              onScroll={updateMoreBelow}
+              className={`queue-list-scroll overflow-x-hidden overflow-y-auto app-scroll is-chainable max-h-[360px] p-1${hasMoreBelow ? ' has-more-below' : ''}`}
             >
             <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-              <div className="space-y-3">
+              <div ref={listRef} className="space-y-2">
               <AnimatePresence>
                 {pendingFiles.map((file) => {
                   const isActive = file.status === 'processing';
@@ -238,47 +237,47 @@ export const QueueSection = memo(function QueueSection({
             </div>
           </DndContext>
 
-          {(appState !== 'idle' || queuedCount > 0 || failedCount > 0) && (
-            <div className="pt-4 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
-              <AnimatePresence mode="wait">
-                {appState === 'idle' && queuedCount > 0 && (
-                  <motion.div key="idle" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                    <button onClick={onStart} disabled={!canStart}
-                      className={`premium-button w-full${canStart ? ' premium-button--ready' : ''}`}
-                      style={canStart ? {} : { cursor: 'not-allowed' }}>
-                      <Play className="w-5 h-5 fill-current" />
-                      {!isOnline ? '⚠️ Connessione Internet assente' : !hasApiKey ? '⚠️ Inserisci API Key nelle impostazioni' : !isApiKeyValid ? '⚠️ API Key non valida' : `Avvia sbobinatura (${queuedCount + failedCount} file)`}
-                    </button>
-                  </motion.div>
+          {(showStart || showResumeAll || startHint) && (
+          <div className="pt-3 space-y-2.5">
+            {/* A slim full-width pill: the queue's focal action without the weight of a full-height slab. */}
+            <AnimatePresence mode="wait" initial={false}>
+              {showStart && (
+                <motion.div key="idle" {...fade}>
+                  <button onClick={onStart} disabled={!canStart}
+                    aria-describedby={startHint ? hintId : undefined}
+                    className="queue-start-button">
+                    <Play className="w-3.5 h-3.5 fill-current" aria-hidden="true" />
+                    <span>{`Avvia sbobinatura (${queuedCount + failedCount} file)`}</span>
+                    {audioTotal && (
+                      <span className="queue-start-meta" title="Durata totale dell'audio da sbobinare">{`· ${audioTotal} di audio`}</span>
+                    )}
+                  </button>
+                </motion.div>
+              )}
+              {showResumeAll && (
+                <motion.div key="resume-all" {...fade}>
+                  <button onClick={onResumeAll} disabled={!canResumeAll}
+                    aria-describedby={startHint ? hintId : undefined}
+                    className="queue-start-button">
+                    <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>{`Riprendi elaborazione (${failedCount} file)`}</span>
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {startHint && (
+              <p id={hintId} role="status" className="queue-start-hint justify-center">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                <span>{startHint}</span>
+                {needsSettings && onOpenSettings && (
+                  <button type="button" className="queue-text-button" onClick={onOpenSettings}>
+                    Apri impostazioni
+                  </button>
                 )}
-                {appState === 'idle' && queuedCount === 0 && failedCount > 0 && onResumeAll && (
-                  <motion.div key="resume-all" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                    <button onClick={onResumeAll} disabled={!canResumeAll}
-                      className={`premium-button w-full${canResumeAll ? ' premium-button--ready' : ''}`}
-                      style={canResumeAll ? {} : { cursor: 'not-allowed' }}>
-                      <RotateCcw className="w-5 h-5" />
-                      {!isOnline ? '⚠️ Connessione Internet assente' : !hasApiKey ? '⚠️ Inserisci API Key nelle impostazioni' : !isApiKeyValid ? '⚠️ API Key non valida' : `Riprendi elaborazione (${failedCount} ${failedCount === 1 ? 'file' : 'file'})`}
-                    </button>
-                  </motion.div>
-                )}
-                {appState === 'processing' && (
-                  <motion.div key="processing" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                    <button onClick={onStop} className="premium-button is-danger w-full">
-                      <Square className="w-5 h-5 fill-current" />
-                      Interrompi elaborazione
-                    </button>
-                  </motion.div>
-                )}
-                {appState === 'canceling' && (
-                  <motion.div key="canceling" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                    <button disabled className="premium-button is-danger w-full" style={{ opacity: 0.65, cursor: 'wait' }}>
-                      <Square className="w-5 h-5 fill-current animate-pulse" />
-                      Annullamento in corso...
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+              </p>
+            )}
+          </div>
           )}
         </motion.div>
       )}

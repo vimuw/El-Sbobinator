@@ -31,6 +31,16 @@ describe('ShareExportModal', () => {
     expect(screen.getByText('Solo Audio')).toBeTruthy();
   });
 
+  it('labels the choice in sentence case, without small caps', () => {
+    render(<ShareExportModal session={mockSession} onClose={vi.fn()} />);
+    const prompt = screen.getByText('Cosa desideri includere nel pacchetto?');
+    expect(prompt.className).toContain('dashboard-section-title');
+    expect(prompt.className).not.toContain('uppercase');
+    const badge = screen.getByText('Consigliato');
+    expect(badge.className).not.toContain('uppercase');
+    expect(badge.className).toContain('rounded-full');
+  });
+
   it('switches option selection when clicking option cards', () => {
     render(<ShareExportModal session={mockSession} onClose={vi.fn()} />);
     const soloSbobinaCard = screen.getByText('Solo Sbobina (Leggero)');

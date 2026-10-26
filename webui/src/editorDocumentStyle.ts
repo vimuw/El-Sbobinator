@@ -4,6 +4,7 @@ import { DOCUMENT_FORMATTING, isDefaultBlockStyle, pointSize } from './documentF
 import { EditorEmptyTextMarks } from './editorEmptyTextMarks';
 import { clipboardCssLineHeight } from './editorLineSpacing';
 import { readMarks } from './emptyTextMarks';
+import { blockIsBold } from './editorBold';
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
@@ -153,6 +154,8 @@ export const EditorDocumentStyle = Extension.create({
                 if (Object.keys(values).length) tr.addMark(left, right, textStyle.create(values));
               }
               if ((direct['font-weight'] === 'bold' || Number(direct['font-weight']) >= 600) && state.schema.marks.bold) tr.addMark(left, right, state.schema.marks.bold.create());
+              // A normal-weight heading keeps that weight once its style resets to bold.
+              else if (direct['font-weight'] && !child.marks.some(mark => mark.type.name === 'bold') && blockIsBold(node.type.create({ ...node.attrs, documentStyle: null })) && state.schema.marks.unbold) tr.addMark(left, right, state.schema.marks.unbold.create());
               if (direct['font-style'] === 'italic' && state.schema.marks.italic) tr.addMark(left, right, state.schema.marks.italic.create());
             }
           });

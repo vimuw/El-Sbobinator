@@ -140,7 +140,7 @@ class ElSbobinatorApi(
         try:
             removed = cleanup_orphan_temp_chunks()
             if removed > 0 and self._adapter.window is not None:
-                self._push_console(f"[*] Pulizia: rimossi {removed} file temporanei.")
+                self._push_console(f"Pulizia: rimossi {removed} file temporanei.")
         except Exception as exc:
             try:
                 self._logger.debug("startup temp cleanup failed: %s", exc)
@@ -197,9 +197,6 @@ from el_sbobinator.core.shared import (
     get_session_root,
     get_session_storage_info,
     invalidate_session_storage_cache,
-)
-from el_sbobinator.core.shared import (
-    cleanup_completed_sessions as _cleanup_completed_sessions,
 )
 from el_sbobinator.pipeline.pipeline_settings import (
     build_default_pipeline_settings,

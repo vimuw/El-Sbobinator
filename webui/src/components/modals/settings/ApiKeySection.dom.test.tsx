@@ -27,7 +27,8 @@ describe('ApiKeySection component', () => {
 
     expect(screen.getByText('Chiave Principale')).toBeTruthy();
     expect(screen.getByText('...2345')).toBeTruthy();
-    expect(screen.getByText('1 chiave')).toBeTruthy();
+    // The key count is not repeated as a pill beside the heading
+    expect(screen.queryByText('1 chiave')).toBeNull();
   });
 
   it('renders existing fallback keys as masked rows (...XXXX)', () => {
@@ -42,7 +43,19 @@ describe('ApiKeySection component', () => {
     expect(screen.getByText('...WXYZ')).toBeTruthy();
     expect(screen.getByText('Chiave Riserva 1')).toBeTruthy();
     expect(screen.getByText('Chiave Riserva 2')).toBeTruthy();
-    expect(screen.getByText('3 chiavi')).toBeTruthy();
+    expect(screen.queryByText('3 chiavi')).toBeNull();
+    // Masked suffixes are plain monospace text, not pills
+    expect(screen.getByText('...ABCD').className).not.toContain('rounded-full');
+  });
+
+  it('titles the section in plain sentence case and offers Aggiungi as the settings pill', () => {
+    render(<ApiKeySection {...defaultProps} />);
+
+    const heading = screen.getByRole('heading', { name: 'Chiavi API' });
+    expect(heading.className).not.toContain('uppercase');
+    expect(heading.parentElement?.querySelector('svg')).toBeNull();
+    const addButton = screen.getByRole('button', { name: 'Aggiungi chiave di riserva' });
+    expect(addButton.className).toBe('settings-pill-button');
   });
 
   it('adds a valid fallback key when clicking Aggiungi button', () => {
@@ -403,8 +416,8 @@ describe('ApiKeySection component', () => {
       />
     );
 
-    expect(screen.getByText('Quota esaurita (oggi)')).toBeTruthy();
-    expect(screen.getByText('In uso (riserva)')).toBeTruthy();
+    expect(screen.getByText('Esaurita oggi')).toBeTruthy();
+    expect(screen.getByText('Attiva')).toBeTruthy();
   });
 
   it('matches stale telemetry by key identity after primary promotion', () => {
@@ -442,8 +455,8 @@ describe('ApiKeySection component', () => {
     const fallbackRow = screen.getByText('Chiave Riserva 1').closest('.justify-between');
     expect(primaryRow).not.toBeNull();
     expect(fallbackRow).not.toBeNull();
-    expect(within(primaryRow as HTMLElement).getByText('Operativa')).toBeTruthy();
-    expect(within(fallbackRow as HTMLElement).getByText('Quota esaurita (oggi)')).toBeTruthy();
+    expect(within(primaryRow as HTMLElement).getByText('Attiva')).toBeTruthy();
+    expect(within(fallbackRow as HTMLElement).getByText('Esaurita oggi')).toBeTruthy();
   });
 
   it('renders footer caption and handles external link click', () => {
@@ -512,7 +525,7 @@ describe('ApiKeySection component', () => {
     ).toBeTruthy();
   });
 
-  it('does not mark fallback keys as "In uso (riserva)" when all keys are exhausted for preferredModel', () => {
+  it('marks no key as active when all keys are exhausted for preferredModel', () => {
     const mockUsage = {
       credentials: [
         {
@@ -539,11 +552,11 @@ describe('ApiKeySection component', () => {
       />
     );
 
-    // Neither key should be marked as "In uso (riserva)"
-    expect(screen.queryByText('In uso (riserva)')).toBeNull();
-    // Both should show uniform quota exhausted for Gemini 3.5 Flash
-    const badges = screen.getAllByText('Quota esaurita per Gemini 3.6 Flash');
-    expect(badges).toHaveLength(2);
+    expect(screen.queryByText('Attiva')).toBeNull();
+    expect(screen.getAllByText('Esaurita oggi')).toHaveLength(2);
+    expect(screen.getByTestId('api-key-availability').textContent).toContain(
+      'Gemini 3.6 Flash: 0 di 2 chiavi disponibili oggi'
+    );
   });
 
   it('skips fallback keys exhausted on preferredModel and promotes first available reserve', () => {
@@ -583,12 +596,12 @@ describe('ApiKeySection component', () => {
     );
 
     // Second reserve (WXYZ) should be in use, not first (ABCD)
-    expect(screen.getByText('In uso (riserva)')).toBeTruthy();
-    const exhaustedBadges = screen.getAllByText('Quota esaurita per Gemini 3.6 Flash');
-    expect(exhaustedBadges).toHaveLength(2);
+    const secondReserveRow = screen.getByText('Chiave Riserva 2').closest('.justify-between');
+    expect(within(secondReserveRow as HTMLElement).getByText('Attiva')).toBeTruthy();
+    expect(screen.getAllByText('Esaurita oggi')).toHaveLength(2);
   });
 
-  it('correctly keeps reserve key as "In riserva" with tag when exhausted only on another model', () => {
+  it('keeps a key exhausted only on another model usable and notes that model quietly', () => {
     const mockUsage = {
       credentials: [
         {
@@ -624,13 +637,44 @@ describe('ApiKeySection component', () => {
       />
     );
 
-    // Primary is operative for Gemini 3.5 Flash
-    expect(screen.getByText('Operativa')).toBeTruthy();
-    // Fallback 1 is in reserve (NOT quota exhausted for current model)
-    const inReserveBadges = screen.getAllByText('In riserva');
-    expect(inReserveBadges).toHaveLength(2);
-    // Both primary and fallback 1 have the tag for 2.5 Flash
-    const tags = screen.getAllByText('Esaurita per Gemini 2.5 Flash');
-    expect(tags).toHaveLength(2);
+    const rowOf = (name: string) => screen.getByText(name).closest('.justify-between') as HTMLElement;
+    expect(within(rowOf('Chiave Principale')).getByText('Attiva')).toBeTruthy();
+    // Fallback 1 is not exhausted for the selected model, so it is next in line
+    expect(within(rowOf('Chiave Riserva 1')).getByText('Prossima')).toBeTruthy();
+    // The row name already says "Riserva": no extra badge for the rest of the queue
+    expect(within(rowOf('Chiave Riserva 2')).queryByText('In riserva')).toBeNull();
+    // Exhaustion on the other model is a quiet note, not a competing badge
+    expect(screen.getAllByText('Esaurita su Gemini 2.5 Flash')).toHaveLength(2);
+    expect(screen.queryByText('Esaurita oggi')).toBeNull();
+    expect(screen.getByTestId('api-key-availability').textContent).toContain(
+      'Gemini 3.6 Flash: 3 di 3 chiavi disponibili oggi'
+    );
+  });
+
+  it('shows rotation order and an unverified summary before any telemetry', () => {
+    render(
+      <ApiKeySection
+        {...defaultProps}
+        fallbackKeys={['AIzaSyBackupKey11111111111111ABCD', 'AIzaSyBackupKey22222222222222WXYZ']}
+        preferredModel="gemini-3.6-flash"
+      />
+    );
+
+    const rowOf = (name: string) => screen.getByText(name).closest('.justify-between') as HTMLElement;
+    expect(within(rowOf('Chiave Principale')).getByText('Attiva')).toBeTruthy();
+    const next = within(rowOf('Chiave Riserva 1')).getByText('Prossima');
+    expect(next.className).not.toContain('rounded-full');
+    expect(within(rowOf('Chiave Riserva 2')).queryByText('In riserva')).toBeNull();
+    expect(screen.getByTestId('api-key-availability').textContent).toBe(
+      'Gemini 3.6 Flash: stato non ancora verificato'
+    );
+  });
+
+  it('places the add-key field after the key list', () => {
+    render(<ApiKeySection {...defaultProps} />);
+
+    const input = screen.getByLabelText('Nuova chiave di riserva');
+    const primaryLabel = screen.getByText('Chiave Principale');
+    expect(primaryLabel.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

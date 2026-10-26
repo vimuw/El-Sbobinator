@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Download, Package, FileText, Music, CheckCircle2, AlertCircle, Loader2, FolderOpen } from 'lucide-react';
 import type { ArchiveSession } from '../../bridge';
+import { modalCard } from '../../motion';
 
 interface ShareExportModalProps {
   session: ArchiveSession | null;
@@ -83,9 +84,7 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
           className="modal-overlay absolute inset-0"
         />
         <motion.div
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1, transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] } }}
-          exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.14, ease: 'easeIn' } }}
+          {...modalCard}
           className="modal-card relative w-full max-w-lg overflow-hidden flex flex-col"
         >
           {/* Header */}
@@ -116,14 +115,14 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
           <div className="modal-body space-y-4">
             {/* Option Cards */}
             <div className="space-y-2.5">
-              <label className="text-xs font-semibold uppercase tracking-wider block text-[var(--text-muted)]">
+              <p className="dashboard-section-title">
                 Cosa desideri includere nel pacchetto?
-              </label>
+              </p>
 
               {/* Option 1: Sbobina + Audio */}
               <div
                 onClick={() => setExportType('full')}
-                className="p-3.5 rounded-lg border cursor-pointer transition-all flex items-start gap-3.5"
+                className="p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3.5"
                 style={{
                   borderColor: exportType === 'full' ? 'var(--accent-bg)' : 'var(--border-default)',
                   background: exportType === 'full' ? 'var(--accent-subtle)' : 'var(--bg-surface)',
@@ -144,7 +143,7 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
                       Sbobina + Audio (Completo)
                     </span>
                     <span
-                      className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md"
+                      className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
                       style={{ background: 'var(--accent-bg)', color: 'var(--btn-primary-text)' }}
                     >
                       Consigliato
@@ -159,7 +158,7 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
               {/* Option 2: Solo Sbobina */}
               <div
                 onClick={() => setExportType('text_only')}
-                className="p-3.5 rounded-lg border cursor-pointer transition-all flex items-start gap-3.5"
+                className="p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3.5"
                 style={{
                   borderColor: exportType === 'text_only' ? 'var(--accent-bg)' : 'var(--border-default)',
                   background: exportType === 'text_only' ? 'var(--accent-subtle)' : 'var(--bg-surface)',
@@ -190,7 +189,7 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
               {/* Option 3: Solo Audio */}
               <div
                 onClick={() => setExportType('audio_only')}
-                className="p-3.5 rounded-lg border cursor-pointer transition-all flex items-start gap-3.5"
+                className="p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3.5"
                 style={{
                   borderColor: exportType === 'audio_only' ? 'var(--accent-bg)' : 'var(--border-default)',
                   background: exportType === 'audio_only' ? 'var(--accent-subtle)' : 'var(--bg-surface)',
@@ -237,7 +236,7 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
                   <button
                     type="button"
                     onClick={handleOpenFolder}
-                    className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all cursor-pointer bg-[var(--bg-surface)] border-[var(--border-default)] text-[var(--accent-text)] hover:bg-[var(--bg-hover)]"
+                    className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-3 py-1.5 rounded-full border transition-all cursor-pointer bg-[var(--bg-surface)] border-[var(--border-default)] text-[var(--accent-text)] hover:bg-[var(--bg-hover)]"
                   >
                     <FolderOpen className="w-3.5 h-3.5" />
                     <span>Apri cartella del pacchetto</span>
@@ -260,7 +259,7 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
               type="button"
               onClick={handleExportFile}
               disabled={isProcessing}
-              className="modal-action-button is-primary flex-1 flex items-center justify-center gap-2"
+              className="modal-action-button is-primary flex-1 whitespace-nowrap"
             >
               {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               <span>Esporta Pacchetto (.sbobina)</span>

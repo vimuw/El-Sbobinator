@@ -52,4 +52,52 @@ describe('wrap layout invalidation', () => {
     editor.commands.toggleBold();
     expect(plugin.getState(editor.state)?.affectedEnd).toBeNull();
   });
+
+  it('keeps the solved gaps when an edit above the measured region only shifts it down', () => {
+    const editor = new Editor({ extensions: [StarterKit, FloatingImage.extend({ addNodeView: () => null, addProseMirrorPlugins: () => [] })], content: '<p>Sopra</p><p>Figura</p><p>Dopo</p>' });
+    editors.push(editor);
+    const plugin = createImageWrapPlugin();
+    editor.registerPlugin(plugin);
+    const affectedStart = editor.state.doc.firstChild!.nodeSize;
+    const affectedEnd = affectedStart + editor.state.doc.child(1).nodeSize;
+    const decorations = DecorationSet.create(editor.state.doc, [Decoration.widget(affectedStart + 2, () => document.createElement('span'))]);
+    editor.view.dispatch(editor.state.tr.setMeta(plugin, { decorations, affectedStart, affectedEnd, revision: 0 }));
+
+    // Typing, Enter and list toggles above the figures move everything below as one block.
+    const size = editor.state.doc.content.size;
+    editor.commands.insertContentAt(2, 'ABC');
+    editor.commands.setTextSelection(2);
+    editor.commands.splitBlock();
+    editor.commands.toggleBulletList();
+    const state = plugin.getState(editor.state)!;
+    expect(state.revision).toBe(0);
+    const shift = editor.state.doc.content.size - size;
+    expect(shift).toBeGreaterThan(3);
+    expect(state.affectedStart).toBe(affectedStart + shift);
+    expect(state.affectedEnd).toBe(affectedEnd + shift);
+    expect(state.decorations.find().map(d => d.from)).toEqual([affectedStart + 2 + shift]);
+    expect(editor.state.doc.textBetween(state.affectedStart!, state.affectedEnd!)).toBe('Figura');
+
+    // A block inserted right above the region start shifts it too.
+    editor.commands.insertContentAt(state.affectedStart!, '<p>Nuovo</p>');
+    const inserted = plugin.getState(editor.state)!;
+    expect(inserted.revision).toBe(0);
+    expect(editor.state.doc.textBetween(inserted.affectedStart!, inserted.affectedEnd!)).toBe('Figura');
+
+    // Joining the first measured block with the one above changes its lines.
+    editor.commands.deleteRange({ from: inserted.affectedStart! - 1, to: inserted.affectedStart! + 1 });
+    expect(plugin.getState(editor.state)?.affectedEnd).toBeNull();
+    expect(plugin.getState(editor.state)?.revision).toBe(1);
+  });
+
+  it('still invalidates an edit inside a region that starts below the document top', () => {
+    const editor = new Editor({ extensions: [StarterKit, FloatingImage.extend({ addNodeView: () => null, addProseMirrorPlugins: () => [] })], content: '<p>Sopra</p><p>Figura</p><p>Dopo</p>' });
+    editors.push(editor);
+    const plugin = createImageWrapPlugin();
+    editor.registerPlugin(plugin);
+    const affectedStart = editor.state.doc.firstChild!.nodeSize;
+    editor.view.dispatch(editor.state.tr.setMeta(plugin, { decorations: DecorationSet.empty, affectedStart, affectedEnd: affectedStart + 8, revision: 0 }));
+    editor.commands.insertContentAt(affectedStart + 3, 'X');
+    expect(plugin.getState(editor.state)?.affectedEnd).toBeNull();
+  });
 });

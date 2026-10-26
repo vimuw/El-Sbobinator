@@ -36,20 +36,18 @@ export type FolderModalState =
 export type DeleteFolderConfirmState = { folder: ArchiveFolder };
 export type DeleteMultipleSessionsConfirmState = { sessions: { sessionDir: string; name: string }[] };
 
-export type SortOption = 'newest' | 'oldest' | 'recently_opened' | 'name' | 'relevance';
+export type SortOption = 'newest' | 'recently_opened' | 'name' | 'relevance';
 
 export const SORT_OPTIONS: { id: SortOption; label: string }[] = [
-  { id: 'recently_opened', label: 'Aperti di recente' },
-  { id: 'newest', label: 'Più recenti' },
-  { id: 'oldest', label: 'Meno recenti' },
+  { id: 'newest', label: 'Create di recente' },
+  { id: 'recently_opened', label: 'Aperte di recente' },
   { id: 'name', label: 'Nome (A-Z)' },
 ];
 
 export const FULL_TEXT_SORT_OPTIONS: { id: SortOption; label: string }[] = [
   { id: 'relevance', label: 'Più occorrenze' },
-  { id: 'recently_opened', label: 'Aperti di recente' },
-  { id: 'newest', label: 'Più recenti' },
-  { id: 'oldest', label: 'Meno recenti' },
+  { id: 'newest', label: 'Create di recente' },
+  { id: 'recently_opened', label: 'Aperte di recente' },
   { id: 'name', label: 'Nome (A-Z)' },
 ];
 

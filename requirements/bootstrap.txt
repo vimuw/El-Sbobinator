@@ -1,4 +1,4 @@
 # Only the isolated dependency manager. Application packages live in uv.lock.
-uv==0.13.1
+uv==0.13.4
 pip==26.2.1
-setuptools==84.0.0
+setuptools==84.2.1

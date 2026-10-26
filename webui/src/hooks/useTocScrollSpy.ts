@@ -52,7 +52,9 @@ export function useTocScrollSpy({
       if (tocScrollRafRef.current !== null) return;
       tocScrollRafRef.current = requestAnimationFrame(() => {
         tocScrollRafRef.current = null;
-        if (!headingElsCacheRef.current) {
+        // Aligning or restyling a heading redraws its element without changing
+        // the index, and a detached element measures as top 0.
+        if (!headingElsCacheRef.current || headingElsCacheRef.current.some(el => !el.isConnected)) {
           headingElsCacheRef.current = Array.from(
             container.querySelectorAll<HTMLElement>(
               '.tiptap-editor h1,.tiptap-editor h2,.tiptap-editor h3,.tiptap-editor h4,.tiptap-editor h5'

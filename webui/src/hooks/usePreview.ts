@@ -102,17 +102,18 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
     fileId?: string,
     sessionDir?: string,
     searchTerm?: string,
-  ) => {
+  ): Promise<boolean> => {
     if (!window.pywebview?.api?.read_html_content) {
       appendConsole('❌ Funzione anteprima non disponibile in questa versione.');
-      return;
+      return false;
     }
     appendConsole('Caricamento anteprima in corso...');
     const request = ++previewRequestRef.current;
     ++audioRequestRef.current;
+    let opened = false;
     try {
       const res = await window.pywebview.api.read_html_content(htmlPath);
-      if (request !== previewRequestRef.current) return;
+      if (request !== previewRequestRef.current) return false;
       if (res.ok) {
         const bodyMatch = res.content.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
         const extractedContent = bodyMatch ? bodyMatch[1] : res.content.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
@@ -141,14 +142,16 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
           initScrollTop: savedSession.scrollTop,
           initialSearchTerm: searchTerm || undefined,
         });
+        opened = true;
         await loadPreviewAudio(sourcePath, sessionDir);
-      } else {
-        appendConsole(`❌ Errore anteprima: ${res.error}`);
-        onOpenFailed?.(htmlPath, sessionDir ?? '');
+        return true;
       }
+      appendConsole(`❌ Errore anteprima: ${res.error}`);
+      onOpenFailed?.(htmlPath, sessionDir ?? '');
     } catch (e: unknown) {
       appendConsole(`❌ Errore JS anteprima: ${e instanceof Error ? e.message : String(e)}`);
     }
+    return opened;
   }, [appendConsole, loadPreviewAudio, onOpenFailed]);
 
   const closePreview = useCallback(() => {

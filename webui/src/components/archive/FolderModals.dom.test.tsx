@@ -64,6 +64,14 @@ describe('FolderModals and AddSessionsToFolderModal', () => {
       expect(handleSave).toHaveBeenCalledWith('Biochimica', '');
     });
 
+    it('labels the fields in sentence case', () => {
+      render(<FolderModal state={{ type: 'create' }} onClose={vi.fn()} onSave={vi.fn()} />);
+      expect(screen.getByLabelText('Nome raccolta')).toBe(screen.getByPlaceholderText('es. Anatomia'));
+      expect(screen.getByRole('group', { name: 'Colore identificativo' })).toBeTruthy();
+      expect(screen.queryByText('NOME RACCOLTA')).toBeNull();
+      expect(screen.queryByText('COLORE IDENTIFICATIVO')).toBeNull();
+    });
+
     it('allows selecting a different saturated color from the palette', () => {
       const handleSave = vi.fn();
 

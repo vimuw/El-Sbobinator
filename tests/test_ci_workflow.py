@@ -49,3 +49,57 @@ def test_release_requires_a_successful_build_and_a_tag():
     assert "!cancelled()" in condition
     assert "needs.build.result == 'success'" in condition
     assert "needs.release-context.outputs.tag != ''" in condition
+
+
+WEB_RELEASE = WORKFLOW.parent / "web-release.yml"
+
+
+def test_web_release_runs_only_for_web_tags_and_desktop_release_ignores_them():
+    web = WEB_RELEASE.read_text(encoding="utf-8")
+    trigger = web.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+    assert re.findall(r"^\s+- '([^']+)'$", trigger, re.M) == ["web-v*"]
+    assert "branches" not in trigger and "pull_request" not in trigger
+    desktop_tags = re.search(
+        r"^    tags:\n((?:      - .*\n)+)", WORKFLOW.read_text(encoding="utf-8"), re.M
+    )
+    assert desktop_tags is not None
+    # GitHub tag filters match from the start: 'v*' never matches web-v1.0.0.
+    assert all(
+        pattern.startswith("'v")
+        for pattern in re.findall(r"- ('[^']+')", desktop_tags.group(1))
+    )
+
+
+def test_web_release_pins_actions_and_deploys_only_after_tests_and_build():
+    web = WEB_RELEASE.read_text(encoding="utf-8")
+    uses = re.findall(r"uses: (\S+)", web)
+    assert uses and all(
+        re.fullmatch(r"[\w.-]+/[\w.-]+@[0-9a-f]{40}", action) for action in uses
+    )
+    assert "permissions:\n  contents: read" in web
+    order = [
+        web.index("git merge-base --is-ancestor"),
+        web.index("npm run typecheck"),
+        web.index("npm test"),
+        web.index("npm run test:e2e:web"),
+        web.index("npm run build:web"),
+        web.index("cloudflare/wrangler-action@"),
+    ]
+    assert order == sorted(order)
+    assert "EL_SBOBINATOR_WEB_VERSION: ${{ github.ref_name }}" in web
+    assert (
+        "secrets.CLOUDFLARE_API_TOKEN" in web and "secrets.CLOUDFLARE_ACCOUNT_ID" in web
+    )
+    assert "--project-name=elsbobinator --branch=main" in web
+
+
+def test_web_release_publishes_nothing_on_github():
+    # The web site stays out of the desktop repository's Releases page and artifacts.
+    web = WEB_RELEASE.read_text(encoding="utf-8")
+    for public in (
+        "action-gh-release",
+        "upload-artifact",
+        "gh release",
+        "contents: write",
+    ):
+        assert public not in web

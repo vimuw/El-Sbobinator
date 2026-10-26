@@ -5,6 +5,7 @@ import type {
   FileFailedPayload,
   ProcessDonePayload,
   ProcessingAction,
+  ProcessingWarningPayload,
   SetCurrentFilePayload,
   WorkDonePayload,
   WorkTotalsPayload,
@@ -237,6 +238,7 @@ export interface BridgeCallbacks {
   appendConsole: (msg: string) => void;
   updateProgress: (value: number) => void;
   updatePhase: (text: string) => void;
+  processingWarning?: (data: ProcessingWarningPayload) => void;
   updateModel: (model: string) => void;
   processDone: (data: ProcessDonePayload) => void;
   setWorkTotals: (data: WorkTotalsPayload) => void;
@@ -295,9 +297,15 @@ export interface PywebviewApi {
     preferredModel?: string,
 
   ) => Promise<{ ok: boolean; result?: ValidationResult; error?: string }>;
-  get_session_storage_info?: () => Promise<{ ok: boolean; total_bytes?: number; total_sessions?: number; session_root?: string; error?: string }>;
+  get_session_storage_info?: () => Promise<{ ok: boolean; total_bytes?: number; total_sessions?: number; session_root?: string; usage_detail?: string; persisted?: boolean; error?: string }>;
+  // Web build only: asks the browser to keep this site's data; false when it may still clear it.
+  get_storage_protection?: () => Promise<{ ok: boolean; persisted: boolean }>;
+  // Web build only: backup of the archive kept in this browser (webBackup.ts).
+  get_web_backup_info?: () => Promise<{ ok: boolean; sessions?: number; text_bytes?: number; audio_bytes?: number; audio_files?: number; last_backup_at?: string | null; error?: string }>;
+  create_web_backup?: (includeAudio: boolean, onProgress?: (done: number, total: number) => void) => Promise<{ ok: boolean; blob?: Blob; filename?: string; sessions?: number; audio_files?: number; error?: string }>;
+  import_web_backup?: (file: File) => Promise<{ ok: boolean; summary?: string; error?: string }>;
+  record_web_backup_download?: () => Promise<{ ok: boolean; last_backup_at?: string }>;
   cleanup_old_sessions?: (maxAgeDays?: number, dryRun?: boolean) => Promise<{ ok: boolean; removed?: number; freed_bytes?: number; errors?: number; candidates?: number; preserved_completed?: number; missing_completed_html?: number; error?: string }>;
-  cleanup_completed_sessions?: (maxAgeDays?: number, dryRun?: boolean) => Promise<{ ok: boolean; removed?: number; freed_bytes?: number; errors?: number; candidates?: number; preserved_completed?: number; missing_completed_html?: number; error?: string }>;
   get_completed_sessions?: (limit?: number) => Promise<{ ok: boolean; sessions?: ArchiveSession[]; total?: number; error?: string }>;
   delete_session?: (sessionDir: string) => Promise<{ ok: boolean; error?: string }>;
   rename_session?: (sessionDir: string, name: string) => Promise<{ ok: boolean; name?: string; error?: string }>;
@@ -368,7 +376,6 @@ export interface PywebviewApi {
   list_diagnostic_sessions?: () => Promise<{ ok: boolean; sessions?: Array<{ path: string; label: string }>; error?: string }>;
   export_diagnostics?: (sessionDir?: string, frontendVersion?: string) => Promise<{ ok: boolean; target_path?: string; cancelled?: boolean; error?: string }>;
   record_frontend_event?: (kind: string, message?: string, stack?: string) => Promise<{ ok: boolean; error?: string }>;
-  open_logs_folder?: () => Promise<{ ok: boolean; error?: string }>;
   upload_browser_files?: (files: File[]) => Promise<FileDescriptor[]>;
   set_browser_scenario?: (scenario: string) => Promise<{ ok: boolean; scenario?: string; error?: string }>;
 }
@@ -427,6 +434,7 @@ export function createBridge(options: {
       dispatch({ type: 'bridge/update_phase', text: normalized });
       appendConsole(normalized);
     },
+    processingWarning: data => dispatch({ type: 'bridge/processing_warning', data }),
     updateModel: model => dispatch({ type: 'bridge/update_model', model }),
     processDone: data => {
       dispatch({ type: 'bridge/process_done', data });

@@ -4,6 +4,7 @@ import { Check, FileText, FolderPlus, Plus, Search, X } from 'lucide-react';
 import type { ArchiveFolder, ArchiveSession } from '../../bridge';
 import { DEFAULT_FOLDER_COLOR } from './types';
 import { formatRelativeTime } from '../../utils';
+import { modalCard } from '../../motion';
 
 export interface AddSessionsToFolderModalProps {
   folder: ArchiveFolder;
@@ -89,9 +90,7 @@ export function AddSessionsToFolderModal({
         className="modal-overlay absolute inset-0"
       />
       <motion.div
-        initial={{ opacity: 0, scale: 0.98 }}
-        animate={{ opacity: 1, scale: 1, transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] } }}
-        exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.14, ease: 'easeIn' } }}
+        {...modalCard}
         className="modal-card relative w-full max-w-lg max-h-[86vh] overflow-hidden flex flex-col"
         onClick={e => e.stopPropagation()}
       >

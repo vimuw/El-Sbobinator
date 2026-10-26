@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { useRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 import { useBridgeCallbacks } from './useBridgeCallbacks';
 import type { AppStatus, FileItem, ProcessDonePayload, ProcessingAction } from '../appState';
 
@@ -420,6 +421,23 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
     vi.restoreAllMocks();
   });
 
+  it('askNewKey on the web points to the dialog, not to the settings', () => {
+    const addNotification = vi.fn();
+    setHostCapabilities({ kind: 'web' });
+    try {
+      renderHook(() => { useBridgeCallbacks(makeMinimalHook({ addNotification })); });
+      act(() => { window.elSbobinatorBridge?.askNewKey(); });
+      expect(addNotification).toHaveBeenCalledWith('Chiavi esaurite', expect.stringContaining('vale solo per questa elaborazione'), 'warning', 'system');
+      expect(addNotification.mock.calls[0][1]).not.toContain('impostazioni');
+    } finally {
+      setHostCapabilities(DESKTOP_CAPABILITIES);
+    }
+    const desktopNotification = vi.fn();
+    renderHook(() => { useBridgeCallbacks(makeMinimalHook({ addNotification: desktopNotification })); });
+    act(() => { window.elSbobinatorBridge?.askNewKey(); });
+    expect(desktopNotification.mock.calls[0][1]).toContain('Aggiungi una chiave nelle impostazioni');
+  });
+
   it('fileDone callback: covers warning notification for completed file with warnings', () => {
     const showNotification = vi.fn();
     setPywebview({ show_notification: showNotification });
@@ -533,7 +551,7 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
     expect(onBatchFullyDone).toHaveBeenCalledWith(payload);
   });
 
-  it('uses the backend retry-state names for cooldown, probe, and pause', () => {
+  it('leaves retry waits to the phase line instead of adding console lines', () => {
     const appendConsole = vi.fn();
     const opts = makeMinimalHook();
     opts.appendConsole = appendConsole;
@@ -547,12 +565,11 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
         state: 'probing', attempt: 2, max_attempts: 4, model: 'gemini-2.5-flash',
       });
       window.elSbobinatorBridge?.retryStateChanged?.({
-        state: 'paused', attempt: 4, max_attempts: 4,
+        state: 'exhausted', attempt: 4, max_attempts: 4,
       });
     });
 
-    expect(appendConsole).toHaveBeenCalledWith(expect.stringContaining('Attesa cooldown'));
-    expect(appendConsole).toHaveBeenCalledWith(expect.stringContaining('Esecuzione sonda'));
-    expect(appendConsole).toHaveBeenCalledWith(expect.stringContaining('Batch sospeso'));
+    // "Server Gemini occupato — riprovo tra 15s (tentativo 2/4)" already reaches the console as a phase.
+    expect(appendConsole).not.toHaveBeenCalled();
   });
 });

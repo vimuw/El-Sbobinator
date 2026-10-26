@@ -104,6 +104,31 @@ describe('createBridge', () => {
     expect(onBatchStart).toHaveBeenCalledTimes(2);
   });
 
+  it('dispatches processing warnings without logging them twice', () => {
+    const dispatch = vi.fn();
+    const appendConsole = vi.fn();
+    const bridge = createBridge({
+      dispatch,
+      appendConsole,
+      onRegenerate: vi.fn(),
+      onAskNewKey: vi.fn(),
+      onDismissNewKey: vi.fn(),
+      onBatchDone: vi.fn(),
+      onFileDone: vi.fn(),
+      onFilesDropped: vi.fn(),
+      onBatchStart: vi.fn(),
+    });
+
+    bridge.processingWarning?.({ code: 'low_disk_space', message: 'Spazio su disco quasi esaurito' });
+
+    // The backend already printed the details to the console.
+    expect(appendConsole).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'bridge/processing_warning',
+      data: { code: 'low_disk_space', message: 'Spazio su disco quasi esaurito' },
+    });
+  });
+
   it('logs normalized phases once and ignores blank or consecutive duplicates', () => {
     const dispatch = vi.fn();
     const appendConsole = vi.fn();

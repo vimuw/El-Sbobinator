@@ -38,6 +38,18 @@ describe('AudioPlayer', () => {
     expect(screen.getByRole('slider', { name: 'Volume' }).getAttribute('aria-valuetext')).toBe('100%');
   });
 
+  it('leaves out the volume slider where the browser keeps volume on the hardware buttons (iPad)', () => {
+    const volume = Object.getOwnPropertyDescriptor(window.HTMLMediaElement.prototype, 'volume')!;
+    Object.defineProperty(window.HTMLMediaElement.prototype, 'volume', { configurable: true, get: () => 1, set: () => {} });
+    try {
+      render(<AudioPlayer src="/audio/test.mp3" initialVolume={0.4} />);
+      expect(screen.getByRole('slider', { name: 'Posizione audio' })).toBeTruthy();
+      expect(screen.queryByRole('slider', { name: 'Volume' })).toBeNull();
+    } finally {
+      Object.defineProperty(window.HTMLMediaElement.prototype, 'volume', volume);
+    }
+  });
+
   it('shows time display 00:00:00 / 00:00:00 initially', () => {
     render(<AudioPlayer src="/audio/test.mp3" />);
     expect(screen.getByText('00:00:00 / 00:00:00')).toBeTruthy();
@@ -125,6 +137,22 @@ describe('AudioPlayer', () => {
     expect(screen.getByRole('option', { name: '1x' })).toBeTruthy();
     expect(screen.getByRole('option', { name: '1.5x' })).toBeTruthy();
     expect(screen.getByRole('option', { name: '2x' })).toBeTruthy();
+  });
+
+  it('frames the speed and linked-audio menus with the shared menu rules', () => {
+    render(<AudioPlayer src="/audio/test.mp3" onRelink={vi.fn()} onRemoveAudio={vi.fn()} />);
+
+    fireEvent.click(screen.getByTitle('Velocità di riproduzione'));
+    const speedPanel = screen.getByRole('listbox', { name: 'Velocità di riproduzione' });
+    expect(speedPanel.classList.contains('kebab-panel')).toBe(true);
+    expect(within(speedPanel).getByRole('option', { name: '1x' }).classList.contains('kebab-item')).toBe(true);
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+
+    fireEvent.click(screen.getByLabelText('Opzioni audio collegato'));
+    const relinkRow = screen.getByText('Sostituisci file audio...').closest('button');
+    expect(relinkRow?.classList.contains('kebab-item')).toBe(true);
+    expect(relinkRow?.parentElement?.classList.contains('kebab-panel')).toBe(true);
+    expect(relinkRow?.parentElement?.getAttribute('style') ?? '').toBe('');
   });
 
   it('changes playback rate when an option in custom dropdown is clicked', () => {
@@ -457,6 +485,21 @@ describe('AudioPlayer', () => {
     expect(item2.disabled).toBe(false);
     expect(consoleErrorSpy).toHaveBeenCalled();
     consoleErrorSpy.mockRestore();
+  });
+
+  it('portals the remove-audio confirmation outside the player dock', async () => {
+    const { container } = render(<AudioPlayer src="/audio/test.mp3" onRemoveAudio={vi.fn()} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Opzioni audio collegato'));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Rimuovi audio collegato'));
+    });
+
+    const dialog = screen.getByRole('alertdialog');
+    expect(container.contains(dialog)).toBe(false);
+    expect(document.body.contains(dialog)).toBe(true);
   });
 
   it('opens audio options menu and calls onRemoveAudio when confirmed in modal', async () => {

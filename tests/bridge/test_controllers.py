@@ -807,13 +807,6 @@ class TestSystemControllerDiagnostics(unittest.TestCase):
         self.assertIn("report", res)
         self.assertIn("Report Diagnostico", res["report"])
 
-    @patch("el_sbobinator.utils.file_ops.open_path_with_default_app")
-    def test_open_logs_folder(self, mock_open_path):
-        host = DummySystemHost()
-        res = host.open_logs_folder()
-        self.assertTrue(res["ok"])
-        mock_open_path.assert_called_once()
-
 
 if __name__ == "__main__":
     unittest.main()

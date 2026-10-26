@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Key, X } from 'lucide-react';
+import { getHostCapabilities } from '../../hostCapabilities';
 import { GEMINI_KEY_PATTERN } from '../../utils';
+import { modalCard } from '../../motion';
 
 interface NewKeyModalProps {
   isOpen: boolean;
@@ -10,6 +12,8 @@ interface NewKeyModalProps {
 
 export function NewKeyModal({ isOpen, onClose }: NewKeyModalProps) {
   const [newKeyInput, setNewKeyInput] = useState('');
+  // The web keeps progress in the browser and uses the typed key for this run only.
+  const web = getHostCapabilities().kind === 'web';
 
   useEffect(() => {
     if (isOpen) {
@@ -60,9 +64,7 @@ export function NewKeyModal({ isOpen, onClose }: NewKeyModalProps) {
             className="modal-overlay absolute inset-0"
           />
           <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1, transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] } }}
-            exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.14, ease: 'easeIn' } }}
+            {...modalCard}
             className="modal-card relative w-full max-w-md max-h-[86vh] overflow-hidden flex flex-col"
           >
             <div className="modal-header">
@@ -80,13 +82,15 @@ export function NewKeyModal({ isOpen, onClose }: NewKeyModalProps) {
             </div>
             <div className="modal-body space-y-4">
               <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-                Tutte le chiavi API configurate hanno esaurito la quota disponibile per Google Gemini (errore 429).
-                L'avanzamento della lezione è stato salvato su disco.
+                Tutte le chiavi API configurate hanno esaurito la quota disponibile per Google Gemini (errore 429).{' '}
+                {web ? 'L’avanzamento della lezione è salvato in questo browser.' : "L'avanzamento della lezione è stato salvato su disco."}
               </p>
 
               <div className="space-y-2">
                 <p className="text-xs text-[var(--text-secondary)]">
-                  Se hai un'altra API Key con quota disponibile, incollala qui sotto per continuare da dove eri rimasto:
+                  {web
+                    ? 'Se hai un’altra API Key con quota disponibile, incollala qui sotto per continuare da dove eri rimasto. Vale solo per questa elaborazione: non viene salvata nelle impostazioni.'
+                    : "Se hai un'altra API Key con quota disponibile, incollala qui sotto per continuare da dove eri rimasto:"}
                 </p>
                 <input
                   type="password"
@@ -118,7 +122,7 @@ export function NewKeyModal({ isOpen, onClose }: NewKeyModalProps) {
               <button
                 onClick={handleClose}
                 className="modal-action-button flex-1"
-                title="La sessione viene salvata su disco; potrai riprenderla al reset delle 09:00"
+                title={web ? 'L’avanzamento resta in questo browser: potrai riprendere quando la quota si azzera, verso le 9:00' : 'La sessione viene salvata su disco; potrai riprenderla al reset delle 09:00'}
               >
                 Sospendi elaborazione
               </button>

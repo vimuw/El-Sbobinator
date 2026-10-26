@@ -4,6 +4,8 @@ import { Check, Trash2, X } from 'lucide-react';
 import type { ArchiveFolder } from '../../bridge';
 import { DEFAULT_FOLDER_COLOR, FOLDER_COLORS, type FolderModalState } from './types';
 import { getFolderColor, NEUTRAL_FOLDER_COLOR } from '../../archiveFolders';
+import { modalCard } from '../../motion';
+import { deletedFrom } from '../../hostCapabilities';
 
 interface FolderModalProps {
   state: FolderModalState;
@@ -59,9 +61,7 @@ export function FolderModal({ state, onClose, onSave, folders = [] }: FolderModa
         className="modal-overlay absolute inset-0"
       />
       <motion.div
-        initial={{ opacity: 0, scale: 0.98 }}
-        animate={{ opacity: 1, scale: 1, transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] } }}
-        exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.14, ease: 'easeIn' } }}
+        {...modalCard}
         className="modal-card relative w-full max-w-md max-h-[86vh] overflow-hidden flex flex-col"
         onClick={e => e.stopPropagation()}
       >
@@ -87,7 +87,7 @@ export function FolderModal({ state, onClose, onSave, folders = [] }: FolderModa
           <div className="modal-body space-y-4">
             <div>
               <label htmlFor="folder-name" className="text-xs font-semibold block mb-1.5" style={{ color: 'var(--text-muted)' }}>
-                NOME RACCOLTA
+                Nome raccolta
               </label>
               <input
                 ref={inputRef}
@@ -103,7 +103,7 @@ export function FolderModal({ state, onClose, onSave, folders = [] }: FolderModa
             <div>
               <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                 <span id="folder-color-label" className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
-                  COLORE IDENTIFICATIVO
+                  Colore identificativo
                 </span>
                 <button
                   type="button"
@@ -198,9 +198,7 @@ export function DeleteFolderConfirmModal({
         className="modal-overlay absolute inset-0"
       />
       <motion.div
-        initial={{ opacity: 0, scale: 0.98 }}
-        animate={{ opacity: 1, scale: 1, transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] } }}
-        exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.14, ease: 'easeIn' } }}
+        {...modalCard}
         className="modal-card relative w-full max-w-md max-h-[86vh] overflow-hidden flex flex-col"
         onClick={e => e.stopPropagation()}
       >
@@ -300,9 +298,7 @@ export function DeleteMultipleSessionsConfirmModal({
         className="modal-overlay absolute inset-0"
       />
       <motion.div
-        initial={{ opacity: 0, scale: 0.98 }}
-        animate={{ opacity: 1, scale: 1, transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] } }}
-        exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.14, ease: 'easeIn' } }}
+        {...modalCard}
         className="modal-card relative w-full max-w-md max-h-[86vh] overflow-hidden flex flex-col"
         onClick={e => e.stopPropagation()}
       >
@@ -337,7 +333,7 @@ export function DeleteMultipleSessionsConfirmModal({
           </div>
 
           <p style={{ color: 'var(--text-muted)' }}>
-            Tutti i file e i dati di sessione relativi verranno eliminati definitivamente dal disco.{' '}
+            Tutti i file e i dati di sessione relativi verranno eliminati definitivamente {deletedFrom()}.{' '}
             <strong style={{ color: 'var(--error-text)' }}>L&apos;operazione è irreversibile.</strong>
           </p>
         </div>

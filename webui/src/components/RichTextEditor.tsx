@@ -4,7 +4,6 @@ import { TextSelection } from '@tiptap/pm/state';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Color } from '@tiptap/extension-color';
-import { TextStyle } from '@tiptap/extension-text-style';
 import Underline from '@tiptap/extension-underline';
 import Highlight from '@tiptap/extension-highlight';
 import TextAlign from '@tiptap/extension-text-align';
@@ -13,7 +12,7 @@ import Link from '@tiptap/extension-link';
 import { EditorSubscript, EditorSuperscript, EditorScriptCaret } from '../editorScripts';
 import { ListTree, X } from 'lucide-react';
 import { FloatingImage } from './FloatingImage';
-import { type Heading, SearchHighlight, FontSize, CustomHeading, CustomParagraph, CustomHardBreak, MathInline, MathBlock, SmartArrows, extractHeadings } from '../editorExtensions';
+import { type Heading, SearchHighlight, FontSize, CustomHeading, CustomParagraph, CustomHardBreak, MathInline, MathBlock, SmartArrows, extractHeadings, sameHeadings } from '../editorExtensions';
 import Typography from '@tiptap/extension-typography';
 import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
 import { MenuBar } from './EditorToolbar';
@@ -32,12 +31,14 @@ import { EditorDocumentStyle } from '../editorDocumentStyle';
 import { EditorListItem, EditorOrderedList } from '../editorLists';
 import { EditorReadingColors } from '../editorReadingColors';
 import { EditorParagraphTab } from '../editorParagraphTab';
+import { EditorBold, EditorTextStyle } from '../editorBold';
 
 export type { Heading };
 
 interface RichTextEditorProps {
   initialContent?: string;
-  onChange?: (content: string) => void;
+  /** Signals an edit; the HTML is read lazily through the onEditorReady getter. */
+  onChange?: () => void;
   onEditorReady?: (getHtml: () => string) => void;
   initialScrollTop?: number;
   initialSearchTerm?: string;
@@ -49,6 +50,8 @@ interface RichTextEditorProps {
   onScrollToHeading?: (heading: Heading) => void;
   zoomLevel?: number;
   onZoomChange?: (zoomLevel: number) => void;
+  /** Height in px of chrome floating over the bottom of the page (the player dock). */
+  bottomInset?: number;
 }
 
 export function RichTextEditor({
@@ -65,7 +68,10 @@ export function RichTextEditor({
   onScrollToHeading,
   zoomLevel,
   onZoomChange,
+  bottomInset = 0,
 }: RichTextEditorProps) {
+  const bottomInsetRef = useRef(bottomInset);
+  useEffect(() => { bottomInsetRef.current = bottomInset; }, [bottomInset]);
   const [contextMenu, setContextMenu] = React.useState<{ x: number; y: number } | null>(null);
   const [isMathOpen, setIsMathOpen] = useState(false);
   // Each request opens the shared link panel once (Ctrl+K and the context menu).
@@ -90,10 +96,15 @@ export function RichTextEditor({
   const onHeadingsChangeRef = useRef(onHeadingsChange);
   useEffect(() => { onHeadingsChangeRef.current = onHeadingsChange; }, [onHeadingsChange]);
   const headingsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const publishedHeadingsRef = useRef<Heading[] | null>(null);
   const publishHeadings = (currentEditor: TiptapEditor) => {
     if (currentEditor.isDestroyed) return;
     try {
-      onHeadingsChangeRef.current?.(extractHeadings(currentEditor));
+      const headings = extractHeadings(currentEditor);
+      // Most pauses edit body text: leave the index untouched.
+      if (publishedHeadingsRef.current && sameHeadings(publishedHeadingsRef.current, headings)) return;
+      publishedHeadingsRef.current = headings;
+      onHeadingsChangeRef.current?.(headings);
     } catch (_) {
       // TipTap can briefly retain an editor object with a disposed schema while
       // React StrictMode reconnects effects. The next mounted pass republishes.
@@ -114,7 +125,10 @@ export function RichTextEditor({
   } = useEditorImageDrop({ editorRef });
 
   const extensions = useMemo(() => [
+    // First, as in StarterKit: mark order decides that bold wraps the others.
+    EditorBold,
     StarterKit.configure({
+      bold: false,
       heading: false,
       paragraph: false,
       link: false,
@@ -133,7 +147,7 @@ export function RichTextEditor({
     EditorListItem,
     EditorParagraphTab,
     FloatingImage,
-    TextStyle,
+    EditorTextStyle,
     Color,
     FontFamily.configure({ types: ['textStyle'] }),
     FontSize,
@@ -176,7 +190,8 @@ export function RichTextEditor({
       }
     },
     onUpdate: ({ editor }) => {
-      onChange?.(editor.getHTML());
+      // Serializing the whole document here cost ~13 ms per keystroke on long notes.
+      onChangeRef.current?.();
       if (headingsDebounceRef.current) clearTimeout(headingsDebounceRef.current);
       headingsDebounceRef.current = setTimeout(() => {
         publishHeadings(editor);
@@ -184,9 +199,17 @@ export function RichTextEditor({
     },
     editorProps: {
       attributes: {
-        class: 'prose prose-sm sm:prose-base max-w-none focus:outline-none tiptap-editor',
+        // Typography comes from editorTypography.css, not Tailwind's prose classes.
+        class: 'focus:outline-none tiptap-editor',
         spellcheck: 'false',
         style: editorFormattingVariables(),
+      },
+      // Read lazily so typing at the end of the document keeps the caret clear of the floating player.
+      scrollMargin: {
+        top: 5,
+        left: 5,
+        right: 5,
+        get bottom() { return bottomInsetRef.current + 16; },
       },
       handleDoubleClick: (view, pos) => {
         const range = getWordRangeAtPos(view, pos);
@@ -430,7 +453,7 @@ export function RichTextEditor({
       <div
         ref={scrollContainerRef}
         className="editor-page-container flex-1 overflow-y-auto"
-        style={{ overflowX: 'auto' }}
+        style={{ overflowX: 'auto', paddingBottom: bottomInset, scrollPaddingBottom: bottomInset }}
         onScroll={() => {
           setContextMenu(null);
           if (scrollContainerRef.current) {

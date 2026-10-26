@@ -12,6 +12,14 @@ MAX_PENDING_LINE_LEN = 65_536
 OVERSIZED_LINE_MESSAGE = "[console] Riga troppo lunga: contenuto omesso."
 
 
+def format_clock(seconds: float) -> str:
+    """Lecture position or length as m:ss (or h:mm:ss), the way a player shows it."""
+    total = max(0, int(seconds))
+    hours, rest = divmod(total, 3600)
+    minutes, secs = divmod(rest, 60)
+    return f"{hours}:{minutes:02}:{secs:02}" if hours else f"{minutes}:{secs:02}"
+
+
 class _ThreadLineState(threading.local):
     def __init__(self) -> None:
         self.pending = ""

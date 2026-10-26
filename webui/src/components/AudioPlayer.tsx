@@ -16,6 +16,18 @@ interface AudioPlayerProps {
 
 const PLAYBACK_RATES = [1, 1.25, 1.5, 1.75, 2, 2.5, 3];
 
+// iPad and iPhone Safari keep media volume on the hardware buttons: audio.volume stays 1 whatever
+// is set, so a volume slider there would move without changing anything.
+function canSetMediaVolume(): boolean {
+  try {
+    const probe = document.createElement('audio');
+    probe.volume = 0.5;
+    return probe.volume === 0.5;
+  } catch {
+    return false;
+  }
+}
+
 const INTERACTIVE_ARIA_ROLES = new Set([
   'button', 'link', 'menuitem', 'menuitemcheckbox', 'menuitemradio',
   'option', 'tab', 'treeitem', 'slider', 'spinbutton', 'combobox',
@@ -38,6 +50,7 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(initialPlaybackRate ?? 1);
   const [volume, setVolume] = useState(initialVolume ?? 1);
+  const [showVolume] = useState(canSetMediaVolume);
   const [isSpeedOpen, setIsSpeedOpen] = useState(false);
   const [speedPanelPos, setSpeedPanelPos] = useState({ bottom: 0, left: 0 });
   const speedBtnRef = useRef<HTMLButtonElement>(null);
@@ -443,7 +456,7 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
               ref={speedPanelRef}
               role="listbox"
               aria-label="Velocità di riproduzione"
-              className="editor-dropdown-panel player-speed-dropdown-panel open-up"
+              className="kebab-panel editor-dropdown-panel player-speed-dropdown-panel open-up"
               style={{
                 position: 'fixed',
                 bottom: `${speedPanelPos.bottom}px`,
@@ -462,7 +475,7 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
                     type="button"
                     role="option"
                     aria-selected={isActive}
-                    className={`editor-dropdown-item${isActive ? ' is-active' : ''}`}
+                    className={`kebab-item editor-dropdown-item${isActive ? ' is-active' : ''}`}
                     style={{ justifyContent: 'center', padding: '5px 8px', fontSize: '13px' }}
                     onClick={() => handleSpeedSelect(rate)}
                   >
@@ -484,6 +497,7 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
             <Plus className="h-3.5 w-3.5" />
           </button>
         </div>
+        {showVolume && (
         <div className="flex items-center gap-1.5">
           <Volume2 className="h-3.5 w-3.5" style={{ color: 'var(--text-muted)' }} />
           <input
@@ -499,6 +513,7 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
             style={{ '--progress': `${volume * 100}%` } as React.CSSProperties}
           />
         </div>
+        )}
         {(onRelink || onRemoveAudio) && (
           <div className="relative" ref={audioMenuRef}>
             <button
@@ -512,12 +527,7 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
             </button>
             {showAudioMenu && (
               <div
-                className="absolute bottom-full right-0 mb-2 z-50 rounded-lg border p-1 text-xs min-w-[200px]"
-                style={{
-                  background: 'var(--bg-elevated)',
-                  borderColor: 'var(--border-subtle)',
-                  boxShadow: 'var(--shadow-strong)',
-                }}
+                className="kebab-panel absolute bottom-full right-0 mb-2 z-50 text-xs min-w-[200px]"
               >
                 {onRelink && (
                   <button
@@ -555,6 +565,8 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
         )}
       </div>
 
+      {/* Portaled: the glass dock's backdrop-filter would otherwise trap the fixed overlay inside it. */}
+      {createPortal(
       <ConfirmActionModal
         isOpen={showConfirmRemove}
         title="Rimuovere l'audio collegato?"
@@ -566,7 +578,9 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
           setShowConfirmRemove(false);
           await handleRemoveAudio();
         }}
-      />
+      />,
+      document.body,
+      )}
     </div>
   );
 }

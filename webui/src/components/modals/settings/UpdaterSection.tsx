@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from 'react';
-import { ArrowDownToLine, CheckCircle2, RefreshCw, Tag, ExternalLink, Loader2, AlertCircle } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { ArrowDownToLine, CheckCircle2, RefreshCw, ExternalLink, Loader2, AlertCircle } from 'lucide-react';
 import { APP_VERSION, GITHUB_RELEASES_URL } from '../../../branding';
+import { SettingsSectionHeading } from './SettingsLayout';
 
 export interface SettingsUpdateInstallState {
   status?: 'idle' | 'downloading' | 'verifying' | 'installing' | 'done' | 'error';
@@ -33,6 +34,8 @@ interface UpdaterSectionProps {
   checkFailed: boolean;
   updateInstallState?: SettingsUpdateInstallState;
   onInstallUpdate?: (version: string) => Promise<void>;
+  /** Install progress and outcome appear in one place only: where the install was started. */
+  showsInstallFeedback?: boolean;
 }
 
 export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
@@ -43,6 +46,7 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
   checkFailed,
   updateInstallState,
   onInstallUpdate,
+  showsInstallFeedback = false,
 }) => {
   const cleanAppVersion = formatVersion(APP_VERSION);
   const cleanLatestVersion = formatVersion(latestVersion);
@@ -55,12 +59,22 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
   const isError = updateInstallState?.status === 'error';
   const isInProgress = isDownloading || isVerifying || isInstalling;
   const feedbackRequestedRef = useRef(false);
+  // An update already known on opening is offered only by the notice at the top; after a
+  // manual check down here, the notice is off screen, so the check button itself becomes
+  // the install action.
+  const [checkedHere, setCheckedHere] = useState(false);
+  const offersUpdateHere = checkedHere && isUpdateAvailable && !isCheckingUpdate && !checkFailed && !isDone && !isInProgress;
+  const canInstallHere = offersUpdateHere && Boolean(onInstallUpdate);
   const checkStatusRef = useRef<HTMLDivElement>(null);
-  const previousInstallStatusRef = useRef(updateInstallState?.status);
+  // The download row gains a size readout with the first sized progress event, which can
+  // wrap onto a new line on narrow windows, so it counts as a change of feedback too.
+  const hasDownloadSize = isDownloading && Boolean(updateInstallState?.bytesTotal ?? updateInstallState?.totalBytes);
+  const installFeedbackShape = `${updateInstallState?.status ?? ''}${hasDownloadSize ? ':sized' : ''}`;
+  const previousInstallFeedbackShapeRef = useRef(installFeedbackShape);
 
   useEffect(() => {
-    const installStatusChanged = previousInstallStatusRef.current !== updateInstallState?.status;
-    previousInstallStatusRef.current = updateInstallState?.status;
+    const installStatusChanged = previousInstallFeedbackShapeRef.current !== installFeedbackShape;
+    previousInstallFeedbackShapeRef.current = installFeedbackShape;
     const feedback = checkStatusRef.current;
     let shouldReveal = feedbackRequestedRef.current;
     // Keep expanding installation feedback visible only while this section is on screen.
@@ -77,71 +91,78 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
     if (feedback?.textContent) {
       feedback.scrollIntoView({ block: 'nearest' });
     }
-  }, [isCheckingUpdate, hasChecked, latestVersion, checkFailed, isInProgress, isError, isDone, updateInstallState?.status]);
+  }, [isCheckingUpdate, hasChecked, latestVersion, checkFailed, isInProgress, isError, isDone, installFeedbackShape]);
 
   return (
     <div role="region" aria-label="Versione e aggiornamenti" className="space-y-3">
       {/* Header row: Version Info & Check Button */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <Tag className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-              Versione e aggiornamenti
-            </h3>
-          </div>
+          <SettingsSectionHeading>Versione e aggiornamenti</SettingsSectionHeading>
           <p className="text-xs text-[var(--text-secondary)]">
             Installata:{' '}
             <span className="font-mono font-bold text-[var(--text-primary)]">{cleanAppVersion}</span>
-            <a
+            {offersUpdateHere && (
+              <>
+                <span aria-hidden="true" className="mx-1.5">→</span>
+                <span className="sr-only">disponibile </span>
+                <span className="font-mono font-bold text-[var(--accent-text)]">{cleanLatestVersion}</span>
+              </>
+            )}
+            {/* With an update pending, the notice at the top of the page links the notes,
+                unless that notice is off screen behind a manual check down here. */}
+            {(!isUpdateAvailable || offersUpdateHere) && <a
               href={GITHUB_RELEASES_URL}
               target="_blank"
               rel="noopener noreferrer"
               className="ml-2 hover:underline text-[var(--accent-text)] font-semibold inline-flex items-center gap-0.5"
             >
               Note di rilascio ↗
-            </a>
+            </a>}
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            feedbackRequestedRef.current = true;
-            checkForUpdates(true);
-          }}
-          disabled={isCheckingUpdate || isInProgress}
-          aria-label="Cerca aggiornamenti"
-          title={isCheckingUpdate ? 'Controllo in corso…' : 'Cerca aggiornamenti'}
-          className="app-button-secondary is-settings-action"
-        >
-          <RefreshCw
-            className={`w-4 h-4 transition-transform duration-500 ease-out ${
-              isCheckingUpdate
-                ? 'animate-spin text-[var(--accent-text)]'
-                : 'settings-refresh-icon'
-            }`}
-          />
-          <span>{isCheckingUpdate ? 'Controllo in corso…' : 'Cerca aggiornamenti'}</span>
-        </button>
+        {/* One button in one place: the check action turns into the install action, so focus
+            stays on the control the user just pressed. */}
+        {canInstallHere ? (
+          <button
+            type="button"
+            onClick={() => {
+              feedbackRequestedRef.current = true;
+              void Promise.resolve(onInstallUpdate!(latestVersion!)).catch(() => {});
+            }}
+            className="settings-pill-button animate-fade-in"
+          >
+            <ArrowDownToLine className="w-3.5 h-3.5" />
+            <span>Aggiorna a {cleanLatestVersion}</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              feedbackRequestedRef.current = true;
+              setCheckedHere(true);
+              checkForUpdates(true);
+            }}
+            disabled={isCheckingUpdate || isInProgress}
+            aria-label="Cerca aggiornamenti"
+            title={isCheckingUpdate ? 'Controllo in corso…' : 'Cerca aggiornamenti'}
+            className="app-button-secondary is-settings-action"
+          >
+            <RefreshCw
+              className={`w-4 h-4 transition-transform duration-500 ease-out ${
+                isCheckingUpdate
+                  ? 'animate-spin text-[var(--accent-text)]'
+                  : 'settings-refresh-icon'
+              }`}
+            />
+            <span>{isCheckingUpdate ? 'Controllo in corso…' : 'Cerca aggiornamenti'}</span>
+          </button>
+        )}
       </div>
 
       <div ref={checkStatusRef} role="status" aria-atomic="true" className="space-y-3 scroll-mb-4">
-        {isUpdateAvailable && !isCheckingUpdate && !checkFailed && !isDone && !isInProgress && (
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="flex items-center gap-2 text-xs text-[var(--accent-text)] font-bold">
-              <ArrowDownToLine className="w-4 h-4 shrink-0" />
-              <span>È disponibile la versione {cleanLatestVersion}.</span>
-            </p>
-            {onInstallUpdate && (
-              <InstallUpdateButton
-                version={latestVersion!}
-                onInstallUpdate={onInstallUpdate}
-                onStart={() => { feedbackRequestedRef.current = true; }}
-              />
-            )}
-          </div>
-        )}
+        {offersUpdateHere && <span className="sr-only">È disponibile la versione {cleanLatestVersion}.</span>}
 
         {/* Error Banner */}
         {hasChecked && checkFailed && !isCheckingUpdate && !isError && !isInProgress && !isDone && (
@@ -158,7 +179,7 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
             <span>Sei aggiornato alla versione più recente.</span>
           </div>
         )}
-        <UpdateInstallFeedback state={updateInstallState} />
+        {showsInstallFeedback && <UpdateInstallFeedback state={updateInstallState} />}
       </div>
     </div>
   );
@@ -166,10 +187,11 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
 
 UpdaterSection.displayName = 'UpdaterSection';
 
-export const UpdateNotice: React.FC<Pick<UpdaterSectionProps, 'latestVersion' | 'updateInstallState' | 'onInstallUpdate'>> = React.memo(({
+export const UpdateNotice: React.FC<Pick<UpdaterSectionProps, 'latestVersion' | 'updateInstallState' | 'onInstallUpdate' | 'showsInstallFeedback'>> = React.memo(({
   latestVersion,
   updateInstallState,
   onInstallUpdate,
+  showsInstallFeedback = true,
 }) => {
   const cleanLatestVersion = formatVersion(latestVersion);
   const isUpdateAvailable = Boolean(cleanLatestVersion && cleanLatestVersion !== formatVersion(APP_VERSION));
@@ -180,12 +202,14 @@ export const UpdateNotice: React.FC<Pick<UpdaterSectionProps, 'latestVersion' | 
   const isError = updateInstallState?.status === 'error';
   const isInProgress = isDownloading || isVerifying || isInstalling;
 
-  if (!isUpdateAvailable && !isDone && !isError) return null;
+  const showsCard = isUpdateAvailable && !isDone;
+  const showsOutcome = (isDone || isError) && showsInstallFeedback;
+  if (!showsCard && !showsOutcome) return null;
 
   return (
     <div role="region" aria-label="Aggiornamento applicazione" className="space-y-3">
       {/* Update Available Banner Card */}
-      {isUpdateAvailable && !isDone && (
+      {showsCard && (
         <div className="p-4 rounded-lg bg-[var(--accent-subtle)] border border-[var(--border-subtle)] space-y-3 relative overflow-hidden">
           {/* Top/Inline Content */}
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -198,7 +222,7 @@ export const UpdateNotice: React.FC<Pick<UpdaterSectionProps, 'latestVersion' | 
                   <h4 className="text-base font-bold text-[var(--text-primary)] leading-tight">
                     Nuova versione disponibile
                   </h4>
-                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold font-mono bg-[var(--bg-surface)] text-[var(--accent-text)] border border-[var(--accent-ring)] tracking-wide shrink-0">
+                  <span className="text-xs font-bold font-mono text-[var(--accent-text)] shrink-0">
                     {cleanLatestVersion}
                   </span>
                 </div>
@@ -223,31 +247,29 @@ export const UpdateNotice: React.FC<Pick<UpdaterSectionProps, 'latestVersion' | 
             )}
           </div>
 
-          {isInProgress && <UpdateInstallFeedback state={updateInstallState} />}
+          {isInProgress && showsInstallFeedback && <UpdateInstallFeedback state={updateInstallState} />}
         </div>
       )}
 
-      {(isDone || isError) && <UpdateInstallFeedback state={updateInstallState} />}
+      {showsOutcome && <UpdateInstallFeedback state={updateInstallState} />}
     </div>
   );
 });
 
 UpdateNotice.displayName = 'UpdateNotice';
 
-function InstallUpdateButton({ version, onInstallUpdate, onStart }: {
+function InstallUpdateButton({ version, onInstallUpdate }: {
   version: string;
   onInstallUpdate: (version: string) => Promise<void>;
-  onStart?: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={() => {
-        onStart?.();
         void Promise.resolve(onInstallUpdate(version)).catch(() => {});
       }}
       aria-label="Installa aggiornamento"
-      className="premium-button compact-button cursor-pointer shrink-0 font-bold text-xs flex items-center gap-1.5"
+      className="settings-pill-button"
     >
       <ArrowDownToLine className="w-3.5 h-3.5" />
       Aggiorna ora

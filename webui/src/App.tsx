@@ -1,12 +1,13 @@
-import React, { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { motion, MotionConfig } from 'motion/react';
 import { PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { GithubIcon } from './components/icons/GithubIcon';
+import { fade } from './motion';
 import { ReportProblemLink } from './components/ReportProblemLink';
 import { GITHUB_URL } from './branding';
 import { type ElSbobinatorBridge, type PywebviewApi } from './bridge';
 import { createInitialProcessingState, processingReducer } from './appState';
-import { GEMINI_KEY_PATTERN } from './utils';
+import { GEMINI_KEY_PATTERN, normalizeSessionPath } from './utils';
 import { STORAGE_KEYS } from './storageKeys';
 import { useConsole } from './hooks/useConsole';
 import { useTheme } from './hooks/useTheme';
@@ -14,8 +15,9 @@ import { useUpdateChecker } from './hooks/useUpdateChecker';
 import { loadPersistedQueue, useQueuePersistence } from './hooks/useQueuePersistence';
 import { useApiReady } from './hooks/useApiReady';
 import { useBridgeCallbacks } from './hooks/useBridgeCallbacks';
-import { getHostCapabilities } from './browserHost';
+import { getHostCapabilities } from './hostCapabilities';
 import { useBodyScrollLock } from './hooks/useBodyScrollLock';
+import { useHistoryNavigation } from './hooks/useHistoryNavigation';
 import { usePreview } from './hooks/usePreview';
 import { useNotifications } from './hooks/useNotifications';
 import { useUpdateInstaller } from './hooks/useUpdateInstaller';
@@ -27,6 +29,7 @@ import { useRevisionRetry } from './hooks/useRevisionRetry';
 import { useRegenerateDialog } from './hooks/useRegenerateDialog';
 import type { EditorSaveController } from './hooks/useEditorAutosave';
 import { useSystemNotificationTriggers } from './hooks/useSystemNotificationTriggers';
+import { useWebStorageNotice } from './hooks/useWebStorageNotice';
 import { QueuePage } from './components/QueuePage';
 import { RegenerateModal } from './components/modals/RegenerateModal';
 import { NewKeyModal } from './components/modals/NewKeyModal';
@@ -49,7 +52,7 @@ declare global {
 }
 
 export default function App() {
-  const [{ files, structuralVersion, appState, currentPhase, currentModel, activeProgress, workTotals, workDone }, dispatch] = useReducer(
+  const [{ files, structuralVersion, appState, currentPhase, currentModel, activeProgress, workTotals, workDone, processingWarnings }, dispatch] = useReducer(
     processingReducer,
     undefined,
     () => createInitialProcessingState(loadPersistedQueue()),
@@ -183,6 +186,7 @@ export default function App() {
     addNotification,
     handleRetryFailedRevisionBlocks: useCallback((sessionDir: string, fileId?: string) => handleRetryFailedRevisionBlocksRef.current(sessionDir, fileId), []),
   });
+  useWebStorageNotice({ apiReady, sessionCount: archiveSessions.length, addNotification });
 
   const completedFileCount = files.filter(file => file.status === 'done').length;
   useEffect(() => {
@@ -216,6 +220,9 @@ export default function App() {
     apiReady,
     appendConsole,
     onFilesAddedToBatch: useCallback((count: number) => onFilesAddedToBatchRef.current(count), []),
+    onFilesRejected: useCallback((names: string[]) => {
+      addNotification('Formato non supportato', `${names.join(', ')}: la versione web accetta solo file MP3, M4A o MP4.`, 'warning', 'system');
+    }, [addNotification]),
   });
 
   const {
@@ -280,6 +287,32 @@ export default function App() {
 
   const { preview, openPreview, closePreview, relinkPreviewAudio, removePreviewAudio, handleAudioStateChange, handleScrollTopChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed, onArchiveRefresh: refreshArchiveSessions });
 
+  // Web: the screen lives in the URL, so Back/Forward and a reload keep it (editor included).
+  const openEditorForSession = useCallback(async (sessionDir: string) => {
+    const key = normalizeSessionPath(sessionDir);
+    const file = filesRef.current.find(item => item.status === 'done' && item.outputHtml && normalizeSessionPath(item.outputDir) === key);
+    if (file) return openPreview(file.outputHtml!, file.title || file.name, file.path, file.id, file.outputDir);
+    const session = archiveSessionsRef.current.find(item => normalizeSessionPath(item.session_dir) === key);
+    if (!session) return false;
+    return openPreview(session.html_path, session.name, session.input_path, undefined, session.session_dir);
+  }, [openPreview, archiveSessionsRef]);
+  const closeEditorForHistory = useCallback(async () => {
+    const controller = editorControllerRef.current;
+    if (controller && !await controller.flushPendingAutosave()) return false;
+    closePreview();
+    return true;
+  }, [closePreview]);
+  const editorSessionDir = preview.content !== null ? preview.sessionDir || null : null;
+  useHistoryNavigation({
+    enabled: getHostCapabilities().kind === 'web',
+    screen: useMemo(() => ({ page: activePage, settings: isSettingsOpen, editor: editorSessionDir }), [activePage, isSettingsOpen, editorSessionDir]),
+    ready: apiReady && isArchiveLoaded,
+    setPage: setActivePage,
+    setSettingsOpen: setIsSettingsOpen,
+    openEditor: openEditorForSession,
+    closeEditor: closeEditorForHistory,
+  });
+
   const {
     regeneratePrompt,
     setRegeneratePrompt,
@@ -343,7 +376,7 @@ export default function App() {
     const targetFile = filesRef.current.find(file => file.id === id);
     if (!targetFile) return;
     if (appStateRef.current !== 'idle' && targetFile.status !== 'done' && targetFile.status !== 'queued' && targetFile.status !== 'error') return;
-    setConfirmAction({ type: 'remove-file', fileId: id, fileName: targetFile.name, isDone: targetFile.status === 'done' });
+    setConfirmAction({ type: 'remove-file', fileId: id, fileName: targetFile.title || targetFile.name, isDone: targetFile.status === 'done' });
   }, [setConfirmAction]);
 
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -488,11 +521,13 @@ export default function App() {
     const f = filesRef.current.find(item => item.id === id);
     if (!f) return;
     if (appStateRef.current !== 'idle' && f.status !== 'done') return;
-    setConfirmAction({ type: 'remove-file', fileId: id, fileName: f.name, isDone: true });
+    setConfirmAction({ type: 'remove-file', fileId: id, fileName: f.title || f.name, isDone: true });
   }, [setConfirmAction]);
 
+  // Full motion even when Windows "Animation effects" is off: the workflow relies on it.
   return (
-    <div className="app-shell h-screen overflow-hidden font-sans flex flex-row bg-[var(--bg-base)] text-[var(--text-secondary)]">
+    <MotionConfig reducedMotion="never">
+    <div className="app-shell overflow-hidden font-sans flex flex-row bg-[var(--bg-base)] text-[var(--text-secondary)]">
       <NavSidebar
         activePage={activePage}
         setActivePage={setActivePage}
@@ -512,112 +547,112 @@ export default function App() {
         isNotificationsOpen={isNotificationsOpen}
         setIsNotificationsOpen={setIsNotificationsOpen}
         shakeBell={shakeBell}
+        completionFlash={completionFlash}
       />
 
-      <div className="flex flex-col flex-1 min-w-0 h-screen overflow-hidden">
-        <AnimatePresence mode="wait">
-          {activePage === 'queue' ? (
-            <QueuePage
-              files={files}
-              progress={{
-                appState,
-                currentPhase,
-                currentModel,
-                activeProgress,
-                workDone,
-                workTotals,
-                batchCompleted,
-                batchTotal,
-                completionFlash,
-              }}
-              auth={{
-                apiReady,
-                bridgeDelayed,
-                apiKey,
-                setApiKey,
-                hasProtectedKey,
-                apiKeyInsecure,
-                setApiKeyInsecure,
-                apiKeyInsecureReason,
-                setApiKeyInsecureReason,
-                fallbackKeys,
-                preferredModel,
-                setPreferredModel,
+      <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden">
+        {/* The next page mounts at once and fades in; the previous one leaves
+            instantly. Waiting for its exit held every switch for ~165 ms. */}
+        {activePage === 'queue' ? (
+          <QueuePage
+            files={files}
+            progress={{
+              appState,
+              currentPhase,
+              currentModel,
+              activeProgress,
+              workDone,
+              workTotals,
+              processingWarnings,
+              batchCompleted,
+              batchTotal,
+              completionFlash,
+            }}
+            auth={{
+              apiReady,
+              bridgeDelayed,
+              apiKey,
+              setApiKey,
+              hasProtectedKey,
+              apiKeyInsecure,
+              setApiKeyInsecure,
+              apiKeyInsecureReason,
+              setApiKeyInsecureReason,
+              fallbackKeys,
+              preferredModel,
+              setPreferredModel,
 
-              }}
-              ingest={{
-                isDragging,
-                handleDragOver,
-                handleDragLeave,
-                handleDrop,
-                handleBrowseClick,
-              }}
-              console={{
-                showConsole,
-                setShowConsole,
-                consoleLogs,
-                isConsoleExpanded,
-                setIsConsoleExpanded,
-                appendConsole,
-              }}
-              actions={{
-                requestRemoveFile,
-                handleClearAll,
-                handleQueueRetry,
-                handleQueueResumeAll,
-                openPreview,
-                openFile,
-                handleQueueStart,
-                handleQueueStop,
-                handleOpenSettings,
-                handleRemoveDoneFile,
-                setConfirmAction,
-                handleRetryFailedRevisionBlocks,
-              }}
-              autoContinue={autoContinue}
-              setAutoContinue={setAutoContinue}
-              archiveSessions={archiveSessions}
-              isArchiveLoaded={isArchiveLoaded}
-              completedSessionFolderMap={completedSessionFolderMap}
-              dndSensors={dndSensors}
-              handleDragEnd={handleDragEnd}
-            />
-          ) : (
-            <motion.main
-              key="archive"
-              className="flex-1 w-full flex flex-col overflow-y-auto app-scroll"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.15, ease: 'easeOut' }}
-            >
-              <div className="flex-1 px-5 sm:px-6 py-8 flex flex-col max-w-4xl w-full mx-auto">
-                <React.Suspense fallback={null}>
-                  <ArchivePage
-                    sessions={archiveFiltered}
-                    total={archiveTotal - (archiveSessions.length - archiveFiltered.length)}
-                    folders={folders}
-                    onFoldersChange={handleFoldersChange}
-                    onPreview={openPreview}
-                    onOpenFile={openFile}
-                    onDeleteSession={(sessionDir, name) => setConfirmAction({ type: 'delete-archive-session', sessionDir, name })}
-                    onDeleteMultipleSessions={(sessionsList) => setConfirmAction({ type: 'delete-multiple-archive-sessions', sessions: sessionsList })}
-                    onRefresh={refreshArchiveSessions}
-                    onRenameSession={handleRenameSession}
-                    onLoadAll={handleLoadAll}
-                    onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
-                    onNotification={addNotification}
-                  />
-                </React.Suspense>
-              </div>
-              <footer className="app-footer app-footer-links">
-                <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }} className="footer-link">
-                  <GithubIcon className="w-3.5 h-3.5" /> Progetto Open-Source — GitHub
-                </a>
-                <ReportProblemLink />
-              </footer>
-            </motion.main>
-          )}
-        </AnimatePresence>
+            }}
+            ingest={{
+              isDragging,
+              handleDragOver,
+              handleDragLeave,
+              handleDrop,
+              handleBrowseClick,
+            }}
+            console={{
+              showConsole,
+              setShowConsole,
+              consoleLogs,
+              isConsoleExpanded,
+              setIsConsoleExpanded,
+              appendConsole,
+            }}
+            actions={{
+              requestRemoveFile,
+              handleClearAll,
+              handleQueueRetry,
+              handleQueueResumeAll,
+              openPreview,
+              openFile,
+              handleQueueStart,
+              handleQueueStop,
+              handleOpenSettings,
+              handleRemoveDoneFile,
+              handleRetryFailedRevisionBlocks,
+            }}
+            autoContinue={autoContinue}
+            setAutoContinue={setAutoContinue}
+            archiveSessions={archiveSessions}
+            isArchiveLoaded={isArchiveLoaded}
+            completedSessionFolderMap={completedSessionFolderMap}
+            dndSensors={dndSensors}
+            handleDragEnd={handleDragEnd}
+            onOpenArchive={() => setActivePage('archive')}
+          />
+        ) : (
+          <motion.main
+            key="archive"
+            className="flex-1 w-full flex flex-col overflow-y-auto app-scroll"
+            {...fade}
+          >
+            <div className="flex-1 px-5 sm:px-6 py-8 flex flex-col max-w-4xl w-full mx-auto">
+              <React.Suspense fallback={null}>
+                <ArchivePage
+                  sessions={archiveFiltered}
+                  total={archiveTotal - (archiveSessions.length - archiveFiltered.length)}
+                  folders={folders}
+                  onFoldersChange={handleFoldersChange}
+                  onPreview={openPreview}
+                  onOpenFile={openFile}
+                  onDeleteSession={(sessionDir, name) => setConfirmAction({ type: 'delete-archive-session', sessionDir, name })}
+                  onDeleteMultipleSessions={(sessionsList) => setConfirmAction({ type: 'delete-multiple-archive-sessions', sessions: sessionsList })}
+                  onRefresh={refreshArchiveSessions}
+                  onRenameSession={handleRenameSession}
+                  onLoadAll={handleLoadAll}
+                  onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
+                  onNotification={addNotification}
+                />
+              </React.Suspense>
+            </div>
+            <footer className="app-footer app-footer-links">
+              <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }} className="footer-link">
+                <GithubIcon className="w-3.5 h-3.5" /> Progetto Open-Source — GitHub
+              </a>
+              <ReportProblemLink />
+            </footer>
+          </motion.main>
+        )}
       </div>
 
       <RegenerateModal
@@ -686,6 +721,7 @@ export default function App() {
             }}
             storage={{
               onSessionRootMoved: handleSessionRootMoved,
+              onArchiveImported: () => void handleSessionRootMoved(),
             }}
           />
         </React.Suspense>
@@ -740,5 +776,6 @@ export default function App() {
         bottomOffset={16}
       />
     </div>
+    </MotionConfig>
   );
 }

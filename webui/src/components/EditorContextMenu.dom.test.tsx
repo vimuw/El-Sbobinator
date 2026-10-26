@@ -95,6 +95,25 @@ describe('EditorContextMenu', () => {
     const cutBtn = screen.getByText('Taglia').closest('button');
     if (cutBtn) fireEvent.click(cutBtn);
   });
+  it('frames the menu and its rows with the shared menu rules, tinting only the delete row', () => {
+    const editor = new Editor({ extensions: [StarterKit], content: '<p>Hello</p>' });
+    editor.commands.selectAll();
+    try {
+      render(<EditorContextMenu contextMenu={{ x: 50, y: 50 }} onClose={vi.fn()} editor={editor} onOpenMath={vi.fn()} onOpenImagePicker={vi.fn()} onOpenFind={vi.fn()} />);
+      const menu = document.querySelector('.editor-context-menu');
+      expect(menu?.classList.contains('kebab-panel')).toBe(true);
+      expect(menu?.querySelectorAll('.kebab-separator').length).toBeGreaterThan(0);
+
+      const rows = Array.from(menu?.querySelectorAll('button') ?? []);
+      expect(rows.length).toBeGreaterThan(0);
+      expect(rows.every(row => row.classList.contains('kebab-item'))).toBe(true);
+      expect(rows.filter(row => row.classList.contains('is-danger')).map(row => row.textContent)).toEqual([
+        expect.stringContaining('Elimina selezione'),
+      ]);
+    } finally {
+      editor.destroy();
+    }
+  });
   it('does not delete the selection when the clipboard transfer fails', async () => {
     const write = vi.spyOn(clipboard, 'writeEditorClipboard').mockRejectedValue(new Error('Clipboard unavailable'));
     const editor = new Editor({ extensions: [StarterKit], content: '<p>Hello</p>' });

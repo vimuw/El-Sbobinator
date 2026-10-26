@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { describe, expect, it, vi } from 'vitest';
 import type { ArchiveFolder, ArchiveSession } from '../bridge';
 import { ArchivePage } from './ArchivePage';
+import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 
 const motionCache = new Map<string, React.ComponentType<Record<string, unknown>>>();
 vi.mock('motion/react', () => ({
@@ -53,6 +54,29 @@ function renderArchive(overrides: Partial<{
 }
 
 describe('ArchivePage', () => {
+  it('lists each lesson as its own card, apart from the Riprendi card', () => {
+    const session = { ...makeSession('s1'), last_opened_at_iso: '2026-10-01T10:00:00Z' };
+    renderArchive({ sessions: [session] });
+
+    const resume = screen.getByText('Riprendi').closest('.archive-session-card');
+    expect(resume?.closest('.archive-session-list')).toBeNull();
+    const rows = document.querySelectorAll('.archive-session-list .archive-session-card');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].textContent).toContain(session.name);
+  });
+
+  it.each([false, true])('titles its sections like the dashboard, in plain sentence case (inside collection: %s)', (insideFolder) => {
+    const session = makeSession('s1');
+    renderArchive({ sessions: [session], folders: [{ id: 'f1', name: 'Anatomia', color: '', session_dirs: [session.session_dir] }] });
+    if (insideFolder) fireEvent.click(within(screen.getByRole('region', { name: 'Raccolte' })).getByText('Anatomia'));
+
+    const names = insideFolder ? ['Lezioni'] : ['Raccolte', 'Tutte le sbobine'];
+    for (const name of names) {
+      const heading = screen.getByRole('heading', { name, level: 3 });
+      expect(heading.className).toBe('dashboard-section-title');
+    }
+  });
+
   it.each([false, true])('renames a lesson from its menu (inside collection: %s)', async (insideFolder) => {
     const session = makeSession('s1');
     const onRenameSession = vi.fn().mockResolvedValue(undefined);
@@ -144,7 +168,7 @@ describe('ArchivePage', () => {
     renderArchive({ folders: hierarchy, onFoldersChange });
     fireEvent.click(within(screen.getByRole('region', { name: 'Raccolte' })).getByText('3° anno'));
     fireEvent.click(screen.getByRole('button', { name: 'Nuova raccolta' }));
-    fireEvent.change(screen.getByLabelText('NOME RACCOLTA'), { target: { value: '1° semestre' } });
+    fireEvent.change(screen.getByLabelText('Nome raccolta'), { target: { value: '1° semestre' } });
     fireEvent.click(screen.getByRole('button', { name: 'Crea raccolta' }));
     const updated = onFoldersChange.mock.calls[0][0] as ArchiveFolder[];
     expect(updated.slice(0, 3)).toEqual(hierarchy);
@@ -434,6 +458,49 @@ describe('ArchivePage', () => {
     expect(screen.getByText('Deseleziona')).toBeTruthy();
   });
 
+  it('deletes the whole selection when "Elimina" is chosen from a selected row menu', () => {
+    const s1 = makeSession('s1', 'Lezione 1');
+    const s2 = makeSession('s2', 'Lezione 2');
+    const s3 = makeSession('s3', 'Lezione 3');
+    const onDeleteSession = vi.fn();
+    const onDeleteMultipleSessions = vi.fn();
+
+    render(
+      <ArchivePage
+        sessions={[s1, s2, s3]}
+        folders={[]}
+        onFoldersChange={vi.fn()}
+        onPreview={vi.fn()}
+        onOpenFile={vi.fn()}
+        onDeleteSession={onDeleteSession}
+        onDeleteMultipleSessions={onDeleteMultipleSessions}
+      />,
+    );
+
+    // The selection bar has its own "Elimina"; pick the row-menu entry.
+    const clickRowMenuDelete = (rowIndex: number) => {
+      fireEvent.click(screen.getAllByLabelText('Altre opzioni')[rowIndex]);
+      const menuDelete = screen.getAllByRole('button', { name: 'Elimina' })
+        .find(btn => btn.getAttribute('title') !== 'Elimina le sbobine selezionate dal disco');
+      fireEvent.click(menuDelete!);
+    };
+
+    const selectButtons = screen.getAllByTitle('Seleziona');
+    fireEvent.click(selectButtons[0]);
+    fireEvent.click(selectButtons[1]);
+
+    clickRowMenuDelete(0);
+
+    expect(onDeleteSession).not.toHaveBeenCalled();
+    expect(onDeleteMultipleSessions).toHaveBeenCalledTimes(1);
+    expect(onDeleteMultipleSessions.mock.calls[0][0]).toHaveLength(2);
+
+    // A row outside the selection still deletes only itself.
+    clickRowMenuDelete(2);
+    expect(onDeleteSession).toHaveBeenCalledTimes(1);
+    expect(onDeleteMultipleSessions).toHaveBeenCalledTimes(1);
+  });
+
   it('matches sessions and displays correct folder count regardless of path casing or backslashes', () => {
     const s1: ArchiveSession = {
       session_dir: 'C:\\Users\\vimuw\\AppData\\Local\\El Sbobinator\\Sessions\\s1',
@@ -575,5 +642,27 @@ describe('ArchivePage', () => {
     await vi.waitFor(() => {
       expect(onNotification).toHaveBeenCalledWith('Importazione non riuscita', 'Error: Network IPC failure', 'error');
     });
+  });
+});
+
+describe('ArchivePage on hosts without .sbobina packages', () => {
+  it('hides the import button', () => {
+    setHostCapabilities({ kind: 'web', sbobinaPackages: false });
+    try {
+      render(
+        <ArchivePage
+          sessions={[makeSession('s1')]}
+          folders={[]}
+          onFoldersChange={vi.fn()}
+          onPreview={vi.fn()}
+          onOpenFile={vi.fn()}
+          onDeleteSession={vi.fn()}
+        />,
+      );
+      expect(screen.getAllByText('Lezione s1').length).toBeGreaterThan(0);
+      expect(screen.queryByTitle('Importa Sbobina (.sbobina)')).toBeNull();
+    } finally {
+      setHostCapabilities(DESKTOP_CAPABILITIES);
+    }
   });
 });

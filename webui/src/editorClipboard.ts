@@ -1,9 +1,9 @@
 import { normalizeImageAspectRatio, normalizeImageAlignment, normalizeImageLayout, normalizeImagePosition, normalizeImageOffsetY, normalizeImageWidth } from './imageLayout';
 import { clipboardPlainText, DOCUMENT_FORMATTING, EDITOR_CONTENT_WIDTH_PX, formatPortableHtml, headingStyle, orderedListStyle, paragraphSpacing, pointSize } from './documentFormatting';
 import { createClipboardEquation, type ClipboardEquation } from './clipboardEquations';
-import { resampleClipboardImageSync } from './utils';
 import { nativeLineSpacingReader, prepareHtmlLineSpacing } from './editorLineSpacing';
 import { videoLink } from './editorLinks';
+import { getHostCapabilities } from './hostCapabilities';
 
 // Docs ignores CSS floats on HTML paste. Its native clipboard slice carries the
 // positioned entities. Keep this adapter separate from saved editor HTML.
@@ -59,8 +59,12 @@ export const clipboardImageSize = (img: HTMLImageElement, sourceRoot?: HTMLEleme
   return null;
 };
 
-/** Return null for content we cannot represent faithfully in the native format. */
-export function createNativeClipboardFormats(html: string, sourceRoot?: HTMLElement, inlineSelection = false, sourceFigures?: readonly HTMLElement[]): ClipboardFormats | null {
+/**
+ * Return null for content we cannot represent faithfully in the native format.
+ * `portable` skips formatPortableHtml for HTML that prepareHtmlForClipboardSync
+ * just produced unchanged: the pass is idempotent, and costs tens of ms on a long lecture.
+ */
+export function createNativeClipboardFormats(html: string, sourceRoot?: HTMLElement, inlineSelection = false, sourceFigures?: readonly HTMLElement[], portable = false): ClipboardFormats | null {
   const body = new DOMParser().parseFromString(html, 'text/html').body;
   const displayedFigures = sourceFigures ?? Array.from(sourceRoot?.querySelectorAll<HTMLElement>('.editor-image-node') ?? []);
   let figureIndex = 0;
@@ -79,7 +83,7 @@ export function createNativeClipboardFormats(html: string, sourceRoot?: HTMLElem
     if (!size?.width || !size.height) return null;
     sizes.set(img, size);
   }
-  formatPortableHtml(body);
+  if (!portable) formatPortableHtml(body);
   const spacing = paragraphSpacing(body);
   const lineSpacing = nativeLineSpacingReader();
 
@@ -190,9 +194,9 @@ export function createNativeClipboardFormats(html: string, sourceRoot?: HTMLElem
     const entityId = id();
     const placeholder = `PLACEHOLDER_sbobinator_${serial}`;
     const wrapMargins = !caption && layout === 'wrap' ? { top: 3, bottom: 12, left: 12, right: 12 } : { top: 0, bottom: 0, left: 0, right: 0 };
-    const nativeImage = img.cloneNode(true) as HTMLImageElement;
-    resampleClipboardImageSync(nativeImage, width, sourceRoot);
-    imageUrls[placeholder] = nativeImage.getAttribute('src')!;
+    // Docs receives the stored source pixels; the entity size only sets how
+    // large it is displayed, so enlarging it in Docs keeps the full detail.
+    imageUrls[placeholder] = img.getAttribute('src')!;
     if (caption) {
       separateAdjacentTables();
       setStyle('tbl', spacers.length, {
@@ -460,10 +464,24 @@ export function setClipboardFormats(event: ClipboardEvent, formats: ClipboardFor
   return true;
 }
 
-/** Button/context-menu copies use the same ClipboardEvent formats as Ctrl+C. */
+/**
+ * Web build in Safari/WebKit (iPad): the hidden-textarea copy below pops up the on-screen keyboard,
+ * and Safari keeps custom clipboard types to the page's own origin, so Google Docs would only get
+ * HTML anyway. There the copy goes through navigator.clipboard.write, started inside the tap.
+ */
+function prefersAsyncClipboard(): boolean {
+  return getHostCapabilities().kind === 'web'
+    && typeof navigator !== 'undefined' && /Apple/.test(navigator.vendor ?? '')
+    && typeof ClipboardItem !== 'undefined' && typeof navigator.clipboard?.write === 'function';
+}
+
+/**
+ * Button/context-menu copies use the same ClipboardEvent formats as Ctrl+C. The write starts
+ * before the first await: Safari only allows it while the tap is being handled.
+ */
 export async function writeEditorClipboard(html: string, plainText: string, sourceRoot?: HTMLElement, preparedFormats?: ClipboardFormats): Promise<void> {
   const formats = preparedFormats ?? createNativeClipboardFormats(html, sourceRoot);
-  if (!formats || !formats[NATIVE_SLICE_MIME]) {
+  if (!formats || !formats[NATIVE_SLICE_MIME] || prefersAsyncClipboard()) {
     await navigator.clipboard.write([new ClipboardItem({
       'text/html': new Blob([formats?.['text/html'] ?? prepareHtmlLineSpacing(html)], { type: 'text/html' }),
       'text/plain': new Blob([formats?.['text/plain'] ?? plainText], { type: 'text/plain' }),

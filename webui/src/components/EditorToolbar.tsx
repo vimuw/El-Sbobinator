@@ -11,9 +11,11 @@ import {
   InsertImageButton, InsertMathButton, InsertYoutubeButton,
   ZoomSelect,
 } from './EditorToolbarControls';
+import { editorIsBold } from '../editorBold';
+import { shortcutLabel } from '../keyboardLabels';
 
 const menuBarStateKey = (editor: TiptapEditor): string => [
-  editor.isActive('bold'),
+  editorIsBold(editor),
   editor.isActive('italic'),
   editor.isActive('underline'),
   editor.isActive('strike'),
@@ -41,6 +43,14 @@ const menuBarStateKey = (editor: TiptapEditor): string => [
   // Docs paragraph styles feed the font, size and colour controls too.
   JSON.stringify(editor.getAttributes(editor.isActive('heading') ? 'heading' : 'paragraph').documentStyle ?? null),
 ].join('|');
+
+// A pressed toolbar button must not blur the editor: blur and refocus each
+// restyle the whole document. React bubbles portalled dropdown events here too.
+const keepEditorFocus = (event: React.MouseEvent) => {
+  const target = event.target as HTMLElement;
+  if (event.button !== 0 || target.closest('input, textarea, select, label')) return;
+  if (target.closest('button')) event.preventDefault();
+};
 
 export const MenuBar = ({
   editor,
@@ -87,7 +97,7 @@ export const MenuBar = ({
   const btn = (active: boolean) => `editor-button${active ? ' is-active' : ''}`;
 
   return (
-    <div className="editor-toolbar">
+    <div className="editor-toolbar" onMouseDown={keepEditorFocus}>
       <button
         type="button"
         onClick={() => {
@@ -97,7 +107,7 @@ export const MenuBar = ({
         }}
         disabled={!editor.can?.()?.undo?.()}
         className="editor-button"
-        title="Annulla (Ctrl+Z)"
+        title={shortcutLabel('Annulla (Ctrl+Z)')}
       >
         <Undo className="h-4 w-4" />
       </button>
@@ -110,7 +120,7 @@ export const MenuBar = ({
         }}
         disabled={!editor.can?.()?.redo?.()}
         className="editor-button"
-        title="Ripeti (Ctrl+Y)"
+        title={shortcutLabel('Ripeti (Ctrl+Y)')}
       >
         <Redo className="h-4 w-4" />
       </button>
@@ -127,23 +137,23 @@ export const MenuBar = ({
       <FontFamilySelect editor={editor} />
       <FontSizeSelect editor={editor} />
       <div className="editor-separator" />
-      <button type="button" onClick={() => editor.chain().focus().toggleBold().run()} className={btn(editor.isActive('bold'))} title="Grassetto (Ctrl+B)">
+      <button type="button" onClick={() => editor.chain().focus().toggleBold().run()} className={btn(editorIsBold(editor))} title={shortcutLabel('Grassetto (Ctrl+B)')}>
         <Bold className="h-4 w-4" />
       </button>
-      <button type="button" onClick={() => editor.chain().focus().toggleItalic().run()} className={btn(editor.isActive('italic'))} title="Corsivo (Ctrl+I)">
+      <button type="button" onClick={() => editor.chain().focus().toggleItalic().run()} className={btn(editor.isActive('italic'))} title={shortcutLabel('Corsivo (Ctrl+I)')}>
         <Italic className="h-4 w-4" />
       </button>
-      <button type="button" onClick={() => editor.chain().focus().toggleUnderline().run()} className={btn(editor.isActive('underline'))} title="Sottolineato (Ctrl+U)">
+      <button type="button" onClick={() => editor.chain().focus().toggleUnderline().run()} className={btn(editor.isActive('underline'))} title={shortcutLabel('Sottolineato (Ctrl+U)')}>
         <UnderlineIcon className="h-4 w-4" />
       </button>
       <button type="button" onClick={() => editor.chain().focus().toggleStrike().run()} className={btn(editor.isActive('strike'))} title="Barrato">
         <Strikethrough className="h-4 w-4" />
       </button>
       <div className="editor-script-controls" role="group" aria-label="Apice e pedice">
-        <button type="button" onClick={() => editor.chain().focus().toggleSuperscript().run()} className={btn(editor.isActive('superscript'))} title="Apice (Ctrl+.)" aria-label="Apice (Ctrl+.)" aria-pressed={editor.isActive('superscript')}>
+        <button type="button" onClick={() => editor.chain().focus().toggleSuperscript().run()} className={btn(editor.isActive('superscript'))} title={shortcutLabel('Apice (Ctrl+.)')} aria-label={shortcutLabel('Apice (Ctrl+.)')} aria-pressed={editor.isActive('superscript')}>
           <Superscript className="h-4 w-4" />
         </button>
-        <button type="button" onClick={() => editor.chain().focus().toggleSubscript().run()} className={btn(editor.isActive('subscript'))} title="Pedice (Ctrl+,)" aria-label="Pedice (Ctrl+,)" aria-pressed={editor.isActive('subscript')}>
+        <button type="button" onClick={() => editor.chain().focus().toggleSubscript().run()} className={btn(editor.isActive('subscript'))} title={shortcutLabel('Pedice (Ctrl+,)')} aria-label={shortcutLabel('Pedice (Ctrl+,)')} aria-pressed={editor.isActive('subscript')}>
           <Subscript className="h-4 w-4" />
         </button>
       </div>
@@ -153,7 +163,7 @@ export const MenuBar = ({
         type="button"
         onClick={() => editor.chain().focus().clearDocumentFormatting().run()}
         className="editor-button"
-        title="Rimuovi formattazione (Ctrl+\)"
+        title={shortcutLabel('Rimuovi formattazione (Ctrl+\\)')}
       >
         <RemoveFormatting className="h-4 w-4" />
       </button>
@@ -179,7 +189,7 @@ export const MenuBar = ({
         type="button"
         onClick={onToggleFindReplace}
         className={btn(showFindReplace)}
-        title="Trova e sostituisci (Ctrl+H)"
+        title={shortcutLabel('Trova e sostituisci (Ctrl+H)')}
       >
         <Search className="h-4 w-4" />
       </button>

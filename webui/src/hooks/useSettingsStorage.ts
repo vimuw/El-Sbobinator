@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-export const SESSION_CLEANUP_DAYS = 30;
-
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -10,6 +8,20 @@ export interface SessionStorageInfo {
   total_bytes: number;
   total_sessions: number;
   session_root: string;
+  /** Host's breakdown of the space, shown under the total (web: audio, texts, browser estimate). */
+  usage_detail?: string;
+  /** Web: whether the browser promised to keep the data (navigator.storage.persisted()). */
+  persisted?: boolean;
+}
+
+function toSessionInfo(res: { total_bytes?: number; total_sessions?: number; session_root?: string; usage_detail?: string; persisted?: boolean }): SessionStorageInfo {
+  return {
+    total_bytes: res.total_bytes ?? 0,
+    total_sessions: res.total_sessions ?? 0,
+    session_root: res.session_root ?? '',
+    ...(res.usage_detail ? { usage_detail: res.usage_detail } : {}),
+    ...(typeof res.persisted === 'boolean' ? { persisted: res.persisted } : {}),
+  };
 }
 
 export interface UseSettingsStorageOptions {
@@ -24,8 +36,6 @@ export interface CleanupResult {
   removed: number;
   freed_bytes: number;
   candidates?: number;
-  preserved_completed?: number;
-  missing_completed_html?: number;
 }
 
 export interface CleanupPreview {
@@ -49,13 +59,9 @@ export function useSettingsStorage({
   const [showMoveConfirm, setShowMoveConfirm] = useState(false);
 
   const [isCleaningSession, setIsCleaningSession] = useState(false);
-  const [isCleaningCompletedSessions, setIsCleaningCompletedSessions] = useState(false);
   const [showCleanupConfirm, setShowCleanupConfirm] = useState(false);
-  const [showCompletedCleanupConfirm, setShowCompletedCleanupConfirm] = useState(false);
   const [cleanupPreview, setCleanupPreview] = useState<CleanupPreview | null>(null);
-  const [completedCleanupPreview, setCompletedCleanupPreview] = useState<CleanupPreview | null>(null);
   const [cleanupResult, setCleanupResult] = useState<CleanupResult | null>(null);
-  const [completedCleanupResult, setCompletedCleanupResult] = useState<CleanupPreview | null>(null);
 
   const isMountedRef = useRef(true);
   const isOpenRef = useRef(isOpen);
@@ -70,7 +76,6 @@ export function useSettingsStorage({
       cleanupDismissTimerRef.current = null;
     }
     setCleanupResult(null);
-    setCompletedCleanupResult(null);
   }, []);
 
   const scheduleCleanupDismiss = useCallback(() => {
@@ -80,8 +85,7 @@ export function useSettingsStorage({
     cleanupDismissTimerRef.current = setTimeout(() => {
       if (isMountedRef.current) {
         setCleanupResult(null);
-        setCompletedCleanupResult(null);
-      }
+          }
       cleanupDismissTimerRef.current = null;
     }, 5000);
   }, []);
@@ -110,11 +114,7 @@ export function useSettingsStorage({
       p.then((res) => {
         if (!isOpenRef.current || !isMountedRef.current || reqId !== sessionInfoReqIdRef.current) return;
         if (res?.ok) {
-          setSessionInfo({
-            total_bytes: res.total_bytes ?? 0,
-            total_sessions: res.total_sessions ?? 0,
-            session_root: res.session_root ?? '',
-          });
+          setSessionInfo(toSessionInfo(res));
         }
       })
       .catch(() => {})
@@ -141,11 +141,7 @@ export function useSettingsStorage({
         if (window.pywebview?.api?.get_session_storage_info) {
           const info = await window.pywebview.api.get_session_storage_info();
           if (info?.ok && isOpenRef.current && isMountedRef.current) {
-            setSessionInfo({
-              total_bytes: info.total_bytes ?? 0,
-              total_sessions: info.total_sessions ?? 0,
-              session_root: info.session_root ?? '',
-            });
+            setSessionInfo(toSessionInfo(info));
           }
         }
         onSessionRootMoved?.({
@@ -177,13 +173,10 @@ export function useSettingsStorage({
       cleanupDismissTimerRef.current = null;
     }
     setCleanupResult(null);
-    setCompletedCleanupResult(null);
     setCleanupPreview(null);
-    setCompletedCleanupPreview(null);
     setMoveError(null);
     setPendingMovePath(null);
     setShowCleanupConfirm(false);
-    setShowCompletedCleanupConfirm(false);
     setShowMoveConfirm(false);
 
     if (!isOpen) {
@@ -297,18 +290,12 @@ export function useSettingsStorage({
           removed: res.removed ?? 0,
           freed_bytes: res.freed_bytes ?? 0,
           candidates: res.candidates ?? res.removed ?? 0,
-          preserved_completed: res.preserved_completed ?? 0,
-          missing_completed_html: res.missing_completed_html ?? 0,
         });
         scheduleCleanupDismiss();
         if (window.pywebview?.api?.get_session_storage_info) {
           const info = await window.pywebview.api.get_session_storage_info();
           if (info?.ok && isMountedRef.current) {
-            setSessionInfo({
-              total_bytes: info.total_bytes ?? 0,
-              total_sessions: info.total_sessions ?? 0,
-              session_root: info.session_root ?? '',
-            });
+            setSessionInfo(toSessionInfo(info));
           }
         }
       } else {
@@ -318,64 +305,6 @@ export function useSettingsStorage({
       if (isMountedRef.current) appendConsole(`❌ Pulizia sessioni fallita: ${getErrorMessage(e)}`);
     } finally {
       if (isMountedRef.current) setIsCleaningSession(false);
-    }
-  };
-
-  const handleAskCompletedCleanup = async () => {
-    if (!window.pywebview?.api?.cleanup_completed_sessions || isCleaningCompletedSessions) return;
-    setIsCleaningCompletedSessions(true);
-    setCompletedCleanupPreview(null);
-    try {
-      const res = await window.pywebview.api.cleanup_completed_sessions(SESSION_CLEANUP_DAYS, true);
-      if (!isMountedRef.current) return;
-      if (res?.ok) {
-        setCompletedCleanupPreview({
-          removed: res.removed ?? 0,
-          freed_bytes: res.freed_bytes ?? 0,
-          candidates: res.candidates ?? 0,
-        });
-        setShowCompletedCleanupConfirm(true);
-      } else {
-        appendConsole(`❌ Conteggio sbobine completate fallito: ${res?.error || 'errore sconosciuto'}`);
-      }
-    } catch (e: unknown) {
-      if (isMountedRef.current) appendConsole(`❌ Conteggio sbobine completate fallito: ${getErrorMessage(e)}`);
-    } finally {
-      if (isMountedRef.current) setIsCleaningCompletedSessions(false);
-    }
-  };
-
-  const handleCleanupCompletedSessions = async () => {
-    if (!window.pywebview?.api?.cleanup_completed_sessions) return;
-    setShowCompletedCleanupConfirm(false);
-    setIsCleaningCompletedSessions(true);
-    try {
-      const res = await window.pywebview.api.cleanup_completed_sessions(SESSION_CLEANUP_DAYS, false);
-      if (!isMountedRef.current) return;
-      if (res?.ok) {
-        setCompletedCleanupResult({
-          removed: res.removed ?? 0,
-          freed_bytes: res.freed_bytes ?? 0,
-          candidates: res.candidates ?? res.removed ?? 0,
-        });
-        scheduleCleanupDismiss();
-        if (window.pywebview?.api?.get_session_storage_info) {
-          const info = await window.pywebview.api.get_session_storage_info();
-          if (info?.ok && isMountedRef.current) {
-            setSessionInfo({
-              total_bytes: info.total_bytes ?? 0,
-              total_sessions: info.total_sessions ?? 0,
-              session_root: info.session_root ?? '',
-            });
-          }
-        }
-      } else {
-        appendConsole(`❌ Pulizia sbobine completate fallita: ${res?.error || 'errore sconosciuto'}`);
-      }
-    } catch (e: unknown) {
-      if (isMountedRef.current) appendConsole(`❌ Pulizia sbobine completate fallita: ${getErrorMessage(e)}`);
-    } finally {
-      if (isMountedRef.current) setIsCleaningCompletedSessions(false);
     }
   };
 
@@ -394,19 +323,12 @@ export function useSettingsStorage({
     handleConfirmMove,
     handleCancelMove,
     isCleaningSession,
-    isCleaningCompletedSessions,
     showCleanupConfirm,
     setShowCleanupConfirm,
-    showCompletedCleanupConfirm,
-    setShowCompletedCleanupConfirm,
     cleanupPreview,
-    completedCleanupPreview,
     cleanupResult,
-    completedCleanupResult,
     handleAskCleanup,
     handleCleanupSessions,
-    handleAskCompletedCleanup,
-    handleCleanupCompletedSessions,
     handleDismissCleanupResult,
   };
 }

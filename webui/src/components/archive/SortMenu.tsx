@@ -3,6 +3,10 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowUpDown, Check } from 'lucide-react';
 import { type SortOption, SORT_OPTIONS } from './types';
+import { popoverVariants, popoverItemVariants } from '../../motion';
+
+// Menus open like the other popovers but lighter, and their items follow in a quick beat.
+const MENU_ITEM_VARIANTS = popoverItemVariants({ step: 0.015 });
 
 interface SortMenuProps {
   sort: SortOption;
@@ -78,7 +82,7 @@ export function SortMenu({ sort, onSortChange, options = SORT_OPTIONS }: SortMen
         title={`Ordinamento: ${currentOption?.label ?? ''}`}
         aria-label="Cambia ordinamento"
       >
-        <ArrowUpDown className={`w-4 h-4 transition-transform duration-200 ${open ? 'scale-105 rotate-180 opacity-100' : 'opacity-80 group-hover/sort:opacity-100 group-hover/sort:scale-110 group-hover/sort:-translate-y-0.5'}`} />
+        <ArrowUpDown className={`w-4 h-4 transition duration-200 ${open ? 'scale-110 opacity-100' : 'opacity-80 group-hover/sort:opacity-100 group-hover/sort:scale-110'}`} />
       </button>
 
       {createPortal(
@@ -86,31 +90,30 @@ export function SortMenu({ sort, onSortChange, options = SORT_OPTIONS }: SortMen
           {open && pos && (
             <motion.div
               ref={dropdownRef}
-              initial={{ opacity: 0, scale: 0.95, y: pos.opensUp ? 4 : -4 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: pos.opensUp ? 4 : -4 }}
-              transition={{ duration: 0.1, ease: 'easeOut' }}
+              className="kebab-panel"
+              variants={popoverVariants({ y: pos.opensUp ? 4 : -4 })}
+              initial="closed"
+              animate="open"
+              exit="closed"
               style={{
+                transformOrigin: `${pos.opensUp ? 'bottom' : 'top'} ${pos.left !== undefined ? 'left' : 'right'}`,
                 position: 'fixed',
                 ...(pos.top !== undefined ? { top: pos.top } : { bottom: pos.bottom }),
                 ...(pos.left !== undefined ? { left: pos.left } : { right: pos.right }),
                 zIndex: 9999,
-                background: 'var(--bg-elevated)',
-                border: '1px solid var(--border-default)',
-                borderRadius: 12,
-                boxShadow: 'var(--shadow-strong)',
                 minWidth: 200,
                 width: 'max-content',
-                padding: 4,
               }}
               onClick={e => e.stopPropagation()}
             >
-              {options.map(opt => {
+              {options.map((opt, index) => {
                 const isSelected = sort === opt.id;
                 return (
-                  <button
+                  <motion.button
                     key={opt.id}
                     type="button"
+                    variants={MENU_ITEM_VARIANTS}
+                    custom={index}
                     onClick={() => {
                       onSortChange(opt.id);
                       setOpen(false);
@@ -121,7 +124,7 @@ export function SortMenu({ sort, onSortChange, options = SORT_OPTIONS }: SortMen
                       {isSelected && <Check className="w-3.5 h-3.5" style={{ color: 'var(--accent-text)' }} />}
                     </span>
                     <span>{opt.label}</span>
-                  </button>
+                  </motion.button>
                 );
               })}
             </motion.div>

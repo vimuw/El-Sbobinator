@@ -1,6 +1,8 @@
+import io
 import os
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from unittest.mock import patch
 
 from el_sbobinator.services.generation_service import QuotaDailyLimitError
@@ -66,7 +68,7 @@ class TestProcessMacroRevisionPhase(unittest.TestCase):
     def _make_session(self):
         return {"phase2": {"revised_done": 0}, "stage": "phase2", "last_error": None}
 
-    def _run(self, macro_blocks, phase2_dir, session, rq_side_effect):
+    def _run(self, macro_blocks, phase2_dir, session, rq_side_effect, runtime=None):
         """Run process_macro_revision_phase with mocked retry_with_quota and sleep."""
         with (
             patch(
@@ -85,7 +87,7 @@ class TestProcessMacroRevisionPhase(unittest.TestCase):
                 phase2_revised_dir=phase2_dir,
                 session=session,
                 save_session=lambda: True,
-                runtime=_FakeRuntime(),
+                runtime=runtime or _FakeRuntime(),
                 cancelled=lambda: False,
                 fallback_keys=[],
                 request_fallback_key=lambda: None,
@@ -146,6 +148,31 @@ class TestProcessMacroRevisionPhase(unittest.TestCase):
             self.assertTrue(os.path.exists(os.path.join(tmpdir, "rev_001.raw.md")))
             self.assertTrue(os.path.exists(os.path.join(tmpdir, "rev_001.md")))
             self.assertIn(1, session.get("revision_failed_blocks", []))
+
+    def test_unrevised_blocks_reach_the_banner(self):
+        """Blocks kept without revision are a lasting warning, not only a console line."""
+
+        class _WarningRuntime(_FakeRuntime):
+            def __init__(self):
+                self.warnings: list[tuple[str, str | None]] = []
+
+            def warning(self, code, message):
+                self.warnings.append((code, message))
+
+        runtime = _WarningRuntime()
+        with tempfile.TemporaryDirectory() as tmpdir:
+
+            def always_fail(fn, *, client, **kw):
+                raise RuntimeError("network error")
+
+            self._run(
+                ["Blocco grezzo."], tmpdir, self._make_session(), always_fail, runtime
+            )
+
+        self.assertEqual(
+            runtime.warnings,
+            [("unrevised_blocks", "1 sezione inclusa senza revisione (sezione 1)")],
+        )
 
     def test_resume_with_raw_md_goes_to_retry_pass_not_skipped_as_done(self):
         """On resume, a pre-existing .raw.md must trigger the retry pass,
@@ -390,6 +417,36 @@ class TestRevisionEdgeCases(unittest.TestCase):
 
             result = self._run_with_patches(["Blocco."], tmpdir, session, call_fn)
             self.assertIn("Testo generato dal modello", result)
+
+    def test_revision_call_logs_gemini_timing_and_thinking_tokens(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session = self._make_session()
+
+            class _Usage:
+                thoughts_token_count = 2500
+                candidates_token_count = 1200
+
+            class _FakeResp:
+                text = "Testo revisionato"
+                usage_metadata = _Usage()
+
+            class _FakeModels:
+                def generate_content(self, **_kw):
+                    return _FakeResp()
+
+            class _FakeClient:
+                models = _FakeModels()
+
+            def call_fn(fn, *, client, **kw):
+                return _FakeClient(), fn(_FakeClient())
+
+            out = io.StringIO()
+            with redirect_stdout(out):
+                self._run_with_patches(["Blocco."], tmpdir, session, call_fn)
+            self.assertRegex(
+                out.getvalue(),
+                r"Risposta di Gemini in \d+s \(ragionamento 2\.500 token, testo 1\.200 token\)\.",
+            )
 
     def test_current_text_none_in_main_pass_returns_early(self):
         with tempfile.TemporaryDirectory() as tmpdir:

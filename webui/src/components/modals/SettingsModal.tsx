@@ -1,24 +1,27 @@
 import { reportClientError } from '../../diagnostics';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Settings, HardDrive, SlidersHorizontal, Loader2, X, FlaskConical } from 'lucide-react';
+import { Settings, HardDrive, SlidersHorizontal, Loader2, X, LifeBuoy } from 'lucide-react';
 import type { ApiUsageResult, CredentialStorage, ModelOption, ValidationResult } from '../../bridge';
 import { ConfirmActionModal } from './ConfirmActionModal';
 import { ApiKeySection, type DeleteKeyTarget } from './settings/ApiKeySection';
 import { ModelSection } from './settings/ModelSection';
 import { NotificationSection } from './settings/NotificationSection';
 import { StorageSection } from './settings/StorageSection';
-import { DiagnosticsSection, type DisplayCheck } from './settings/DiagnosticsSection';
-import { ActivitySection } from './settings/ActivitySection';
+import { WebBackupSection } from './settings/WebBackupSection';
+import { DiagnosticsSection } from './settings/DiagnosticsSection';
 import { ApiStatusSection } from './settings/ApiStatusSection';
+import { WebKeysSection } from './settings/WebKeysSection';
 import { UpdaterSection, UpdateNotice, type SettingsUpdateInstallState } from './settings/UpdaterSection';
+import { SettingsDivider, SettingsPageHeader, SettingsSectionHeading } from './settings/SettingsLayout';
 
-import { useSettingsStorage, SESSION_CLEANUP_DAYS } from '../../hooks/useSettingsStorage';
+import { useSettingsStorage } from '../../hooks/useSettingsStorage';
 import { formatSize } from '../../utils';
 import { credentialStorageWarning } from '../../credentialStorage';
-import { getHostCapabilities } from '../../browserHost';
-import { APP_VERSION } from '../../branding';
+import { getHostCapabilities } from '../../hostCapabilities';
+import { APP_VERSION, WEB_PREVIEW_BUILD } from '../../branding';
 import { STORAGE_KEYS } from '../../storageKeys';
+import { modalCard } from '../../motion';
 
 export type { SettingsUpdateInstallState };
 
@@ -54,6 +57,8 @@ export interface SettingsUpdaterProps {
 
 export interface SettingsStorageProps {
   onSessionRootMoved?: (payload?: { oldRoot?: string; newRoot?: string }) => void;
+  /** Web build: a backup was imported, the archive must be reloaded. */
+  onArchiveImported?: () => void;
 }
 
 export interface SettingsModalProps {
@@ -68,6 +73,55 @@ export interface SettingsModalProps {
 }
 
 type TabType = 'general' | 'storage' | 'diagnostics';
+
+const TAB_HEADERS: Record<TabType, { title: string; description: string }> = {
+  general: {
+    title: 'Generale',
+    description: 'Chiave API Google Gemini, modello di trascrizione e preferenze di sistema.',
+  },
+  storage: {
+    title: 'Archiviazione',
+    description: 'Spazio su disco occupato dalle sbobine e gestione della cartella di lavoro.',
+  },
+  diagnostics: {
+    title: 'Assistenza',
+    description: "Segnala un problema e controlla che l'app sia pronta a trascrivere.",
+  },
+};
+
+const WEB_STORAGE_HEADER = {
+  title: 'Archiviazione',
+  description: 'Spazio occupato in questo browser da sbobine, audio delle lezioni ed elaborazioni.',
+};
+
+// The settings card mounts a large tree whose first style and layout pass can outlast several
+// frames on a slow machine. Starting the entrance on mount would spend that time off-screen and
+// show the card already half-faded in, so it waits in its initial pose until a frame has been
+// painted. Only this wrapper re-renders when it starts: the children keep their identity.
+const SettingsCard: React.FC<{ className: string; children: React.ReactNode }> = ({ className, children }) => {
+  const [hasPainted, setHasPainted] = useState(false);
+  useEffect(() => {
+    let nextFrame = 0;
+    const firstFrame = requestAnimationFrame(() => {
+      nextFrame = requestAnimationFrame(() => setHasPainted(true));
+    });
+    return () => {
+      cancelAnimationFrame(firstFrame);
+      cancelAnimationFrame(nextFrame);
+    };
+  }, []);
+  return (
+    <motion.div
+      initial={modalCard.initial}
+      animate={hasPainted ? modalCard.animate : modalCard.initial}
+      exit={modalCard.exit}
+      data-entered={hasPainted ? 'true' : 'false'}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  );
+};
 
 interface SettingsSnapshot {
   apiKey: string;
@@ -120,6 +174,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [isLoadingUsage, setIsLoadingUsage] = useState(false);
   const [clearProtectedPrimary, setClearProtectedPrimary] = useState(false);
   const [keyDeleteTarget, setKeyDeleteTarget] = useState<DeleteKeyTarget | null>(null);
+  // Update progress shows only where the install was started: the top notice by default,
+  // the version section when the user installed from there.
+  const [updateStartedInSection, setUpdateStartedInSection] = useState(false);
+  const installUpdateFromNotice = useCallback((version: string) => {
+    setUpdateStartedInSection(false);
+    return onInstallUpdate!(version);
+  }, [onInstallUpdate]);
+  const installUpdateFromSection = useCallback((version: string) => {
+    setUpdateStartedInSection(true);
+    return onInstallUpdate!(version);
+  }, [onInstallUpdate]);
 
   const isSavingRef = useRef(false);
   const isMountedRef = useRef(true);
@@ -145,19 +210,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     handleConfirmMove,
     handleCancelMove,
     isCleaningSession,
-    isCleaningCompletedSessions,
     showCleanupConfirm,
     setShowCleanupConfirm,
-    showCompletedCleanupConfirm,
-    setShowCompletedCleanupConfirm,
     cleanupPreview,
-    completedCleanupPreview,
     cleanupResult,
-    completedCleanupResult,
     handleAskCleanup,
     handleCleanupSessions,
-    handleAskCompletedCleanup,
-    handleCleanupCompletedSessions,
     handleDismissCleanupResult,
   } = useSettingsStorage({
     isOpen,
@@ -193,6 +251,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       };
     } else if (!isOpen) {
       settingsSnapshotRef.current = null;
+      // Reopened, the page starts at the top again, where the notice shows the progress.
+      setUpdateStartedInSection(false);
     }
     wasOpenRef.current = isOpen;
   }, [apiKey, fallbackKeys, isOpen, preferredModel]);
@@ -205,16 +265,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     notificationsEnabled !== snapshot.notificationsEnabled ||
     clearProtectedPrimary
   ));
-  const showCloseOnly = activeTab === 'diagnostics' && !hasPendingChanges;
+  const showCloseOnly = activeTab !== 'general' && !hasPendingChanges;
 
-  const usageRequestInFlightRef = useRef(false);
   const usageRequestIdRef = useRef(0);
-  const fetchApiUsage = useCallback(async (forceRefresh = false, background = false) => {
+  const fetchApiUsage = useCallback(async (forceRefresh = false) => {
     if (!window.pywebview?.api?.get_api_usage) return;
-    if (background && usageRequestInFlightRef.current) return;
     const requestId = ++usageRequestIdRef.current;
-    usageRequestInFlightRef.current = true;
-    if (!background) setIsLoadingUsage(true);
+    setIsLoadingUsage(true);
     try {
       const res = await window.pywebview.api.get_api_usage(
         clearProtectedPrimary
@@ -235,9 +292,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       reportClientError('Failed to fetch api usage:', e);
     } finally {
       // A superseded request must not release the current request's busy state.
-      if (requestId === usageRequestIdRef.current) {
-        usageRequestInFlightRef.current = false;
-        if (!background && isMountedRef.current) setIsLoadingUsage(false);
+      if (requestId === usageRequestIdRef.current && isMountedRef.current) {
+        setIsLoadingUsage(false);
       }
     }
   }, [apiKey, clearProtectedPrimary, fallbackKeys, hasProtectedKey, preferredModel]);
@@ -246,21 +302,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     void fetchApiUsage(true);
   }, [fetchApiUsage]);
 
-  const handleRetryActivity = useCallback(() => {
-    void fetchApiUsage();
-  }, [fetchApiUsage]);
-
-  useEffect(() => {
-    if (!isOpen || activeTab !== 'diagnostics') return;
-    const intervalId = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void fetchApiUsage(false, true);
-    }, 10_000);
-    return () => window.clearInterval(intervalId);
-  }, [isOpen, activeTab, fetchApiUsage]);
-
   useEffect(() => {
     if (isOpen) {
-      if (activeTab === 'diagnostics' || activeTab === 'general') {
+      if (activeTab === 'general') {
         void fetchApiUsage();
       }
       if (activeTab === 'storage') {
@@ -294,6 +338,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
     setSaveError(null);
+    // The new page starts at the top, where the notice shows the progress.
+    setUpdateStartedInSection(false);
   };
 
   const runEnvironmentValidation = async () => {
@@ -314,7 +360,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       }
       setValidationResult(response.result);
       appendConsole(response.result.summary);
-      void fetchApiUsage();
     } catch (error: unknown) {
       if (isMountedRef.current) {
         appendConsole(`❌ Validazione ambiente fallita: ${getErrorMessage(error)}`);
@@ -338,81 +383,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       throw new Error(res?.error || 'Errore generazione report diagnostico');
     }
   };
-
-  const handleOpenLogs = useCallback(() => {
-    if (window.pywebview?.api?.open_logs_folder) {
-      void window.pywebview.api.open_logs_folder();
-    }
-  }, []);
-
-  const getPendingChecks = useCallback((): DisplayCheck[] => {
-    const isWindows = typeof window !== 'undefined' && /windows|win32/i.test(navigator.userAgent || '');
-    const checks: DisplayCheck[] = [
-      {
-        id: 'api_key',
-        label: 'API Key Gemini',
-        status: 'pending',
-        message: '',
-        details: '',
-      },
-      {
-        id: 'ffmpeg',
-        label: 'FFmpeg',
-        status: 'pending',
-        message: '',
-        details: '',
-      },
-      {
-        id: 'config',
-        label: 'Config locale',
-        status: 'pending',
-        message: '',
-        details: '',
-      },
-      {
-        id: 'output',
-        label: 'Cartella sessioni/output',
-        status: 'pending',
-        message: '',
-        details: sessionInfo?.session_root || '',
-      },
-    ];
-
-    if (!isWindows) {
-      checks.push({
-        id: 'keyring',
-        label: 'Keyring',
-        status: 'pending',
-        message: '',
-        details: '',
-      });
-    }
-
-    return checks;
-  }, [sessionInfo?.session_root]);
-
-  const getDisplayChecks = useCallback((): DisplayCheck[] => {
-    const pending = getPendingChecks();
-    if (!validationResult) return pending;
-
-    const resultChecks = validationResult.checks;
-    const list: DisplayCheck[] = [];
-    for (const p of pending) {
-      const match = resultChecks.find(r => r.id === p.id);
-      if (match) {
-        list.push({
-          id: p.id,
-          label: p.label,
-          status: match.status,
-          message: match.message,
-          details: match.details,
-        });
-      } else {
-        list.push(p);
-      }
-    }
-    return list;
-  }, [getPendingChecks, validationResult]);
 
   const handleSave = async () => {
     if (isSavingRef.current) return;
@@ -466,7 +436,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       try {
         await onSettingsSaved?.();
       } catch (e: unknown) {
-        appendConsole(`Avviso: impostazioni salvate, ma il refresh dello stato non e riuscito: ${getErrorMessage(e)}`);
+        appendConsole(`⚠ Impostazioni salvate, ma l'aggiornamento dello stato non è riuscito: ${getErrorMessage(e)}`);
       }
       if (credentialStorageWarning(result.credential_storage, result.api_key_insecure)) {
         setActiveTab('general');
@@ -492,6 +462,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
     onClose();
   }, [onClose, setApiKey, setFallbackKeys, setPreferredModel]);
+
+  // Web build: "Rimuovi chiave" deletes the keys from this browser right away, not on "Salva".
+  const handleRemoveWebKeys = useCallback(async () => {
+    if (isSavingRef.current || !window.pywebview?.api?.save_settings) return;
+    isSavingRef.current = true;
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      const result = await window.pywebview.api.save_settings('', [], preferredModel);
+      if (!isMountedRef.current) return;
+      if (!result?.ok) {
+        setSaveError(`Rimozione non riuscita: ${result?.error || 'errore sconosciuto'}`);
+        return;
+      }
+      setApiKey('');
+      setFallbackKeys([]);
+      if (settingsSnapshotRef.current) settingsSnapshotRef.current = { ...settingsSnapshotRef.current, apiKey: '', fallbackKeys: [] };
+      appendConsole('Chiavi API rimosse da questo browser.');
+      await onSettingsSaved?.();
+    } catch (e: unknown) {
+      if (isMountedRef.current) setSaveError(`Rimozione non riuscita: ${getErrorMessage(e)}`);
+    } finally {
+      isSavingRef.current = false;
+      if (isMountedRef.current) setIsSaving(false);
+    }
+  }, [appendConsole, onSettingsSaved, preferredModel, setApiKey, setFallbackKeys]);
 
   const handleConfirmDeleteKey = useCallback(() => {
     if (!keyDeleteTarget) return;
@@ -543,16 +539,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               className="modal-overlay absolute inset-0"
             />
 
-            <motion.div
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1, transition: { duration: 0.15, ease: [0.16, 1, 0.3, 1] } }}
-              exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.12, ease: 'easeIn' } }}
-              className="modal-card relative w-full max-w-md md:max-w-4xl h-[85vh] md:h-[80vh] overflow-hidden flex flex-col md:flex-row"
-            >
+            <SettingsCard className="modal-card relative w-full max-w-md md:max-w-4xl h-[85vh] md:h-[80vh] overflow-hidden flex flex-col md:flex-row">
               <nav aria-label="Sezioni delle impostazioni" className="settings-nav app-scroll">
                 <div className="hidden md:flex items-center gap-2 px-3 py-2.5 mb-3 border-b border-[var(--border-subtle)]">
                   <Settings className="w-5 h-5 text-[var(--accent-text)] shrink-0" />
-                  <span role="heading" aria-level={2} className="font-bold text-base tracking-wide uppercase text-[var(--text-primary)]">
+                  <span role="heading" aria-level={2} className="font-semibold text-base text-[var(--text-primary)]">
                     Impostazioni
                   </span>
                 </div>
@@ -588,36 +579,35 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   className={`settings-nav-item ${activeTab === 'diagnostics' ? 'is-active' : ''}`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <FlaskConical className={`w-4 h-4 shrink-0 transition-colors ${activeTab === 'diagnostics' ? 'text-[var(--accent-text)]' : 'text-[var(--text-secondary)]'}`} />
-                    <span className="truncate">Diagnostica</span>
+                    <LifeBuoy className={`w-4 h-4 shrink-0 transition-colors ${activeTab === 'diagnostics' ? 'text-[var(--accent-text)]' : 'text-[var(--text-secondary)]'}`} />
+                    <span className="truncate">Assistenza</span>
                   </div>
                 </button>
               </nav>
 
               <div className="flex-1 min-h-0 flex flex-col min-w-0 bg-[var(--bg-surface)] relative">
-                <button
-                  type="button"
-                  onClick={handleClose}
-                  disabled={isSaving}
-                  className="icon-button modal-icon-button absolute top-4 right-4 z-20"
-                  aria-label="Chiudi finestra"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-                <div ref={contentRef} className="app-scroll flex-1 overflow-y-auto overflow-x-hidden p-6 md:p-8 space-y-6 [scrollbar-gutter:stable]">
+                {/* The page title and the close button stay put above the scrolling content,
+                    so nothing slides under the X. */}
+                <div className="flex items-start justify-between gap-4 px-6 md:px-8 pt-6 md:pt-8 pb-4 border-b border-[var(--border-subtle)]">
+                  <SettingsPageHeader {...(activeTab === 'storage' && hostCapabilities.kind === 'web' ? WEB_STORAGE_HEADER : TAB_HEADERS[activeTab])} />
+                  <button
+                    type="button"
+                    onClick={handleClose}
+                    disabled={isSaving}
+                    className="icon-button modal-icon-button shrink-0 -mt-1 -mr-2"
+                    aria-label="Chiudi finestra"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div ref={contentRef} data-testid="settings-content" className="app-scroll flex-1 overflow-y-auto overflow-x-hidden px-6 md:px-8 pt-5 pb-6 md:pb-8 space-y-6 [scrollbar-gutter:stable]">
                   {activeTab === 'general' && (
                     <div className="space-y-6 animate-fade-in">
-                      <div>
-                        <h2 className="text-lg font-bold text-[var(--text-primary)] tracking-tight">Generale</h2>
-                        <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                          Chiave API Google Gemini, modello di trascrizione e preferenze di sistema.
-                        </p>
-                      </div>
-
                       <UpdateNotice
                         latestVersion={latestVersion}
                         updateInstallState={updateInstallState}
-                        onInstallUpdate={onInstallUpdate}
+                        onInstallUpdate={onInstallUpdate && installUpdateFromNotice}
+                        showsInstallFeedback={!updateStartedInSection}
                       />
 
                       <ModelSection
@@ -626,60 +616,85 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         availableModels={availableModels}
                       />
 
-                      <div className="border-t border-[var(--border-default)]" />
+                      <SettingsDivider />
 
-                      <ApiKeySection
-                        apiKey={apiKey}
-                        setApiKey={key => {
-                          if (key.trim()) setClearProtectedPrimary(false);
-                          setApiKey(key);
-                        }}
-                        hasProtectedKey={hasProtectedKey && !clearProtectedPrimary}
-                        credentialStorage={credentialStorage}
-                        apiKeyInsecure={apiKeyInsecure}
-                        apiKeyInsecureReason={apiKeyInsecureReason || ''}
-                        fallbackKeys={fallbackKeys}
-                        setFallbackKeys={setFallbackKeys}
-                        onClearProtectedPrimary={() => setClearProtectedPrimary(true)}
-                        apiUsage={apiUsage}
-                        isLoadingUsage={isLoadingUsage}
-                        preferredModel={preferredModel}
-                        onAskDeleteKey={setKeyDeleteTarget}
-                        onRefreshUsage={handleRefreshUsage}
-                        statusSummary={<ApiStatusSection apiUsage={apiUsage} isLoadingUsage={isLoadingUsage} />}
-                      />
+                      {hostCapabilities.keyStorage === 'browser' ? (
+                        <WebKeysSection
+                          apiKey={apiKey}
+                          fallbackKeys={fallbackKeys}
+                          setApiKey={setApiKey}
+                          setFallbackKeys={setFallbackKeys}
+                          onRemoveKeys={() => void handleRemoveWebKeys()}
+                          disabled={isSaving}
+                        />
+                      ) : (
+                        <ApiKeySection
+                          apiKey={apiKey}
+                          setApiKey={key => {
+                            if (key.trim()) setClearProtectedPrimary(false);
+                            setApiKey(key);
+                          }}
+                          hasProtectedKey={hasProtectedKey && !clearProtectedPrimary}
+                          credentialStorage={credentialStorage}
+                          apiKeyInsecure={apiKeyInsecure}
+                          apiKeyInsecureReason={apiKeyInsecureReason || ''}
+                          fallbackKeys={fallbackKeys}
+                          setFallbackKeys={setFallbackKeys}
+                          onClearProtectedPrimary={() => setClearProtectedPrimary(true)}
+                          apiUsage={apiUsage}
+                          isLoadingUsage={isLoadingUsage}
+                          preferredModel={preferredModel}
+                          onAskDeleteKey={setKeyDeleteTarget}
+                          onRefreshUsage={handleRefreshUsage}
+                          statusSummary={<ApiStatusSection apiUsage={apiUsage} isLoadingUsage={isLoadingUsage} />}
+                        />
+                      )}
 
-                      <div className="border-t border-[var(--border-default)]" />
+                      {hostCapabilities.osNotifications && (
+                        <>
+                          <SettingsDivider />
 
-                      <NotificationSection
-                        notificationsEnabled={notificationsEnabled}
-                        onChange={setNotificationsEnabled}
-                        disabled={isSaving}
-                      />
+                          <NotificationSection
+                            notificationsEnabled={notificationsEnabled}
+                            onChange={setNotificationsEnabled}
+                            disabled={isSaving}
+                          />
+                        </>
+                      )}
 
-                      <div className="border-t border-[var(--border-default)]" />
+                      {hostCapabilities.updateInstallation && (
+                        <>
+                          <SettingsDivider />
 
-                      <UpdaterSection
-                        latestVersion={latestVersion}
-                        checkForUpdates={checkForUpdates}
-                        isCheckingUpdate={isCheckingUpdate}
-                        hasChecked={hasChecked}
-                        checkFailed={checkFailed}
-                        updateInstallState={updateInstallState}
-                        onInstallUpdate={onInstallUpdate}
-                      />
+                          <UpdaterSection
+                            latestVersion={latestVersion}
+                            checkForUpdates={checkForUpdates}
+                            isCheckingUpdate={isCheckingUpdate}
+                            hasChecked={hasChecked}
+                            checkFailed={checkFailed}
+                            updateInstallState={updateInstallState}
+                            onInstallUpdate={onInstallUpdate && installUpdateFromSection}
+                            showsInstallFeedback={updateStartedInSection}
+                          />
+                        </>
+                      )}
+
+                      {hostCapabilities.kind === 'web' && (
+                        <>
+                          <SettingsDivider />
+                          <div className="space-y-1" data-testid="web-version">
+                            <SettingsSectionHeading>Versione</SettingsSectionHeading>
+                            <p className="text-xs text-[var(--text-secondary)]">
+                              {WEB_PREVIEW_BUILD ? `${APP_VERSION} (anteprima)` : APP_VERSION}. Gli aggiornamenti arrivano da soli alla prossima apertura del sito, senza toccare sbobine e chiavi salvate in questo browser.
+                            </p>
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
 
                   {activeTab === 'storage' && (
                     <div className="space-y-6 animate-fade-in">
-                      <div>
-                        <h2 className="text-lg font-bold text-[var(--text-primary)] tracking-tight">Archiviazione</h2>
-                        <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                          Spazio su disco occupato dalle sbobine e gestione della cartella di lavoro.
-                        </p>
-                      </div>
-
                       <StorageSection
                         sessionInfo={sessionInfo}
                         isLoadingSessionInfo={isLoadingSessionInfo}
@@ -689,45 +704,35 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         moveProgress={moveProgress}
                         moveError={moveError}
                         isCleaningSession={isCleaningSession}
-                        isCleaningCompletedSessions={isCleaningCompletedSessions}
-                        cleanupPreview={cleanupPreview}
-                        completedCleanupPreview={completedCleanupPreview}
                         onAskCleanup={handleAskCleanup}
-                        onAskCompletedCleanup={handleAskCompletedCleanup}
                         cleanupResult={cleanupResult}
-                        completedCleanupResult={completedCleanupResult}
                         onDismissCleanupResult={handleDismissCleanupResult}
                         canManageSessionFolder={hostCapabilities.nativeFolderPicker && hostCapabilities.openLocalPath}
+                        inBrowser={hostCapabilities.kind === 'web'}
                       />
+                      {hostCapabilities.kind === 'web' && (
+                        <>
+                          <SettingsDivider />
+                          <WebBackupSection
+                            onArchiveImported={() => {
+                              storage?.onArchiveImported?.();
+                              fetchSessionStorageInfo();
+                            }}
+                          />
+                        </>
+                      )}
                     </div>
                   )}
 
                   {activeTab === 'diagnostics' && (
                     <div className="space-y-6 animate-fade-in">
-                      <div>
-                        <h2 className="text-lg font-bold text-[var(--text-primary)] tracking-tight">Diagnostica</h2>
-                        <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                          Verifica requisiti di sistema (FFmpeg, API, disco) e report di assistenza.
-                        </p>
-                      </div>
-
-                      <ActivitySection
-                        apiUsage={apiUsage}
-                        isLoadingUsage={isLoadingUsage}
-                        onRetry={handleRetryActivity}
-                      />
-                      <div className="border-t border-[var(--border-default)]" />
-
                       <DiagnosticsSection
                         isValidatingEnvironment={isValidatingEnvironment}
                         onRunValidation={runEnvironmentValidation}
                         validationResult={validationResult}
-                        displayChecks={getDisplayChecks()}
                         onCopyReport={handleCopyReport}
-                        onOpenLogs={handleOpenLogs}
-                        showOpenLogs={hostCapabilities.openLocalPath}
+                        showEnvironmentCheck={hostCapabilities.environmentCheck}
                       />
-
                     </div>
                   )}
                 </div>
@@ -762,7 +767,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                 </div>
               </div>
-            </motion.div>
+            </SettingsCard>
           </div>
         )}
       </AnimatePresence>
@@ -771,25 +776,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       <ConfirmActionModal
         isOpen={showCleanupConfirm}
         title="Eliminare tutte le elaborazioni incomplete?"
-        description={`Questa operazione elimina subito tutte le elaborazioni incomplete per liberare spazio. Sbobine interessate: ${cleanupPreview?.candidates ?? 0}. Spazio stimato: ${formatSize(cleanupPreview?.freed_bytes ?? 0)}. L'operazione è irreversibile.`}
+        description={`Elimina subito tutte le sbobine interrotte o non finite, comprese quelle in pausa che potresti ancora riprendere. Sbobine interessate: ${cleanupPreview?.candidates ?? 0}. Spazio stimato: ${formatSize(cleanupPreview?.freed_bytes ?? 0)}. L'operazione è irreversibile.`}
         confirmLabel="Elimina incomplete"
         cancelLabel="Annulla"
         onClose={() => setShowCleanupConfirm(false)}
         onConfirm={() => {
           setShowCleanupConfirm(false);
           void handleCleanupSessions();
-        }}
-      />
-      <ConfirmActionModal
-        isOpen={showCompletedCleanupConfirm}
-        title="Eliminare le sbobine completate vecchie?"
-        description={`Questa operazione elimina subito le sbobine completate più vecchie di ${SESSION_CLEANUP_DAYS} giorni. Sbobine interessate: ${completedCleanupPreview?.candidates ?? 0}. Spazio stimato: ${formatSize(completedCleanupPreview?.freed_bytes ?? 0)}. L'operazione è irreversibile.`}
-        confirmLabel="Elimina sbobine completate"
-        cancelLabel="Annulla"
-        onClose={() => setShowCompletedCleanupConfirm(false)}
-        onConfirm={() => {
-          setShowCompletedCleanupConfirm(false);
-          void handleCleanupCompletedSessions();
         }}
       />
       <ConfirmActionModal

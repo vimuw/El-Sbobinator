@@ -19,6 +19,8 @@ export type FileItem = {
   outputHtml?: string;
   outputDir?: string;
   completedAt?: number;
+  // Display title chosen in the archive; `name` stays the audio file name for duplicate checks.
+  title?: string;
   startedAt?: number;
   effectiveModel?: string;
   resumeSession?: boolean;
@@ -36,6 +38,16 @@ export function getPendingFiles(files: FileItem[]): FileItem[] {
 export function getDoneFiles(files: FileItem[]): FileItem[] {
   return [...files.filter(f => f.status === 'done')]
     .sort((a, b) => (b.completedAt ?? 0) - (a.completedAt ?? 0));
+}
+
+// Recenti keeps only the latest completions; older ones stay reachable in the archive.
+export const RECENT_DONE_LIMIT = 3;
+
+function keepRecentDone(files: FileItem[]): FileItem[] {
+  const done = getDoneFiles(files);
+  if (done.length <= RECENT_DONE_LIMIT) return files;
+  const dropped = new Set(done.slice(RECENT_DONE_LIMIT).map(f => f.id));
+  return files.filter(f => !dropped.has(f.id));
 }
 
 export type FileDescriptor = {
@@ -94,6 +106,17 @@ export type FileFailedPayload = {
   recommended_retry_at?: string | null;
 };
 
+// A lasting problem in the current run (see PipelineRuntime.warning); message null clears the code.
+export type ProcessingWarningPayload = {
+  code: string;
+  message: string | null;
+};
+
+export type ProcessingWarning = {
+  code: string;
+  message: string;
+};
+
 export type WorkTotalsPayload = {
   chunks?: number | null;
   macro?: number | null;
@@ -122,15 +145,17 @@ export type ProcessingState = {
     chunks: number;
     macro: number;
   };
+  processingWarnings: ProcessingWarning[];
 };
 
 export type ProcessingAction =
   | { type: 'queue/add'; files: FileItem[] }
+  | { type: 'queue/remove_sessions'; sessionDirs: string[] }
+  | { type: 'queue/rename_session'; sessionDir: string; title: string }
   | { type: 'queue/prepend'; files: FileItem[] }
   | { type: 'queue/remove'; id: string }
   | { type: 'queue/reorder'; fromIndex: number; toIndex: number }
   | { type: 'queue/update_source'; id?: string; sessionDir?: string; path?: string; name?: string; size?: number; duration?: number }
-  | { type: 'queue/clear_completed' }
   | { type: 'queue/retry_failed' }
   | { type: 'queue/retry_one'; id: string }
   | { type: 'queue/remap_session_roots'; oldRoot: string; newRoot: string }
@@ -140,6 +165,7 @@ export type ProcessingAction =
   | { type: 'app/set_status'; status: AppStatus }
   | { type: 'bridge/update_progress'; value: number }
   | { type: 'bridge/update_phase'; text: string }
+  | { type: 'bridge/processing_warning'; data: ProcessingWarningPayload }
   | { type: 'bridge/update_model'; model: string }
   | { type: 'bridge/process_done'; data: ProcessDonePayload }
   | { type: 'bridge/set_work_totals'; data: WorkTotalsPayload }
@@ -150,7 +176,8 @@ export type ProcessingAction =
 
 export function createInitialProcessingState(initialFiles: FileItem[] = []): ProcessingState {
   return {
-    files: initialFiles,
+    // A queue saved before the Recenti cap may hold more completions than it allows.
+    files: keepRecentDone(initialFiles),
     structuralVersion: 0,
     appState: 'idle',
     currentPhase: '',
@@ -166,12 +193,25 @@ export function createInitialProcessingState(initialFiles: FileItem[] = []): Pro
       chunks: 0,
       macro: 0,
     },
+    processingWarnings: [],
   };
 }
 
 export const initialProcessingState: ProcessingState = createInitialProcessingState();
 
 export function processingReducer(state: ProcessingState, action: ProcessingAction): ProcessingState {
+  const next = reduceProcessing(state, action);
+  if (next.files === state.files) return next;
+  const files = keepRecentDone(next.files);
+  if (files === next.files) return next;
+  return {
+    ...next,
+    files,
+    structuralVersion: next.structuralVersion === state.structuralVersion ? next.structuralVersion + 1 : next.structuralVersion,
+  };
+}
+
+function reduceProcessing(state: ProcessingState, action: ProcessingAction): ProcessingState {
   switch (action.type) {
     case 'queue/add':
       return { ...state, structuralVersion: state.structuralVersion + 1, files: [...state.files, ...action.files] };
@@ -179,6 +219,22 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
       return { ...state, structuralVersion: state.structuralVersion + 1, files: [...action.files, ...state.files] };
     case 'queue/remove':
       return { ...state, structuralVersion: state.structuralVersion + 1, files: state.files.filter(file => file.id !== action.id) };
+    case 'queue/remove_sessions': {
+      // Recenti and the archive show the same completed session, so deleting it drops both.
+      const dirs = new Set(action.sessionDirs.map(normalizeSessionPath));
+      const files = state.files.filter(file => file.status !== 'done' || !dirs.has(normalizeSessionPath(file.outputDir)));
+      if (files.length === state.files.length) return state;
+      return { ...state, structuralVersion: state.structuralVersion + 1, files };
+    }
+    case 'queue/rename_session': {
+      const dir = normalizeSessionPath(action.sessionDir);
+      if (!state.files.some(file => file.status === 'done' && normalizeSessionPath(file.outputDir) === dir)) return state;
+      return {
+        ...state,
+        structuralVersion: state.structuralVersion + 1,
+        files: state.files.map(file => (file.status === 'done' && normalizeSessionPath(file.outputDir) === dir ? { ...file, title: action.title } : file)),
+      };
+    }
     case 'queue/reorder': {
       const { fromIndex, toIndex } = action;
       if (fromIndex === toIndex) return state;
@@ -250,8 +306,6 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
       if (!changed) return state;
       return { ...state, structuralVersion: state.structuralVersion + 1, files };
     }
-    case 'queue/clear_completed':
-      return { ...state, structuralVersion: state.structuralVersion + 1, files: state.files.filter(file => file.status !== 'done') };
     case 'queue/retry_failed':
       return {
         ...state,
@@ -304,6 +358,8 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         ...target,
         isRetryingBlocks: action.value,
         status: action.value ? ('processing' as const) : ('done' as const),
+        // A finished retry counts as a fresh completion, so an old archive session stays in Recenti.
+        ...(!action.value && target.isRetryingBlocks ? { completedAt: Date.now() } : {}),
       };
       if (action.value) {
         const remaining = state.files.filter(file => file.id !== action.id);
@@ -328,6 +384,22 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
     case 'bridge/update_phase':
       if (state.currentPhase === action.text) return state;
       return { ...state, currentPhase: action.text };
+    case 'bridge/processing_warning': {
+      const code = String(action.data?.code ?? '').trim();
+      if (!code) return state;
+      const message = String(action.data?.message ?? '').trim();
+      const index = state.processingWarnings.findIndex(warning => warning.code === code);
+      if (!message) {
+        if (index === -1) return state;
+        return { ...state, processingWarnings: state.processingWarnings.filter(warning => warning.code !== code) };
+      }
+      if (index !== -1 && state.processingWarnings[index].message === message) return state;
+      // A code keeps its place when its message is updated, so the list does not jump around.
+      const processingWarnings = index === -1
+        ? [...state.processingWarnings, { code, message }]
+        : state.processingWarnings.map((warning, i) => (i === index ? { code, message } : warning));
+      return { ...state, processingWarnings };
+    }
     case 'bridge/update_model':
       if (state.currentModel === action.model) return state;
       return { ...state, currentModel: action.model };
@@ -380,6 +452,7 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
         currentPhase: '',
         currentModel: '',
         activeProgress: 0,
+        processingWarnings: [],
         currentFileIndex: action.data.index,
         currentBatchTotal: action.data.total,
         files: state.files.map(file =>

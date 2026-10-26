@@ -7,16 +7,17 @@ import { GithubIcon } from './icons/GithubIcon';
 import { GITHUB_URL } from '../branding';
 import { ReportProblemLink } from './ReportProblemLink';
 import type { ArchiveFolder, ArchiveSession } from '../bridge';
-import { type AppStatus, type FileItem, getDoneFiles, getPendingFiles } from '../appState';
+import { type AppStatus, type FileItem, type ProcessingWarning, getDoneFiles, getPendingFiles } from '../appState';
 import { GEMINI_KEY_PATTERN } from '../utils';
 import { STORAGE_KEYS } from '../storageKeys';
 import { ProcessingStatusBanner } from './ProcessingStatusBanner';
-import { DropZone } from './DropZone';
+import { DropOverlay, DropZone } from './DropZone';
 import { WelcomeDashboard } from './WelcomeDashboard';
 import { QueueSection } from './QueueSection';
 import { CompletedSection } from './CompletedSection';
+import { AutoHeight } from './AutoHeight';
+import { fade, fadeUp } from '../motion';
 import { ConsolePanel } from './ConsolePanel';
-import type { ConfirmAction } from '../hooks/useConfirmModal';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 
 const SetupPage = React.lazy(() => import('./SetupPage').then(m => ({ default: m.SetupPage })));
@@ -30,6 +31,7 @@ export interface QueueProgressProps {
   activeProgress: number;
   workDone: { chunks: number; macro: number };
   workTotals: { chunks: number; macro: number };
+  processingWarnings: ProcessingWarning[];
   batchCompleted: number;
   batchTotal: number;
   completionFlash: boolean;
@@ -54,7 +56,7 @@ export interface QueueAuthProps {
 export interface QueueIngestProps {
   isDragging: boolean;
   handleDragOver: (e: React.DragEvent) => void;
-  handleDragLeave: (e: React.DragEvent) => void;
+  handleDragLeave: (e?: React.DragEvent) => void;
   handleDrop: (e: React.DragEvent) => void;
   handleBrowseClick: () => void;
 }
@@ -79,7 +81,6 @@ export interface QueueActionProps {
   handleQueueStop: () => void;
   handleOpenSettings: () => void;
   handleRemoveDoneFile: (id: string) => void;
-  setConfirmAction: (action: ConfirmAction | null) => void;
   handleRetryFailedRevisionBlocks: (sessionDir: string, fileId?: string) => Promise<void>;
 }
 
@@ -97,8 +98,10 @@ export interface QueuePageProps {
   completedSessionFolderMap: Map<string, ArchiveFolder>;
   dndSensors: SensorDescriptor<SensorOptions>[];
   handleDragEnd: (event: DragEndEvent) => void;
+  onOpenArchive?: () => void;
 }
 
+// The dashboard shows the latest few; the archive keeps every transcript.
 export function QueuePage({
   files,
   progress,
@@ -113,6 +116,7 @@ export function QueuePage({
   completedSessionFolderMap,
   dndSensors,
   handleDragEnd,
+  onOpenArchive,
 }: QueuePageProps) {
   const {
     appState,
@@ -121,6 +125,7 @@ export function QueuePage({
     activeProgress,
     workDone,
     workTotals,
+    processingWarnings,
     batchCompleted,
     batchTotal,
     completionFlash,
@@ -170,7 +175,6 @@ export function QueuePage({
     handleQueueStop,
     handleOpenSettings,
     handleRemoveDoneFile,
-    setConfirmAction,
     handleRetryFailedRevisionBlocks,
   } = actions;
 
@@ -190,7 +194,7 @@ export function QueuePage({
   const isApiKeyValid = hasProtectedKey || GEMINI_KEY_PATTERN.test(apiKey.trim());
   const handleNetworkChange = useCallback((online: boolean) => {
     if (online) {
-      appendConsole('Connessione a Internet ripristinata.');
+      appendConsole('✅ Connessione a Internet ripristinata.');
     } else {
       appendConsole('⚠️ Connessione a Internet interrotta.');
     }
@@ -213,7 +217,40 @@ export function QueuePage({
     () => files.find(f => f.status === 'processing' || f.isRetryingBlocks) ?? (completionFlash ? doneFiles[0] : undefined),
     [files, completionFlash, doneFiles],
   );
-  const isConsoleDisabled = !hasApiKey || !isApiKeyValid || !(pendingFiles.length > 0 || doneFiles.length > 0 || showProcessingBanner);
+  const hasWork = pendingFiles.length > 0 || doneFiles.length > 0 || showProcessingBanner;
+  const isConsoleDisabled = !hasApiKey || !isApiKeyValid || !hasWork;
+
+  // Only file drags light up the page; nested dragleave events (moving between
+  // children) are ignored so the overlay never flickers while crossing the page.
+  const isFileDrag = (e: React.DragEvent) => {
+    const types = e.dataTransfer?.types;
+    return !types || Array.from(types).includes('Files');
+  };
+  const onPageDragOver = useCallback((e: React.DragEvent) => {
+    if (isFileDrag(e)) handleDragOver(e);
+  }, [handleDragOver]);
+  const onPageDragLeave = useCallback((e: React.DragEvent) => {
+    const next = e.relatedTarget as Node | null;
+    if (next && e.currentTarget.contains(next)) return;
+    handleDragLeave(e);
+  }, [handleDragLeave]);
+
+  useEffect(() => {
+    if (!isDragging) return;
+    const clear = () => handleDragLeave();
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') clear();
+    };
+    // A drag cancelled or dropped outside the page never reaches the main element.
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('dragend', clear);
+    window.addEventListener('drop', clear);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('dragend', clear);
+      window.removeEventListener('drop', clear);
+    };
+  }, [isDragging, handleDragLeave]);
 
   useEffect(() => {
     if (isConsoleDisabled && showConsole) {
@@ -226,20 +263,22 @@ export function QueuePage({
     <motion.main
       key="queue"
       className="flex-1 w-full flex flex-col overflow-y-auto app-scroll"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.15, ease: 'easeOut' }}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
+      {...fade}
+      onDragOver={onPageDragOver}
+      onDragLeave={onPageDragLeave}
       onDrop={handleDrop}
     >
-      <div className="my-auto px-5 sm:px-6 py-8 flex flex-col gap-5 max-w-3xl w-full mx-auto">
+      <DropOverlay visible={isDragging && uiMode !== 'setup' && uiMode !== 'loading'} />
+      {/* With work on the page the column stays anchored to the top: a vertically
+          centred column would shift everything above when the banner swaps in. */}
+      <div
+        data-testid="queue-column"
+        className={`${hasWork ? 'mb-auto' : 'my-auto'} px-5 sm:px-6 py-8 flex flex-col gap-8 max-w-3xl w-full mx-auto`}
+      >
         {apiKeyInsecure && (
           <motion.div
             key="api-key-insecure-banner"
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.18, ease: 'easeOut' }}
+            {...fadeUp}
             className="w-full alert-card is-warning px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
           >
             <div className="flex items-start gap-3 text-sm leading-relaxed text-[var(--warning-text)]">
@@ -261,9 +300,7 @@ export function QueuePage({
         {uiMode === 'loading' ? (
           <motion.div
             key="connecting-loader"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, ease: 'easeOut' }}
+            {...fadeUp}
             className="premium-panel py-12 px-6 flex flex-col items-center justify-center gap-4 text-center max-w-md mx-auto w-full"
           >
             <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--accent-text)' }} />
@@ -275,8 +312,7 @@ export function QueuePage({
             </p>
             {bridgeDelayed && (
               <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
+                {...fade}
                 className="alert-card is-error p-3 rounded-lg text-xs leading-relaxed max-w-sm mt-2 text-[var(--error-text)]"
               >
                 Il motore dell'applicazione sta impiegando più tempo del previsto.
@@ -303,52 +339,41 @@ export function QueuePage({
           </React.Suspense>
         ) : (
           <>
-            {!(pendingFiles.length > 0 || doneFiles.length > 0 || showProcessingBanner) && (
+            {!hasWork && (
               <WelcomeDashboard archiveSessions={archiveSessions} isArchiveLoaded={isArchiveLoaded} />
             )}
-            {/* Height animations let the queue below slide instead of jumping when the banner swaps in. */}
-            <AnimatePresence initial={false}>
-              {showProcessingBanner ? (
-                <motion.div
-                  key="processing-banner"
-                  data-testid="processing-banner-slot"
-                  initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                  animate={{ opacity: 1, height: 'auto', transitionEnd: { overflow: 'visible' } }}
-                  exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                  transition={{ duration: 0.28, ease: 'easeOut' }}
-                >
-                  <ProcessingStatusBanner
-                    appState={appState}
-                    currentPhase={completionFlash ? '__completed__' : currentPhase}
-                    currentModel={currentModel}
-                    activeProgress={completionFlash ? 100 : activeProgress}
-                    workTotals={workTotals}
-                    workDone={workDone}
-                    currentFileIndex={batchCompleted}
-                    currentBatchTotal={batchTotal}
-                    currentFileName={bannerFile?.name}
-                    startedAt={bannerFile?.startedAt}
-                  />
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="dropzone"
-                  initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                  animate={{ opacity: 1, height: 'auto', transitionEnd: { overflow: 'visible' } }}
-                  exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                  transition={{ duration: 0.28, ease: 'easeOut' }}
-                >
-                  <DropZone
-                    compact={pendingFiles.length > 0 || doneFiles.length > 0}
-                    isDragging={isDragging}
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                    onClick={handleBrowseClick}
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {/* Fade-through: the dropzone fades out, the slot settles to the banner's
+                height, then the banner fades in. Nothing slides across the page. */}
+            <AutoHeight testId="processing-slot">
+              <AnimatePresence mode="wait" initial={false}>
+                {showProcessingBanner ? (
+                  <motion.div key="processing-banner" data-testid="processing-banner-slot" {...fade}>
+                    <ProcessingStatusBanner
+                      appState={appState}
+                      currentPhase={completionFlash ? '__completed__' : currentPhase}
+                      currentModel={currentModel}
+                      activeProgress={completionFlash ? 100 : activeProgress}
+                      workTotals={workTotals}
+                      workDone={workDone}
+                      currentFileIndex={batchCompleted}
+                      currentBatchTotal={batchTotal}
+                      currentFileName={bannerFile?.name}
+                      startedAt={bannerFile?.startedAt}
+                      warnings={processingWarnings}
+                      onStop={handleQueueStop}
+                    />
+                  </motion.div>
+                ) : (
+                  <motion.div key="dropzone" {...fade}>
+                    <DropZone
+                      compact={pendingFiles.length > 0 || doneFiles.length > 0}
+                      isDragging={isDragging}
+                      onClick={handleBrowseClick}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </AutoHeight>
           </>
         )}
 
@@ -381,7 +406,6 @@ export function QueuePage({
                 onPreview: openPreview,
                 onOpenFile: openFile,
                 onStart: handleQueueStart,
-                onStop: handleQueueStop,
                 onOpenSettings: handleOpenSettings,
                 onAddFiles: handleBrowseClick,
               }}
@@ -389,13 +413,12 @@ export function QueuePage({
 
             <CompletedSection
               doneFiles={doneFiles}
-              appState={appState}
               onRemove={handleRemoveDoneFile}
               onPreview={openPreview}
               onOpenFile={openFile}
-              onClearAll={() => setConfirmAction({ type: 'clear-completed', count: doneFiles.length })}
               onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
               sessionFolderMap={completedSessionFolderMap}
+              onOpenArchive={onOpenArchive}
             />
           </>
         )}

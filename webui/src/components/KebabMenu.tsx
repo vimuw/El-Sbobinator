@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Check, ChevronRight, MoreVertical } from 'lucide-react';
+import { popoverVariants, popoverItemVariants } from '../motion';
 
 export type KebabMenuItem =
   | {
@@ -39,6 +40,10 @@ interface SubmenuPos {
   maxHeight: number;
   opensLeft: boolean;
 }
+
+// Menus open like the other popovers but lighter, and their items follow in a quick beat.
+// Submenus open on hover, so their items appear with the frame.
+const MENU_ITEM_VARIANTS = popoverItemVariants({ step: 0.015 });
 
 export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, title }: KebabMenuProps) {
   const [open, setOpen] = useState(false);
@@ -286,36 +291,36 @@ export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, 
             <motion.div
               key="kebab-dropdown"
               ref={dropdownRef}
-              initial={{ opacity: 0, y: opensUp ? 4 : -4, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: opensUp ? 4 : -4, scale: 0.97 }}
-              transition={{ duration: 0.12 }}
+              className="kebab-panel"
+              variants={popoverVariants({ y: opensUp ? 4 : -4 })}
+              initial="closed"
+              animate="open"
+              exit="closed"
               style={{
+                transformOrigin: `${opensUp ? 'bottom' : 'top'} ${pos.right !== undefined ? 'right' : 'left'}`,
                 position: 'fixed',
                 ...(pos.top !== undefined ? { top: pos.top } : { bottom: pos.bottom }),
                 ...(pos.right !== undefined ? { right: pos.right } : { left: pos.left }),
                 maxHeight: pos.maxHeight,
                 overflowY: 'auto',
                 zIndex: 9999,
-                background: 'var(--bg-elevated)',
-                border: '1px solid var(--border-default)',
-                borderRadius: 12,
-                boxShadow: 'var(--shadow-strong)',
                 minWidth: 210,
-                padding: 4,
               }}
               onClick={e => e.stopPropagation()}
             >
               {items.map((item, i) => {
                 if ('separator' in item) {
-                  return <div key={`sep-${i}`} style={{ height: 1, background: 'var(--border-subtle)', margin: '2px 0' }} />;
+                  return <div key={`sep-${i}`} className="kebab-separator" />;
                 }
                 const hasChildren = Boolean(item.children && item.children.length > 0);
                 const isSubmenuActive = activeSubmenuIndex === i;
 
                 return (
-                  <button
+                  <motion.button
                     key={`item-${i}-${item.label}`}
+                    // Disabled items keep their dimmed opacity, so they appear with the frame.
+                    variants={item.disabled ? undefined : MENU_ITEM_VARIANTS}
+                    custom={i}
                     ref={el => {
                       itemRefs.current[i] = el;
                     }}
@@ -350,7 +355,7 @@ export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, 
                     {hasChildren && (
                       <ChevronRight className="w-3.5 h-3.5 shrink-0 ml-2 opacity-60" />
                     )}
-                  </button>
+                  </motion.button>
                 );
               })}
             </motion.div>
@@ -360,13 +365,13 @@ export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, 
             <motion.div
               key="kebab-submenu"
               ref={submenuRef}
-              initial={{ opacity: 0, x: submenuPos.opensLeft ? 4 : -4, scale: 0.97 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: submenuPos.opensLeft ? 4 : -4, scale: 0.97 }}
-              transition={{ duration: 0.1 }}
+              variants={popoverVariants({ x: submenuPos.opensLeft ? 4 : -4, scale: 0.96 })}
+              initial="closed"
+              animate="open"
+              exit="closed"
               onMouseEnter={handleSubmenuMouseEnter}
               onMouseLeave={handleSubmenuMouseLeave}
-              className="app-scroll"
+              className="kebab-panel app-scroll"
               style={{
                 position: 'fixed',
                 top: submenuPos.top,
@@ -374,19 +379,14 @@ export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, 
                 maxHeight: submenuPos.maxHeight,
                 overflowY: 'auto',
                 zIndex: 10000,
-                background: 'var(--bg-elevated)',
-                border: '1px solid var(--border-default)',
-                borderRadius: 12,
-                boxShadow: 'var(--shadow-strong)',
                 minWidth: 200,
                 maxWidth: 280,
-                padding: 4,
               }}
               onClick={e => e.stopPropagation()}
             >
               {activeChildren.map((child, j) => {
                 if ('separator' in child) {
-                  return <div key={`subsep-${j}`} style={{ height: 1, background: 'var(--border-subtle)', margin: '2px 0' }} />;
+                  return <div key={`subsep-${j}`} className="kebab-separator" />;
                 }
                 return (
                   <button

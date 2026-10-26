@@ -18,6 +18,7 @@ from google import genai
 
 from el_sbobinator.core.model_registry import (
     default_macro_char_limit_for_model,
+    model_label,
 )
 from el_sbobinator.core.prompts import PROMPT_REVISIONE, PROMPT_SISTEMA
 from el_sbobinator.core.session_store import _update_session, mark_html_exported
@@ -40,6 +41,7 @@ from el_sbobinator.pipeline.pipeline_session import (
     persist_phase1_metadata,
     phase1_has_progress,
     read_text_file,
+    report_save_failures,
     reset_for_regeneration,
     restore_phase1_progress,
 )
@@ -60,6 +62,7 @@ from el_sbobinator.services.phase1_service import process_phase1_transcription
 from el_sbobinator.services.revision_service import (
     build_macro_blocks,
     process_macro_revision_phase,
+    unrevised_blocks_message,
 )
 from el_sbobinator.services.session_audio_service import (
     attach_playback_audio,
@@ -69,6 +72,7 @@ from el_sbobinator.services.session_audio_service import (
     session_audio_lock,
     session_metadata_lock,
 )
+from el_sbobinator.utils.console_utils import format_clock
 from el_sbobinator.utils.logging_utils import (
     attach_file_handler,
     detach_file_handler,
@@ -86,7 +90,6 @@ def _probe_input_media(
     input_path: str, runtime: PipelineRuntime, logger
 ) -> tuple[float | None, str | None]:
     """Probe media duration and return (total_duration_sec, ffmpeg_exe) or (None, None) on failure."""
-    print(f"[*] Analisi del file originale in corso:\n{os.path.basename(input_path)}")
     runtime.phase("Fase: analisi file")
     try:
         ffmpeg_exe = resolve_ffmpeg()
@@ -99,7 +102,9 @@ def _probe_input_media(
             )
         return total_duration_sec, ffmpeg_exe
     except Exception as e:
-        print(f"Errore caricamento audio. File corrotto o formato non supportato.\n{e}")
+        print(
+            f"❌ Impossibile leggere l'audio: file danneggiato o formato non supportato.\nDettaglio: {e}"
+        )
         logger.exception("Analisi file fallita.", extra={"stage": "probe"})
         return None, None
 
@@ -186,7 +191,7 @@ def _make_fallback_key_requester(runtime: PipelineRuntime, session: dict, save_s
                     except Exception:
                         pass
                 runtime.console_error(
-                    "Attesa chiave API scaduta. Sessione salvata - riprendi quando vuoi."
+                    "⚠ Nessuna nuova chiave API inserita in tempo: sbobina in pausa, potrai riprenderla quando vuoi."
                 )
                 runtime.set_run_error_detail("api_key_prompt_timeout")
                 raise generation_service.QuotaDailyLimitError("api_key_prompt_timeout")
@@ -211,7 +216,7 @@ def _handle_regeneration_flow(
     """Handle resume/regenerate prompt when progress already exists.
 
     Returns (status, new_stage, is_timeout_terminal). Status can be 'proceed', 'early_done',
-    'timeout', or 'continue'.
+    'timeout', 'cancelled', or 'continue'.
     """
     session = session_ctx.session
     _is_regen, _is_timeout = _ask_regeneration_decision(
@@ -222,19 +227,22 @@ def _handle_regeneration_flow(
         stage,
         cancel_event,
     )
-    print(f"[*] Risposta Rigenerare dal JS: {_is_regen}")
     if _is_regen == "timeout":
         session["last_error"] = _REGENERATE_PROMPT_TIMEOUT_ERROR
         session["last_error_detail"] = None
         save_session()
         runtime.console_error(
-            "Risposta non ricevuta entro 120 secondi. Sessione salvata - riprendi quando vuoi."
+            "⚠ Nessuna risposta entro 120 secondi: sbobina in pausa, potrai riprenderla quando vuoi."
         )
         runtime.set_run_result("failed", _REGENERATE_PROMPT_TIMEOUT_ERROR)
         return "timeout", stage, True
+    if runtime.cancelled():
+        # Stop, or closing the dialog, answers no question: neither reuse the
+        # finished document nor resume; the cancelled phase reports the outcome.
+        return "cancelled", stage, False
     if _is_regen:
         print(
-            f"[*] L'utente ha scelto di rigenerare il file {os.path.basename(input_path)}. Pulizia sessione precedente..."
+            f"Rigenero {os.path.basename(input_path)} da capo: elimino la sessione precedente..."
         )
         reset_for_regeneration(session_ctx)
         logger.info(
@@ -249,9 +257,7 @@ def _handle_regeneration_flow(
             else ""
         )
         if existing_html and os.path.exists(str(existing_html)):
-            print(
-                "[*] File gia' completato, l'utente ha scelto di usare la versione pronta."
-            )
+            print("Sbobina già pronta: uso la versione esistente.")
             runtime.update_model(session_ctx.settings.effective_model)
             runtime.output_html(str(existing_html))
             runtime.set_revision_failed_blocks(
@@ -288,9 +294,6 @@ def _run_phase1_transcription(
 ) -> tuple[Any, str | None]:
     """Execute phase 1 chunked transcription."""
     logger.info("Trascrizione avviata.", extra={"stage": "phase1"})
-    print(
-        f"[*] INIZIO FASE 1: Trascrizione a blocchi (circa {settings.chunk_minutes} min per blocco)"
-    )
     runtime.phase("Fase 1/3: trascrizione (chunk)")
     client, full_transcript, _ = process_phase1_transcription(
         client=client,
@@ -343,7 +346,6 @@ def _run_phase2_revision(
 ) -> tuple[Any, str, bool]:
     """Execute phase 2 macro revision. Returns (client, revised_text, should_exit)."""
     logger.info("Revisione avviata.", extra={"stage": "phase2"})
-    print("\n--------------------------------------")
     runtime.phase("Fase 2/3: revisione")
 
     char_limit = int(
@@ -367,7 +369,6 @@ def _run_phase2_revision(
         except Exception:
             pass
 
-    print(f"[*] INIZIO FASE 2: Revisione e pulizia ({len(macro_blocks)} macro-sezioni)")
     _update_session(
         session,
         {
@@ -451,14 +452,16 @@ def _export_html_and_finish(
             ],
         )
     except Exception as e:
-        print(f"[!] Errore salvataggio HTML: {e}")
+        print(f"❌ Impossibile salvare il documento finale: {e}")
         session["last_error"] = "html_export_failed"
         session["last_error_detail"] = None
         save_session()
         return False
 
     if not os.path.exists(html_path):
-        print("[!] Errore salvataggio HTML: file finale non trovato dopo la scrittura.")
+        print(
+            "❌ Impossibile salvare il documento finale: il file non risulta scritto."
+        )
         session["last_error"] = "html_export_missing"
         session["last_error_detail"] = None
         save_session()
@@ -500,17 +503,18 @@ def _export_html_and_finish(
     elapsed = time.monotonic() - start_time
     minutes = int(elapsed // 60)
     seconds = int(elapsed % 60)
-    print("\n======================================")
-    print("SBOBINATURA COMPLETATA CON SUCCESSO!")
-    print(f"Tempo totale: {minutes}m {seconds}s")
-    print(f"File salvato in: {session_html_dir}")
-    runtime.phase("Fase: completato")
     runtime.set_revision_failed_blocks(session.get("revision_failed_blocks") or [])
-    _completion_status = (
-        "completed_with_warnings"
-        if runtime.get_revision_failed_blocks()
-        else "completed"
-    )
+    failed_blocks = runtime.get_revision_failed_blocks()
+    # The closing line must match the run result the banner and archive show.
+    if failed_blocks:
+        print(
+            f"⚠ Sbobina completata con avvisi in {minutes}m {seconds:02}s: "
+            f"{unrevised_blocks_message(failed_blocks)}."
+        )
+    else:
+        print(f"✅ Sbobina completata in {minutes}m {seconds:02}s.")
+    runtime.phase("Fase: completato")
+    _completion_status = "completed_with_warnings" if failed_blocks else "completed"
     runtime.set_run_result(_completion_status)
     logger.info("Pipeline completata con successo.", extra={"stage": "done"})
     return True
@@ -569,7 +573,7 @@ def _retain_playback_audio(
         invalidate_session_storage_cache()
     except Exception as error:
         print(
-            "[!] Copia audio interna non salvata. Conserva il file originale "
+            "⚠ Copia audio interna non salvata. Conserva il file originale "
             f"e riapri la sbobina per riprovare: {error}"
         )
 
@@ -701,7 +705,9 @@ def _handle_circuit_breaker_paused(
         e,
         extra={"stage": "paused"},
     )
-    print(f"\n[⏸] PIPELINE SOSPESA (CIRCUIT BREAKER):\n{e}")
+    print(
+        f"⚠ Sbobina in pausa: Gemini non accetta altre richieste per ora. Riprendila più tardi.\nDettaglio: {e}"
+    )
 
 
 def _esegui_sbobinatura_impl(
@@ -729,7 +735,9 @@ def _esegui_sbobinatura_impl(
     try:
         if not api_key_value or api_key_value.strip() == "":
             runtime.set_run_result("failed", "api_key_mancante")
-            print("Errore: Formato API Key non valido o assente.")
+            print(
+                "❌ Chiave API mancante o non valida: controllala nelle impostazioni."
+            )
             logger.error("API key mancante o non valida.", extra={"stage": "startup"})
             return
 
@@ -757,13 +765,15 @@ def _esegui_sbobinatura_impl(
         logger.info("Elaborazione avviata.", extra={"stage": "startup"})
 
         def _on_autosave_fatal(msg: str) -> None:
-            print(msg)
             runtime.console_error(msg)
             if isinstance(session, dict):
                 session["last_error"] = "autosave_failed"
                 session["last_error_detail"] = None
 
-        save_session = SaveSessionGuard(session_ctx.save, _on_autosave_fatal)
+        save_session = SaveSessionGuard(
+            report_save_failures(session_ctx.save, runtime.warning),
+            _on_autosave_fatal,
+        )
         request_fallback_key = _make_fallback_key_requester(
             runtime, session, save_session
         )
@@ -776,7 +786,7 @@ def _esegui_sbobinatura_impl(
         if total_duration_sec is None or ffmpeg_exe is None:
             return
 
-        print(f"[*] Durata totale rilevata: {int(total_duration_sec / 60)} minuti.")
+        print(f"Durata audio: {format_clock(total_duration_sec)}.")
         persist_phase1_metadata(session_ctx, total_duration_sec, settings.step_seconds)
 
         previous_stage = str(session.get("stage", "phase1")).strip().lower()
@@ -793,6 +803,7 @@ def _esegui_sbobinatura_impl(
             settings,
             stage,
             _next_start_sec,
+            warn=runtime.warning,
         )
 
         existing_chunks = list_phase1_chunks(session_ctx.phase1_chunks_dir)
@@ -809,7 +820,7 @@ def _esegui_sbobinatura_impl(
             )
             if timeout_flag:
                 regenerate_prompt_timeout_terminal = True
-            if status in ("timeout", "early_done"):
+            if status in ("timeout", "early_done", "cancelled"):
                 return
             if status == "regenerated":
                 session = session_ctx.session
@@ -817,6 +828,8 @@ def _esegui_sbobinatura_impl(
                 model_name = settings.model
                 runtime.update_model(model_name)
 
+        # Printed once the regeneration choice can no longer change the model.
+        print(f"Modello: {model_label(model_name)}.")
         if runtime.cancelled():
             return
         _, preconv_used_path = ensure_preconverted_audio(
@@ -827,6 +840,7 @@ def _esegui_sbobinatura_impl(
             cancel_event=cancel_event,
             cancelled=runtime.cancelled,
             phase_callback=runtime.phase,
+            warn=runtime.warning,
         )
         if runtime.cancelled():
             return
@@ -913,7 +927,7 @@ def _esegui_sbobinatura_impl(
     except Exception as e:
         runtime.set_run_result("failed", str(e))
         logger.exception("Errore imprevisto nella pipeline.", extra={"stage": "fatal"})
-        print(f"\n[X] ERRORE IMPREVISTO DURANTE L'ESECUZIONE:\n{e}")
+        print(f"❌ Errore imprevisto: elaborazione interrotta.\nDettaglio: {e}")
     finally:
         _pipeline_finally_cleanup(
             session_ctx,

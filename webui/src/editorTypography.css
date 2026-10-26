@@ -1,0 +1,612 @@
+/* Typography of the editor page: Tailwind Typography's `prose prose-sm sm:prose-base`
+   (@tailwindcss/typography 0.5), scoped to the editor without the `not-prose` escape hatch.
+   That :not(:where([class~="not-prose"] *)) guard made every focus change and every block
+   inserted restyle the whole document; the editor never uses not-prose.
+   Enter and lists insert a block into the editor root, and Chromium then restyles every element
+   that a sibling (`h2 + x`) or `:*-of-type` rule could match among the root's children:
+   - The plugin's `hr/h2/h3/h4 + *` margin resets name only blockquote and pre: index.css already
+     sets the top margin of every other block that can follow a heading, and the editor has no hr.
+   - The quote rules keep `blockquote` in its own compound, so Chromium skips paragraphs outside
+     a quote without testing `:first-of-type` on them.
+   Same layer and :where() specificity as the plugin, so the editor rules in index.css still win. */
+@layer utilities {
+  .tiptap-editor {
+    color: var(--tw-prose-body);
+  }
+
+  .tiptap-editor :where(p) {
+    margin-top: 1.25em;
+    margin-bottom: 1.25em;
+  }
+
+  .tiptap-editor :where(a) {
+    color: var(--tw-prose-links);
+    font-weight: 500;
+    text-decoration: underline;
+  }
+
+  .tiptap-editor :where(strong) {
+    color: var(--tw-prose-bold);
+    font-weight: 600;
+  }
+
+  .tiptap-editor :where(a strong),
+  .tiptap-editor :where(blockquote strong) {
+    color: inherit;
+  }
+
+  .tiptap-editor :where(ol) {
+    margin-top: 1.25em;
+    margin-bottom: 1.25em;
+    padding-inline-start: 1.625em;
+    list-style-type: decimal;
+  }
+
+  .tiptap-editor :where(ol[type=A]) {
+    list-style-type: upper-alpha;
+  }
+
+  .tiptap-editor :where(ol[type=a]) {
+    list-style-type: lower-alpha;
+  }
+
+  .tiptap-editor :where(ol[type=A s]) {
+    list-style-type: upper-alpha;
+  }
+
+  .tiptap-editor :where(ol[type=a s]) {
+    list-style-type: lower-alpha;
+  }
+
+  .tiptap-editor :where(ol[type=I]) {
+    list-style-type: upper-roman;
+  }
+
+  .tiptap-editor :where(ol[type=i]) {
+    list-style-type: lower-roman;
+  }
+
+  .tiptap-editor :where(ol[type=I s]) {
+    list-style-type: upper-roman;
+  }
+
+  .tiptap-editor :where(ol[type=i s]) {
+    list-style-type: lower-roman;
+  }
+
+  .tiptap-editor :where(ol[type="1"]) {
+    list-style-type: decimal;
+  }
+
+  .tiptap-editor :where(ul) {
+    margin-top: 1.25em;
+    margin-bottom: 1.25em;
+    padding-inline-start: 1.625em;
+    list-style-type: disc;
+  }
+
+  .tiptap-editor :where(ol > li)::marker {
+    color: var(--tw-prose-counters);
+    font-weight: 400;
+  }
+
+  .tiptap-editor :where(ul > li)::marker {
+    color: var(--tw-prose-bullets);
+  }
+
+  .tiptap-editor :where(hr) {
+    border-color: var(--tw-prose-hr);
+    border-top-width: 1px;
+    margin-top: 3em;
+    margin-bottom: 3em;
+  }
+
+  .tiptap-editor :where(blockquote) {
+    color: var(--tw-prose-quotes);
+    border-inline-start-width: .25rem;
+    border-inline-start-color: var(--tw-prose-quote-borders);
+    quotes: "“""”""‘""’";
+    margin-top: 1.6em;
+    margin-bottom: 1.6em;
+    padding-inline-start: 1em;
+    font-style: italic;
+    font-weight: 500;
+  }
+
+  .tiptap-editor :where(blockquote) :where(p:first-of-type):before {
+    content: open-quote;
+  }
+
+  .tiptap-editor :where(blockquote) :where(p:last-of-type):after {
+    content: close-quote;
+  }
+
+  .tiptap-editor :where(h1) {
+    color: var(--tw-prose-headings);
+    margin-top: 0;
+    margin-bottom: .888889em;
+    font-size: 2.25em;
+    font-weight: 800;
+    line-height: 1.11111;
+  }
+
+  .tiptap-editor :where(h1 strong) {
+    color: inherit;
+    font-weight: 900;
+  }
+
+  .tiptap-editor :where(h2) {
+    color: var(--tw-prose-headings);
+    margin-top: 2em;
+    margin-bottom: 1em;
+    font-size: 1.5em;
+    font-weight: 700;
+    line-height: 1.33333;
+  }
+
+  .tiptap-editor :where(h2 strong) {
+    color: inherit;
+    font-weight: 800;
+  }
+
+  .tiptap-editor :where(h3) {
+    color: var(--tw-prose-headings);
+    margin-top: 1.6em;
+    margin-bottom: .6em;
+    font-size: 1.25em;
+    font-weight: 600;
+    line-height: 1.6;
+  }
+
+  .tiptap-editor :where(h3 strong) {
+    color: inherit;
+    font-weight: 700;
+  }
+
+  .tiptap-editor :where(h4) {
+    color: var(--tw-prose-headings);
+    margin-top: 1.5em;
+    margin-bottom: .5em;
+    font-weight: 600;
+    line-height: 1.5;
+  }
+
+  .tiptap-editor :where(h4 strong) {
+    color: inherit;
+    font-weight: 700;
+  }
+
+  .tiptap-editor :where(img) {
+    margin-top: 2em;
+    margin-bottom: 2em;
+  }
+
+  .tiptap-editor :where(code) {
+    color: var(--tw-prose-code);
+    font-size: .875em;
+    font-weight: 600;
+  }
+
+  .tiptap-editor :where(code):before,
+  .tiptap-editor :where(code):after {
+    content: "`";
+  }
+
+  .tiptap-editor :where(a code),
+  .tiptap-editor :where(h1 code) {
+    color: inherit;
+  }
+
+  .tiptap-editor :where(h2 code) {
+    color: inherit;
+    font-size: .875em;
+  }
+
+  .tiptap-editor :where(h3 code) {
+    color: inherit;
+    font-size: .9em;
+  }
+
+  .tiptap-editor :where(h4 code),
+  .tiptap-editor :where(blockquote code) {
+    color: inherit;
+  }
+
+  .tiptap-editor :where(pre) {
+    color: var(--tw-prose-pre-code);
+    background-color: var(--tw-prose-pre-bg);
+    padding-top: .857143em;
+    padding-inline-end: 1.14286em;
+    padding-bottom: .857143em;
+    border-radius: .375rem;
+    margin-top: 1.71429em;
+    margin-bottom: 1.71429em;
+    padding-inline-start: 1.14286em;
+    font-size: .875em;
+    font-weight: 400;
+    line-height: 1.71429;
+    overflow-x: auto;
+  }
+
+  .tiptap-editor :where(pre code) {
+    font-weight: inherit;
+    color: inherit;
+    font-size: inherit;
+    font-family: inherit;
+    line-height: inherit;
+    background-color: #0000;
+    border-width: 0;
+    border-radius: 0;
+    padding: 0;
+  }
+
+  .tiptap-editor :where(pre code):before,
+  .tiptap-editor :where(pre code):after {
+    content: none;
+  }
+
+  .tiptap-editor :where(table) {
+    table-layout: auto;
+    width: 100%;
+    margin-top: 2em;
+    margin-bottom: 2em;
+    font-size: .875em;
+    line-height: 1.71429;
+  }
+
+  .tiptap-editor :where(tbody tr) {
+    border-bottom-width: 1px;
+    border-bottom-color: var(--tw-prose-td-borders);
+  }
+
+  .tiptap-editor :where(tbody tr:last-child) {
+    border-bottom-width: 0;
+  }
+
+  .tiptap-editor :where(tbody td) {
+    vertical-align: baseline;
+  }
+
+  .tiptap-editor :where(th,td) {
+    text-align: start;
+  }
+
+  .tiptap-editor {
+    --tw-prose-body: oklch(37.3% .034 259.733);
+    --tw-prose-headings: oklch(21% .034 264.665);
+    --tw-prose-links: oklch(21% .034 264.665);
+    --tw-prose-bold: oklch(21% .034 264.665);
+    --tw-prose-counters: oklch(55.1% .027 264.364);
+    --tw-prose-bullets: oklch(87.2% .01 258.338);
+    --tw-prose-hr: oklch(92.8% .006 264.531);
+    --tw-prose-quotes: oklch(21% .034 264.665);
+    --tw-prose-quote-borders: oklch(92.8% .006 264.531);
+    --tw-prose-code: oklch(21% .034 264.665);
+    --tw-prose-pre-code: oklch(92.8% .006 264.531);
+    --tw-prose-pre-bg: oklch(27.8% .033 256.848);
+    --tw-prose-td-borders: oklch(92.8% .006 264.531);
+    font-size: 1rem;
+    line-height: 1.75;
+  }
+
+  .tiptap-editor :where(li) {
+    margin-top: .5em;
+    margin-bottom: .5em;
+  }
+
+  .tiptap-editor :where(ol > li),
+  .tiptap-editor :where(ul > li) {
+    padding-inline-start: .375em;
+  }
+
+  .tiptap-editor :where(.tiptap-editor > ul > li p) {
+    margin-top: .75em;
+    margin-bottom: .75em;
+  }
+
+  .tiptap-editor :where(.tiptap-editor > ul > li > p:first-child) {
+    margin-top: 1.25em;
+  }
+
+  .tiptap-editor :where(.tiptap-editor > ul > li > p:last-child) {
+    margin-bottom: 1.25em;
+  }
+
+  .tiptap-editor :where(.tiptap-editor > ol > li > p:first-child) {
+    margin-top: 1.25em;
+  }
+
+  .tiptap-editor :where(.tiptap-editor > ol > li > p:last-child) {
+    margin-bottom: 1.25em;
+  }
+
+  .tiptap-editor :where(ul ul,ul ol,ol ul,ol ol) {
+    margin-top: .75em;
+    margin-bottom: .75em;
+  }
+
+  .tiptap-editor :where(:is(h2, h3, h4) + :is(blockquote, pre)) {
+    margin-top: 0;
+  }
+
+  .tiptap-editor :where(.tiptap-editor > :first-child) {
+    margin-top: 0;
+  }
+
+  .tiptap-editor :where(.tiptap-editor > :last-child) {
+    margin-bottom: 0;
+  }
+
+  .tiptap-editor {
+    font-size: .875rem;
+    line-height: 1.71429;
+  }
+
+  .tiptap-editor :where(p) {
+    margin-top: 1.14286em;
+    margin-bottom: 1.14286em;
+  }
+
+  .tiptap-editor :where(blockquote) {
+    margin-top: 1.33333em;
+    margin-bottom: 1.33333em;
+    padding-inline-start: 1.11111em;
+  }
+
+  .tiptap-editor :where(h1) {
+    margin-top: 0;
+    margin-bottom: .8em;
+    font-size: 2.14286em;
+    line-height: 1.2;
+  }
+
+  .tiptap-editor :where(h2) {
+    margin-top: 1.6em;
+    margin-bottom: .8em;
+    font-size: 1.42857em;
+    line-height: 1.4;
+  }
+
+  .tiptap-editor :where(h3) {
+    margin-top: 1.55556em;
+    margin-bottom: .444444em;
+    font-size: 1.28571em;
+    line-height: 1.55556;
+  }
+
+  .tiptap-editor :where(h4) {
+    margin-top: 1.42857em;
+    margin-bottom: .571429em;
+    line-height: 1.42857;
+  }
+
+  .tiptap-editor :where(img) {
+    margin-top: 1.71429em;
+    margin-bottom: 1.71429em;
+  }
+
+  .tiptap-editor :where(code) {
+    font-size: .857143em;
+  }
+
+  .tiptap-editor :where(h2 code) {
+    font-size: .9em;
+  }
+
+  .tiptap-editor :where(h3 code) {
+    font-size: .888889em;
+  }
+
+  .tiptap-editor :where(pre) {
+    padding-top: .666667em;
+    padding-inline-end: 1em;
+    padding-bottom: .666667em;
+    border-radius: .25rem;
+    margin-top: 1.66667em;
+    margin-bottom: 1.66667em;
+    padding-inline-start: 1em;
+    font-size: .857143em;
+    line-height: 1.66667;
+  }
+
+  .tiptap-editor :where(ol),
+  .tiptap-editor :where(ul) {
+    margin-top: 1.14286em;
+    margin-bottom: 1.14286em;
+    padding-inline-start: 1.57143em;
+  }
+
+  .tiptap-editor :where(li) {
+    margin-top: .285714em;
+    margin-bottom: .285714em;
+  }
+
+  .tiptap-editor :where(ol > li),
+  .tiptap-editor :where(ul > li) {
+    padding-inline-start: .428571em;
+  }
+
+  .tiptap-editor :where(.tiptap-editor > ul > li p) {
+    margin-top: .571429em;
+    margin-bottom: .571429em;
+  }
+
+  .tiptap-editor :where(.tiptap-editor > ul > li > p:first-child) {
+    margin-top: 1.14286em;
+  }
+
+  .tiptap-editor :where(.tiptap-editor > ul > li > p:last-child) {
+    margin-bottom: 1.14286em;
+  }
+
+  .tiptap-editor :where(.tiptap-editor > ol > li > p:first-child) {
+    margin-top: 1.14286em;
+  }
+
+  .tiptap-editor :where(.tiptap-editor > ol > li > p:last-child) {
+    margin-bottom: 1.14286em;
+  }
+
+  .tiptap-editor :where(ul ul,ul ol,ol ul,ol ol) {
+    margin-top: .571429em;
+    margin-bottom: .571429em;
+  }
+
+  .tiptap-editor :where(hr) {
+    margin-top: 2.85714em;
+    margin-bottom: 2.85714em;
+  }
+
+  .tiptap-editor :where(:is(h2, h3, h4) + :is(blockquote, pre)) {
+    margin-top: 0;
+  }
+
+  .tiptap-editor :where(table) {
+    font-size: .857143em;
+    line-height: 1.5;
+  }
+
+  .tiptap-editor :where(.tiptap-editor > :first-child) {
+    margin-top: 0;
+  }
+
+  .tiptap-editor :where(.tiptap-editor > :last-child) {
+    margin-bottom: 0;
+  }
+
+  @media (width >= 40rem) {
+    .tiptap-editor {
+      font-size: 1rem;
+      line-height: 1.75;
+    }
+
+    .tiptap-editor :where(p) {
+      margin-top: 1.25em;
+      margin-bottom: 1.25em;
+    }
+
+    .tiptap-editor :where(blockquote) {
+      margin-top: 1.6em;
+      margin-bottom: 1.6em;
+      padding-inline-start: 1em;
+    }
+
+    .tiptap-editor :where(h1) {
+      margin-top: 0;
+      margin-bottom: .888889em;
+      font-size: 2.25em;
+      line-height: 1.11111;
+    }
+
+    .tiptap-editor :where(h2) {
+      margin-top: 2em;
+      margin-bottom: 1em;
+      font-size: 1.5em;
+      line-height: 1.33333;
+    }
+
+    .tiptap-editor :where(h3) {
+      margin-top: 1.6em;
+      margin-bottom: .6em;
+      font-size: 1.25em;
+      line-height: 1.6;
+    }
+
+    .tiptap-editor :where(h4) {
+      margin-top: 1.5em;
+      margin-bottom: .5em;
+      line-height: 1.5;
+    }
+
+    .tiptap-editor :where(img) {
+      margin-top: 2em;
+      margin-bottom: 2em;
+    }
+
+    .tiptap-editor :where(code),
+    .tiptap-editor :where(h2 code) {
+      font-size: .875em;
+    }
+
+    .tiptap-editor :where(h3 code) {
+      font-size: .9em;
+    }
+
+    .tiptap-editor :where(pre) {
+      padding-top: .857143em;
+      padding-inline-end: 1.14286em;
+      padding-bottom: .857143em;
+      border-radius: .375rem;
+      margin-top: 1.71429em;
+      margin-bottom: 1.71429em;
+      padding-inline-start: 1.14286em;
+      font-size: .875em;
+      line-height: 1.71429;
+    }
+
+    .tiptap-editor :where(ol),
+    .tiptap-editor :where(ul) {
+      margin-top: 1.25em;
+      margin-bottom: 1.25em;
+      padding-inline-start: 1.625em;
+    }
+
+    .tiptap-editor :where(li) {
+      margin-top: .5em;
+      margin-bottom: .5em;
+    }
+
+    .tiptap-editor :where(ol > li),
+    .tiptap-editor :where(ul > li) {
+      padding-inline-start: .375em;
+    }
+
+    .tiptap-editor :where(.tiptap-editor > ul > li p) {
+      margin-top: .75em;
+      margin-bottom: .75em;
+    }
+
+    .tiptap-editor :where(.tiptap-editor > ul > li > p:first-child) {
+      margin-top: 1.25em;
+    }
+
+    .tiptap-editor :where(.tiptap-editor > ul > li > p:last-child) {
+      margin-bottom: 1.25em;
+    }
+
+    .tiptap-editor :where(.tiptap-editor > ol > li > p:first-child) {
+      margin-top: 1.25em;
+    }
+
+    .tiptap-editor :where(.tiptap-editor > ol > li > p:last-child) {
+      margin-bottom: 1.25em;
+    }
+
+    .tiptap-editor :where(ul ul,ul ol,ol ul,ol ol) {
+      margin-top: .75em;
+      margin-bottom: .75em;
+    }
+
+    .tiptap-editor :where(hr) {
+      margin-top: 3em;
+      margin-bottom: 3em;
+    }
+
+    .tiptap-editor :where(:is(h2, h3, h4) + :is(blockquote, pre)) {
+      margin-top: 0;
+    }
+
+    .tiptap-editor :where(table) {
+      font-size: .875em;
+      line-height: 1.71429;
+    }
+
+    .tiptap-editor :where(.tiptap-editor > :first-child) {
+      margin-top: 0;
+    }
+
+    .tiptap-editor :where(.tiptap-editor > :last-child) {
+      margin-bottom: 0;
+    }
+  }
+}

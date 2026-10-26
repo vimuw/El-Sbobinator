@@ -107,6 +107,14 @@ def configure_logging(stream: LogStream | None = None) -> logging.Logger:
     return logger
 
 
+def detach_console_logging() -> None:
+    """Keep logger records out of the console stream; file handlers stay attached."""
+    logger = configure_logging()
+    for handler in list(logger.handlers):
+        if getattr(handler, "_el_console_log", False):
+            logger.removeHandler(handler)
+
+
 class ContextLoggerAdapter(logging.LoggerAdapter):
     def process(self, msg, kwargs):
         # Python 3.11's default adapter discards per-call extra (including stage).

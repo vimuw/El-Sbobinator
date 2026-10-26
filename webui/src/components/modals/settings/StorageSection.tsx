@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CheckCircle2, FolderInput, HardDrive, Info, Loader2, Trash2, X } from 'lucide-react';
+import { CheckCircle2, FolderInput, FolderOpen, Info, Loader2, Trash2, X } from 'lucide-react';
+import { SettingsSectionHeading } from './SettingsLayout';
 
 function formatSize(bytes: number): string {
   if (bytes <= 0) return '0 B';
@@ -9,10 +10,8 @@ function formatSize(bytes: number): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
 }
 
-const SESSION_CLEANUP_DAYS = 30;
-
 interface StorageSectionProps {
-  sessionInfo: { total_bytes: number; total_sessions: number; session_root: string } | null;
+  sessionInfo: { total_bytes: number; total_sessions: number; session_root: string; usage_detail?: string; persisted?: boolean } | null;
   isLoadingSessionInfo?: boolean;
   isMoveInProgress: boolean;
   moveProgress: { moved: number; total: number } | null;
@@ -20,15 +19,12 @@ interface StorageSectionProps {
   onOpenSessionFolder: () => void;
   onAskMoveFolder: () => void;
   isCleaningSession: boolean;
-  isCleaningCompletedSessions: boolean;
-  cleanupPreview: { removed: number; freed_bytes: number; candidates?: number } | null;
-  completedCleanupPreview: { removed: number; freed_bytes: number; candidates?: number } | null;
-  cleanupResult: { removed: number; freed_bytes: number; candidates?: number; preserved_completed?: number; missing_completed_html?: number } | null;
-  completedCleanupResult?: { removed: number; freed_bytes: number; candidates?: number } | null;
+  cleanupResult: { removed: number; freed_bytes: number } | null;
   onAskCleanup: () => void;
-  onAskCompletedCleanup: () => void;
   onDismissCleanupResult?: () => void;
   canManageSessionFolder?: boolean;
+  /** Web build: everything lives in this browser's storage, not in a folder on disk. */
+  inBrowser?: boolean;
 }
 
 export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
@@ -40,98 +36,87 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
   onOpenSessionFolder,
   onAskMoveFolder,
   isCleaningSession,
-  isCleaningCompletedSessions,
-  cleanupPreview: _cleanupPreview,
-  completedCleanupPreview: _completedCleanupPreview,
   cleanupResult,
-  completedCleanupResult,
   onAskCleanup,
-  onAskCompletedCleanup,
   onDismissCleanupResult,
   canManageSessionFolder = true,
+  inBrowser = false,
 }) => {
   return (
     <div className="space-y-6">
-      <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-        Spostamento e pulizia hanno effetto immediato dopo la conferma e non vengono annullati con Annulla.
-      </p>
-      {/* 1. Spazio Disco e Posizione Cartella */}
+      {/* 1. Posizione cartella e spazio occupato */}
       <div className="space-y-3">
-        {/* Header */}
-        <div className="flex items-center gap-2">
-          <HardDrive className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
-          <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-            Spazio disco e archivio
-          </h3>
-        </div>
-
-        {/* Metric Stat Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="premium-panel p-3.5 space-y-1">
-            <span className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider block">
-              Spazio occupato
-            </span>
-            <span className="text-2xl font-bold text-[var(--text-primary)] block">
-              {isLoadingSessionInfo ? 'Calcolo…' : sessionInfo ? formatSize(sessionInfo.total_bytes) : '—'}
-            </span>
-          </div>
-          <div className="premium-panel p-3.5 space-y-1">
-            <span className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider block">
-              Sbobine salvate
-            </span>
-            <span className="text-2xl font-bold text-[var(--text-primary)] block">
-              {sessionInfo ? `${sessionInfo.total_sessions} ${sessionInfo.total_sessions === 1 ? 'sbobina' : 'sbobine'}` : '—'}
-            </span>
-          </div>
-        </div>
-
-        {/* Row: Sessions Folder */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="space-y-0.5 min-w-0">
-              <span className="text-sm font-bold text-[var(--text-primary)] block">
-                Cartella sessioni
-              </span>
+              <SettingsSectionHeading>{inBrowser ? 'Spazio in questo browser' : 'Cartella sessioni'}</SettingsSectionHeading>
               <p className="text-xs text-[var(--text-secondary)]">
-                Posizione su disco delle trascrizioni e dei file di lavoro.
+                {inBrowser
+                  ? 'Sbobine, audio delle lezioni e avanzamento delle elaborazioni restano in questo browser, su questo dispositivo.'
+                  : 'Posizione su disco delle trascrizioni e dei file di lavoro.'}
               </p>
             </div>
             {canManageSessionFolder && (
-              <button
-                type="button"
-                onClick={onAskMoveFolder}
-                disabled={isMoveInProgress}
-                aria-label="Cambia cartella"
-                title="Cambia cartella"
-                className="app-button-secondary is-settings-action"
-              >
-                {isMoveInProgress ? (
-                  <Loader2 className="w-4 h-4 animate-spin text-[var(--accent-text)]" />
-                ) : (
-                  <FolderInput className="w-4 h-4" />
-                )}
-                <span>Cambia cartella</span>
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={onOpenSessionFolder}
+                  title="Apri cartella sessioni"
+                  className="app-button-secondary is-settings-action"
+                >
+                  <FolderOpen className="w-4 h-4" />
+                  <span>Apri</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={onAskMoveFolder}
+                  disabled={isMoveInProgress}
+                  aria-label="Cambia cartella"
+                  title="Cambia cartella"
+                  className="app-button-secondary is-settings-action"
+                >
+                  {isMoveInProgress ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-[var(--accent-text)]" />
+                  ) : (
+                    <FolderInput className="w-4 h-4" />
+                  )}
+                  <span>Cambia cartella</span>
+                </button>
+              </div>
             )}
           </div>
 
-          <div
-            onClick={canManageSessionFolder ? onOpenSessionFolder : undefined}
-            title={canManageSessionFolder ? 'Apri cartella sessioni' : undefined}
-            role={canManageSessionFolder ? 'button' : undefined}
-            tabIndex={canManageSessionFolder ? 0 : undefined}
-            onKeyDown={canManageSessionFolder ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                onOpenSessionFolder();
-              }
-            } : undefined}
-            className={`p-2.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] font-mono text-xs break-all text-[var(--text-primary)] group transition-colors ${canManageSessionFolder ? 'cursor-pointer hover:border-[var(--border-strong)]' : ''}`}
-          >
-            <span className="font-mono text-xs break-all group-hover:underline font-medium">
-              {sessionInfo?.session_root || (isLoadingSessionInfo ? '…' : '—')}
-            </span>
+          <div className={`p-2.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] text-xs break-all text-[var(--text-primary)] font-medium${inBrowser ? '' : ' font-mono'}`}>
+            {sessionInfo?.session_root || (isLoadingSessionInfo ? '…' : '—')}
           </div>
+
+          <p data-testid="storage-usage" className="text-xs text-[var(--text-secondary)]">
+            {isLoadingSessionInfo
+              ? 'Calcolo dello spazio occupato…'
+              : sessionInfo
+                ? `${sessionInfo.total_sessions} ${sessionInfo.total_sessions === 1 ? 'sbobina' : 'sbobine'} · ${formatSize(sessionInfo.total_bytes)} occupati`
+                : 'Spazio occupato non disponibile.'}
+          </p>
+
+          {!isLoadingSessionInfo && sessionInfo?.usage_detail && (
+            <p data-testid="storage-usage-detail" className="text-xs text-[var(--text-secondary)]">
+              {sessionInfo.usage_detail}
+            </p>
+          )}
+
+          {inBrowser && !isLoadingSessionInfo && sessionInfo?.persisted === false && (
+            <div data-testid="storage-persist-warning" role="note" className="alert-card is-warning text-xs space-y-1.5">
+              <p className="font-semibold">Il browser può cancellare questi dati</p>
+              <p>
+                Se non apri il sito per qualche giorno (con Safari su iPad e iPhone ne bastano circa 7) o se il dispositivo resta senza spazio,
+                il browser può eliminare sbobine e audio senza chiedere.
+              </p>
+              <p>
+                Scarica ogni tanto un backup qui sotto. Su iPad e iPhone puoi anche aggiungere il sito alla schermata Home (Condividi → Aggiungi alla schermata Home):
+                aperto da lì non dipende dalle visite in Safari, ma ha una memoria sua, quindi porta le sbobine con un backup.
+              </p>
+            </div>
+          )}
 
           {isMoveInProgress && (
             <div className="alert-card is-info text-xs space-y-2">
@@ -164,25 +149,18 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
         </div>
       </div>
 
-      {/* 2. Eliminazione e Pulizia Sbobine */}
-      <div className="border-t border-[var(--border-default)] pt-6 space-y-3">
-        {/* Header */}
-        <div className="flex items-center gap-2">
-          <Trash2 className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
-          <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-            Pulizia archivio
-          </h3>
-        </div>
+      {/* 2. Pulizia delle elaborazioni incomplete (the web build has no session folders to clean) */}
+      {!inBrowser && (
+        <div className="border-t border-[var(--border-default)] pt-6 space-y-3">
+          <SettingsSectionHeading>Pulizia archivio</SettingsSectionHeading>
 
-        <div className="space-y-1">
-          {/* Row: Incomplete Sessions */}
           <div className="flex items-center justify-between gap-3 p-2.5 rounded-lg hover:bg-[var(--bg-hover)] transition-colors -mx-2">
             <div className="space-y-0.5 min-w-0">
               <span className="text-sm font-bold text-[var(--text-primary)] block">
                 Elaborazioni incomplete
               </span>
               <p className="text-xs text-[var(--text-secondary)]">
-                File temporanei e bozze interrotte
+                Sbobine interrotte o non finite. Dopo la pulizia non si potranno più riprendere.
               </p>
             </div>
             <button
@@ -201,110 +179,53 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
             </button>
           </div>
 
-          {/* Row: Old Completed Sessions */}
-          <div className="flex items-center justify-between gap-3 p-2.5 rounded-lg hover:bg-[var(--bg-hover)] transition-colors -mx-2">
-            <div className="space-y-0.5 min-w-0">
-              <span className="text-sm font-bold text-[var(--text-primary)] block">
-                Sbobine archiviate
-              </span>
-              <p className="text-xs text-[var(--text-secondary)]">
-                Salvate da oltre {SESSION_CLEANUP_DAYS} giorni
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={onAskCompletedCleanup}
-              disabled={isCleaningCompletedSessions}
-              aria-label={`Elimina sbobine completate archiviate da oltre ${SESSION_CLEANUP_DAYS} giorni`}
-              title={`Conta ed elimina sbobine completate archiviate da oltre ${SESSION_CLEANUP_DAYS} giorni`}
-              className="app-button-secondary is-settings-action is-icon is-danger"
-            >
-              {isCleaningCompletedSessions ? (
-                <Loader2 className="w-4 h-4 animate-spin text-[var(--error-text)]" />
-              ) : (
-                <Trash2 className="w-4 h-4" />
-              )}
-            </button>
-          </div>
-        </div>
-
-      {/* Cleanup Results Feedback Notification Banner */}
-      <AnimatePresence>
-        {(cleanupResult || completedCleanupResult) && (
-          <motion.div
-            initial={{ opacity: 0, y: -6, height: 0 }}
-            animate={{ opacity: 1, y: 0, height: 'auto' }}
-            exit={{ opacity: 0, y: -6, height: 0 }}
-            transition={{ duration: 0.2, ease: 'easeOut' }}
-            className="overflow-hidden"
-          >
-            <div
-              className={`relative alert-card ${
-                (cleanupResult?.removed ?? 0) > 0 || (completedCleanupResult?.removed ?? 0) > 0
-                  ? 'is-success'
-                  : 'is-info'
-              } !flex-row items-start justify-between gap-3`}
-            >
-              <div className="flex items-start gap-2.5 min-w-0 pr-6">
-                {(cleanupResult?.removed ?? 0) > 0 || (completedCleanupResult?.removed ?? 0) > 0 ? (
-                  <CheckCircle2 className="w-4 h-4 text-[var(--success-text)] shrink-0 mt-0.5" />
-                ) : (
-                  <Info className="w-4 h-4 text-[var(--text-secondary)] shrink-0 mt-0.5" />
-                )}
-                <div className="space-y-0.5 min-w-0">
-                  {cleanupResult && (
-                    <>
-                      <p
-                        className={`text-xs ${cleanupResult.removed > 0 ? 'font-semibold text-[var(--success-text)]' : 'font-medium text-[var(--text-secondary)]'}`}
-                      >
-                        {cleanupResult.removed > 0
-                          ? cleanupResult.removed === 1
-                            ? `Rimossa 1 elaborazione incompleta, liberati ${formatSize(cleanupResult.freed_bytes)}.`
-                            : `Rimosse ${cleanupResult.removed} elaborazioni incomplete, liberati ${formatSize(cleanupResult.freed_bytes)}.`
-                          : 'Nessuna elaborazione incompleta da eliminare.'}
-                      </p>
-                      {(cleanupResult?.preserved_completed ?? 0) > 0 && (
-                        <p className="text-xs text-[var(--text-secondary)]">
-                          {cleanupResult.preserved_completed} sbobine completate preservate.
-                        </p>
-                      )}
-                      {(cleanupResult?.missing_completed_html ?? 0) > 0 && (
-                        <p className="text-xs text-[var(--warning-text)]">
-                          {cleanupResult.missing_completed_html} sessioni completate senza HTML finale trattate come incomplete.
-                        </p>
-                      )}
-                    </>
-                  )}
-                  {completedCleanupResult && (
+          {/* Cleanup Results Feedback Notification Banner */}
+          <AnimatePresence>
+            {cleanupResult && (
+              <motion.div
+                initial={{ opacity: 0, y: -6, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: 'auto' }}
+                exit={{ opacity: 0, y: -6, height: 0 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+                className="overflow-hidden"
+              >
+                <div
+                  className={`relative alert-card ${cleanupResult.removed > 0 ? 'is-success' : 'is-info'} !flex-row items-start justify-between gap-3`}
+                >
+                  <div className="flex items-start gap-2.5 min-w-0 pr-6">
+                    {cleanupResult.removed > 0 ? (
+                      <CheckCircle2 className="w-4 h-4 text-[var(--success-text)] shrink-0 mt-0.5" />
+                    ) : (
+                      <Info className="w-4 h-4 text-[var(--text-secondary)] shrink-0 mt-0.5" />
+                    )}
                     <p
-                      className={`text-xs ${completedCleanupResult.removed > 0 ? 'font-semibold text-[var(--success-text)]' : 'font-medium text-[var(--text-secondary)]'}`}
+                      className={`text-xs ${cleanupResult.removed > 0 ? 'font-semibold text-[var(--success-text)]' : 'font-medium text-[var(--text-secondary)]'}`}
                     >
-                      {completedCleanupResult.removed > 0
-                        ? completedCleanupResult.removed === 1
-                          ? `Eliminata 1 sbobina completata, liberati ${formatSize(completedCleanupResult.freed_bytes)}.`
-                          : `Eliminate ${completedCleanupResult.removed} sbobine completate, liberati ${formatSize(completedCleanupResult.freed_bytes)}.`
-                        : 'Nessuna sbobina completata vecchia da eliminare.'}
+                      {cleanupResult.removed > 0
+                        ? cleanupResult.removed === 1
+                          ? `Rimossa 1 elaborazione incompleta, liberati ${formatSize(cleanupResult.freed_bytes)}.`
+                          : `Rimosse ${cleanupResult.removed} elaborazioni incomplete, liberati ${formatSize(cleanupResult.freed_bytes)}.`
+                        : 'Nessuna elaborazione incompleta da eliminare.'}
                     </p>
+                  </div>
+
+                  {onDismissCleanupResult && (
+                    <button
+                      type="button"
+                      onClick={onDismissCleanupResult}
+                      aria-label="Chiudi notifica"
+                      title="Chiudi notifica"
+                      className="absolute top-2.5 right-2.5 p-1 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer shrink-0"
+                    >
+                      <X className="w-4 h-4 shrink-0" />
+                    </button>
                   )}
                 </div>
-              </div>
-
-              {onDismissCleanupResult && (
-                <button
-                  type="button"
-                  onClick={onDismissCleanupResult}
-                  aria-label="Chiudi notifica"
-                  title="Chiudi notifica"
-                  className="absolute top-2.5 right-2.5 p-1 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer shrink-0"
-                >
-                  <X className="w-4 h-4 shrink-0" />
-                </button>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-      </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
     </div>
   );
 });

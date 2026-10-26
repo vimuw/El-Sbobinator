@@ -17,6 +17,7 @@ export function serializeQueueFile(file: FileItem): Record<string, unknown> {
     errorText: file.errorText,
     errorDetail: file.errorDetail,
     completedAt: file.completedAt,
+    title: file.title,
     effectiveModel: file.effectiveModel,
     completionStatus: file.completionStatus,
     revisionFailedBlocks: file.revisionFailedBlocks,
@@ -42,6 +43,7 @@ export function deserializeQueueFile(file: Partial<FileItem>, index: number): Fi
     errorText: file.errorText ? String(file.errorText) : undefined,
     errorDetail: file.errorDetail ? String(file.errorDetail) : undefined,
     completedAt: file.completedAt ? Number(file.completedAt) : undefined,
+    title: file.title ? String(file.title) : undefined,
     effectiveModel: storedModel ? String(storedModel) : undefined,
     completionStatus: file.completionStatus === 'completed_with_warnings' ? 'completed_with_warnings' : 'completed',
     revisionFailedBlocks: Array.isArray(file.revisionFailedBlocks)
@@ -91,7 +93,7 @@ export function useQueuePersistence(
       dispatch({ type: 'queue/add', files: restoredFiles });
       appendConsole(`Coda ripristinata: ${restoredFiles.length} file.`);
     } catch (error) {
-      appendConsole(`[ERRORE] Ripristino coda fallito: ${error}`);
+      appendConsole(`❌ Ripristino coda fallito: ${error}`);
     }
   }, [appendConsole, dispatch]);
 
@@ -106,7 +108,7 @@ export function useQueuePersistence(
       const persisted = currentFiles.map(serializeQueueFile);
       window.localStorage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(persisted));
     } catch (error) {
-      appendConsole(`[ERRORE] Persistenza coda fallita: ${error}`);
+      appendConsole(`❌ Persistenza coda fallita: ${error}`);
     }
   }, [structuralVersion, appendConsole]);
 }

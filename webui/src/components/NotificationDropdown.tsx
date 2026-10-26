@@ -7,6 +7,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { NotificationItem } from './notifications/NotificationItem';
+import { DURATION, enterTransition, popoverItemVariants, popoverVariants } from '../motion';
 
 export interface NotificationAction {
   label: string;
@@ -47,6 +48,20 @@ export interface NotificationDropdownProps {
   bottomOffset?: number;
 }
 
+// The caret sits 48px above the panel's bottom and is 18px tall; the open animation scales from its tip.
+const CARET_BOTTOM = 48;
+const CARET_CENTER_FROM_BOTTOM = CARET_BOTTOM + 9;
+
+// The content lands in three beats after the frame: header, filters, then rows.
+const HEADER_VARIANTS = popoverItemVariants({ y: -4, blur: 4 });
+const ROW_VARIANTS = popoverItemVariants({ x: -4, blur: 4 });
+
+// The caret fades out of the panel edge once the frame has nearly settled.
+const CARET_VARIANTS = {
+  open: { opacity: 1, scale: 1, transition: enterTransition(DURATION.base, 0.08) },
+  closed: { opacity: 0, scale: 0.6, transition: { delay: DURATION.fast, duration: 0 } },
+};
+
 export function NotificationDropdown({
   isOpen,
   onClose,
@@ -73,8 +88,8 @@ export function NotificationDropdown({
 
   const dynamicHeightStyle =
     valign === 'bottom'
-      ? `clamp(320px, 52vh, min(480px, calc(100vh - ${bottomOffset + 16}px)))`
-      : 'clamp(320px, 52vh, min(480px, calc(100vh - 88px)))';
+      ? `clamp(320px, 52vh, min(480px, calc(var(--app-height) - ${bottomOffset + 16}px)))`
+      : 'clamp(320px, 52vh, min(480px, calc(var(--app-height) - 88px)))';
 
   const hasCaret = align === 'left' && valign === 'bottom';
 
@@ -94,30 +109,31 @@ export function NotificationDropdown({
         style={{ background: 'transparent' }}
       />
 
-      {/* Popover Dropdown Container with sleek, subtle ease-out animation */}
+      {/* The panel materialises out of its caret, so it reads as coming from the bell it points
+          at. It is the app's largest popover, so it opens from further back than a menu. */}
       <motion.div
         key="notification-popover"
         role="dialog"
         aria-label="Notifiche"
         initial={false}
-        animate={{
-          opacity: isOpen ? 1 : 0,
-          scale: isOpen ? 1 : 0.98,
-          y: isOpen ? 0 : (valign === 'bottom' ? 4 : -4),
-          pointerEvents: isOpen ? 'auto' : 'none',
-        }}
-        transition={{
-          duration: isOpen ? 0.14 : 0.1,
-          ease: isOpen ? [0.16, 1, 0.3, 1] : 'easeIn',
-        }}
-        className={`fixed z-50 flex flex-col origin-bottom-left ${
+        animate={isOpen ? 'open' : 'closed'}
+        variants={popoverVariants({
+          x: hasCaret ? -6 : 0,
+          y: hasCaret ? 0 : valign === 'bottom' ? 4 : -4,
+          scale: 0.9,
+          blur: 8,
+          duration: DURATION.slow,
+        })}
+        className={`fixed z-50 flex flex-col ${
           isOpen ? 'pointer-events-auto' : 'pointer-events-none'
         }`}
         style={{
-          transformOrigin: `${valign === 'bottom' ? 'bottom' : 'top'} ${align === 'left' ? 'left' : 'right'}`,
+          transformOrigin: hasCaret
+            ? `left calc(100% - ${CARET_CENTER_FROM_BOTTOM}px)`
+            : `${valign === 'bottom' ? 'bottom' : 'top'} ${align === 'left' ? 'left' : 'right'}`,
           width: 380,
           height: dynamicHeightStyle,
-          maxHeight: `calc(100vh - ${valign === 'bottom' ? bottomOffset + 16 : 88}px)`,
+          maxHeight: `calc(var(--app-height) - ${valign === 'bottom' ? bottomOffset + 16 : 88}px)`,
           top: valign === 'bottom' ? undefined : 64,
           bottom: valign === 'bottom' ? bottomOffset : undefined,
           left: align === 'left' ? leftOffset : undefined,
@@ -126,9 +142,10 @@ export function NotificationDropdown({
       >
         {/* Left pointer triangle pointing towards the sidebar trigger */}
         {hasCaret && (
-          <div
+          <motion.div
+            variants={CARET_VARIANTS}
             className="absolute -left-[8px] pointer-events-none z-30 flex items-center"
-            style={{ bottom: 48 }}
+            style={{ bottom: CARET_BOTTOM, transformOrigin: 'right center' }}
             aria-hidden="true"
           >
             <svg
@@ -145,13 +162,13 @@ export function NotificationDropdown({
               />
               <path
                 d="M 8.5 0.5 L 0.5 9 L 8.5 17.5"
-                stroke="var(--border-default)"
+                stroke="var(--border-subtle)"
                 strokeWidth="1"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
             </svg>
-          </div>
+          </motion.div>
         )}
 
         {/* Inner bordered panel matching design system .notification-dropdown-panel */}
@@ -160,21 +177,17 @@ export function NotificationDropdown({
         >
           <div className="notification-dropdown-content flex flex-col flex-1 min-h-0 overflow-hidden">
             {/* Header Row: Title & Action Buttons */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
+            <motion.div
+              variants={HEADER_VARIANTS}
+              custom={0}
+              className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-elevated)]"
+            >
               <div className="flex items-center gap-2">
                 <h3 className="text-sm font-semibold tracking-tight text-[var(--text-primary)]">
                   Notifiche
                 </h3>
                 {unreadCount > 0 && (
-                  <span
-                    className="px-1.5 py-0.2 text-[10px] rounded-full font-bold leading-tight"
-                    style={{
-                      background: 'var(--accent-subtle)',
-                      color: 'var(--accent-text)',
-                    }}
-                  >
-                    {unreadCount}
-                  </span>
+                  <span className="status-pill is-quiet is-count shrink-0">{unreadCount}</span>
                 )}
               </div>
 
@@ -183,7 +196,7 @@ export function NotificationDropdown({
                   <button
                     type="button"
                     onClick={onMarkAllAsRead}
-                    className="p-1 rounded-md transition-colors hover:bg-[var(--accent-subtle)] flex items-center justify-center text-[var(--accent-text)] hover:text-[var(--text-primary)]"
+                    className="p-1.5 rounded-full transition-colors hover:bg-[var(--accent-subtle)] flex items-center justify-center text-[var(--accent-text)] hover:text-[var(--text-primary)]"
                     style={{
                       cursor: 'pointer',
                     }}
@@ -197,7 +210,7 @@ export function NotificationDropdown({
                   <button
                     type="button"
                     onClick={onClearAll}
-                    className="p-1 rounded-md transition-colors hover:bg-[var(--error-subtle)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--error-text)]"
+                    className="p-1.5 rounded-full transition-colors hover:bg-[var(--error-subtle)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--error-text)]"
                     style={{
                       cursor: 'pointer',
                     }}
@@ -208,77 +221,37 @@ export function NotificationDropdown({
                   </button>
                 )}
               </div>
-            </div>
+            </motion.div>
 
-            {/* Minimalist Sub-tabs: Tutte & Non lette with smooth layoutId indicator */}
-            <div className="flex items-center gap-4 px-4 border-b border-[var(--border-subtle)] bg-[var(--bg-elevated)]">
+            {/* Filters: Tutte & Non lette as pills, like the toolbar chips */}
+            <motion.div
+              variants={HEADER_VARIANTS}
+              custom={1}
+              className="flex items-center gap-1.5 px-4 py-2 border-b border-[var(--border-subtle)] bg-[var(--bg-elevated)]"
+            >
               <button
                 type="button"
                 onClick={() => setActiveTab('all')}
-                className={`py-2 text-xs transition-colors relative flex items-center gap-1.5 ${
-                  activeTab === 'all'
-                    ? 'font-medium text-[var(--text-primary)]'
-                    : 'font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                }`}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                }}
+                aria-pressed={activeTab === 'all'}
+                className={`notification-filter${activeTab === 'all' ? ' is-active' : ''}`}
               >
-                <span>Tutte</span>
-                {activeTab === 'all' && (
-                  <motion.span
-                    layoutId="activeNotificationTab"
-                    className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full"
-                    style={{ background: 'var(--accent-text)' }}
-                    transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-                  />
-                )}
+                Tutte
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveTab('unread')}
-                className={`py-2 text-xs transition-colors relative flex items-center gap-1.5 ${
-                  activeTab === 'unread'
-                    ? 'font-medium text-[var(--text-primary)]'
-                    : 'font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                }`}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                }}
+                aria-pressed={activeTab === 'unread'}
+                className={`notification-filter${activeTab === 'unread' ? ' is-active' : ''}`}
               >
                 <span>Non lette</span>
-                {unreadCount > 0 && (
-                  <span
-                    className="px-1.5 py-0.2 text-[10px] rounded-md font-bold leading-tight"
-                    style={{
-                      background: 'var(--accent-subtle)',
-                      color: 'var(--accent-text)',
-                    }}
-                  >
-                    {unreadCount}
-                  </span>
-                )}
-                {activeTab === 'unread' && (
-                  <motion.span
-                    layoutId="activeNotificationTab"
-                    className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full"
-                    style={{ background: 'var(--accent-text)' }}
-                    transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-                  />
-                )}
+                {unreadCount > 0 && <span className="notification-filter-count">{unreadCount}</span>}
               </button>
-            </div>
+            </motion.div>
 
             {/* Notification items list */}
             <div
-              className="flex-1 overflow-y-auto flex flex-col scrollbar-thin"
+              className="flex-1 overflow-y-auto flex flex-col gap-0.5 p-1 scrollbar-thin"
             >
               {filteredNotifications.length === 0 ? (
                 <div
@@ -308,14 +281,15 @@ export function NotificationDropdown({
                   </p>
                 </div>
               ) : (
-                filteredNotifications.map((n) => (
-                  <NotificationItem
-                    key={n.id}
-                    notification={n}
-                    onMarkAsRead={onMarkAsRead}
-                    onDelete={onDelete}
-                    onNotificationClick={onNotificationClick}
-                  />
+                filteredNotifications.map((n, index) => (
+                  <motion.div key={n.id} variants={ROW_VARIANTS} custom={index + 2}>
+                    <NotificationItem
+                      notification={n}
+                      onMarkAsRead={onMarkAsRead}
+                      onDelete={onDelete}
+                      onNotificationClick={onNotificationClick}
+                    />
+                  </motion.div>
                 ))
               )}
             </div>

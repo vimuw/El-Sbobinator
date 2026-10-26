@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AlertCircle, X } from 'lucide-react';
+import { modalCard } from '../../motion';
 
 interface RegenerateModalProps {
   prompt: { filename: string; mode?: 'completed' | 'resume' } | null;
@@ -35,9 +36,7 @@ export function RegenerateModal({ prompt, onAnswer, onDismiss }: RegenerateModal
             className="modal-overlay absolute inset-0"
           />
           <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1, transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] } }}
-            exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.14, ease: 'easeIn' } }}
+            {...modalCard}
             className="modal-card relative w-full max-w-md max-h-[86vh] overflow-hidden flex flex-col"
           >
             <div className="modal-header">
@@ -69,7 +68,7 @@ export function RegenerateModal({ prompt, onAnswer, onDismiss }: RegenerateModal
             </div>
             <div className="modal-footer">
               <button onClick={() => onAnswer(false)} className="modal-action-button flex-1">
-                {prompt.mode === 'completed' ? 'Usa versione pronta' : 'Riprendi da dove eri rimasto'}
+                {prompt.mode === 'completed' ? 'Usa versione pronta' : 'Riprendi'}
               </button>
               <button onClick={() => onAnswer(true)} className="modal-action-button is-danger flex-1">
                 {prompt.mode === 'completed' ? 'Rigenera da zero' : 'Ricomincia da zero'}

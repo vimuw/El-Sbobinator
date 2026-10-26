@@ -1,4 +1,5 @@
 import contextlib
+import io
 import os
 import shutil
 import tempfile
@@ -922,6 +923,63 @@ class PipelineCleanupCacheTests(unittest.TestCase):
             self.assertNotIn("playback_audio", context.session)
             self.assertEqual(os.listdir(os.path.join(context.session_dir, "audio")), [])
 
+    def test_completion_line_matches_the_run_result(self):
+        for failed_blocks, expected_status, expected_line in (
+            ([], "completed", "✅ Sbobina completata in "),
+            (
+                [3, 5],
+                "completed_with_warnings",
+                "⚠ Sbobina completata con avvisi in ",
+            ),
+        ):
+            with (
+                self.subTest(failed_blocks=failed_blocks),
+                tempfile.TemporaryDirectory() as tmpdir,
+            ):
+                context = self._make_session_ctx(os.path.join(tmpdir, "session"))
+                context.session["revision_failed_blocks"] = failed_blocks
+                html_path = os.path.join(context.session_dir, "lezione.html")
+
+                def fake_export(html_path=html_path, **_kwargs):
+                    with open(html_path, "w", encoding="utf-8") as handle:
+                        handle.write("<html></html>")
+                    return "Lezione", html_path
+
+                adapter = PipelineAdapter(None, threading.Event())
+                out = io.StringIO()
+                with (
+                    patch(
+                        "el_sbobinator.pipeline.pipeline.export_final_html_document",
+                        side_effect=fake_export,
+                    ),
+                    patch("el_sbobinator.pipeline.pipeline._retain_playback_audio"),
+                    patch(
+                        "el_sbobinator.pipeline.pipeline.usage_service.record_work_completed"
+                    ),
+                    contextlib.redirect_stdout(out),
+                ):
+                    self.assertTrue(
+                        _export_html_and_finish(
+                            "input.mp3",
+                            context,  # type: ignore[arg-type]
+                            context.session,
+                            lambda: True,
+                            "testo",
+                            context.phase2_revised_dir,
+                            PipelineRuntime(adapter),
+                            adapter,
+                            _FakeLogger(),
+                            time.monotonic(),
+                        )
+                    )
+                lines = out.getvalue().splitlines()
+                self.assertEqual(adapter.last_run_status, expected_status)
+                self.assertEqual(len(lines), 1)
+                self.assertTrue(lines[0].startswith(expected_line), lines[0])
+                self.assertNotIn("SUCCESSO", lines[0])
+                if failed_blocks:
+                    self.assertIn("sezioni 3, 5", lines[0])
+
     def test_quit_during_playback_encode_keeps_the_exported_document(self):
         from el_sbobinator.core.session_store import load_session, save_session
 
@@ -1363,6 +1421,40 @@ class PipelineCleanupCacheTests(unittest.TestCase):
             self.assertIsNotNone(playback_audio_path(session_ctx.session, session_dir))
             self.assertEqual(app.last_run_status, "completed")
 
+    def test_run_names_its_model_before_processing(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            session_dir = os.path.join(tmpdir, "session")
+            session_ctx = self._make_session_ctx(session_dir)
+            preconv_path = os.path.join(session_dir, "preconv.mp3")
+            html_path = os.path.join(tmpdir, "output.html")
+            input_path = os.path.join(tmpdir, "input.mp3")
+            with open(input_path, "wb") as fh:
+                fh.write(b"fake")
+
+            out = io.StringIO()
+            with contextlib.ExitStack() as stack:
+                for p in self._make_pipeline_patches(
+                    session_ctx, preconv_path, html_path, tmpdir
+                ):
+                    stack.enter_context(p)
+                stack.enter_context(
+                    patch(
+                        "el_sbobinator.pipeline.pipeline.process_phase1_transcription",
+                        return_value=(_FakeClient(), None, ""),
+                    )
+                )
+                stack.enter_context(contextlib.redirect_stdout(out))
+                esegui_sbobinatura(input_path, "fake-key", _DoneEarlyReturnApp())
+
+            lines = out.getvalue().splitlines()
+            self.assertIn("Modello: gemini-test.", lines)
+            self.assertLess(
+                next(
+                    i for i, line in enumerate(lines) if line.startswith("Durata audio")
+                ),
+                lines.index("Modello: gemini-test."),
+            )
+
     def test_cleanup_skipped_when_stage_not_done(self):
         """Preconverted audio is NOT deleted when stage is still phase1 (needed for resume)."""
         from el_sbobinator.core.shared import PRECONVERTED_AUDIO_FINAL
@@ -1399,6 +1491,56 @@ class PipelineCleanupCacheTests(unittest.TestCase):
                 os.path.exists(preconv_path),
                 "preconv file must be kept when processing is incomplete (stage!=done)",
             )
+
+
+class RegenerationPromptCancelTests(unittest.TestCase):
+    def test_stop_on_the_prompt_does_not_reuse_the_finished_document(self):
+        from el_sbobinator.pipeline.pipeline import _handle_regeneration_flow
+
+        for stopped, expected_status in ((True, "cancelled"), (False, "early_done")):
+            with (
+                self.subTest(stopped=stopped),
+                tempfile.TemporaryDirectory() as tmpdir,
+            ):
+                context = _FakeSessionContext(tmpdir)
+                html_path = os.path.join(tmpdir, "lezione.html")
+                with open(html_path, "w", encoding="utf-8") as handle:
+                    handle.write("<html></html>")
+                context.session.update(
+                    {"stage": "done", "outputs": {"html": html_path}}
+                )
+                cancel_event = threading.Event()
+                if stopped:
+                    cancel_event.set()
+                adapter = PipelineAdapter(None, cancel_event)
+                out = io.StringIO()
+                with (
+                    patch(
+                        "el_sbobinator.pipeline.pipeline._ask_regeneration_decision",
+                        return_value=(False, False),
+                    ),
+                    contextlib.redirect_stdout(out),
+                ):
+                    status, stage, timed_out = _handle_regeneration_flow(
+                        "lezione.mp3",
+                        context,  # type: ignore[arg-type]
+                        adapter,
+                        PipelineRuntime(adapter),
+                        "done",
+                        cancel_event,
+                        context.save,
+                        _FakeLogger(),
+                    )
+
+                self.assertEqual(
+                    (status, stage, timed_out), (expected_status, "done", False)
+                )
+                if stopped:
+                    self.assertEqual(out.getvalue(), "")
+                    self.assertNotEqual(adapter.last_run_status, "completed")
+                else:
+                    self.assertIn("Sbobina già pronta", out.getvalue())
+                    self.assertEqual(adapter.last_run_status, "completed")
 
 
 class PipelineStageRoutingTests(unittest.TestCase):

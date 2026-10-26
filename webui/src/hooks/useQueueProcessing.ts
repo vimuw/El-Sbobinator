@@ -118,10 +118,10 @@ export function useQueueProcessing({
     let nextSize = file.size;
     let nextDuration = file.duration;
     if (!exists) {
-      if (!api?.ask_media_file) { appendConsole(`Impossibile ricollegare l'audio per ${file.name}.`); return []; }
-      appendConsole(`Audio non trovato per ${file.name}. Selezionalo di nuovo per continuare.`);
+      if (!api?.ask_media_file) { appendConsole(`❌ Impossibile ricollegare l'audio per ${file.name}.`); return []; }
+      appendConsole(`⚠ Audio non trovato per ${file.name}. Selezionalo di nuovo per continuare.`);
       const selectedFile = await api.ask_media_file();
-      if (!selectedFile?.path) { appendConsole(`Avvio annullato: audio non ricollegato per ${file.name}.`); return []; }
+      if (!selectedFile?.path) { appendConsole(`⚠ Avvio annullato: audio non ricollegato per ${file.name}.`); return []; }
       if (!isSupportedMediaPath(selectedFile.path)) { appendConsole(`❌ ${UNSUPPORTED_MEDIA_ERROR}`); return []; }
       nextPath = selectedFile.path; nextName = selectedFile.name; nextSize = selectedFile.size; nextDuration = selectedFile.duration || 0;
       dispatch({ type: 'queue/update_source', id: file.id, path: nextPath, name: nextName, size: nextSize, duration: nextDuration });

@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../../hostCapabilities';
 import { NewKeyModal } from './NewKeyModal';
 
 function setPywebview(api: Record<string, unknown> | undefined) {
@@ -111,5 +112,24 @@ describe('NewKeyModal', () => {
     rerender(<NewKeyModal isOpen={false} onClose={vi.fn()} />);
     rerender(<NewKeyModal isOpen onClose={vi.fn()} />);
     expect((screen.getByPlaceholderText('Incolla qui la nuova API Key...') as HTMLInputElement).value).toBe('');
+  });
+
+  it('on the web says progress stays in the browser and the key is for this run only', () => {
+    setHostCapabilities({ kind: 'web' });
+    try {
+      render(<NewKeyModal isOpen onClose={vi.fn()} />);
+      expect(screen.getByText(/salvato in questo browser/)).toBeTruthy();
+      expect(screen.getByText(/Vale solo per questa elaborazione: non viene salvata nelle impostazioni/)).toBeTruthy();
+      expect(screen.queryByText(/su disco/)).toBeNull();
+      expect(screen.getByText('Sospendi elaborazione').getAttribute('title')).toContain('in questo browser');
+    } finally {
+      setHostCapabilities(DESKTOP_CAPABILITIES);
+    }
+  });
+
+  it('keeps the desktop text on the desktop', () => {
+    render(<NewKeyModal isOpen onClose={vi.fn()} />);
+    expect(screen.getByText(/\(errore 429\)\. L'avanzamento della lezione è stato salvato su disco\./)).toBeTruthy();
+    expect(screen.queryByText(/Vale solo per questa elaborazione/)).toBeNull();
   });
 });

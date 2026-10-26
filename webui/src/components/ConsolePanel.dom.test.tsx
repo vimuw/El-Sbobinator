@@ -27,6 +27,14 @@ describe('ConsolePanel', () => {
     expect(screen.getByText('Ultimo messaggio')).toBeTruthy();
   });
 
+  it('shows the last three log lines when collapsed, like a terminal tail', () => {
+    const logs = ['[12:00:00] uno', '[12:00:01] due', '[12:00:02] tre', '[12:00:03] quattro'];
+    const { container } = render(<ConsolePanel consoleLogs={logs} lastConsoleMessage="[12:00:03] quattro" appState="processing" />);
+    const tail = container.querySelector('.console-tail') as HTMLElement;
+    expect(Array.from(tail.children, line => line.textContent)).toEqual(logs.slice(1));
+    expect(container.querySelector('.console-scroll')).toBeNull();
+  });
+
   it('shows Console heading', () => {
     render(<ConsolePanel consoleLogs={[]} lastConsoleMessage="" appState="idle" />);
     expect(screen.getByText('Console')).toBeTruthy();
@@ -61,17 +69,23 @@ describe('ConsolePanel', () => {
     expect(container.querySelector('.animate-pulse')).not.toBeNull();
   });
 
-  it('colors error log entries with error style', () => {
-    render(<ConsolePanel consoleLogs={['Errore critico']} lastConsoleMessage="" appState="idle" />);
-    fireEvent.click(screen.getByTitle('Espandi'));
-    const entry = screen.getByText('Errore critico');
-    expect(entry.style.color).toBeTruthy();
-  });
-
-  it('colors success log entries', () => {
-    render(<ConsolePanel consoleLogs={['COMPLETATA operazione ✅']} lastConsoleMessage="" appState="idle" />);
-    fireEvent.click(screen.getByTitle('Espandi'));
-    expect(screen.getByText('COMPLETATA operazione ✅')).toBeTruthy();
+  it('colors each line by its leading severity marker, not by the words it contains', () => {
+    const logs = [
+      '[12:00:00] ❌ Errore imprevisto: elaborazione interrotta.',
+      '[12:00:01] ⚠ Sbobina completata con avvisi in 3m 05s: 1 sezione inclusa senza revisione (sezione 2).',
+      '[12:00:02] ✅ Sbobina completata in 3m 05s.',
+      '[12:00:03] Annullamento in corso, attendere prego...',
+      '[12:00:04] Dettaglio: Errore 500 dal server',
+      '[12:00:05] ValueError: string too long (65, maximum length 64)',
+      '[11:00:06 PM] ⚠ Connessione a Internet interrotta.',
+    ];
+    const { container } = render(<ConsolePanel consoleLogs={logs} lastConsoleMessage="" appState="idle" isConsoleExpanded />);
+    const lines = Array.from(container.querySelectorAll('.console-scroll > div'));
+    expect(lines.map(line => line.getAttribute('data-tone'))).toEqual([
+      'error', 'warning', 'success', 'normal', 'normal', 'error', 'warning',
+    ]);
+    // The timestamp stays muted whatever its locale format.
+    expect(lines[6].firstElementChild?.textContent).toBe('[11:00:06 PM]');
   });
 
   it('clicking copy button writes to clipboard', async () => {

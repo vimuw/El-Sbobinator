@@ -31,6 +31,11 @@ class RetryStatePayload(TypedDict, total=False):
     seconds_remaining: float | None
 
 
+class ProcessingWarningPayload(TypedDict):
+    code: str
+    message: str | None
+
+
 class LowDiskWarningPayload(TypedDict):
     needed_bytes: int
     free_bytes: int

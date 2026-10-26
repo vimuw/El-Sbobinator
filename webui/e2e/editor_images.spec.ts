@@ -1896,7 +1896,9 @@ for (const native of [true, false]) {
     expect(await dimensions(keyboardFormats['text/html'])).toEqual({ declaredWidth: String(declared), width: 1600, height: 1000 });
     if (native) {
       const nativeImages = JSON.parse(JSON.parse(keyboardFormats['application/x-vnd.google-docs-image-clip+wrapped']).data).image_urls;
-      expect(await dimensions(`<img width="${declared}" src="${Object.values(nativeImages)[0]}">`)).toEqual({ declaredWidth: String(declared), width: declared, height: Math.round(declared * 1000 / 1600) });
+      // Docs receives the original pixels too; only the entity size scales it down.
+      expect(Object.values(nativeImages)).toEqual([source]);
+      expect(await dimensions(`<img width="${declared}" src="${Object.values(nativeImages)[0]}">`)).toEqual({ declaredWidth: String(declared), width: 1600, height: 1000 });
     }
     await page.getByRole('button', { name: 'Copia documento', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Copia documento' })).toHaveAttribute('title', 'Copiato!');

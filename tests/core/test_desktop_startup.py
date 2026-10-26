@@ -3,6 +3,7 @@ import io
 import json
 import socket
 import threading
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -13,6 +14,20 @@ from urllib.request import Request, urlopen
 import pytest
 
 from el_sbobinator.core.desktop_startup import DesktopStartupServer
+from el_sbobinator.core.desktop_startup import (
+    _build_id_cache_file as real_build_id_cache_file,
+)
+
+
+@pytest.fixture(autouse=True)
+def build_id_cache(tmp_path_factory):
+    # Outside the served build directory, whose files make up the build id.
+    cache_file = tmp_path_factory.mktemp("config") / "desktop_build_id.json"
+    with patch(
+        "el_sbobinator.core.desktop_startup._build_id_cache_file",
+        return_value=cache_file,
+    ):
+        yield cache_file
 
 
 @pytest.fixture
@@ -66,6 +81,26 @@ def test_real_http_headers_identity_and_public_script_namespace(server):
         assert response.headers["Content-Type"] == "application/javascript"
     with request(server, server.prefix + "boot.js") as response:
         assert response.read() == b"window.boot = true;"
+
+
+def test_close_does_not_wait_for_the_default_half_second_poll(tmp_path):
+    (tmp_path / "index.html").write_text("<html><head></head></html>")
+    (tmp_path / "desktop-build.json").write_text('{"version":"2.7.3"}')
+    seen: list[float] = []
+    serve_forever = ThreadingHTTPServer.serve_forever
+
+    def record_poll(self, poll_interval=0.5):
+        seen.append(poll_interval)
+        serve_forever(self, poll_interval)
+
+    with (
+        patch("el_sbobinator.core.desktop_startup.record_startup_diagnostic"),
+        patch.object(ThreadingHTTPServer, "serve_forever", record_poll),
+    ):
+        instance = DesktopStartupServer(str(tmp_path / "index.html"), port=0)
+        instance.close()
+    assert seen == [0.05]
+    assert not instance.thread.is_alive()
 
 
 @pytest.mark.parametrize(
@@ -857,3 +892,96 @@ def test_macos_metadata_link_controls_real_http_handshake(
             assert other.failed.is_set() == (backend_version != "2.7.3")
         finally:
             other.close()
+
+
+def _packaged_server(root: Path) -> DesktopStartupServer:
+    with (
+        patch("el_sbobinator.core.desktop_startup.sys.frozen", True, create=True),
+        patch(
+            "el_sbobinator.services.diagnostics_service.build_info",
+            return_value={"version": "2.7.3"},
+        ),
+    ):
+        instance = DesktopStartupServer(str(root / "index.html"), port=0)
+    instance.close()
+    return instance
+
+
+def test_packaged_build_id_is_reused_until_an_installed_file_changes(
+    server, build_id_cache
+):
+    from el_sbobinator.core import desktop_startup
+
+    with patch.object(
+        desktop_startup, "_hash_build", wraps=desktop_startup._hash_build
+    ) as hash_build:
+        first = _packaged_server(server.root)
+        second = _packaged_server(server.root)
+        assert hash_build.call_count == 1
+        assert first.build_id == second.build_id == server.build_id
+        assert json.loads(build_id_cache.read_text())["build_id"] == server.build_id
+
+        # An update rewrites the files: a new size or timestamp forces a rehash.
+        (server.root / "boot.js").write_text("window.boot = 'update';")
+        updated = _packaged_server(server.root)
+        assert hash_build.call_count == 2
+        assert updated.build_id != server.build_id
+
+
+@pytest.mark.parametrize(
+    "cached",
+    [
+        "not json",
+        '["list"]',
+        '{"signature": "stale", "build_id": "000000000000000000000000"}',
+        '{"signature": null, "build_id": "../../outside"}',
+    ],
+)
+def test_packaged_build_id_rehashes_unusable_cache(server, build_id_cache, cached):
+    build_id_cache.write_text(cached)
+    assert _packaged_server(server.root).build_id == server.build_id
+    assert json.loads(build_id_cache.read_text())["build_id"] == server.build_id
+
+
+def test_packaged_build_id_rejects_a_forged_signature_match(server, build_id_cache):
+    _packaged_server(server.root)
+    cached = json.loads(build_id_cache.read_text())
+    build_id_cache.write_text(
+        json.dumps({"signature": cached["signature"], "build_id": "../outside"})
+    )
+    assert _packaged_server(server.root).build_id == server.build_id
+
+
+def test_packaged_build_id_survives_unwritable_or_unknown_config_dir(server):
+    from el_sbobinator.core import desktop_startup
+
+    with patch(
+        "el_sbobinator.utils.file_ops._atomic_write_json",
+        side_effect=PermissionError("read-only"),
+    ):
+        assert _packaged_server(server.root).build_id == server.build_id
+    with patch.object(
+        desktop_startup, "_build_id_cache_file", side_effect=RuntimeError("no home")
+    ):
+        assert _packaged_server(server.root).build_id == server.build_id
+
+
+def test_development_build_id_never_trusts_the_cache(server, build_id_cache):
+    build_id_cache.write_text(
+        json.dumps({"signature": "x", "build_id": "0" * 24}), encoding="utf-8"
+    )
+    other = DesktopStartupServer(str(server.root / "index.html"), port=0)
+    other.close()
+    assert other.build_id == server.build_id
+    assert json.loads(build_id_cache.read_text())["build_id"] == "0" * 24
+
+
+def test_build_id_cache_lives_in_user_config_not_in_the_app(tmp_path):
+    # Captured at import, before the autouse fixture replaces the location.
+    with patch(
+        "el_sbobinator.services.config_service.get_config_dir",
+        return_value=str(tmp_path / "config"),
+    ):
+        assert real_build_id_cache_file() == (
+            tmp_path / "config" / "desktop_build_id.json"
+        )

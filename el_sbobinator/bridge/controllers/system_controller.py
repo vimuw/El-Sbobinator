@@ -211,19 +211,6 @@ class SystemControllerMixin:
             record_incident("frontend." + kind, message[:3000], stack[:6000])
         return bridge_ok()
 
-    def open_logs_folder(self) -> dict:
-        """Open the local logs directory in the default system file manager."""
-        try:
-            from el_sbobinator.services.config_service import get_config_dir
-
-            log_dir = get_config_dir()
-            os.makedirs(log_dir, exist_ok=True)
-            file_ops.open_path_with_default_app(log_dir)
-            return bridge_ok()
-        except Exception as e:
-            self._logger.exception("Apertura cartella log fallita.")
-            return bridge_error(e)
-
     def open_file(self, path: str) -> dict:
         """Open a local file/folder with the system default handler."""
         if not isinstance(path, str):

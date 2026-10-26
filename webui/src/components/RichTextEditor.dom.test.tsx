@@ -23,6 +23,8 @@ describe('RichTextEditor Component', () => {
 
     const editorEl = document.querySelector('.tiptap-editor');
     expect(editorEl).toBeTruthy();
+    // Tailwind's prose selectors restyled the whole note on every focus change.
+    expect(editorEl!.className).not.toMatch(/(^|\s)prose/);
 
     // Verify initial content rendered
     expect(screen.getByText('Prima pagina di appunti per anatomia')).toBeTruthy();
@@ -63,6 +65,23 @@ describe('RichTextEditor Component', () => {
     );
 
     expect(pageWrapper.style.zoom).toBe('1.5');
+  });
+
+  it('reserves the floating player height below the page and in the caret scroll margin', async () => {
+    const { rerender } = render(<RichTextEditor initialContent="<p>Appunti</p>" bottomInset={70} />);
+    const container = document.querySelector('.editor-page-container') as HTMLElement;
+    expect(container.style.paddingBottom).toBe('70px');
+    expect(container.style.scrollPaddingBottom).toBe('70px');
+
+    const element = document.querySelector('.tiptap-editor') as HTMLElement & { editor: Editor };
+    await waitFor(() => expect(element.editor).toBeTruthy());
+    const margin = () => element.editor.view.someProp('scrollMargin') as { bottom: number };
+    expect(margin().bottom).toBe(86);
+
+    // A taller dock (relink prompt, wrapped controls) moves the margin without rebuilding the editor.
+    rerender(<RichTextEditor initialContent="<p>Appunti</p>" bottomInset={120} />);
+    expect(container.style.paddingBottom).toBe('120px');
+    expect(margin().bottom).toBe(136);
   });
 
   it('keeps the index mounted for its exit fade and restores it on immediate reopen', () => {
@@ -110,15 +129,32 @@ describe('RichTextEditor Component', () => {
 
     act(() => element.editor.commands.insertContentAt(element.editor.state.doc.content.size - 1, ' corretti'));
     expect(element.textContent).toBe('Appunti originali corretti');
-    expect(onChange).toHaveBeenLastCalledWith('<p>Appunti originali corretti</p>');
+    expect(element.editor.getHTML()).toBe('<p>Appunti originali corretti</p>');
+    expect(onChange).toHaveBeenCalledTimes(1);
 
     act(() => fireEvent.click(screen.getByTitle('Annulla (Ctrl+Z)')));
     expect(element.textContent).toBe('Appunti originali');
-    expect(onChange).toHaveBeenLastCalledWith('<p>Appunti originali</p>');
+    expect(element.editor.getHTML()).toBe('<p>Appunti originali</p>');
+    expect(onChange).toHaveBeenCalledTimes(2);
 
     act(() => fireEvent.click(screen.getByTitle('Ripeti (Ctrl+Y)')));
     expect(element.textContent).toBe('Appunti originali corretti');
-    expect(onChange).toHaveBeenLastCalledWith('<p>Appunti originali corretti</p>');
+    expect(element.editor.getHTML()).toBe('<p>Appunti originali corretti</p>');
+    expect(onChange).toHaveBeenCalledTimes(3);
+  });
+
+  it('signals edits without serializing the document on every keystroke', async () => {
+    const onChange = vi.fn();
+    render(<RichTextEditor initialContent="<p>Appunti</p>" onChange={onChange} />);
+    const element = document.querySelector('.tiptap-editor') as HTMLElement & { editor: Editor };
+    await waitFor(() => expect(element.editor).toBeTruthy());
+    const getHTML = vi.spyOn(element.editor, 'getHTML');
+
+    act(() => element.editor.commands.insertContentAt(element.editor.state.doc.content.size - 1, ' nuovi'));
+
+    expect(onChange).toHaveBeenCalledOnce();
+    expect(onChange.mock.calls[0]).toEqual([]);
+    expect(getHTML).not.toHaveBeenCalled();
   });
 
   it('extracts headings and triggers onHeadingsChange', async () => {
@@ -135,6 +171,23 @@ describe('RichTextEditor Component', () => {
     const headings = onHeadingsChange.mock.calls[0][0];
     expect(headings.length).toBeGreaterThanOrEqual(1);
     expect(headings.some((h: { text: string }) => h.text === 'Titolo Sezione 1')).toBe(true);
+  });
+
+  it('republishes the index only when the headings change', async () => {
+    const onHeadingsChange = vi.fn();
+    render(<RichTextEditor initialContent="<h2>Capitolo</h2><p>Testo</p>" onHeadingsChange={onHeadingsChange} />);
+    const element = document.querySelector('.tiptap-editor') as HTMLElement & { editor: Editor };
+    await waitFor(() => expect(onHeadingsChange).toHaveBeenCalledOnce());
+    const pause = () => act(() => new Promise(resolve => setTimeout(resolve, 450)));
+
+    act(() => element.editor.commands.insertContentAt(element.editor.state.doc.content.size - 1, ' aggiunto'));
+    await pause();
+    expect(onHeadingsChange).toHaveBeenCalledOnce();
+
+    act(() => element.editor.commands.insertContentAt(1, 'Nuovo '));
+    await pause();
+    expect(onHeadingsChange).toHaveBeenCalledTimes(2);
+    expect(onHeadingsChange.mock.lastCall![0].map((h: { text: string }) => h.text)).toEqual(['Nuovo Capitolo']);
   });
 
   it('removes inline fontSize mark when setting a heading on text with pre-existing font-size', async () => {

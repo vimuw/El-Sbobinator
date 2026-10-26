@@ -32,6 +32,22 @@ describe('SetupPage', () => {
     expect(onSaved).toHaveBeenCalledWith('AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345', 'gemini-2.5-flash', storage);
   });
 
+  it('uses the shared page title, pill field, pill save action and sentence-case guide card', () => {
+    const { container } = render(<SetupPage {...baseProps} />);
+    expect(screen.getByRole('heading', { level: 1, name: 'Configura la tua API Key' }).classList.contains('page-title')).toBe(true);
+    const input = screen.getByLabelText('Chiave API Gemini');
+    expect(input.classList.contains('is-settings-input')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Salva e inizia' }).classList.contains('settings-pill-button')).toBe(true);
+    const guide = screen.getByRole('region', { name: 'Come ottenere la chiave in 1 minuto' });
+    expect(guide.classList.contains('setup-guide')).toBe(true);
+    expect(guide.querySelectorAll('li')).toHaveLength(3);
+    expect(container.querySelector('.uppercase, .rounded-xl')).toBeNull();
+    fireEvent.change(input, { target: { value: 'bad-key' } });
+    expect(input.classList.contains('is-warning')).toBe(true);
+    fireEvent.change(input, { target: { value: 'AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345' } });
+    expect(input.classList.contains('is-valid')).toBe(true);
+  });
+
   it('shows "Configura la tua API Key" when no protected key', () => {
     render(<SetupPage {...baseProps} />);
     expect(screen.getByText('Configura la tua API Key')).toBeTruthy();

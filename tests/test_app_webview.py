@@ -356,90 +356,6 @@ class AppWebviewTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertIn("elaborazione in corso", result.get("error", ""))
 
-    @patch(
-        "el_sbobinator.bridge.controllers.session_controller.cleanup_completed_sessions"
-    )
-    def test_cleanup_completed_sessions_dry_run_counts_without_deleting(
-        self, mock_cleanup
-    ):
-        api = ElSbobinatorApi()
-        mock_cleanup.return_value = {
-            "removed": 0,
-            "freed_bytes": 8192,
-            "errors": 0,
-            "candidates": 3,
-            "preserved_completed": 0,
-            "missing_completed_html": 0,
-        }
-
-        result = api.cleanup_completed_sessions(dry_run=True)
-
-        self.assertTrue(result["ok"])
-        self.assertEqual(result["removed"], 0)
-        self.assertEqual(result["candidates"], 3)
-        self.assertEqual(result["freed_bytes"], 8192)
-        mock_cleanup.assert_called_once_with(14, dry_run=True)
-
-    def test_cleanup_completed_sessions_fails_when_processing_active(self):
-        api = ElSbobinatorApi()
-        mock_thread = MagicMock()
-        mock_thread.is_alive.return_value = True
-        api._processing_thread = mock_thread
-
-        result = api.cleanup_completed_sessions(dry_run=True)
-
-        self.assertFalse(result["ok"])
-        self.assertIn("elaborazione in corso", result.get("error", ""))
-
-    @patch(
-        "el_sbobinator.bridge.controllers.session_controller.cleanup_completed_sessions"
-    )
-    def test_cleanup_completed_sessions_delete_invalidates_caches(self, mock_cleanup):
-        api = ElSbobinatorApi()
-        with tempfile.TemporaryDirectory() as tmpdir:
-            deleted_dir = os.path.realpath(os.path.join(tmpdir, "deleted"))
-            deleted_html = os.path.join(deleted_dir, "note.html")
-            unrelated_html = os.path.join(tmpdir, "unrelated", "note.html")
-            mock_cleanup.return_value = {
-                "removed": 2,
-                "freed_bytes": 8192,
-                "errors": 0,
-                "candidates": 2,
-                "preserved_completed": 0,
-                "missing_completed_html": 0,
-                "deleted_paths": [deleted_dir],
-            }
-            with api._sessions_cache_lock:
-                api._sessions_cache = {"ok": True, "sessions": [], "total": 0}
-                initial_gen = api._sessions_cache_gen
-            with api._text_cache_lock:
-                api._text_cache["x"] = (1.0, "text")
-            api._resolved_path_cache["deleted-file"] = deleted_html
-            api._resolved_path_cache["deleted-root"] = deleted_dir
-            api._resolved_path_cache["unrelated"] = unrelated_html
-            api._html_shell_cache[deleted_html] = ("<body>", "</body>")
-            api._html_shell_cache[unrelated_html] = ("<body>", "</body>")
-
-            with patch(
-                "el_sbobinator.bridge.controllers.session_controller.evict_html_paths_under"
-            ) as mock_evict:
-                result = api.cleanup_completed_sessions(dry_run=False)
-
-        self.assertTrue(result["ok"])
-        self.assertEqual(result["removed"], 2)
-        mock_cleanup.assert_called_once_with(14, dry_run=False)
-        mock_evict.assert_called_once_with(deleted_dir + os.sep)
-        with api._sessions_cache_lock:
-            self.assertIsNone(api._sessions_cache)
-            self.assertEqual(api._sessions_cache_gen, initial_gen + 1)
-        with api._text_cache_lock:
-            self.assertEqual(api._text_cache, {})
-        self.assertNotIn("deleted-file", api._resolved_path_cache)
-        self.assertNotIn("deleted-root", api._resolved_path_cache)
-        self.assertIn("unrelated", api._resolved_path_cache)
-        self.assertNotIn(deleted_html, api._html_shell_cache)
-        self.assertIn(unrelated_html, api._html_shell_cache)
-
     def test_stop_processing_unblocks_pending_prompts(self):
         api = ElSbobinatorApi()
         regenerate_event = threading.Event()
@@ -1415,7 +1331,7 @@ class AppWebviewTests(unittest.TestCase):
         mock_cleanup.assert_called_once()
         api._adapter.emit.assert_any_call(  # type: ignore[attr-defined]
             "appendConsole",
-            "[*] Pulizia: rimossi 2 file temporanei.",
+            "Pulizia: rimossi 2 file temporanei.",
             batched=False,
         )
 

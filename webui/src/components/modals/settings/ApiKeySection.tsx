@@ -1,7 +1,6 @@
 import { reportClientError } from '../../../diagnostics';
 import React, { useState, useMemo, useCallback } from 'react';
 import {
-  Key,
   ShieldCheck,
   AlertCircle,
   AlertTriangle,
@@ -17,14 +16,17 @@ import {
   Loader2,
   Trash2,
   RefreshCw,
+  Clock,
 } from 'lucide-react';
 import { ConfirmActionModal } from '../ConfirmActionModal';
 import { QuotasSection } from './QuotasSection';
+import { SettingsSectionHeading, StatusBadge } from './SettingsLayout';
 import { KebabMenu, type KebabMenuItem } from '../../KebabMenu';
 import { DEFAULT_MODEL, GEMINI_KEY_PATTERN, getModelDisplayName } from '../../../utils';
 import type { ApiUsageResult, CredentialProfile, CredentialStorage } from '../../../bridge';
 
 import { credentialStorageWarning } from '../../../credentialStorage';
+import { DEFAULT_QUOTA_RESET_INFO, isCredentialUsableForModel } from './credentialAvailability';
 
 export interface ApiKeySectionProps {
   apiKey: string;
@@ -337,220 +339,129 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
   };
 
   const effectivePreferredModel = preferredModel || DEFAULT_MODEL;
+  const preferredModelName = getModelDisplayName(effectivePreferredModel);
 
   const isCredWorkingForModel = useCallback(
-    (c?: CredentialProfile) => {
-      if (!c) return true;
-      if (
-        c.operational_status === 'invalid' ||
-        c.operational_status === 'permission_denied' ||
-        c.operational_status === 'request_error'
-      ) {
-        return false;
-      }
-      const exhausted = c.exhausted_models || [];
-      if (exhausted.includes(effectivePreferredModel)) {
-        return false;
-      }
-      // If temporarily_failing but it has exhausted_models that don't include effectivePreferredModel,
-      // the failure was strictly on those other models, so it IS working for effectivePreferredModel.
-      if (c.operational_status === 'temporarily_failing' && exhausted.length === 0) {
-        return false;
-      }
-      return true;
-    },
+    (c?: CredentialProfile) => isCredentialUsableForModel(c, effectivePreferredModel),
     [effectivePreferredModel]
   );
 
   const primaryCred = getCredentialFor(apiKey, true);
-  const isPrimaryWorking = hasPrimaryConfigured && isCredWorkingForModel(primaryCred);
 
-  const activeFallbackKey = !isPrimaryWorking
-    ? cleanedFallbackKeys.find((k, idx) => {
-        const c = getCredentialFor(k, false, idx);
-        return isCredWorkingForModel(c);
-      })
-    : null;
+  // Ordered rotation: primary first, then reserves in priority order. The first usable
+  // key for the selected model is the active one, the second is next in line.
+  const rotation = [
+    ...(hasPrimaryConfigured ? [{ id: 'primary', cred: primaryCred }] : []),
+    ...cleanedFallbackKeys.map((k, idx) => ({ id: `fallback-${idx}`, cred: getCredentialFor(k, false, idx) })),
+  ];
+  const usableIds = rotation.filter(r => isCredWorkingForModel(r.cred)).map(r => r.id);
+  const activeRowId = usableIds[0] ?? null;
+  const nextRowId = usableIds[1] ?? null;
+  const hasTelemetry = credentials.length > 0;
 
-  const renderCredentialStatusBadge = (
-    cred?: CredentialProfile,
-    isPrimary?: boolean,
-    keyVal?: string,
-  ) => {
+  const resetInfo = apiUsage?.next_reset_info || DEFAULT_QUOTA_RESET_INFO;
+
+  // One badge per row, always about the selected model.
+  const renderCredentialStatusBadge = (cred: CredentialProfile | undefined, rowId: string) => {
     if (isLoadingUsage) {
       return (
-        <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-default)] inline-flex items-center gap-1 leading-normal shrink-0">
+        <StatusBadge tone="neutral">
           <Loader2 className="w-3 h-3 animate-spin text-[var(--accent-text)]" />
           <span>Verifica...</span>
-        </span>
+        </StatusBadge>
       );
     }
 
-    const baseBadge =
-      'text-[11px] font-semibold px-2.5 py-0.5 rounded-full inline-flex items-center justify-center leading-normal shrink-0';
+    const status = cred?.operational_status;
+    if (status === 'invalid') return <StatusBadge tone="error">Non valida (401)</StatusBadge>;
+    if (status === 'permission_denied') return <StatusBadge tone="error">Permesso negato (403)</StatusBadge>;
+    if (status === 'request_error') return <StatusBadge tone="error">Errore richiesta (400)</StatusBadge>;
 
-    if (!cred) {
-      if (isPrimary) {
+    if (cred && !isCredWorkingForModel(cred)) {
+      const exhaustedModels = cred.exhausted_models || [];
+      const message = (cred.last_error_message || '').toLowerCase();
+      const isQuota =
+        exhaustedModels.includes(effectivePreferredModel) ||
+        !cred.last_error_message ||
+        message.includes('quota') ||
+        message.includes('rpd') ||
+        cred.last_error_code === 429;
+      if (!isQuota) {
         return (
-          <span
-            className={`${baseBadge} bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)]`}
-            title={`Operativa per ${getModelDisplayName(effectivePreferredModel)}`}
-          >
-            Operativa
-          </span>
+          <StatusBadge tone="warning" title={cred.last_error_message || undefined}>
+            Non disponibile (temporaneo)
+          </StatusBadge>
         );
       }
+      return (
+        <StatusBadge tone="warning" title={`Quota giornaliera di ${preferredModelName} esaurita su questa chiave. ${resetInfo}.`}>
+          Esaurita oggi
+        </StatusBadge>
+      );
+    }
+
+    if (rowId === activeRowId) {
+      return (
+        <StatusBadge tone="accent" title={`Le trascrizioni con ${preferredModelName} usano questa chiave`}>
+          Attiva
+        </StatusBadge>
+      );
+    }
+    // Only the next key in line gets a quiet label: the row name already says "riserva".
+    if (rowId === nextRowId) {
       return (
         <span
-          className={`${baseBadge} bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-default)]`}
-          title={`Disponibile in riserva per ${getModelDisplayName(effectivePreferredModel)}`}
+          className="text-[11px] text-[var(--text-secondary)]"
+          title={`Subentra quando la chiave attiva esaurisce la quota di ${preferredModelName}`}
         >
-          In riserva
+          Prossima
         </span>
       );
     }
+    return null;
+  };
 
-    const status = cred.operational_status;
-    const exhaustedModels = cred.exhausted_models || [];
-    const isCurrentModelExhausted = Boolean(
-      effectivePreferredModel && exhaustedModels.includes(effectivePreferredModel)
-    );
-
-    if (status === 'invalid') {
-      return (
-        <span className={`${baseBadge} bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)] border border-[var(--error-ring)]`}>
-          Non valida (401)
-        </span>
-      );
-    }
-    if (status === 'permission_denied') {
-      return (
-        <span className={`${baseBadge} bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)] border border-[var(--error-ring)]`}>
-          Permesso negato (403)
-        </span>
-      );
-    }
-    if (status === 'request_error') {
-      return (
-        <span className={`${baseBadge} bg-[var(--error-subtle,var(--bg-surface))] text-[var(--error-text)] border border-[var(--error-ring)]`}>
-          Errore richiesta (400)
-        </span>
-      );
-    }
-
-    const isCurrentModelQuotaExhausted =
-      isCurrentModelExhausted ||
-      (status === 'temporarily_failing' &&
-        exhaustedModels.length === 0 &&
-        (!cred.last_error_message ||
-          cred.last_error_message.toLowerCase().includes('quota') ||
-          cred.last_error_message.toLowerCase().includes('rpd') ||
-          cred.last_error_code === 429));
-
-    if (isCurrentModelQuotaExhausted) {
-      if (exhaustedModels.length === 1) {
-        return (
-          <span
-            className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-ring)]`}
-            title={`Quota esaurita per ${getModelDisplayName(exhaustedModels[0])}. Disponibile per gli altri modelli.`}
-          >
-            Quota esaurita per {getModelDisplayName(exhaustedModels[0])}
-          </span>
-        );
-      }
-      if (exhaustedModels.length > 1) {
-        const names = exhaustedModels.map(getModelDisplayName).join(', ');
-        const otherCount = exhaustedModels.length - 1;
-        const label = isCurrentModelExhausted
-          ? `Quota esaurita per ${getModelDisplayName(effectivePreferredModel)} (+${otherCount})`
-          : `Quota esaurita (${exhaustedModels.length} modelli)`;
-        return (
-          <span
-            className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-ring)]`}
-            title={`Quota esaurita per: ${names}. Disponibile per gli altri modelli.`}
-          >
-            {label}
-          </span>
-        );
-      }
-      return (
-        <span className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-ring)]`}>
-          Quota esaurita (oggi)
-        </span>
-      );
-    }
-
-    if (status === 'temporarily_failing' && exhaustedModels.length === 0) {
-      return (
-        <span className={`${baseBadge} bg-[var(--warning-subtle,var(--bg-surface))] text-[var(--warning-text)] border border-[var(--warning-ring)]`}>
-          Non disponibile (temporaneo)
-        </span>
-      );
-    }
-
-    const renderExhaustedTag = () => {
-      const otherExhaustedModels = exhaustedModels.filter(
-        m => m !== effectivePreferredModel
-      );
-      if (otherExhaustedModels.length === 0) return null;
-      const label =
-        otherExhaustedModels.length === 1
-          ? `Esaurita per ${getModelDisplayName(otherExhaustedModels[0])}`
-          : otherExhaustedModels.length === 2
-          ? `Esaurita per ${otherExhaustedModels.map(m => getModelDisplayName(m).replace('Gemini ', '')).join(' & ')}`
-          : `Esaurita per ${otherExhaustedModels.length} modelli`;
-      const title = `Disponibile per ${getModelDisplayName(effectivePreferredModel)}. Quota esaurita oggi per: ${otherExhaustedModels.map(getModelDisplayName).join(', ')}`;
-      return (
-        <span
-          className="text-[10px] font-medium text-[var(--warning-text)] bg-[var(--warning-subtle,var(--bg-surface))] px-2 py-0.5 rounded-full border border-[var(--warning-ring)] leading-normal shrink-0"
-          title={title}
-        >
-          {label}
-        </span>
-      );
-    };
-
-    // Operational or reserve status
-    if (isPrimary || cred.is_primary) {
-      return (
-        <div className="flex items-center gap-1.5 flex-wrap justify-end">
-          <span
-            className={`${baseBadge} bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)]`}
-            title={`Operativa per ${getModelDisplayName(effectivePreferredModel)}`}
-          >
-            Operativa
-          </span>
-          {renderExhaustedTag()}
-        </div>
-      );
-    }
-
-    if (keyVal && keyVal === activeFallbackKey) {
-      return (
-        <div className="flex items-center gap-1.5 flex-wrap justify-end">
-          <span
-            className={`${baseBadge} bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)]`}
-            title={`In uso per ${getModelDisplayName(effectivePreferredModel)}`}
-          >
-            In uso (riserva)
-          </span>
-          {renderExhaustedTag()}
-        </div>
-      );
-    }
-
+  // Quiet secondary line: exhaustion on models other than the selected one.
+  const renderOtherModelsNote = (cred?: CredentialProfile) => {
+    if (isLoadingUsage || !cred) return null;
+    const exhausted = cred.exhausted_models || [];
+    const others = exhausted.filter(m => m !== effectivePreferredModel);
+    if (others.length === 0) return null;
     return (
-      <div className="flex items-center gap-1.5 flex-wrap justify-end">
-        <span
-          className={`${baseBadge} bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-default)]`}
-          title={`Disponibile in riserva per ${getModelDisplayName(effectivePreferredModel)}`}
-        >
-          In riserva
+      <span className="block mt-0.5 text-[11px] text-[var(--text-secondary)] leading-snug">
+        {exhausted.includes(effectivePreferredModel) ? 'Esaurita anche su' : 'Esaurita su'}{' '}
+        {others.map(getModelDisplayName).join(', ')}
+      </span>
+    );
+  };
+
+  const renderAvailabilitySummary = () => {
+    if (totalKeysCount === 0 || isLoadingUsage) return null;
+    const usableCount = usableIds.length;
+    const noneUsable = hasTelemetry && usableCount === 0;
+    return (
+      <div
+        className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs ${
+          noneUsable ? 'text-[var(--warning-text)]' : 'text-[var(--text-secondary)]'
+        }`}
+        data-testid="api-key-availability"
+      >
+        <span>
+          <span className="font-semibold text-[var(--text-primary)]">{preferredModelName}</span>
+          {hasTelemetry
+            ? `: ${usableCount} di ${totalKeysCount} ${totalKeysCount === 1 ? 'chiave disponibile' : 'chiavi disponibili'} oggi`
+            : ': stato non ancora verificato'}
         </span>
-        {renderExhaustedTag()}
+        {hasTelemetry && (
+          <span className="inline-flex items-center gap-1 text-[var(--text-secondary)]">
+            <Clock className="w-3.5 h-3.5 shrink-0" />
+            {resetInfo}
+          </span>
+        )}
       </div>
     );
   };
+
   const primaryMaskedDisplay = apiKey
     ? `...${apiKey.slice(-4)}`
     : (primaryCred?.masked_key
@@ -585,17 +496,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
     <div className="space-y-3">
       {/* 1. Header with count & global actions */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 min-w-0">
-          <Key className="w-4 h-4 text-[var(--accent-text)] shrink-0" />
-          <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] truncate">
-            Chiavi API
-          </h3>
-          {totalKeysCount > 0 && (
-            <span className="text-[11px] font-semibold text-[var(--text-secondary)] bg-[var(--bg-surface)] border border-[var(--border-default)] px-2 py-0.5 rounded-full leading-normal shrink-0">
-              {totalKeysCount} {totalKeysCount === 1 ? 'chiave' : 'chiavi'}
-            </span>
-          )}
-        </div>
+        <SettingsSectionHeading>Chiavi API</SettingsSectionHeading>
 
         <div className="flex items-center gap-1.5 shrink-0">
           {onRefreshUsage && (
@@ -611,72 +512,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
 
       {statusSummary}
 
-      {/* 2. Compact Add Key Bar */}
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1 min-w-0">
-          <input
-            type={showNewKeyInput ? 'text' : 'password'}
-            value={newKeyInput}
-            onChange={e => {
-              setNewKeyInput(e.target.value);
-              if (notice) setNotice(null);
-            }}
-            onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
-            placeholder={
-              hasPrimaryConfigured
-                ? 'Aggiungi chiave di riserva (AIzaSy... o AQ...)'
-                : 'Inserisci chiave principale (AIzaSy... o AQ...)'
-            }
-            aria-label="Nuova chiave di riserva"
-            autoComplete="off"
-            data-lpignore="true"
-            data-1p-ignore="true"
-            data-form-type="other"
-            spellCheck={false}
-            autoCorrect="off"
-            autoCapitalize="off"
-            className={`app-input is-settings-input ${
-              notice?.type === 'error' ? 'is-invalid' : ''
-            }`}
-          />
-          <button
-            type="button"
-            onClick={() => setShowNewKeyInput(prev => !prev)}
-            className="absolute inset-y-0 right-2 flex items-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
-            aria-label={showNewKeyInput ? 'Nascondi nuova chiave' : 'Mostra nuova chiave'}
-            title={showNewKeyInput ? 'Nascondi nuova chiave' : 'Mostra nuova chiave'}
-          >
-            {showNewKeyInput ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-          </button>
-        </div>
-        <button
-          type="button"
-          onClick={handleAddKey}
-          disabled={!newKeyInput.trim()}
-          className="premium-button compact-button text-xs font-bold shrink-0 cursor-pointer flex items-center gap-1.5 min-h-[38px]"
-          aria-label="Aggiungi chiave di riserva"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Aggiungi</span>
-        </button>
-      </div>
-
-      {/* Validation / Format Notice */}
-      {notice && (
-        <div
-          className={`alert-card ${
-            notice.type === 'warning' ? 'is-warning' : 'is-error'
-          } text-xs flex-row items-center gap-2 py-2 px-3 animate-fade-in`}
-        >
-          {notice.type === 'warning' ? (
-            <AlertTriangle className="w-4 h-4 shrink-0" />
-          ) : (
-            <AlertCircle className="w-4 h-4 shrink-0" />
-          )}
-          <span className="font-medium leading-snug">{notice.message}</span>
-        </div>
-      )}
+      {renderAvailabilitySummary()}
 
       {/* Storage / Security notice */}
       {storageWarning && (
@@ -696,29 +532,32 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
         {/* Row 1: Chiave Principale (if configured) */}
         {hasPrimaryConfigured ? (
           <div className="py-2 px-3.5 flex items-center justify-between gap-2.5 text-xs">
-            <div className="flex items-center gap-2 min-w-0 flex-wrap">
-              <span className="font-bold text-[var(--text-primary)]">Chiave Principale</span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                <span className="font-bold text-[var(--text-primary)]">Chiave Principale</span>
 
-              <span
-                className="px-2.5 py-0.5 rounded-full bg-[var(--bg-hover)] border border-[var(--border-default)] font-mono text-[11px] text-[var(--text-primary)] font-semibold inline-flex items-center leading-normal select-all"
-                title="Chiave protetta"
-              >
-                {primaryMaskedDisplay}
-              </span>
-
-              {hasProtectedKey && !apiKey && (
                 <span
-                  className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[var(--bg-hover)] text-[var(--success-text)] border border-[var(--border-default)] inline-flex items-center gap-1 leading-normal"
-                  title="Credenziale cifrata dal sistema operativo (DPAPI su Windows, Keychain su macOS)"
+                  className="font-mono text-[11px] text-[var(--text-secondary)] select-all"
+                  title="Chiave protetta"
                 >
-                  <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-                  <span>Protetta</span>
+                  {primaryMaskedDisplay}
                 </span>
-              )}
+
+                {hasProtectedKey && !apiKey && (
+                  <span
+                    className="text-[11px] font-medium text-[var(--success-text)] inline-flex items-center gap-1"
+                    title="Credenziale cifrata dal sistema operativo (DPAPI su Windows, Keychain su macOS)"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                    <span>Protetta</span>
+                  </span>
+                )}
+              </div>
+              {renderOtherModelsNote(primaryCred)}
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
-              {renderCredentialStatusBadge(primaryCred, true, apiKey)}
+              {renderCredentialStatusBadge(primaryCred, 'primary')}
 
               <div onClick={e => e.stopPropagation()}>
                 <KebabMenu
@@ -782,19 +621,22 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
               key={`${key}-${idx}`}
               className="py-2 px-3.5 flex items-center justify-between gap-2.5 text-xs"
             >
-              <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                <span className="font-bold text-[var(--text-primary)]">{label}</span>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                  <span className="font-bold text-[var(--text-primary)]">{label}</span>
 
-                <span
-                  className="px-2.5 py-0.5 rounded-full bg-[var(--bg-hover)] border border-[var(--border-default)] font-mono text-[11px] text-[var(--text-primary)] font-semibold inline-flex items-center leading-normal select-all"
-                  title="Chiave protetta"
-                >
-                  {masked}
-                </span>
+                  <span
+                    className="font-mono text-[11px] text-[var(--text-secondary)] select-all"
+                    title="Chiave protetta"
+                  >
+                    {masked}
+                  </span>
+                </div>
+                {renderOtherModelsNote(cred)}
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
-                {renderCredentialStatusBadge(cred, false, key)}
+                {renderCredentialStatusBadge(cred, `fallback-${idx}`)}
 
                 <div onClick={e => e.stopPropagation()}>
                   <KebabMenu
@@ -812,12 +654,79 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
         {totalKeysCount === 0 && (
           <div className="p-6 text-center text-xs text-[var(--text-secondary)] space-y-1">
             <p className="font-semibold text-[var(--text-primary)]">Nessuna chiave API configurata</p>
-            <p>Inserisci la tua prima chiave API nel campo qui sopra per abilitare le trascrizioni.</p>
+            <p>Inserisci la tua prima chiave API nel campo qui sotto per abilitare le trascrizioni.</p>
           </div>
         )}
       </div>
 
-      {/* 4. Quiet Footer Caption with AI Studio link */}
+      {/* 4. Add Key Bar, below the list it extends */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1 min-w-0">
+          <input
+            type={showNewKeyInput ? 'text' : 'password'}
+            value={newKeyInput}
+            onChange={e => {
+              setNewKeyInput(e.target.value);
+              if (notice) setNotice(null);
+            }}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            placeholder={
+              hasPrimaryConfigured
+                ? 'Aggiungi chiave di riserva (AIzaSy... o AQ...)'
+                : 'Inserisci chiave principale (AIzaSy... o AQ...)'
+            }
+            aria-label="Nuova chiave di riserva"
+            autoComplete="off"
+            data-lpignore="true"
+            data-1p-ignore="true"
+            data-form-type="other"
+            spellCheck={false}
+            autoCorrect="off"
+            autoCapitalize="off"
+            className={`app-input is-settings-input ${
+              notice?.type === 'error' ? 'is-invalid' : ''
+            }`}
+          />
+          <button
+            type="button"
+            onClick={() => setShowNewKeyInput(prev => !prev)}
+            className="absolute inset-y-0 right-3.5 flex items-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+            aria-label={showNewKeyInput ? 'Nascondi nuova chiave' : 'Mostra nuova chiave'}
+            title={showNewKeyInput ? 'Nascondi nuova chiave' : 'Mostra nuova chiave'}
+          >
+            {showNewKeyInput ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={handleAddKey}
+          disabled={!newKeyInput.trim()}
+          className="settings-pill-button"
+          aria-label="Aggiungi chiave di riserva"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          <span>Aggiungi</span>
+        </button>
+      </div>
+
+      {/* Validation / Format Notice */}
+      {notice && (
+        <div
+          className={`alert-card ${
+            notice.type === 'warning' ? 'is-warning' : 'is-error'
+          } text-xs flex-row items-center gap-2 py-2 px-3 animate-fade-in`}
+        >
+          {notice.type === 'warning' ? (
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+          ) : (
+            <AlertCircle className="w-4 h-4 shrink-0" />
+          )}
+          <span className="font-medium leading-snug">{notice.message}</span>
+        </div>
+      )}
+
+      {/* 5. Quiet Footer Caption with AI Studio link */}
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-secondary)] leading-relaxed">
         <span>Le chiavi di riserva subentrano in ordine quando la principale esaurisce la quota giornaliera.</span>
         <a

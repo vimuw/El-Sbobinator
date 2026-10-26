@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 @import "katex/dist/katex.min.css";
+@import "./editorTypography.css";
 /* Optimized font imports to bundle ONLY the modern woff2 format (saving ~91kB of unused .woff assets) */
 
 @font-face {
@@ -42,9 +43,21 @@
   font-weight: 800;
   src: url("@fontsource/manrope/files/manrope-latin-800-normal.woff2") format('woff2');
 }
-@plugin "@tailwindcss/typography";
 
 /* ═══ DESIGN TOKENS / CSS VARIABLES ═══ */
+
+/* Visible window height. In iPad/iPhone Safari 100vh also counts the area behind the browser
+   toolbars, which pushed the sidebar bottom and the footer links off screen; 100dvh follows the
+   visible area. In the desktop window both are the same. */
+:root {
+  --app-height: 100vh;
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --app-height: 100dvh;
+  }
+}
 
 :root {
   --font-display: "Manrope", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
@@ -55,16 +68,16 @@
   --bg-elevated: #ffffff;
   --bg-input: #ffffff;
   --bg-hover: rgba(0, 0, 0, 0.05);
-  --bg-overlay: rgba(15, 23, 42, 0.40);
+  --bg-overlay: rgba(28, 25, 23, 0.40);
 
-  --border-default: rgba(100, 116, 139, 0.24);
-  --border-subtle: rgba(100, 116, 139, 0.16);
-  --border-strong: rgba(100, 116, 139, 0.46);
+  --border-default: rgba(120, 113, 108, 0.24);
+  --border-subtle: rgba(120, 113, 108, 0.16);
+  --border-strong: rgba(120, 113, 108, 0.46);
 
-  --text-primary: #191919;
-  --text-secondary: #374151;
-  --text-muted: #6b7280;
-  --text-faint: #9ca3af;
+  --text-primary: #1c1917;
+  --text-secondary: #44403c;
+  --text-muted: #635d57;
+  --text-faint: #857e77;
 
   --accent-bg: #3d6b3a;
   --accent-bg-hover: #2d5529;
@@ -76,18 +89,18 @@
   --brand-warm: #c49a3c;
   --brand-warm-subtle: rgba(196, 154, 60, 0.12);
 
-  --success-bg: #16a34a;
-  --success-text: #15803d;
-  --success-subtle: rgba(22, 163, 74, 0.10);
-  --success-ring: rgba(22, 163, 74, 0.22);
+  --success-bg: #2f855a;
+  --success-text: #23744a;
+  --success-subtle: rgba(47, 133, 90, 0.10);
+  --success-ring: rgba(47, 133, 90, 0.22);
   --error-bg: #b91c1c;
   --error-text: #b91c1c;
   --error-subtle: rgba(185, 28, 28, 0.08);
   --error-ring: rgba(185, 28, 28, 0.20);
-  --warning-bg: #a16207;
-  --warning-text: #a16207;
-  --warning-subtle: rgba(161, 98, 7, 0.09);
-  --warning-ring: rgba(161, 98, 7, 0.20);
+  --warning-bg: #975a16;
+  --warning-text: #8f5410;
+  --warning-subtle: rgba(151, 90, 22, 0.09);
+  --warning-ring: rgba(151, 90, 22, 0.20);
 
   --processing-bg: rgba(61, 107, 58, 0.08);
   --processing-text: #3d6b3a;
@@ -102,32 +115,45 @@
   --btn-danger-text: #ffffff;
   --btn-danger-hover: #991b1b;
   --btn-danger-ring: rgba(185, 28, 28, 0.32);
-  --btn-disabled-bg: rgba(148, 163, 184, 0.22);
-  --btn-disabled-text: rgba(100, 116, 139, 0.72);
+  --btn-disabled-bg: rgba(168, 162, 158, 0.22);
+  --btn-disabled-text: rgba(120, 113, 108, 0.72);
 
   --console-bg: #ffffff;
   --console-header: #faf8f5;
-  --console-heading: #191919;
-  --console-text: #374151;
-  --console-muted: #6b7280;
+  --console-heading: #1c1917;
+  --console-text: #44403c;
+  --console-muted: #635d57;
   --console-border: var(--border-subtle);
   --console-shell-border: var(--border-default);
   --console-error: #b91c1c;
-  --console-success: #15803d;
-  --console-warning: #a16207;
+  --console-success: #23744a;
+  --console-warning: #8f5410;
 
   --gradient-title-from: #1a2e18;
   --gradient-title-to: #4a7c40;
 
   --progress-bg: rgba(61, 107, 58, 0.12);
-  --scrubber-rest: rgba(100, 116, 139, 0.35);
+  --scrubber-rest: rgba(120, 113, 108, 0.35);
   --card-queued-bg: #ffffff;
-  --card-queued-border: rgba(100, 116, 139, 0.28);
+  --card-queued-border: rgba(120, 113, 108, 0.28);
   --glass-bg: #ffffff;
-  --glass-border: rgba(100, 116, 139, 0.24);
+  --glass-border: rgba(120, 113, 108, 0.24);
 
   --shadow-soft: none;
-  --shadow-strong: 0 8px 32px rgba(15, 23, 42, 0.08);
+  --shadow-strong: 0 8px 32px rgba(28, 25, 18, 0.08);
+  /* Surface elevation: a hairline border carries the shape, these add depth
+     quietly. Rest → hover only ever steps up one level. */
+  --shadow-xs: 0 1px 2px rgba(28, 25, 18, 0.04);
+  --shadow-sm: 0 1px 2px rgba(28, 25, 18, 0.04), 0 4px 12px -4px rgba(28, 25, 18, 0.08);
+  --shadow-md: 0 1px 3px rgba(28, 25, 18, 0.05), 0 10px 24px -8px rgba(28, 25, 18, 0.14);
+
+  --radius-card: 12px;
+  --radius-panel: 16px;
+
+  /* Matches EASE_OUT in motion.ts: decelerate, never overshoot. */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --tracking-display: -0.025em;
 
   --glass-top-shimmer: rgba(255, 255, 255, 0.90);
 
@@ -213,6 +239,9 @@
 
     --shadow-soft: none;
     --shadow-strong: 0 8px 48px rgba(0, 0, 0, 0.50);
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.30);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.30), 0 4px 12px -4px rgba(0, 0, 0, 0.40);
+    --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.35), 0 12px 28px -8px rgba(0, 0, 0, 0.55);
 
     --glass-bg: #202020;
     --glass-border: rgba(255, 255, 255, 0.15);
@@ -239,6 +268,7 @@
 .editor-fullpage,
 .editor-fullpage-header,
 .editor-fullpage-footer,
+.editor-player-dock,
 .editor-fullpage-back,
 .editor-fullpage-title,
 .editor-autosave-badge,
@@ -281,57 +311,6 @@
   background: transparent;
   box-shadow: none;
   border-color: transparent;
-}
-
-:root:not([data-theme="dark"]) .queue-card {
-  box-shadow: none;
-}
-
-:root:not([data-theme="dark"]) .queue-card:hover {
-  box-shadow: none;
-  border-color: rgba(100, 116, 139, 0.52);
-}
-
-:root:not([data-theme="dark"]) .dropzone-card {
-  background: var(--bg-surface);
-  border-color: var(--border-default);
-}
-
-:root:not([data-theme="dark"]) .dropzone-card:hover {
-  box-shadow: none;
-  border-color: var(--accent-bg);
-}
-
-:root:not([data-theme="dark"]) .dropzone-card::before {
-  background: radial-gradient(
-    circle 220px at 50% 46%,
-    rgba(61, 107, 58, 0.08) 0%,
-    rgba(61, 107, 58, 0.075) 45%,
-    rgba(61, 107, 58, 0.045) 70%,
-    rgba(61, 107, 58, 0.015) 88%,
-    rgba(61, 107, 58, 0) 100%
-  );
-}
-
-:root[data-theme="dark"] .dropzone-card {
-  background: var(--bg-surface);
-  border-color: var(--border-default);
-}
-
-:root[data-theme="dark"] .dropzone-card:hover {
-  box-shadow: none;
-  border-color: var(--accent-bg);
-}
-
-:root[data-theme="dark"] .dropzone-card::before {
-  background: radial-gradient(
-    circle 220px at 50% 46%,
-    rgba(90, 163, 86, 0.11) 0%,
-    rgba(90, 163, 86, 0.10) 45%,
-    rgba(90, 163, 86, 0.06) 70%,
-    rgba(90, 163, 86, 0.02) 88%,
-    rgba(90, 163, 86, 0) 100%
-  );
 }
 
 /* ═══ FOOTER ═══ */
@@ -394,7 +373,7 @@
 
 :root:not([data-theme="dark"]) .editor-toolbar {
   background: var(--editor-chrome-bg);
-  border-bottom-color: rgba(100, 116, 139, 0.28);
+  border-bottom-color: rgba(120, 113, 108, 0.28);
 }
 
 :root:not([data-theme="dark"]) .editor-select {
@@ -426,7 +405,7 @@
 
 :root:not([data-theme="dark"]) .toc-left-sidebar {
   background: var(--editor-chrome-bg);
-  border-right-color: rgba(100, 116, 139, 0.22);
+  border-right-color: rgba(120, 113, 108, 0.22);
 }
 
 :root:not([data-theme="dark"]) .editor-toc-col .toc-left-sidebar {
@@ -514,7 +493,7 @@ button {
 .app-shell {
   position: relative;
   isolation: isolate;
-  height: 100vh;
+  height: var(--app-height);
   display: flex;
   flex-direction: row;
   background: var(--bg-base);
@@ -543,22 +522,52 @@ button {
 
 .premium-panel {
   background: var(--glass-bg);
+  border-color: var(--border-subtle);
+  border-radius: var(--radius-panel);
+  /* The inset top line catches light on dark surfaces; on white it vanishes. */
+  box-shadow: inset 0 1px 0 var(--glass-top-shimmer), var(--shadow-sm);
 }
 
-.stat-card {
-  transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
+/* Panels nested in a modal sit on an already elevated card. */
+.modal-card .premium-panel {
+  border-radius: 12px;
+  box-shadow: none;
 }
 
-.stat-card:hover {
-  border-color: var(--border-strong);
+/* Fields in a modal are pills, like the inputs in Impostazioni. */
+.modal-card .app-input {
+  min-height: 2.5rem;
+  padding: 0.5rem 1.1rem;
+  border-radius: 999px;
 }
 
-.stat-card-icon {
-  transition: transform 120ms cubic-bezier(0.2, 0.8, 0.4, 1);
+/* Type scale for the queue page: one display title, quieter section titles. */
+.page-title {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: var(--tracking-display);
+  color: var(--text-primary);
 }
 
-.stat-card:hover .stat-card-icon {
-  transform: scale(1.08);
+.section-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+  color: var(--text-primary);
+}
+
+/* Welcome summary: one friendly line under the greeting; the figures carry the accent. */
+.welcome-summary {
+  font-size: 1rem;
+  color: var(--text-muted);
+}
+
+.welcome-summary-figure {
+  font-weight: 600;
+  color: var(--accent-text);
+  font-variant-numeric: tabular-nums;
 }
 
 
@@ -570,6 +579,8 @@ button {
 }
 
 .modal-card {
+  border-color: var(--border-subtle);
+  border-radius: var(--radius-card);
   will-change: transform, opacity;
   transform: translateZ(0);
 }
@@ -594,6 +605,34 @@ button {
   padding: 0.55rem 0.9rem;
   font-size: 0.8rem;
   font-weight: 600;
+}
+
+/* Header metadata next to a .section-title: present, not shouting. */
+:root .status-pill.is-quiet {
+  padding: 0.12rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  border-color: var(--border-subtle);
+  background: transparent;
+}
+
+/* A bare number is a circle, not a stretched pill: as wide as it is tall up to two digits. */
+:root .status-pill.is-quiet.is-count {
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  padding: 0 0.2rem;
+  line-height: 1;
+}
+
+:root .status-pill.is-quiet.is-warning {
+  gap: 0.3rem;
+  color: var(--warning-text);
+  border-color: var(--warning-ring);
+  background: var(--warning-subtle);
 }
 
 .premium-button,
@@ -675,13 +714,173 @@ button {
   box-shadow: 0 0 0 3px var(--error-ring);
 }
 
-@keyframes cta-pulse {
-  0%, 100% { box-shadow: 0 2px 10px rgba(15, 23, 42, 0.10); }
-  50%       { box-shadow: 0 2px 10px rgba(15, 23, 42, 0.10), 0 0 0 6px var(--btn-primary-ring); }
+/* While a run is going well, stopping it is available but not the loudest thing on screen. */
+.premium-button.queue-stop-button {
+  background: transparent;
+  color: var(--text-secondary);
+  border-color: var(--border-default);
+  box-shadow: none;
 }
 
-.premium-button--ready {
-  animation: cta-pulse 2.4s ease-in-out infinite;
+.premium-button.queue-stop-button svg {
+  color: var(--error-text);
+}
+
+/* The app's primary pill: the queue's start action (full width, the twin of the banner's Interrompi)
+   and the primary actions in Impostazioni share one shape instead of tall slabs. */
+.queue-start-button,
+.settings-pill-button {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.15rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+  transition: transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s var(--ease-out), box-shadow 0.15s var(--ease-out);
+}
+
+.queue-start-button:hover:not(:disabled),
+.settings-pill-button:hover:not(:disabled) {
+  background: var(--btn-primary-hover);
+  transform: translateY(-1px);
+}
+
+.queue-start-button:active:not(:disabled),
+.settings-pill-button:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+.queue-start-button:focus-visible,
+.settings-pill-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--btn-primary-ring);
+}
+
+.queue-start-button:disabled,
+.settings-pill-button:disabled {
+  background: var(--btn-disabled-bg);
+  color: var(--btn-disabled-text);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.queue-start-button {
+  display: flex;
+  width: 100%;
+}
+
+/* In a settings row the pill sits beside a 38px input, so it matches that height. */
+.settings-pill-button {
+  min-height: 2.375rem;
+  flex-shrink: 0;
+  font-size: 0.8125rem;
+}
+
+.queue-start-meta {
+  font-weight: 500;
+  opacity: 0.72;
+  font-variant-numeric: tabular-nums;
+  margin-left: -0.2rem;
+}
+
+.queue-start-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--warning-text);
+}
+
+.queue-text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: color 160ms var(--ease-out), background 160ms var(--ease-out);
+}
+
+.queue-start-hint .queue-text-button {
+  padding: 0;
+  color: var(--accent-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.queue-text-button:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.queue-start-hint .queue-text-button:hover {
+  background: transparent;
+}
+
+.queue-text-button.is-danger:hover {
+  color: var(--error-text);
+  background: var(--error-subtle);
+}
+
+.queue-text-button:focus-visible,
+.queue-switch:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.queue-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.25rem 0.35rem 0.25rem 0.15rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.queue-switch-track {
+  position: relative;
+  display: inline-flex;
+  width: 28px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--border-default);
+  transition: background 180ms var(--ease-out);
+}
+
+.queue-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: var(--shadow-xs);
+  transition: transform 180ms var(--ease-out);
+}
+
+.queue-switch[aria-checked="true"] {
+  color: var(--text-primary);
+}
+
+.queue-switch[aria-checked="true"] .queue-switch-track {
+  background: var(--accent-bg);
+}
+
+.queue-switch[aria-checked="true"] .queue-switch-thumb {
+  transform: translateX(12px);
 }
 
 .premium-button-secondary {
@@ -891,15 +1090,15 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.55rem;
-  min-height: 40px;
-  padding: 0.75rem 1rem;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+  padding: 0.5rem 1.15rem;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: var(--bg-surface);
   color: var(--text-secondary);
-  font-size: 0.92rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 500;
   box-shadow: none;
   transition:
     transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1),
@@ -910,9 +1109,10 @@ button {
     opacity 160ms ease;
 }
 
+/* Secondary actions are outline pills, the twins of .app-button-secondary.is-settings-action. */
 .modal-action-button:hover:not(:disabled) {
   background: var(--bg-hover);
-  border-color: transparent;
+  border-color: var(--border-strong);
   color: var(--text-primary);
 }
 
@@ -922,7 +1122,7 @@ button {
 }
 
 .modal-action-button:active:not(:disabled) {
-  transform: scale(0.98);
+  transform: scale(0.985);
 }
 
 .modal-action-button:disabled {
@@ -933,11 +1133,13 @@ button {
   cursor: not-allowed;
 }
 
+/* The primary action is the filled pill of .settings-pill-button / .queue-start-button. */
 .modal-action-button.is-primary {
   background: var(--btn-primary-bg);
   color: var(--btn-primary-text);
   border-color: transparent;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
 }
 
 .modal-action-button.is-primary:hover:not(:disabled) {
@@ -947,13 +1149,20 @@ button {
 }
 
 .modal-action-button.is-primary:focus-visible {
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08), 0 0 0 3px var(--btn-primary-ring);
+  box-shadow: 0 0 0 3px var(--btn-primary-ring);
+}
+
+.modal-action-button.is-primary:disabled {
+  background: var(--btn-disabled-bg);
+  color: var(--btn-disabled-text);
+  box-shadow: none;
 }
 
 .modal-action-button.is-danger {
   background: var(--error-subtle);
   color: var(--error-text);
   border-color: var(--error-ring);
+  font-weight: 600;
 }
 
 .modal-action-button.is-danger:hover:not(:disabled) {
@@ -964,10 +1173,9 @@ button {
 }
 
 .modal-action-button.is-compact {
-  min-height: 34px;
-  padding: 0.45rem 0.78rem;
-  border-radius: 6px;
-  font-size: 0.72rem;
+  min-height: 2rem;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.75rem;
   gap: 0.4rem;
 }
 
@@ -1012,9 +1220,11 @@ button {
   cursor: not-allowed;
 }
 
+/* Settings actions are pills, the outline twins of .settings-pill-button and of the same height. */
 .app-button-secondary.is-settings-action {
-  min-height: 36px;
-  padding: 0 0.75rem;
+  min-height: 2.375rem;
+  padding: 0 0.95rem;
+  border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 500;
   color: var(--text-secondary);
@@ -1039,8 +1249,8 @@ button {
 }
 
 .app-button-secondary.is-settings-action.is-icon {
-  width: 36px;
-  height: 36px;
+  width: 2.375rem;
+  height: 2.375rem;
   padding: 0;
 }
 
@@ -1056,9 +1266,11 @@ button {
   color: var(--error-text);
 }
 
+/* The key field is a pill too, so the Aggiungi row reads as one shape. */
 .app-input.is-settings-input {
-  min-height: 38px;
-  padding: 0.375rem 2.25rem 0.375rem 0.75rem;
+  min-height: 2.375rem;
+  padding: 0.375rem 2.5rem 0.375rem 1rem;
+  border-radius: 999px;
   font-family: var(--font-mono);
   font-size: 0.75rem;
 }
@@ -1140,16 +1352,19 @@ button {
   padding-top: 24px;
 }
 
+/* Quota matrix: one card whose header stays the trigger, like the key list above it. */
 .settings-details.is-api-quota {
-  border-top: none;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
   padding-top: 0;
+  overflow: hidden;
+  background: var(--bg-surface);
 }
 
 .settings-details.is-api-quota > summary {
   min-height: 40px;
   justify-content: flex-start;
-  padding: 10px 12px;
-  border-radius: 8px;
+  padding: 10px 14px;
   background: transparent;
   transition: background 150ms ease, color 150ms ease;
 }
@@ -1158,8 +1373,20 @@ button {
   background: var(--bg-hover);
 }
 
+.settings-details.is-api-quota > summary:focus-visible {
+  outline-offset: -2px;
+}
+
 .settings-details.is-api-quota[open] > summary {
-  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.settings-details.is-api-quota .settings-details-content {
+  padding: 4px 14px 0;
+}
+
+.settings-details.is-api-quota .settings-details-note {
+  padding: 10px 14px 12px;
 }
 
 .settings-details > summary {
@@ -1194,9 +1421,9 @@ button {
 }
 
 .modal-icon-button {
-  width: 38px;
-  height: 38px;
-  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
   box-shadow: none;
 }
 
@@ -1266,13 +1493,57 @@ button {
   cursor: grabbing;
 }
 
+/* In the queue the handle sits on the status icon's slot and swaps in on hover or focus. */
+.queue-item .drag-handle-btn {
+  width: 32px;
+  height: 32px;
+  background: var(--bg-hover);
+  opacity: 0;
+  z-index: 1;
+  transition: opacity 160ms var(--ease-out), color 160ms ease, background 160ms ease;
+}
+
+/* A faded icon gets its own stacking layer, so without these it would sit on the handle and swallow the press. */
+.queue-item .queue-status-icon {
+  pointer-events: none;
+  transition: opacity 160ms var(--ease-out);
+}
+
+/* Keyboard focus only: a click focuses the sortable item too, and must not leave the handle on. */
+.queue-item:hover .drag-handle-btn,
+.queue-item:has(:focus-visible) .drag-handle-btn,
+.queue-item:focus-visible .drag-handle-btn {
+  opacity: 1;
+}
+
+.queue-item:hover .has-handle .queue-status-icon,
+.queue-item:has(:focus-visible) .has-handle .queue-status-icon,
+.queue-item:focus-visible .has-handle .queue-status-icon {
+  opacity: 0;
+}
+
+@media (hover: none) {
+  .queue-item .drag-handle-btn {
+    opacity: 1;
+  }
+
+  .queue-item .has-handle .queue-status-icon {
+    opacity: 0;
+  }
+}
+
+.queue-card-meta {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Player controls are round, like the editor header's utilities; the speed menu is a pill. */
 .player-control {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: 999px;
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-muted);
@@ -1283,8 +1554,8 @@ button {
 }
 
 .player-control:hover {
-  background: var(--accent-subtle);
-  color: var(--accent-text);
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .player-control.is-active {
@@ -1315,9 +1586,9 @@ button {
   width: 64px;
   flex-shrink: 0;
   height: 32px;
-  padding: 0 6px 0 8px;
-  border-radius: 8px;
-  border: 1px solid transparent;
+  padding: 0 8px 0 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
   background: transparent;
   color: var(--text-secondary);
   font-size: 0.75rem;
@@ -1331,8 +1602,9 @@ button {
 }
 
 .player-speed-btn:hover {
-  background: var(--accent-subtle);
-  color: var(--accent-text);
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
 }
 
 .player-speed-btn.is-active {
@@ -1348,61 +1620,31 @@ button {
 
 /* ═══ DROPZONE ═══ */
 
+/* The empty page's drop target sits on the page like the processing banner that replaces it:
+   never a card. Files drop anywhere on the page (DropOverlay), so the area itself is not
+   highlighted; hover lights up its icon and button instead, and only keyboard focus draws an edge. */
 .dropzone-card {
+  --drop-beat: 2.8s; /* the processing banner's beat, so the handoff keeps one rhythm */
   position: relative;
-  overflow: hidden;
-  border-radius: 12px;
-  border: 1.5px dashed var(--border-default);
-  background: var(--bg-panel);
+  border-radius: var(--radius-panel);
+  border: 1.5px solid transparent;
   transition:
-    transform 160ms ease,
-    background 160ms ease,
-    box-shadow 160ms ease,
-    border-color 160ms ease;
+    box-shadow 200ms var(--ease-out),
+    border-color 200ms var(--ease-out);
 }
 
-.dropzone-card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 12px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 180ms ease-out;
-  will-change: opacity;
-}
-
-.dropzone-card:hover::before {
-  opacity: 1;
-}
-
-.dropzone-card:hover {
-  border-color: var(--accent-bg);
-  box-shadow: none;
-  transform: translateY(-1px);
-}
-
-.dropzone-card:active {
-  transform: scale(0.99);
-}
-
-.dropzone-card.is-dragging {
-  background: var(--accent-subtle);
+.dropzone-card:focus-visible {
+  outline: none;
   border-color: var(--accent-bg);
   box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
-.dz-border-svg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  overflow: visible;
-}
-
-.dz-border-rect {
-  display: none;
+.dropzone-title {
+  margin-bottom: 0.25rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
 }
 
 /* ═══ STAT CHIP ═══ */
@@ -1421,28 +1663,71 @@ button {
 
 /* ═══ DROPZONE COMPACT ═══ */
 
+/* With files in the list the drop target shrinks to a slim pill, the twin of the queue's start button. */
 .dropzone-compact {
-  height: 52px;
-  border-radius: 8px;
+  --drop-beat: 2.8s;
+  min-height: 2.5rem;
+  padding: 0 1.1rem 0 0.45rem;
+  border-radius: 999px;
   border: 1.5px dashed var(--border-default);
-  background: var(--glass-bg);
+  background: transparent;
   transition:
-    border-color 160ms ease,
-    background 160ms ease,
-    box-shadow 160ms ease;
+    border-color 200ms var(--ease-out),
+    background 200ms var(--ease-out),
+    box-shadow 200ms var(--ease-out);
 }
 
-.dropzone-compact:hover,
+.dropzone-compact:hover {
+  border-color: color-mix(in srgb, var(--accent-bg) 55%, var(--border-default));
+  background: color-mix(in srgb, var(--accent-subtle) 60%, transparent);
+}
+
 .dropzone-compact:focus-visible {
-  border-color: var(--accent-bg);
-  background: color-mix(in srgb, var(--accent-subtle) 60%, var(--glass-bg));
   outline: none;
+  border-color: var(--accent-bg);
+  background: color-mix(in srgb, var(--accent-subtle) 60%, transparent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.dropzone-compact-icon {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-subtle);
+  color: var(--accent-text);
+  transition: background 200ms var(--ease-out), color 200ms var(--ease-out);
+}
+
+.dropzone-compact-label {
+  color: var(--text-secondary);
+  transition: color 200ms var(--ease-out);
+}
+
+.dropzone-compact:hover .dropzone-compact-label,
+.dropzone-compact:focus-visible .dropzone-compact-label {
+  color: var(--text-primary);
+}
+
+.dropzone-compact:hover .dropzone-compact-icon,
+.dropzone-compact:focus-visible .dropzone-compact-icon,
+.dropzone-compact.is-dragging .dropzone-compact-icon {
+  background: var(--accent-bg);
+  color: var(--btn-primary-text);
+}
+
+.dropzone-compact.is-dragging .dropzone-compact-label {
+  color: var(--accent-text);
+  font-weight: 500;
 }
 
 .dropzone-compact.is-dragging {
   border-color: var(--accent-bg);
   background: var(--accent-subtle);
-  box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
 /* ═══ QUEUE & CARDS ═══ */
@@ -1487,22 +1772,263 @@ button {
   gap: 0.4rem;
 }
 
-.processing-progress {
-  position: relative;
+/* Processing hero: sits on the page, no card. Step title, a large figure, one segmented track. */
+/* The stop button sits close to the queue below, as the banner's own parts sit close to each other. */
+.processing-hero {
+  padding: 2.5rem 0 0.75rem;
 }
 
-.processing-progress-fill {
+.processing-hero-icon-wrap {
   position: relative;
-  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.processing-progress-fill::after {
-  content: "";
+/* A soft halo behind the icon, from the first banner. */
+.processing-hero-glow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 112px;
+  height: 112px;
+  border-radius: 999px;
+  opacity: 0.55;
+  filter: blur(28px);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition: background 0.2s var(--ease-out);
+}
+
+/* While a step runs the halo breathes; the icon itself stays still. */
+.processing-hero-glow.is-live {
+  animation: processing-glow-breathe calc(var(--processing-beat) * 1.25) ease-in-out infinite;
+}
+
+@keyframes processing-glow-breathe {
+  0%, 100% { opacity: 0.4; transform: translate(-50%, -50%) scale(0.94); }
+  50% { opacity: 0.7; transform: translate(-50%, -50%) scale(1.06); }
+}
+
+/* A thin ring leaves the icon once per beat, then rests. */
+.processing-hero-ring {
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.28), transparent);
-  transform: translateX(-100%);
-  animation: processing-progress-sheen 1.6s linear infinite;
+  border: 1.5px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-radius: 999px;
+  opacity: 0;
+  pointer-events: none;
+  animation: processing-ring var(--processing-beat) cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+@keyframes processing-ring {
+  0% { opacity: 0.9; transform: scale(1); }
+  70%, 100% { opacity: 0; transform: scale(1.45); }
+}
+
+.processing-live-dot-halo {
+  opacity: 0;
+  animation: processing-dot-halo var(--processing-beat) cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+@keyframes processing-dot-halo {
+  0% { opacity: 0.35; transform: scale(1); }
+  70%, 100% { opacity: 0; transform: scale(1.8); }
+}
+
+.processing-hero-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 999px;
+  transition: background 0.2s var(--ease-out), color 0.2s var(--ease-out);
+}
+
+.processing-hero-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.processing-hero-percent {
+  font-size: 3.5rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.2s var(--ease-out);
+}
+
+/* Quiet: the run is the focus, stopping is one deliberate click away. */
+.processing-stop-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  transition: color 0.15s var(--ease-out), border-color 0.15s var(--ease-out), background 0.15s var(--ease-out);
+}
+
+.processing-stop-button:hover:not(:disabled) {
+  border-color: var(--error-ring);
+  background: var(--error-subtle);
+  color: var(--error-text);
+}
+
+.processing-stop-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--error-ring);
+}
+
+.processing-stop-button.is-pending {
+  color: var(--error-text);
+  cursor: wait;
+}
+
+/* A recoverable problem: the console keeps the details, the banner says it in plain words. */
+.processing-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--warning-text) 28%, transparent);
+  border-radius: 10px;
+  background: var(--warning-subtle);
+  color: var(--warning-text);
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+
+.processing-notice-detail {
+  color: var(--text-secondary);
+}
+
+/* Lasting warnings: quieter than a live notice, but they stay for the whole file. */
+.processing-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.processing-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  color: var(--warning-text);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.processing-warning svg {
+  margin-top: 0.15rem;
+}
+
+.phase-segment {
+  position: relative;
+  flex: 1 1 0;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--progress-bg);
+}
+
+.phase-segment-fill {
+  position: relative;
+  overflow: hidden;
+  height: 100%;
+  border-radius: inherit;
+  transition: background 0.2s var(--ease-out);
+}
+
+/* The running segment carries a narrow sheen that passes, then rests for the rest of the beat. */
+.phase-segment-fill.is-live::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 40%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.28) 50%, transparent);
+  transform: translateX(-120%);
+  animation: processing-progress-sheen var(--processing-beat, 2.8s) cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes processing-progress-sheen {
+  0% { transform: translateX(-120%); }
+  55%, 100% { transform: translateX(260%); }
+}
+
+/* A soft light at the leading edge marks where the work is, even while the figure holds still. */
+.phase-segment-fill.is-live::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  background: radial-gradient(circle at 100% 50%, rgba(255, 255, 255, 0.55), transparent 70%);
+  animation: processing-edge-breathe var(--processing-beat, 2.8s) ease-in-out infinite;
+}
+
+@keyframes processing-edge-breathe {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.95; }
+}
+
+/* A step that just finished marks the moment once its bar is full (after the 0.45s handoff):
+   the track swells, a soft ring spreads out and a light sweeps across.
+   Like the rest of the app (MotionConfig in App.tsx), the banner ignores Windows "Riduci animazioni". */
+.phase-segment.is-settled {
+  animation: processing-segment-pop 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.45s both;
+}
+
+@keyframes processing-segment-pop {
+  0% { transform: scaleY(1); box-shadow: 0 0 0 0 color-mix(in srgb, var(--segment-accent) 35%, transparent); }
+  35% { transform: scaleY(1.45); }
+  100% { transform: scaleY(1); box-shadow: 0 0 0 7px color-mix(in srgb, var(--segment-accent) 0%, transparent); }
+}
+
+.phase-segment-fill.is-settled {
+  animation: processing-segment-settle 0.8s var(--ease-out) 0.45s both;
+}
+
+@keyframes processing-segment-settle {
+  0% { filter: brightness(1); }
+  20% { filter: brightness(1.4); }
+  100% { filter: brightness(1); }
+}
+
+.phase-segment-fill.is-settled::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 50%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.5) 50%, transparent);
+  transform: translateX(-110%);
+  animation: processing-segment-sweep 0.75s cubic-bezier(0.4, 0, 0.2, 1) 0.45s both;
+}
+
+@keyframes processing-segment-sweep {
+  to { transform: translateX(220%); }
+}
+
+.processing-step-label:focus-visible {
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px var(--processing-ring);
 }
 
 .soft-divider {
@@ -1514,16 +2040,15 @@ button {
 /* ═══ CONSOLE ═══ */
 
 .console-shell {
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   overflow: hidden;
   border: 1px solid var(--console-shell-border, var(--glass-border));
   background: var(--console-bg);
-  box-shadow: none;
+  box-shadow: var(--shadow-xs);
 }
 
 .console-shell-subtle {
   border-color: var(--console-shell-border, var(--glass-border));
-  box-shadow: none;
   background: var(--console-bg);
 }
 
@@ -1547,6 +2072,11 @@ button {
   overscroll-behavior: contain;
   overscroll-behavior-y: contain;
   scrollbar-gutter: stable;
+}
+
+.queue-list-scroll.has-more-below {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent);
 }
 
 .app-scroll.is-chainable {
@@ -1704,8 +2234,8 @@ button {
   gap: 3px;
   padding: 4px 6px;
   background: var(--bg-surface);
-  border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow-strong);
   backdrop-filter: blur(12px);
   z-index: 999;
@@ -1714,8 +2244,6 @@ button {
 
 :root[data-theme="dark"] .editor-bubble-menu {
   background: var(--bg-elevated);
-  border-color: var(--border-default);
-  box-shadow: var(--shadow-strong);
 }
 
 .editor-bubble-btn {
@@ -1736,8 +2264,8 @@ button {
 }
 
 .editor-bubble-btn:hover {
-  background: var(--accent-subtle);
-  color: var(--accent-text);
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .editor-bubble-btn.is-active {
@@ -1837,78 +2365,53 @@ button {
   justify-content: center;
 }
 
+/* CSS twin of popoverVariants in motion.ts: the dropdown grows from slightly further back out
+   of a soft blur, with no overshoot; the filter ends as none so text renders crisp. */
 @keyframes dropdownPop {
   from {
     opacity: 0;
-    transform: scale(0.96) translateY(-4px);
+    transform: scale(0.94) translateY(-4px);
+    filter: blur(4px);
+  }
+  60% {
+    opacity: 1;
   }
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
+    filter: none;
   }
 }
 
 @keyframes dropdownPopUp {
   from {
     opacity: 0;
-    transform: scale(0.96) translateY(4px);
+    transform: scale(0.94) translateY(4px);
+    filter: blur(4px);
+  }
+  60% {
+    opacity: 1;
   }
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
+    filter: none;
   }
 }
 
+/* Toolbar dropdowns wear .kebab-panel / .kebab-item, the app's menu frame and rows; this rule
+   only adds the column layout and the opening animation. */
 .editor-dropdown-panel {
   display: flex;
   flex-direction: column;
-  padding: 4px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-default);
-  border-radius: 12px;
-  box-shadow: var(--shadow-strong);
   min-width: 200px;
-  animation: dropdownPop 0.12s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: dropdownPop 0.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   transform-origin: top left;
 }
 
 .editor-dropdown-panel.open-up {
   transform-origin: bottom center;
-  animation: dropdownPopUp 0.12s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-}
-
-:root[data-theme="dark"] .editor-dropdown-panel {
-  background: var(--bg-elevated);
-  border-color: var(--border-default);
-  box-shadow: var(--shadow-strong);
-}
-
-.editor-dropdown-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  text-align: left;
-  transition: background 140ms ease, color 140ms ease, transform 140ms cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.editor-dropdown-item:hover {
-  background: var(--accent-subtle);
-  color: var(--accent-text);
-  transform: translateX(2px);
-}
-
-.editor-dropdown-item.is-active {
-  background: var(--accent-subtle);
-  color: var(--accent-text);
-  font-weight: 600;
+  animation: dropdownPopUp 0.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 
@@ -1926,7 +2429,7 @@ button {
   max-width: 794px;
   min-width: 794px;
   padding: 0;
-  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05), 0 0 0 1px var(--border-subtle);
+  box-shadow: 0 4px 20px rgba(28, 25, 18, 0.05), 0 0 0 1px var(--border-subtle);
   cursor: text;
 }
 
@@ -1940,6 +2443,28 @@ button {
 :root[data-theme="dark"] .editor-page {
   background: #1e1e1e;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.40), 0 0 0 1px var(--border-subtle);
+}
+
+/* Tablet widths (iPad portrait 744–834 px, landscape up to 1180 px) and narrow desktop windows:
+   the A4 page shrinks to the space left instead of scrolling sideways. From about 922 px with the
+   index closed it is back to its fixed 794 px, so wide windows look the same. */
+@media (max-width: 1180px) {
+  .editor-page-center,
+  .editor-page {
+    min-width: 0;
+  }
+
+  /* The open index keeps its left column; the matching spacer on the right would starve the page. */
+  .editor-toc-open .editor-toc-spacer {
+    display: none;
+  }
+}
+
+/* Narrower margins on portrait tablets; phones narrow them further below. */
+@media (max-width: 900px) {
+  .editor-page .tiptap-editor {
+    padding: 64px 48px;
+  }
 }
 
 @media (max-width: 640px) {
@@ -1968,8 +2493,8 @@ button {
   gap: 4px;
   padding: 5px 6px;
   background: var(--bg-elevated);
-  border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow-strong);
   min-width: 300px;
 }
@@ -1977,9 +2502,9 @@ button {
 .find-bar-input {
   flex: 1;
   height: 30px;
-  padding: 0 0.65rem;
-  border: 1.5px solid var(--border-default);
-  border-radius: 8px;
+  padding: 0 0.85rem;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
   background: var(--bg-input);
   color: var(--text-primary);
   font-size: 0.82rem;
@@ -2009,7 +2534,7 @@ button {
   justify-content: center;
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: 999px;
   border: none;
   background: transparent;
   color: var(--text-muted);
@@ -2023,7 +2548,7 @@ button {
 }
 
 .find-bar-btn:hover:not(:disabled) {
-  background: var(--accent-subtle);
+  background: var(--bg-hover);
   color: var(--text-primary);
 }
 
@@ -2041,8 +2566,8 @@ button {
   right: 16px;
   z-index: 50;
   background: var(--bg-elevated);
-  border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow-strong);
   width: 380px;
   overflow: hidden;
@@ -2077,7 +2602,7 @@ button {
 .find-replace-dialog-label {
   position: absolute;
   top: -8px;
-  left: 10px;
+  left: 14px;
   font-size: 0.68rem;
   font-weight: 600;
   color: var(--accent-bg);
@@ -2090,9 +2615,9 @@ button {
 .find-replace-dialog-input {
   width: 100%;
   height: 38px;
-  padding: 0 0.75rem;
-  border: 1.5px solid var(--border-default);
-  border-radius: 10px;
+  padding: 0 1rem;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
   background: var(--bg-input);
   color: var(--text-primary);
   font-size: 0.85rem;
@@ -2111,7 +2636,7 @@ button {
   font-size: 0.72rem;
   color: var(--text-muted);
   margin-top: 4px;
-  padding-left: 2px;
+  padding-left: 1rem;
   font-variant-numeric: tabular-nums;
 }
 
@@ -2144,19 +2669,19 @@ button {
 .find-replace-dialog-btn {
   height: 32px;
   padding: 0 14px;
-  border-radius: 8px;
+  border-radius: 999px;
   border: 1px solid var(--border-default);
   background: transparent;
   color: var(--text-secondary);
   font-size: 0.78rem;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
   transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
 }
 
 .find-replace-dialog-btn:hover:not(:disabled) {
-  background: var(--accent-subtle);
+  background: var(--bg-hover);
   color: var(--text-primary);
   border-color: var(--border-strong);
 }
@@ -2166,33 +2691,38 @@ button {
   cursor: not-allowed;
 }
 
+/* Sostituisci tutto is the filled pill, the twin of .settings-pill-button. */
 .find-replace-dialog-btn-primary {
-  background: var(--accent-subtle);
-  border-color: var(--border-strong);
-  color: var(--text-primary);
+  background: var(--btn-primary-bg);
+  border-color: transparent;
+  color: var(--btn-primary-text);
+  font-weight: 600;
 }
 
 .find-replace-dialog-btn-primary:hover:not(:disabled) {
-  background: var(--accent-ring);
+  background: var(--btn-primary-hover);
+  border-color: transparent;
+  color: var(--btn-primary-text);
 }
 
 
+/* The link field and its Applica read like the settings key row: an input pill and a filled pill. */
 .link-panel {
   display: flex;
   gap: 6px;
   padding: 8px;
   background: var(--bg-elevated);
-  border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow-strong);
   min-width: 260px;
 }
 
 .link-input {
   flex: 1;
-  height: 30px;
-  padding: 0 0.6rem;
-  border-radius: 8px;
+  height: 32px;
+  padding: 0 0.85rem;
+  border-radius: 999px;
   border: 1px solid var(--border-default);
   background: var(--bg-input);
   color: var(--text-primary);
@@ -2206,12 +2736,12 @@ button {
 }
 
 .link-apply-btn {
-  height: 30px;
-  padding: 0 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border-default);
-  background: var(--accent-subtle);
-  color: var(--text-primary);
+  height: 32px;
+  padding: 0 0.95rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
   font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
@@ -2220,8 +2750,12 @@ button {
 }
 
 .link-apply-btn:hover {
-  background: var(--accent-ring);
-  border-color: var(--border-strong);
+  background: var(--btn-primary-hover);
+}
+
+.link-apply-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--btn-primary-ring);
 }
 
 /* Docs-style link card: address plus open, preview, copy, edit and remove. */
@@ -2232,10 +2766,10 @@ button {
   align-items: center;
   gap: 6px;
   max-width: 360px;
-  padding: 4px 4px 4px 10px;
+  padding: 4px 4px 4px 12px;
   background: var(--bg-elevated);
-  border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow-strong);
 }
 
@@ -2271,8 +2805,8 @@ button {
   width: min(400px, calc(100vw - 48px));
   overflow: hidden;
   background: var(--bg-elevated);
-  border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow-strong);
 }
 
@@ -2498,15 +3032,6 @@ button {
   transition: none;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .editor-toc-col,
-  .editor-toc-spacer,
-  .editor-toc-content,
-  .editor-toc-trigger {
-    transition: none;
-  }
-}
-
 .editor-toc-btn {
   width: 32px;
   height: 32px;
@@ -2535,11 +3060,9 @@ button {
   align-items: center;
   justify-content: space-between;
   padding: 10px 8px 8px 8px;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
@@ -2562,7 +3085,7 @@ button {
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid transparent;
   color: var(--text-secondary);
   background: transparent;
@@ -2576,7 +3099,7 @@ button {
 
 .editor-button:hover:not(:disabled) {
   color: var(--text-primary);
-  background: var(--sidebar-active-bg);
+  background: var(--bg-hover);
 }
 
 .editor-button:disabled {
@@ -2586,7 +3109,7 @@ button {
 
 .editor-button.is-active {
   color: var(--text-primary);
-  border-color: var(--border-default);
+  border-color: var(--border-subtle);
   background: var(--accent-subtle);
 }
 
@@ -2625,15 +3148,15 @@ button {
 
 .color-picker-panel {
   background: var(--bg-elevated);
-  border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow-strong);
   padding: 10px;
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-width: 160px;
-  animation: dropdownPop 0.12s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: dropdownPop 0.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   transform-origin: top left;
 }
 
@@ -2677,15 +3200,15 @@ button {
   background: transparent;
   border: none;
   cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
   white-space: nowrap;
   transition: color 140ms ease, background 140ms ease;
 }
 
 .color-reset:hover {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--bg-hover);
 }
 
 .color-custom {
@@ -2695,8 +3218,8 @@ button {
   font-size: 0.75rem;
   color: var(--text-secondary);
   cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
   white-space: nowrap;
   position: relative;
   transition: color 120ms ease, background 120ms ease;
@@ -2704,7 +3227,7 @@ button {
 
 .color-custom:hover {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--bg-hover);
 }
 
 .color-custom-preview {
@@ -2792,10 +3315,6 @@ button {
 
 @keyframes editor-script-caret-blink {
   50% { opacity: 0; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .tiptap-editor:focus:not([data-editor-script-composing]) .editor-script-caret::after { animation: none; }
 }
 
 .tiptap-editor h1,
@@ -3151,61 +3670,22 @@ button {
 }
 
 /* ── Editor Context Menu ───────────────── */
+/* Framed and filled by .kebab-panel / .kebab-item; this adds the width and the shortcut column. */
 .editor-context-menu {
   font-family: var(--font-display);
-  background-color: var(--bg-surface);
-  color: var(--text-primary);
-  border: 1px solid var(--border-default);
-  border-radius: 10px;
-  box-shadow: var(--shadow-strong);
-  padding: 6px 0;
-  width: 290px;
+  /* Room for the longest row (Incolla senza formattazione, Ctrl+Shift+V) inside the panel padding. */
+  width: 304px;
   max-width: 90vw;
-  max-height: calc(100vh - 24px);
+  max-height: calc(var(--app-height) - 24px);
   overflow-y: auto;
-  backdrop-filter: blur(12px);
 }
 
-:root[data-theme="dark"] .editor-context-menu,
-.dark .editor-context-menu {
-  background-color: var(--bg-elevated);
-  color: var(--text-primary);
-  border-color: var(--border-default);
-  box-shadow: var(--shadow-strong);
-}
-
-.editor-context-menu-item {
-  width: 100%;
-  display: flex;
-  align-items: center;
+/* Two classes so the denser rows win over .kebab-item, which is declared later. */
+.kebab-item.editor-context-menu-item {
   justify-content: space-between;
-  padding: 6px 14px;
   font-size: 13px;
   line-height: 20px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  transition: background-color 120ms ease, color 120ms ease;
-  white-space: nowrap;
-}
-
-:root[data-theme="dark"] .editor-context-menu-item,
-.dark .editor-context-menu-item {
-  color: var(--text-secondary);
-}
-
-.editor-context-menu-item:hover {
-  background-color: rgba(0, 0, 0, 0.06);
-  color: var(--text-primary);
-}
-
-:root[data-theme="dark"] .editor-context-menu-item:hover,
-.dark .editor-context-menu-item:hover {
-  background-color: rgba(255, 255, 255, 0.08);
-  color: var(--text-primary);
+  padding: 6px 12px;
 }
 
 .editor-context-menu-shortcut {
@@ -3216,11 +3696,6 @@ button {
   margin-left: auto;
   padding-left: 12px;
   flex-shrink: 0;
-}
-
-:root[data-theme="dark"] .editor-context-menu-shortcut,
-.dark .editor-context-menu-shortcut {
-  color: var(--text-muted);
 }
 
 .editor-image-action {
@@ -3338,19 +3813,15 @@ input::-webkit-contacts-auto-fill-button {
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.18));
 }
 
-@keyframes processing-progress-sheen {
-  to {
-    transform: translateX(100%);
-  }
-}
-
 @keyframes dz-march {
   to { stroke-dashoffset: -20; }
 }
 
 /* ═══ SIDEBAR ═══ */
 
+/* Every live motion in the app (banner, sidebar badges) shares one slow rhythm, so nothing pulses out of step. */
 :root {
+  --processing-beat: 2.8s;
   --sidebar-bg: #e7e3db;
   --sidebar-active-bg: rgba(61, 107, 58, 0.10);
   --sidebar-active-text: #2d5529;
@@ -3395,6 +3866,39 @@ input::-webkit-contacts-auto-fill-button {
   transform: scale(1.05);
 }
 
+/* A status dot on a sidebar icon: one size, one border, and a halo on the shared beat. */
+.sidebar-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  display: inline-flex;
+  width: 7px;
+  height: 7px;
+  pointer-events: none;
+}
+
+.sidebar-badge.tone-processing { --badge-color: var(--processing-dot); }
+.sidebar-badge.tone-alert { --badge-color: var(--error-bg); }
+.sidebar-badge.tone-accent { --badge-color: var(--accent-text); }
+
+.sidebar-badge-dot {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--badge-color);
+  border: 1.5px solid var(--sidebar-bg);
+}
+
+.sidebar-badge-halo {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--badge-color);
+  opacity: 0;
+  animation: processing-dot-halo var(--processing-beat) cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
 .sidebar-tooltip-anchor {
   position: relative;
   display: block;
@@ -3433,19 +3937,20 @@ input::-webkit-contacts-auto-fill-button {
 
 /* ═══ KEBAB & CONTEXT DROPDOWNS ═══ */
 
-.kebab-dropdown {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  min-width: 210px;
-  z-index: 50;
+/* Menus are framed like the cards; their items read like the dashboard's rows, with an 8px radius
+   that sits concentric inside the 4px padding. Placement stays inline, computed per opening. */
+.kebab-panel {
   background: var(--bg-elevated);
-  border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow-strong);
   padding: 4px;
-  animation: dropdownPop 0.12s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-  transform-origin: top right;
+}
+
+.kebab-separator {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--border-subtle);
 }
 
 .kebab-item {
@@ -3454,7 +3959,7 @@ input::-webkit-contacts-auto-fill-button {
   gap: 10px;
   width: 100%;
   padding: 8px 12px;
-  border-radius: 6px;
+  border-radius: 8px;
   border: none;
   cursor: pointer;
   text-align: left;
@@ -3498,12 +4003,14 @@ input::-webkit-contacts-auto-fill-button {
 
 /* ═══ FOLDER CARDS ═══ */
 
+/* Collection tiles share the queue cards' frame: a quiet border, the card radius and a light lift. */
 .folder-card {
   overflow: hidden;
   min-height: 80px;
-  border-radius: 10px;
-  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border-subtle);
   background: var(--bg-surface);
+  box-shadow: var(--shadow-xs);
   transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -3616,7 +4123,7 @@ input::-webkit-contacts-auto-fill-button {
 
 :root:not([data-theme="dark"]) .archive-session-card:hover {
   box-shadow: none;
-  border-color: rgba(100, 116, 139, 0.52);
+  border-color: rgba(120, 113, 108, 0.52);
 }
 
 :root[data-theme="dark"] .archive-session-card {
@@ -3682,15 +4189,45 @@ input::-webkit-contacts-auto-fill-button {
 
 /* ═══ SEARCH & FILTER CONTROLS ═══ */
 
-.archive-sticky-toolbar::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: var(--border-subtle);
-  pointer-events: none;
+/* Flat at rest; once pinned it floats as a framed panel the list scrolls behind.
+   Only surface properties change, so pinning never shifts the layout. */
+.archive-sticky-toolbar {
+  position: sticky;
+  top: 8px;
+  z-index: 20;
+  margin: -8px;
+  padding: 7px;
+  border: 1px solid transparent;
+  /* Concentric with the 36px pills inside: 18px + the 8px inset. */
+  border-radius: 26px;
+  transition: background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+/* Once pinned the panel is the only frame: the field and chips inside drop their own
+   border and fill and answer only on hover and focus. An active chip keeps its inline accent. */
+:root .archive-sticky-toolbar[data-stuck='true'] .search-pill-input,
+:root .archive-sticky-toolbar[data-stuck='true'] .filter-chip {
+  border-color: transparent;
+  background: transparent;
+}
+
+:root .archive-sticky-toolbar[data-stuck='true'] .search-pill-input:hover,
+:root .archive-sticky-toolbar[data-stuck='true'] .filter-chip:hover {
+  border-color: transparent;
+  background: var(--bg-hover);
+}
+
+:root .archive-sticky-toolbar[data-stuck='true'] .search-pill-input:focus {
+  border-color: var(--accent-bg);
+  background: var(--bg-surface);
+}
+
+.archive-sticky-toolbar[data-stuck='true'] {
+  background: color-mix(in srgb, var(--bg-elevated) 86%, transparent);
+  border-color: var(--border-subtle);
+  box-shadow: var(--shadow-md);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
 }
 
 .folder-card-title {
@@ -3731,11 +4268,12 @@ input::-webkit-contacts-auto-fill-button {
   flex: 1;
 }
 
+/* Archive search is a pill, like the settings key field, with its icon and hint pulled in from the curve. */
 .search-pill-input {
   width: 100%;
   height: 36px;
-  padding: 0 2.4rem 0 2.1rem;
-  border-radius: 6px;
+  padding: 0 2.6rem 0 2.35rem;
+  border-radius: 999px;
   border: 1px solid var(--border-default);
   background: var(--bg-input);
   color: var(--text-primary);
@@ -3779,7 +4317,7 @@ input::-webkit-contacts-auto-fill-button {
 
 .search-pill-icon {
   position: absolute;
-  left: 0.6rem;
+  left: 0.85rem;
   pointer-events: none;
   color: var(--text-faint);
   transition: color 150ms ease;
@@ -3792,13 +4330,13 @@ input::-webkit-contacts-auto-fill-button {
 
 .search-pill-clear {
   position: absolute;
-  right: 0.45rem;
+  right: 0.55rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 22px;
   height: 22px;
-  border-radius: 5px;
+  border-radius: 999px;
   border: none;
   background: transparent;
   color: var(--text-faint);
@@ -3825,7 +4363,7 @@ input::-webkit-contacts-auto-fill-button {
 
 .search-pill-hint {
   position: absolute;
-  right: 0.55rem;
+  right: 0.75rem;
   pointer-events: none;
   display: inline-flex;
   align-items: center;
@@ -3844,10 +4382,11 @@ input::-webkit-contacts-auto-fill-button {
   letter-spacing: 0;
 }
 
+/* Toolbar chips are pills too; the square icon-only ones become circles. */
 .filter-chip {
   height: 36px;
   padding: 0 0.65rem;
-  border-radius: 6px;
+  border-radius: 999px;
   border: 1px solid var(--border-default);
   background: var(--bg-input);
   color: var(--text-secondary);
@@ -3918,9 +4457,36 @@ input::-webkit-contacts-auto-fill-button {
   background: var(--editor-chrome-bg);
 }
 
+/* The player floats over the page like the archive's pinned toolbar: same glass, same
+   concentric radius. It spans the window, not the page, so a long lecture keeps a precise
+   scrubber (a page-wide dock halves it: ~20s per pixel on a 2.5h recording). */
 .editor-fullpage-footer {
-  background: var(--editor-chrome-bg);
-  border-top-color: var(--border-subtle);
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  display: flex;
+  justify-content: center;
+  padding: 0 16px 16px;
+  pointer-events: none;
+}
+
+.editor-player-dock {
+  width: 100%;
+  padding: 0 16px;
+  border: 1px solid var(--border-subtle);
+  /* Concentric with the 32px play button: 16px + the 8px inset. */
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--bg-elevated) 86%, transparent);
+  box-shadow: var(--shadow-md);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+  pointer-events: auto;
+}
+
+.editor-player-dock:has(> div > audio) {
+  padding: 0 12px 0 6px;
 }
 
 .editor-fullpage-back {
@@ -3929,7 +4495,7 @@ input::-webkit-contacts-auto-fill-button {
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: 999px;
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-secondary);
@@ -3939,7 +4505,7 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 .editor-fullpage-back:hover {
-  background: var(--accent-subtle);
+  background: var(--bg-hover);
   color: var(--text-primary);
   border-color: transparent;
 }
@@ -3970,7 +4536,7 @@ input::-webkit-contacts-auto-fill-button {
   padding: 0;
   overflow-y: auto;
   border: 1px solid var(--border-subtle);
-  border-radius: 14px;
+  border-radius: var(--radius-card);
   background: var(--bg-elevated);
   color: var(--text-primary);
   box-shadow: var(--shadow-strong);
@@ -4031,21 +4597,30 @@ input::-webkit-contacts-auto-fill-button {
   .editor-shortcuts-audio .editor-shortcuts-list > div { grid-template-columns: minmax(0, 1fr); gap: 6px; }
 }
 
+/* Header utilities are round outline buttons beside the filled Copia documento pill. */
 .editor-fullpage-actions .icon-button:not(.modal-icon-button) {
   width: 32px;
   height: 32px;
+  border-radius: 999px;
 }
 
-.editor-fullpage-actions .icon-button.editor-fullpage-copy {
-  width: auto;
+.editor-fullpage-actions .settings-pill-button.editor-fullpage-copy {
   /* Fixed width keeps the button from resizing between "Copia documento" and
      "Copiato!", while icon and label stay grouped in the center. */
   min-width: 152px;
+  min-height: 32px;
+  height: 32px;
   gap: 7px;
-  padding: 0 10px;
+  padding: 0 1rem;
   font-size: 0.78rem;
-  font-weight: 500;
   white-space: nowrap;
+}
+
+.editor-fullpage-actions .settings-pill-button.editor-fullpage-copy.is-copied {
+  background: var(--success-subtle);
+  border-color: var(--success-ring);
+  color: var(--success-text);
+  box-shadow: none;
 }
 
 .editor-fullpage-utilities {
@@ -4059,7 +4634,7 @@ input::-webkit-contacts-auto-fill-button {
 
 @media (max-width: 720px) {
   .editor-fullpage-copy-label { display: none; }
-  .editor-fullpage-actions .icon-button.editor-fullpage-copy { width: 32px; min-width: 32px; padding: 0; }
+  .editor-fullpage-actions .settings-pill-button.editor-fullpage-copy { width: 32px; min-width: 32px; padding: 0; }
 }
 
 .editor-fullpage-actions .icon-button.icon-button--active {
@@ -4068,14 +4643,15 @@ input::-webkit-contacts-auto-fill-button {
   border-color: var(--accent-ring);
 }
 
+/* Archive actions are outline pills, the twins of the settings actions. */
 .archive-action-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
   height: 36px;
-  padding: 0 12px;
-  border-radius: 8px;
+  padding: 0 0.95rem;
+  border-radius: 999px;
   border: 1px solid var(--border-default);
   background: var(--bg-surface);
   color: var(--text-secondary);
@@ -4095,7 +4671,7 @@ input::-webkit-contacts-auto-fill-button {
 
 .archive-action-button.is-collection-create {
   height: 32px;
-  padding: 0 8px;
+  padding: 0 0.8rem;
   font-size: 0.75rem;
 }
 
@@ -4159,7 +4735,7 @@ input::-webkit-contacts-auto-fill-button {
   align-items: center;
   height: 28px;
   padding: 0 10px;
-  border-radius: 8px;
+  border-radius: 999px;
   border: 1px solid var(--border-subtle);
   font-size: 0.72rem;
   font-weight: 500;
@@ -4168,6 +4744,7 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 .editor-fullpage-body {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -4253,7 +4830,7 @@ input::-webkit-contacts-auto-fill-button {
   border: 1px solid var(--border-default) !important;
   box-shadow: var(--shadow-strong) !important;
   border-radius: 12px !important;
-  animation: dropdownPop 0.12s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: dropdownPop 0.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   transform-origin: top center;
 }
 
@@ -4264,17 +4841,19 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 /* Floating Elevated Components */
+/* 28px is the 8px padding plus half a pill button: one row reads as a pill, and a bar wrapped
+   onto two rows on a phone keeps corners concentric with its buttons instead of a stadium. */
 .archive-selection-bar {
   background: var(--bg-elevated) !important;
-  border: 1px solid var(--border-strong) !important;
-  border-radius: 10px !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: 28px !important;
   box-shadow: var(--shadow-strong) !important;
 }
 
 .notification-dropdown-panel {
   background: var(--bg-elevated) !important;
-  border: 1px solid var(--border-default) !important;
-  border-radius: 10px !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: var(--radius-card) !important;
   box-shadow: var(--shadow-strong) !important;
 }
 
@@ -4284,7 +4863,47 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 .notification-dropdown-panel.has-caret .notification-dropdown-content {
-  border-radius: 4px;
+  border-radius: 6px;
+}
+
+/* Tutte / Non lette: small outline pills; the active one takes the accent tint. */
+.notification-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-default);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.notification-filter:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.notification-filter.is-active {
+  background: var(--accent-subtle);
+  border-color: var(--accent-ring);
+  color: var(--accent-text);
+}
+
+.notification-filter-count {
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent-subtle);
+  color: var(--accent-text);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
 }
 
 .folder-indicator-chip {
@@ -4322,24 +4941,94 @@ input::-webkit-contacts-auto-fill-button {
   height: 6px;
 }
 
-/* Notification Popover Items */
+/* Notification rows read like the dashboard's: no dividers, a surface only on hover. An unread
+   row carries a soft gradient in its type's colour from the icon side, which fades once read. */
 .notification-item {
+  --notification-tone: var(--accent-text);
   position: relative;
+  isolation: isolate;
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border-subtle);
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: transparent;
   cursor: pointer;
   transition: background-color 150ms ease, opacity 150ms ease;
 }
 
-.notification-item:last-child {
-  border-bottom: none;
+.notification-item:hover {
+  background: var(--bg-hover);
 }
 
-.notification-item.is-unread {
-  border-left: 2px solid var(--accent-text);
+.notification-item[data-tone="success"] { --notification-tone: var(--success-text); }
+.notification-item[data-tone="warning"] { --notification-tone: var(--warning-text); }
+.notification-item[data-tone="error"] { --notification-tone: var(--error-text); }
+
+.notification-item::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--notification-tone) 14%, transparent) 0%,
+    color-mix(in srgb, var(--notification-tone) 6%, transparent) 45%,
+    transparent 85%
+  );
+  opacity: 0;
+  transition: opacity 320ms ease;
+  pointer-events: none;
+}
+
+.notification-item.is-unread::before {
+  opacity: 1;
+}
+
+/* Setup page: the key field and Salva are the settings pills, a touch taller as the page's one task. */
+.app-input.is-settings-input.setup-key-input {
+  min-height: 2.75rem;
+  font-size: 0.8125rem;
+}
+
+.app-input.is-settings-input.setup-key-input.is-valid { border-color: var(--success-ring); }
+.app-input.is-settings-input.setup-key-input.is-valid:focus { border-color: var(--success-text); box-shadow: 0 0 0 3px var(--success-ring); }
+.app-input.is-settings-input.setup-key-input.is-warning { border-color: var(--warning-ring); }
+.app-input.is-settings-input.setup-key-input.is-warning:focus { border-color: var(--warning-text); box-shadow: 0 0 0 3px var(--warning-ring); }
+
+.settings-pill-button.setup-save-button {
+  min-height: 2.75rem;
+  padding-inline: 1.35rem;
+  font-size: 0.875rem;
+}
+
+/* The how-to card is framed like the dashboard sections. */
+.setup-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem 1rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-xs);
+}
+
+.setup-guide-step {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-top: 0.125rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 /* Alert & Notice Banners */
@@ -4347,9 +5036,9 @@ input::-webkit-contacts-auto-fill-button {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 9px 10px;
+  padding: 10px 12px;
   border: 1px solid var(--error-ring);
-  border-radius: 8px;
+  border-radius: var(--radius-card);
   background: var(--error-subtle);
   color: var(--error-text);
   font-size: 12px;
@@ -4360,24 +5049,29 @@ input::-webkit-contacts-auto-fill-button {
 .setup-error-content { flex: 1; min-width: 0; }
 .setup-error-title { margin: 0; font-weight: 600; }
 .setup-error-hint { margin: 2px 0 0; }
-.setup-error-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 0 14px; }
+.setup-error-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+/* Secondary actions are outline pills, tinted like the notice they sit in. */
 .setup-error-action {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-top: 5px;
-  padding: 0;
+  min-height: 1.75rem;
+  margin-top: 8px;
+  padding: 0 0.75rem;
   font: inherit;
   font-weight: 600;
   color: inherit;
   cursor: pointer;
   background: transparent;
-  border: 0;
+  border: 1px solid var(--error-ring);
+  border-radius: 999px;
+  transition: background 0.15s var(--ease-out), border-color 0.15s var(--ease-out);
 }
-.setup-error-action:hover { text-decoration: underline; }
-.setup-error-action:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 2px; }
+.setup-error-action:hover { background: var(--bg-hover); border-color: currentColor; }
+.setup-error-action:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--error-ring); }
+.setup-error-toggle svg { transition: transform 0.15s var(--ease-out); }
 .setup-error-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
-.setup-error-technical { margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--error-ring); }
+.setup-error-technical { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--error-ring); }
 .setup-error-technical p { margin: 0; }
 .setup-error-technical pre { margin: 5px 0 0; max-height: 160px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; user-select: text; }
 .setup-error-copy-status:empty { display: none; }
@@ -4506,91 +5200,184 @@ input::-webkit-contacts-auto-fill-button {
   border: 1px solid var(--warning-ring) !important;
 }
 
-/* Dropzone Components */
-.dropzone-icon-container {
-  width: 48px;
-  height: 48px;
-  margin-bottom: 16px;
-  border-radius: 12px;
-  display: flex;
+/* Dropzone icon: the resting twin of the processing hero icon (round, on a soft halo). */
+.dropzone-icon-wrap {
+  position: relative;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--accent-ring);
+  margin-bottom: 1.1rem;
+}
+
+/* A radial falloff rather than a blurred disc: the accent stays green at the core and fades
+   evenly to nothing, instead of turning into a grey smudge on the light page. The field is wide
+   and the core soft, so on hover the light spreads well past the icon instead of hugging it. */
+.dropzone-glow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 280px;
+  height: 280px;
+  border-radius: 999px;
+  background: radial-gradient(
+    circle closest-side,
+    color-mix(in srgb, var(--accent-bg) 20%, transparent) 0%,
+    color-mix(in srgb, var(--accent-bg) 11%, transparent) 30%,
+    color-mix(in srgb, var(--accent-bg) 4%, transparent) 65%,
+    transparent 100%
+  );
+  opacity: 0.55;
+  transform: translate(-50%, -50%) scale(0.5);
+  pointer-events: none;
+  transition:
+    opacity 320ms var(--ease-out),
+    transform 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* On the near-black page the same mix barely registers, so the dark theme lights a stronger core. */
+:root[data-theme="dark"] .dropzone-glow {
+  background: radial-gradient(
+    circle closest-side,
+    color-mix(in srgb, var(--accent-bg) 28%, transparent) 0%,
+    color-mix(in srgb, var(--accent-bg) 15%, transparent) 30%,
+    color-mix(in srgb, var(--accent-bg) 6%, transparent) 65%,
+    transparent 100%
+  );
+}
+
+/* Hover blooms the halo outward along with the icon filling in. */
+.dropzone-card:hover .dropzone-glow,
+.dropzone-card:focus-visible .dropzone-glow {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.dropzone-icon-wrap.is-live .dropzone-glow {
+  animation: processing-glow-breathe calc(var(--drop-beat, 2.8s) * 1.25) ease-in-out infinite;
+}
+
+.dropzone-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
   background: var(--accent-subtle);
   color: var(--accent-text);
-  transition: background 160ms ease, color 160ms ease, border-color 160ms ease, transform 160ms ease;
+  transition:
+    transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    background 200ms var(--ease-out),
+    color 200ms var(--ease-out);
 }
 
-.dropzone-card:hover .dropzone-icon-container {
-  transform: scale(1.06);
-  border-color: var(--accent-bg);
+/* Hover previews the live state: the icon fills with the accent and lifts toward the pointer. */
+.dropzone-card:hover .dropzone-icon,
+.dropzone-card:focus-visible .dropzone-icon {
+  background: var(--accent-bg);
+  color: var(--btn-primary-text);
+  transform: translateY(-2px) scale(1.05);
 }
 
-.dropzone-icon-container.is-dragging {
-  background: var(--accent-subtle);
-  color: var(--accent-bg);
-  border-color: var(--accent-bg);
-  transform: scale(1.10);
+.dropzone-icon-wrap.is-live .dropzone-icon {
+  background: var(--accent-bg);
+  color: var(--btn-primary-text);
 }
 
+/* While a file hovers, a thin ring leaves the icon once per beat, like the banner's live ring. */
+.dropzone-ring {
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid color-mix(in srgb, var(--accent-bg) 45%, transparent);
+  border-radius: 999px;
+  opacity: 0;
+  pointer-events: none;
+  animation: processing-ring var(--drop-beat, 2.8s) cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+/* The primary action of the empty page: a pill, like the queue's start and the banner's Interrompi.
+   It moves in step with the icon: soft at rest, filled with the accent when the card is hovered. */
 .dropzone-browse-button {
-  margin-top: 16px;
-  padding: 5px 14px;
-  border-radius: 8px;
-  font-size: 0.78rem;
+  margin-top: 1.25rem;
+  min-height: 2.25rem;
+  padding: 0 1.15rem;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 0.85rem;
   font-weight: 600;
   background: var(--accent-subtle);
   color: var(--accent-text);
-  border: 1px solid var(--accent-ring);
-  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+  transition:
+    transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    background 200ms var(--ease-out),
+    color 200ms var(--ease-out),
+    box-shadow 200ms var(--ease-out);
 }
 
 .dropzone-card:hover .dropzone-browse-button,
-.dropzone-browse-button:hover {
-  background: var(--accent-ring);
-  border-color: var(--accent-bg);
+.dropzone-card:focus-visible .dropzone-browse-button {
+  background: var(--accent-bg);
+  color: var(--btn-primary-text);
+  box-shadow: var(--shadow-sm), 0 4px 16px color-mix(in srgb, var(--accent-bg) 30%, transparent);
+  transform: translateY(-1px);
 }
 
-.dropzone-browse-button:active {
-  transform: scale(0.96);
+.dropzone-card:active .dropzone-browse-button {
+  transform: scale(0.985);
 }
 
-.dropzone-compact svg.lucide-plus {
-  transition: transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1);
+/* ═══ FULL-WINDOW DROP OVERLAY ═══ */
+
+.drop-overlay {
+  --drop-beat: 2.8s;
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  padding: 16px;
+  display: flex;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--bg-base) 90%, transparent);
+  backdrop-filter: blur(6px);
 }
 
-.dropzone-compact:hover svg.lucide-plus {
-  transform: rotate(90deg) scale(1.1);
+.drop-overlay-target {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: var(--radius-panel);
+  border: 1.5px dashed var(--accent-bg);
+  background: color-mix(in srgb, var(--accent-subtle) 70%, transparent);
+}
+
+.drop-overlay-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
 }
 
 /* Queue Card Status Modifiers */
 .queue-card {
   border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 180ms cubic-bezier(0.34, 1.2, 0.64, 1);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-xs);
+  transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms var(--ease-out), transform 180ms var(--ease-out);
 }
 
+/* Like the Archivio cards, hover only firms up the border: a deeper shadow would spill
+   under the next card and be clipped by the scrolling list. */
 .queue-card:hover {
   border-color: var(--border-strong);
 }
 
-.queue-card:active:not(:has(button:active, a:active, [role="button"]:active)) {
-  transform: scale(0.99);
-}
-
-.queue-card svg.lucide-file-audio,
-.queue-card svg.lucide-clock,
-.queue-card svg.lucide-check-circle,
-.queue-card svg.lucide-alert-circle,
-.queue-card svg.lucide-alert-triangle {
-  transition: transform 0.2s cubic-bezier(0.34, 1.2, 0.64, 1);
-}
-
-.queue-card:hover svg.lucide-file-audio,
-.queue-card:hover svg.lucide-check-circle,
-.queue-card:hover svg.lucide-alert-circle,
-.queue-card:hover svg.lucide-alert-triangle {
-  transform: scale(1.05);
+/* Cards that open something also answer with a press. */
+.queue-card.cursor-pointer:active:not(:has(button:active, a:active, [role="button"]:active)) {
+  transform: scale(0.995);
 }
 
 .queue-card.is-queued {
@@ -4603,7 +5390,7 @@ input::-webkit-contacts-auto-fill-button {
   position: relative;
   background: var(--card-queued-bg) !important;
   border-color: var(--processing-dot) !important;
-  box-shadow: none !important;
+  box-shadow: 0 0 0 3px var(--processing-bg), var(--shadow-xs) !important;
 }
 
 .queue-card.is-canceling,
@@ -4612,19 +5399,17 @@ input::-webkit-contacts-auto-fill-button {
   position: relative;
   background: var(--card-queued-bg) !important;
   border-color: var(--error-text) !important;
-  box-shadow: none !important;
+  box-shadow: 0 0 0 3px var(--error-subtle), var(--shadow-xs) !important;
 }
 
 .queue-card.is-error {
   background: var(--card-queued-bg) !important;
   border-color: var(--error-ring) !important;
-  box-shadow: none !important;
 }
 
 .queue-card.is-warning {
   background: var(--card-queued-bg) !important;
   border-color: var(--warning-ring) !important;
-  box-shadow: none !important;
 }
 
 .queue-card.is-completed {
@@ -4634,6 +5419,71 @@ input::-webkit-contacts-auto-fill-button {
 .queue-card.is-completed.is-warning {
   background: var(--card-queued-bg) !important;
   border-color: var(--warning-ring) !important;
+}
+
+/* A completed card's primary action: the whole card opens the editor, and
+   "Apri" says so on hover or keyboard focus instead of cluttering every row. */
+.queue-card.is-completed:focus-visible {
+  outline: none;
+  border-color: var(--border-default);
+  box-shadow: 0 0 0 3px var(--accent-ring), var(--shadow-sm);
+}
+
+.completed-open-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.55rem 0.3rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  opacity: 0;
+  transform: translateX(-2px);
+  transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out), color 160ms var(--ease-out), border-color 160ms var(--ease-out), background 160ms var(--ease-out);
+}
+
+.queue-card:hover .completed-open-button,
+.queue-card:focus-within .completed-open-button {
+  opacity: 1;
+  transform: none;
+}
+
+.completed-open-button:hover {
+  color: var(--text-primary);
+  border-color: var(--border-default);
+  background: var(--bg-hover);
+}
+
+.completed-open-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+@media (hover: none) {
+  .completed-open-button {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* A just-finished sbobina is marked by a tint that fades out, not by motion.
+   An overlay, because the card backgrounds above are !important. */
+.queue-card.is-completed.is-fresh::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--success-subtle);
+  pointer-events: none;
+  animation: queue-card-fresh 1.6s cubic-bezier(0.4, 0, 1, 1) 0.2s both;
+}
+
+@keyframes queue-card-fresh {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 /* App Footer Layout */
@@ -4853,3 +5703,94 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 /* ═══ ARCHIVE GRID PREVIEW ═══ */
+
+/* ═══ DASHBOARD SECTIONS ═══ */
+/* Each section is a panel; its sbobine are individual cards, like the Archivio lists. */
+
+.dashboard-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.875rem 1rem 1rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-xs);
+}
+
+.dashboard-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 2rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.dashboard-section-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+/* ═══ TOUCH (web build on tablets) ═══
+   A finger needs about 44px (Apple HIG). Dense rows (sidebar, editor toolbar, player) keep their
+   look: an invisible ::after, centred on the control, widens only the area that takes the tap.
+   Web build only (data-host is set by the web host): the desktop app keeps its mouse sizing. */
+@media (pointer: coarse) {
+  :root[data-host="web"] :is(
+    .sidebar-nav-item,
+    .editor-fullpage-back,
+    .editor-button,
+    .editor-toc-btn,
+    .player-control,
+    .player-speed-btn,
+    .filter-chip,
+    .completed-open-button,
+    .queue-text-button,
+    button.compact-icon-button
+  ) {
+    position: relative;
+  }
+
+  /* .touch-hit is for controls that are already positioned (absolute show-key eyes, checkboxes). */
+  :root[data-host="web"] :is(
+    .sidebar-nav-item,
+    .editor-fullpage-back,
+    .editor-button,
+    .editor-toc-btn,
+    .player-control,
+    .player-speed-btn,
+    .filter-chip,
+    .completed-open-button,
+    .queue-text-button,
+    button.compact-icon-button,
+    .touch-hit
+  )::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+
+  /* The 4px sliders take the whole row height, with a thumb a finger can find. */
+  :root[data-host="web"] :is(.custom-scrubber, .custom-volume) {
+    height: 32px;
+  }
+
+  :root[data-host="web"] :is(.custom-scrubber, .custom-volume)::-webkit-slider-thumb {
+    width: 20px;
+    height: 20px;
+    margin-top: -8px;
+  }
+
+  :root[data-host="web"] .player-speed-dropdown-panel .editor-dropdown-item {
+    min-height: 40px;
+  }
+}

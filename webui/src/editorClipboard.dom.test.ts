@@ -47,21 +47,32 @@ describe('Editor native image clipboard', () => {
     expect(image.pe_to! + image.ee_eo!.eo_mt).toBe(27.75);
     expect(root.querySelectorAll('.editor-image-node')).toHaveLength(2);
   });
-  it('preserves the HTML source and resamples only the native image derivative', () => {
+  it('skips only a redundant portable pass for HTML that was already prepared', () => {
+    const html = `<h1>Titolo</h1><h2 style="color:#c00">Rosso</h2><p style="text-align:center;line-height:2">Centro <mark>evid</mark> <a href="https://x.it">link</a> H<sub>2</sub>O <u>sotto</u> <s>barrato</s></p><p></p><blockquote><p>Citazione</p></blockquote><ol type="a" start="3"><li><p>Uno</p><ul><li><p>Annidato</p></li></ul></li><li style="list-style-type:none"><p>Due</p></li></ol><table><tr><th><p>A</p></th><td colspan="2" style="background-color:#eee"><p>B</p></td></tr><tr><td></td><td><p style="margin-bottom:12pt">C</p></td><td>D</td></tr></table><h3>Dopo</h3><pre>codice</pre><p style="font-size:18px;margin-top:1em">Grande</p>${figure()}<p>fine<br>riga</p>`;
+    const prepared = prepareHtmlForClipboardSync(html);
+    const { 'text/html': skippedHtml, ...skipped } = createNativeClipboardFormats(prepared, undefined, false, undefined, true)!;
+    const { 'text/html': formattedHtml, ...formatted } = createNativeClipboardFormats(prepared)!;
+    expect(skipped).toEqual(formatted);
+    // jsdom may reorder a rewritten style attribute; compare its declarations.
+    const declarations = (source: string) => Array.from(new DOMParser().parseFromString(source, 'text/html').body.querySelectorAll('*'))
+      .map(element => `${element.tagName}:${(element.getAttribute('style') ?? '').split(';').map(rule => rule.trim()).filter(Boolean).sort().join(';')}`);
+    expect(declarations(skippedHtml)).toEqual(declarations(formattedHtml));
+  });
+  it.each([jpeg, 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABkAAAAPo'])('sends Docs the stored image pixels at full resolution, displayed at the editor size', src => {
     const root = document.createElement('div');
-    root.innerHTML = `<img src="${jpeg}">`;
+    root.innerHTML = `<img src="${src}">`;
     const source = root.querySelector('img')!;
     Object.defineProperties(source, { complete: { value: true }, naturalWidth: { value: 1600 }, naturalHeight: { value: 1000 } });
-    const create = document.createElement.bind(document);
-    vi.spyOn(document, 'createElement').mockImplementation(tag => tag === 'canvas' ? {
-      width: 0, height: 0, getContext: () => ({ fillRect: vi.fn(), drawImage: vi.fn() }),
-      toDataURL: () => 'data:image/jpeg;base64,native-derivative',
-    } as unknown as HTMLCanvasElement : create(tag));
-    const formats = createNativeClipboardFormats(figure(), root)!;
+    const create = vi.spyOn(document, 'createElement');
+    const formats = createNativeClipboardFormats(figure('', src), root)!;
+    // A canvas re-encode shrank 1600 px figures to their on-page width and turned transparent PNGs into JPEGs.
+    expect(create).not.toHaveBeenCalledWith('canvas');
     const images = JSON.parse(JSON.parse(formats[NATIVE_IMAGES_MIME]).data).image_urls;
-    expect(Object.values(images)).toEqual(['data:image/jpeg;base64,native-derivative']);
-    expect(new DOMParser().parseFromString(formats['text/html'], 'text/html').querySelector('img')!.getAttribute('src')).toBe(jpeg);
-    expect(source.getAttribute('src')).toBe(jpeg);
+    expect(Object.values(images)).toEqual([src]);
+    const entity = Object.values(JSON.parse(JSON.parse(formats[NATIVE_SLICE_MIME]).data).resolved.dsl_entitymap)[0] as { ee_eo: { i_wth: number; i_ht: number } };
+    expect(entity.ee_eo).toMatchObject({ i_wth: figureWidth * 0.75, i_ht: figureWidth / 1.6 * 0.75 });
+    expect(new DOMParser().parseFromString(formats['text/html'], 'text/html').querySelector('img')!.getAttribute('src')).toBe(src);
+    expect(source.getAttribute('src')).toBe(src);
   });
   it('exports signed offsets outside the page and retains them in the HTML fallback', () => {
     const doc = model(figure('data-offset-x="-600" data-offset-y="-80"'));

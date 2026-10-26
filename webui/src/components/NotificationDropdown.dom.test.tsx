@@ -51,7 +51,7 @@ describe('NotificationDropdown component', () => {
     );
 
     const titleEl = screen.getByText('Notifiche');
-    const container = titleEl.closest('.origin-bottom-left');
+    const container = titleEl.closest('[role="dialog"]');
     expect(container?.className).toContain('pointer-events-none');
   });
 
@@ -94,6 +94,81 @@ describe('NotificationDropdown component', () => {
     await waitFor(() => {
       expect(screen.queryByText('Aggiornamento disponibile')).toBeNull();
     });
+  });
+
+  it('shows the unread count beside the title as a quiet header pill', () => {
+    render(
+      <NotificationDropdown
+        isOpen={true}
+        onClose={vi.fn()}
+        notifications={mockNotifications}
+        onMarkAsRead={vi.fn()}
+        onMarkAllAsRead={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+    const count = screen.getByText('Notifiche').nextElementSibling;
+    expect(count?.textContent).toBe('2');
+    expect(count?.className).toContain('status-pill');
+    expect(count?.className).toContain('is-quiet');
+    expect(count?.className).toContain('is-count');
+  });
+
+  it('offers Tutte and Non lette as pill filters and lists notifications as flat rows', () => {
+    const { container } = render(
+      <NotificationDropdown
+        isOpen={true}
+        onClose={vi.fn()}
+        notifications={mockNotifications}
+        onMarkAsRead={vi.fn()}
+        onMarkAllAsRead={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+
+    const all = screen.getByRole('button', { name: 'Tutte' });
+    const unread = screen.getByRole('button', { name: /Non lette/ });
+    expect(all.className).toContain('notification-filter');
+    expect(all.getAttribute('aria-pressed')).toBe('true');
+    expect(unread.getAttribute('aria-pressed')).toBe('false');
+
+    fireEvent.click(unread);
+    expect(all.getAttribute('aria-pressed')).toBe('false');
+    expect(unread.className).toContain('is-active');
+
+    fireEvent.click(all);
+    const rows = Array.from(container.querySelectorAll<HTMLElement>('.notification-item'));
+    expect(rows.length).toBe(mockNotifications.length);
+    for (const row of rows) {
+      expect(row.style.background).toBe('');
+      expect(row.className).not.toContain('border-b');
+    }
+  });
+
+  it('tints only unread rows, in the colour of their type, and names them for screen readers', () => {
+    const { container } = render(
+      <NotificationDropdown
+        isOpen={true}
+        onClose={vi.fn()}
+        notifications={mockNotifications}
+        onMarkAsRead={vi.fn()}
+        onMarkAllAsRead={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+
+    const row = (id: string) =>
+      container.querySelector<HTMLElement>(`[data-notification-id="${id}"]`)!;
+
+    expect(row('notif-1').className).toContain('is-unread');
+    expect(row('notif-1').dataset.tone).toBe('success');
+    expect(row('notif-3').className).toContain('is-unread');
+    expect(row('notif-3').dataset.tone).toBe('error');
+    expect(row('notif-2').className).not.toContain('is-unread');
+    expect(row('notif-2').dataset.tone).toBe('accent');
+
+    expect(screen.getAllByText('Non letta')).toHaveLength(2);
+    expect(container.querySelector('.animate-pulse')).toBeNull();
   });
 
   it('renders update notifications with accent sparkles badge', () => {
@@ -155,6 +230,8 @@ describe('NotificationDropdown component', () => {
     );
 
     const archiveBtn = screen.getByLabelText('Archivia notifica');
+    // Hidden until hover with a mouse; touch screens have no hover, so it stays visible there.
+    expect(archiveBtn.className).toContain('[@media(hover:none)]:opacity-100');
     fireEvent.click(archiveBtn);
 
     expect(onDismiss).toHaveBeenCalledTimes(1);

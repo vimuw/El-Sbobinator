@@ -17,7 +17,7 @@ from el_sbobinator.webview_entry import (
 
 
 class WindowlessStartupLoggingTests(unittest.TestCase):
-    def test_main_connects_early_logging_to_ui_without_native_console(self):
+    def test_main_keeps_logger_records_out_of_ui_console_without_native_console(self):
         logger = logging.getLogger(LOGGER_NAME)
         api = MagicMock()
         with (
@@ -47,9 +47,7 @@ class WindowlessStartupLoggingTests(unittest.TestCase):
                     get_logger().info("Elaborazione avviata.")
                     error.assert_not_called()
                 lines = [call.args[0] for call in api._push_console.call_args_list]
-                self.assertEqual(
-                    sum("Elaborazione avviata." in line for line in lines), 1
-                )
+                self.assertFalse(any("Elaborazione avviata." in line for line in lines))
                 self.assertFalse(any("Logging error" in line for line in lines))
                 with open(
                     os.path.join(directory, "el_sbobinator.log"), encoding="utf-8"
@@ -57,6 +55,43 @@ class WindowlessStartupLoggingTests(unittest.TestCase):
                     content = handle.read()
                 self.assertIn("Avvio interfaccia:", content)
                 self.assertIn("Elaborazione avviata.", content)
+            finally:
+                for handler in logger.handlers:
+                    handler.close()
+
+    def test_main_sends_logger_records_to_native_terminal_not_ui_console(self):
+        logger = logging.getLogger(LOGGER_NAME)
+        api = MagicMock()
+        terminal = io.StringIO()
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(logger, "handlers", []),
+            patch.dict(logger.__dict__, {"_el_sbobinator_configured": False}),
+            patch("el_sbobinator.utils.logging_utils._STARTUP_PREPARED", False),
+            patch("el_sbobinator.utils.logging_utils.install_exception_hooks"),
+            patch(
+                "el_sbobinator.services.config_service.get_config_dir",
+                return_value=directory,
+            ),
+            patch("el_sbobinator.app_webview.ElSbobinatorApi", return_value=api),
+            patch(
+                "el_sbobinator.webview_entry.get_dist_path",
+                side_effect=RuntimeError("stop before native window"),
+            ),
+            patch("sys.stdout", terminal),
+            patch("sys.stderr", io.StringIO()),
+            patch("sys.__stdout__", terminal),
+            patch("sys.__stderr__", io.StringIO()),
+        ):
+            try:
+                with self.assertRaisesRegex(RuntimeError, "stop before native window"):
+                    main()
+                get_logger().info("Elaborazione avviata.")
+                print("[*] Riga di avanzamento")
+                lines = [call.args[0] for call in api._push_console.call_args_list]
+                self.assertIn("[*] Riga di avanzamento", lines)
+                self.assertFalse(any("Elaborazione avviata." in line for line in lines))
+                self.assertEqual(terminal.getvalue().count("Elaborazione avviata."), 1)
             finally:
                 for handler in logger.handlers:
                     handler.close()

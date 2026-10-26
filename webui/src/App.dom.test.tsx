@@ -21,7 +21,7 @@ vi.mock('motion/react', () => ({
         motionCache.set(
           tag,
           React.forwardRef((props: Record<string, unknown>, ref: unknown) => {
-            const { initial: _i, animate: _a, exit: _e, transition: _t, layout: _l, variants: _v, layoutId: _li, whileTap: _wt, whileHover: _wh, ...rest } = props;
+            const { initial: _i, animate: _a, exit: _e, transition: _t, layout: _l, variants: _v, layoutId: _li, whileTap: _wt, whileHover: _wh, onAnimationStart: _as, onAnimationComplete: _ac, ...rest } = props;
             return React.createElement(tag, { ...rest, ref: ref as React.Ref<unknown> });
           })
         );
@@ -30,6 +30,9 @@ vi.mock('motion/react', () => ({
     },
   }),
   AnimatePresence: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
+  MotionConfig: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
+  useSpring: (v: unknown) => ({ get: () => v, set: vi.fn() }),
+  useTransform: (source: { get: () => unknown }, transform: (value: unknown) => unknown) => transform(source.get()),
   useAnimation: () => ({ start: vi.fn(), stop: vi.fn() }),
   useAnimationControls: () => logoAnimationControls,
   useMotionValue: (v: unknown) => ({ get: () => v, set: vi.fn() }),
@@ -151,9 +154,16 @@ afterEach(() => {
 });
 
 describe('App', () => {
-  function expectUpdateInstallFeedback(message: RegExp) {
-    expect(within(screen.getByRole('region', { name: 'Aggiornamento applicazione' })).getByText(message)).toBeTruthy();
-    expect(within(screen.getByRole('region', { name: 'Versione e aggiornamenti' })).getByText(message)).toBeTruthy();
+  function expectUpdateInstallFeedback(message: RegExp, startedIn: 'notice' | 'section' = 'notice') {
+    // Settings shows the feedback once, where the install was started.
+    const section = within(screen.getByRole('region', { name: 'Versione e aggiornamenti' }));
+    if (startedIn === 'section') {
+      expect(section.getByText(message)).toBeTruthy();
+      expect(screen.queryByRole('region', { name: 'Aggiornamento applicazione' })?.textContent ?? '').not.toMatch(message);
+    } else {
+      expect(within(screen.getByRole('region', { name: 'Aggiornamento applicazione' })).getByText(message)).toBeTruthy();
+      expect(section.queryByText(message)).toBeNull();
+    }
     const notifications = within(screen.getByRole('dialog', { name: 'Notifiche' }));
     expect(notifications.getAllByRole('heading', { name: 'Installazione aggiornamento' })).toHaveLength(1);
     expect(notifications.getByText(message)).toBeTruthy();
@@ -282,13 +292,17 @@ describe('App', () => {
     });
     const updateSection = await screen.findByRole('region', { name: 'Versione e aggiornamenti' });
     within(updateSection).getByRole('status').scrollIntoView = vi.fn();
+    // An update known on opening is offered by the top notice; the section offers it after a check.
     await act(async () => {
-      fireEvent.click(within(updateSection).getByRole('button', { name: 'Installa aggiornamento' }));
+      fireEvent.click(within(updateSection).getByRole('button', { name: 'Cerca aggiornamenti' }));
+    });
+    await act(async () => {
+      fireEvent.click(within(updateSection).getByRole('button', { name: 'Aggiorna a v2.0.0' }));
     });
 
     expect(downloadUpdate).toHaveBeenCalledWith('v2.0.0');
     expect(downloadUpdate).toHaveBeenCalledTimes(1);
-    expectUpdateInstallFeedback(/Download aggiornamento/i);
+    expectUpdateInstallFeedback(/Download aggiornamento/i, 'section');
     const bridgeOptions = vi.mocked(useBridgeCallbacks).mock.calls.at(-1)?.[0];
     expect(bridgeOptions).toBeTruthy();
     await act(async () => {
@@ -300,7 +314,7 @@ describe('App', () => {
       });
     });
 
-    expectUpdateInstallFeedback(/Verifica integrità fallita/i);
+    expectUpdateInstallFeedback(/Verifica integrità fallita/i, 'section');
     await act(async () => {
       fireEvent.click(within(screen.getByRole('dialog', { name: 'Notifiche' })).getByRole('button', { name: 'Apri GitHub' }));
     });
@@ -398,7 +412,7 @@ describe('App', () => {
     expect(notifications.queryByRole('heading', { name: 'Installazione aggiornamento' })).toBeNull();
     expect(notifications.queryByText(/Verifica integrità fallita/i)).toBeNull();
     expect(within(updateNotice).getByText(/Verifica integrità fallita/i)).toBeTruthy();
-    expect(within(screen.getByRole('region', { name: 'Versione e aggiornamenti' })).getByText(/Verifica integrità fallita/i)).toBeTruthy();
+    expect(within(screen.getByRole('region', { name: 'Versione e aggiornamenti' })).queryByText(/Verifica integrità fallita/i)).toBeNull();
 
     await act(async () => {
       fireEvent.click(within(updateNotice).getByRole('button', { name: 'Installa aggiornamento' }));
@@ -1110,17 +1124,13 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
 
       await act(async () => { render(<App />); });
 
-      const optionsBtn = await screen.findByLabelText('Opzioni coda');
+      const clearAllBtn = await screen.findByRole('button', { name: 'Svuota coda' });
       await act(async () => {
-        fireEvent.click(optionsBtn);
-      });
-      const clearAllMenuItem = screen.getByText('Svuota coda');
-      await act(async () => {
-        fireEvent.click(clearAllMenuItem);
+        fireEvent.click(clearAllBtn);
       });
       expect(screen.getByRole('heading', { name: 'Svuotare tutta la coda?' })).toBeTruthy();
       await act(async () => {
-        fireEvent.click(screen.getByText('Svuota coda'));
+        fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Svuota coda' }));
       });
       expect(screen.queryByRole('heading', { name: 'Svuotare tutta la coda?' })).toBeNull();
     });
@@ -1153,6 +1163,32 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
         fireEvent.click(screen.getByText('Tieni elemento'));
       });
       expect(screen.queryByRole('heading', { name: 'Rimuovere questo elemento?' })).toBeNull();
+    });
+
+    it('names a renamed Recenti transcript by its title in the remove confirmation', async () => {
+      vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
+      vi.mocked(useQueuePersistence).mockImplementation((_files, _structuralVersion, dispatch) => {
+        React.useEffect(() => {
+          dispatch({
+            type: 'queue/add',
+            files: [
+              { id: 'd1', name: 'lezione_03.m4a', title: 'Anatomia del cuore', size: 100, duration: 10, path: 'C:\\lezione_03.m4a', status: 'done', progress: 100, phase: 3, outputHtml: 'C:\\s\\d1\\out.html', outputDir: 'C:\\s\\d1', completedAt: Date.now() },
+            ],
+          });
+        }, [dispatch]);
+      });
+
+      await act(async () => { render(<App />); });
+      const card = (await screen.findByText('Anatomia del cuore')).closest('.queue-card') as HTMLElement;
+      await act(async () => {
+        fireEvent.click(within(card).getByRole('button', { name: 'Altre opzioni' }));
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Rimuovi' }));
+      });
+      const dialog = screen.getByRole('alertdialog');
+      expect(within(dialog).getByText(/"Anatomia del cuore" verrà rimossa dai Recenti/)).toBeTruthy();
+      expect(within(dialog).queryByText(/lezione_03\.m4a/)).toBeNull();
     });
 
     it('handles start and retry queue actions', async () => {

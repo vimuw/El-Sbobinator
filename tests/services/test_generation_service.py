@@ -1,5 +1,7 @@
+import io
 import threading
 import unittest
+from contextlib import redirect_stdout
 from typing import Any, ClassVar, cast
 from unittest.mock import MagicMock, patch
 
@@ -22,6 +24,7 @@ class _FakeRuntime:
     def __init__(self):
         self.rotated_keys = []
         self.phase_calls: list[str] = []
+        self.warnings: list[tuple[str, str | None]] = []
         self.retry_states: list[dict[str, Any]] = []
 
     def phase(self, text):
@@ -32,6 +35,9 @@ class _FakeRuntime:
 
     def retry_state(self, payload):
         self.retry_states.append(dict(payload))
+
+    def warning(self, code, message):
+        self.warnings.append((code, message))
 
 
 class _Structured503QuotaError(RuntimeError):
@@ -474,6 +480,15 @@ class RetryWithQuotaTests(unittest.TestCase):
         self.assertIs(client, rotated_client)
         self.assertEqual(result, "ok")
         self.assertEqual(runtime.rotated_keys, ["fallback-key"])
+        self.assertEqual(
+            runtime.warnings,
+            [
+                (
+                    "fallback_key_in_use",
+                    "Quota della chiave principale esaurita: continuo con una chiave di riserva",
+                )
+            ],
+        )
         self.assertEqual(len(call_clients), 2)
         request_mock.assert_not_called()
 
@@ -631,6 +646,66 @@ class RetryWithQuotaTests(unittest.TestCase):
             first_resume,
             first_wait,
             "resume phase must appear after first wait message",
+        )
+
+    def test_generic_retry_is_announced_in_the_phase_and_restored(self):
+        """Empty responses used to reach only the console; the banner now sees them too."""
+        rt = _FakeRuntime()
+        call_count = [0]
+
+        def fn(_client):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise RuntimeError("Risposta vuota dal modello (text=None)")
+            return "ok"
+
+        _, result = retry_with_quota(
+            fn,
+            client=object(),
+            fallback_keys=[],
+            model_name="test-model",
+            cancelled=lambda: False,
+            runtime=rt,
+            request_fallback_key=lambda: None,
+            max_attempts=3,
+            retry_sleep_seconds=0.0,
+            resume_phase_text="Fase 1/3: trascrizione (chunk 7/7)",
+        )
+
+        self.assertEqual(result, "ok")
+        self.assertEqual(
+            rt.phase_calls,
+            [
+                "Risposta vuota da Gemini — riprovo tra 0s (tentativo 2/3)",
+                "Fase 1/3: trascrizione (chunk 7/7)",
+            ],
+        )
+
+    def test_unclassified_retry_uses_a_generic_banner_label(self):
+        rt = _FakeRuntime()
+        call_count = [0]
+
+        def fn(_client):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise RuntimeError("qualcosa di inatteso")
+            return "ok"
+
+        retry_with_quota(
+            fn,
+            client=object(),
+            fallback_keys=[],
+            model_name="test-model",
+            cancelled=lambda: False,
+            runtime=rt,
+            request_fallback_key=lambda: None,
+            max_attempts=3,
+            retry_sleep_seconds=0.0,
+        )
+
+        self.assertEqual(
+            rt.phase_calls,
+            ["Errore temporaneo di Gemini — riprovo tra 0s (tentativo 2/3)"],
         )
 
     def test_rate_limit_phase_restored_after_wait(self):
@@ -1407,16 +1482,37 @@ class RequestNewApiKeyTests(unittest.TestCase):
                 self.dismissed = True
 
         runtime = _FakeRuntime()
-        result = request_new_api_key(
-            runtime,
-            lambda: False,
-            timeout_seconds=0.01,
-            on_timeout=timeout_called.set,
-        )
+        out = io.StringIO()
+        with redirect_stdout(out):
+            result = request_new_api_key(
+                runtime,
+                lambda: False,
+                timeout_seconds=0.01,
+                on_timeout=timeout_called.set,
+            )
 
         self.assertIsNone(result)
         self.assertTrue(timeout_called.is_set())
         self.assertTrue(runtime.dismissed)
+        # The pipeline reports the timeout with its saved-session hint.
+        self.assertNotIn("in tempo", out.getvalue())
+
+    def test_timeout_without_owner_is_reported_here(self):
+        from el_sbobinator.services.generation_service import request_new_api_key
+
+        class _FakeRuntime:
+            def ask_new_api_key(self, callback):
+                return True
+
+            def dismiss_new_api_key_prompt(self):
+                pass
+
+        out = io.StringIO()
+        with redirect_stdout(out):
+            self.assertIsNone(
+                request_new_api_key(_FakeRuntime(), lambda: False, timeout_seconds=0.01)
+            )
+        self.assertIn("⚠ Nessuna nuova chiave API inserita in tempo.", out.getvalue())
 
 
 class ExtractResponseTextMoreTests(unittest.TestCase):
@@ -1453,6 +1549,44 @@ class ExtractResponseTextMoreTests(unittest.TestCase):
             candidates: ClassVar = [_Candidate()]
 
         self.assertEqual(extract_response_text(_Resp()), "Candidate text content")
+
+
+class DescribeResponseTimingTests(unittest.TestCase):
+    def test_reports_elapsed_thinking_and_answer_tokens(self):
+        from el_sbobinator.services.generation_service import describe_response_timing
+
+        class _Usage:
+            thoughts_token_count = 12345
+            candidates_token_count = 4210
+
+        class _Resp:
+            usage_metadata = _Usage()
+
+        self.assertEqual(
+            describe_response_timing(_Resp(), 151.4),
+            "Risposta di Gemini in 2m 31s (ragionamento 12.345 token, testo 4.210 token).",
+        )
+
+    def test_missing_or_mocked_usage_reports_only_elapsed(self):
+        from el_sbobinator.services.generation_service import describe_response_timing
+
+        class _Usage:
+            thoughts_token_count = None
+            candidates_token_count = 80
+
+        class _Resp:
+            usage_metadata = _Usage()
+
+        self.assertEqual(
+            describe_response_timing(object(), 42.0), "Risposta di Gemini in 42s."
+        )
+        self.assertEqual(
+            describe_response_timing(MagicMock(), 0.2), "Risposta di Gemini in 0s."
+        )
+        self.assertEqual(
+            describe_response_timing(_Resp(), 60),
+            "Risposta di Gemini in 1m 00s (testo 80 token).",
+        )
 
 
 class BuildChunkPromptTests(unittest.TestCase):
@@ -2065,3 +2199,61 @@ class AdaptiveGovernorTests(unittest.TestCase):
 
         self.assertEqual(result, "recovered")
         self.assertEqual(call_count[0], 4)
+
+
+class RetryConsoleLineTests(unittest.TestCase):
+    """The phase line announces each wait; the console must not say it twice."""
+
+    def _retry_once(self, error_factory):
+        rt = _FakeRuntime()
+        calls = [0]
+
+        def fn(_client):
+            calls[0] += 1
+            if calls[0] == 1:
+                raise error_factory()
+            return "ok"
+
+        out = io.StringIO()
+        with redirect_stdout(out):
+            _, result = retry_with_quota(
+                fn,
+                client=object(),
+                fallback_keys=[],
+                model_name="test-model",
+                cancelled=lambda: False,
+                runtime=rt,
+                request_fallback_key=lambda: None,
+                max_attempts=3,
+                retry_sleep_seconds=0.0,
+                model_unavailable_retry_delays=(0.0,),
+                rate_limit_sleep_seconds=0.0,
+                resume_phase_text="Fase 1/3: trascrizione (chunk 1/2)",
+            )
+        self.assertEqual(result, "ok")
+        return rt.phase_calls, out.getvalue()
+
+    @staticmethod
+    def _coded(message: str, code: int) -> Exception:
+        err = RuntimeError(message)
+        err.code = code  # type: ignore[attr-defined]
+        return err
+
+    def test_503_and_rate_limit_waits_are_only_phase_lines(self):
+        cases = {
+            "503": lambda: self._coded("503 Service Unavailable", 503),
+            "429": lambda: self._coded("429 Too Many Requests per minute", 429),
+        }
+        for name, factory in cases.items():
+            with self.subTest(name):
+                phases, printed = self._retry_once(factory)
+                self.assertEqual(printed, "")
+                self.assertEqual(phases[-1], "Fase 1/3: trascrizione (chunk 1/2)")
+                self.assertEqual(len(phases), 2)
+
+    def test_generic_retry_prints_only_the_cause(self):
+        phases, printed = self._retry_once(lambda: RuntimeError("qualcosa di inatteso"))
+        self.assertEqual(
+            phases[0], "Errore temporaneo di Gemini — riprovo tra 0s (tentativo 2/3)"
+        )
+        self.assertEqual(printed.splitlines(), ["Dettaglio: qualcosa di inatteso"])

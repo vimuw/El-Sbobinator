@@ -1,8 +1,7 @@
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { QuotasSection } from './QuotasSection';
-import { ActivitySection } from './ActivitySection';
 import { ApiStatusSection } from './ApiStatusSection';
 import type { ApiUsageResult } from '../../../bridge';
 
@@ -79,19 +78,60 @@ describe('QuotasSection', () => {
     expect(screen.queryByText('Gemini 3.7 Flash')).toBeNull();
     expect(screen.getAllByText('Selezionato')).toHaveLength(1);
     expect(selectedModel.parentElement?.contains(screen.getByText('Selezionato'))).toBe(true);
+    expect(screen.getByText('Selezionato').className).not.toContain('rounded-full');
+    // The reset time is shown once, above the key list, not again here
+    expect(screen.queryByText(dummyUsage.next_reset_info!)).toBeNull();
     expect(screen.queryByText('Attività di oggi')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Configura modelli in Generale' })).toBeNull();
   });
 
-  it('keeps activity visible without a refresh or collapse control', () => {
-    const { container } = render(<ActivitySection apiUsage={dummyUsage} onRetry={vi.fn()} />);
-    expect(container.querySelector('details')).toBeNull();
-    expect(screen.getByText('Trascrizioni')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Aggiorna attività di oggi' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Riprova' })).toBeNull();
-    expect(screen.getByText('Ritentativi').title).toContain('automaticamente');
-    expect(screen.getByText('Fallite').title).toContain('sbobine fallite');
-    expect(screen.queryByText('Quote per modello')).toBeNull();
+  it('shows each key against each model and opens when a key is exhausted', () => {
+    const usage: ApiUsageResult = {
+      ...dummyUsage,
+      credentials: [
+        { ...dummyUsage.credentials![0], exhausted_models: ['gemini-3.8-flash'] },
+        dummyUsage.credentials![1],
+      ],
+    };
+    const { container } = render(<QuotasSection apiUsage={usage} />);
+
+    expect(container.querySelector('details')?.open).toBe(true);
+    expect(screen.getAllByRole('columnheader').map(el => el.textContent)).toEqual(['Modello', 'dbtI', 'Tih4', 'Totale']);
+    expect(screen.getByRole('cell', { name: 'Chiave Principale: non disponibile per Gemini 3.8 Flash' })).toBeTruthy();
+    expect(screen.getByRole('cell', { name: 'Chiave Riserva 1: disponibile per Gemini 3.8 Flash' })).toBeTruthy();
+    expect(screen.getByRole('cell', { name: '1 di 2 chiavi disponibili per Gemini 3.8 Flash' }).textContent).toBe('1/2');
+    expect(screen.getByRole('cell', { name: '2 di 2 chiavi disponibili per Gemini 3.6 Flash' }).textContent).toBe('2/2');
+  });
+
+  it('states limits shared by every model once in the footnote', () => {
+    const base = dummyUsage.project_limits!['gemini-2.5-flash'];
+    const sameLimits = Object.fromEntries(
+      ['gemini-2.5-flash', 'gemini-3.6-flash', 'gemini-3.8-flash'].map(id => [id, { ...base, model_name: id, rpd_limit: 20, rpm_limit: 5 }])
+    );
+    render(<QuotasSection apiUsage={{ ...dummyUsage, project_limits: sameLimits }} />);
+
+    expect(screen.queryByText('20 RPD • 5 RPM')).toBeNull();
+    expect(screen.getByText(/Limiti per chiave su ogni modello: 20 RPD • 5 RPM\./)).toBeTruthy();
+  });
+
+  it('keeps the matrix and its footnote inside the quota card under the trigger', () => {
+    const { container } = render(<QuotasSection apiUsage={dummyUsage} />);
+    const card = container.querySelector('details.settings-details.is-api-quota');
+    const table = screen.getByRole('table', { name: 'Disponibilità delle chiavi per modello' });
+    const note = screen.getByText(/RPD: richieste al giorno/).closest('p');
+
+    expect(card?.firstElementChild?.tagName).toBe('SUMMARY');
+    expect(table.closest('.settings-details-content')?.parentElement).toBe(card);
+    expect(note?.classList.contains('settings-details-note')).toBe(true);
+    expect(note?.parentElement).toBe(card);
+  });
+
+  it('titles the model quotas row in sentence case', () => {
+    const { container } = render(<QuotasSection apiUsage={dummyUsage} />);
+    const label = container.querySelector('summary > span');
+
+    expect(label?.textContent?.trim()).toBe('Quote per modello');
+    expect(label?.className).not.toContain('uppercase');
   });
 
   it.each([
@@ -130,12 +170,5 @@ describe('QuotasSection', () => {
   it('does not show a temporary unavailable banner during the initial verification', () => {
     const { container } = render(<ApiStatusSection apiUsage={null} isLoadingUsage />);
     expect(container.firstChild).toBeNull();
-  });
-
-  it('reports missing activity without showing fabricated zero counts', () => {
-    render(<ActivitySection apiUsage={null} onRetry={vi.fn()} />);
-    expect(screen.getByText('Attività non disponibile.')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Riprova' })).toBeTruthy();
-    expect(screen.queryByText('0')).toBeNull();
   });
 });

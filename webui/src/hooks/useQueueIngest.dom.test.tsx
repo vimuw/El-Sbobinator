@@ -3,6 +3,7 @@ import { renderHook, act } from '@testing-library/react';
 import { useQueueIngest } from './useQueueIngest';
 import type { FileItem } from '../appState';
 import type { ArchiveSession } from '../bridge';
+import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 
 describe('useQueueIngest', () => {
   const dispatch = vi.fn();
@@ -255,6 +256,47 @@ describe('useQueueIngest', () => {
       type: 'queue/add',
       files: [expect.objectContaining({ name: 'drop.mp3', path: '/isolated/drop.mp3' })],
     }));
+  });
+
+  it('web: reports dropped files in a format the host refused', async () => {
+    const uploadBrowserFiles = vi.fn().mockResolvedValue([
+      { id: 'uploaded', name: 'lezione.mp3', path: 'local://1/lezione.mp3', size: 3 },
+    ]);
+    (window as unknown as { pywebview: { api: Record<string, unknown> } }).pywebview = {
+      api: { upload_browser_files: uploadBrowserFiles },
+    };
+    const onFilesRejected = vi.fn();
+    const render = () => renderHook(() => useQueueIngest({
+      filesRef: { current: [] as FileItem[] },
+      archiveSessionsRef: { current: [] },
+      pendingArchiveReplacementsRef: { current: new Map() },
+      setArchiveSessions,
+      setArchiveTotal,
+      dispatch,
+      appState: 'idle',
+      appStateRef: { current: 'idle' },
+      apiReady: true,
+      appendConsole,
+      onFilesRejected,
+    })).result;
+    const drop = {
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+      dataTransfer: { files: [new File(['a'], 'lezione.mp3'), new File(['b'], 'registrazione.wav')] },
+    } as unknown as React.DragEvent;
+
+    const desktop = render();
+    await act(async () => { await desktop.current.handleDrop(drop); });
+    expect(onFilesRejected).not.toHaveBeenCalled();
+
+    setHostCapabilities({ kind: 'web' });
+    try {
+      const web = render();
+      await act(async () => { await web.current.handleDrop(drop); });
+      expect(onFilesRejected).toHaveBeenCalledWith(['registrazione.wav']);
+    } finally {
+      setHostCapabilities(DESKTOP_CAPABILITIES);
+    }
   });
 
   it('handleDuplicateAddAgain registers pending replacement and enqueues file without direct archive mutation', async () => {

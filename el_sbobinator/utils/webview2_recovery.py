@@ -358,10 +358,10 @@ def clear_webview2_cache(storage_dir: str, dist_path: str) -> None:
                     except Exception as _e:
                         _failed = True
                         print(
-                            f"[!] Impossibile svuotare cache WebView2 ({cache_name}): {_e}"
+                            f"⚠ Impossibile svuotare cache WebView2 ({cache_name}): {_e}"
                         )
             if _cleared:
-                print("[*] Cache WebView2 svuotata (nuova build rilevata).")
+                print("Cache WebView2 svuotata (nuova build rilevata).")
             if not _failed:
                 with open(mtime_file, "w", encoding="utf-8") as _f:
                     _f.write(current_mtime)
@@ -410,7 +410,7 @@ def start_webview2_monitor(window: Any, stop_event: threading.Event) -> None:
                 try:
                     subprocess.Popen(args)
                 except Exception as e:
-                    print(f"[!] Errore nel riavvio automatico: {e}")
+                    print(f"❌ Errore nel riavvio automatico: {e}")
 
                 try:
                     window.destroy()

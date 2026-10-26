@@ -149,11 +149,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
                   <Info className="w-3.5 h-3.5" aria-hidden="true" />
                 </span>
               )}
-              {selectedOption.badge && (
-                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent-text)] border border-[var(--accent-ring)] leading-normal shrink-0">
-                  {selectedOption.badge}
-                </span>
-              )}
+              {/* Badges help while choosing; the closed trigger shows only the choice. */}
               {selectedOption.sublabel && (
                 <span className="text-xs text-[var(--text-secondary)] font-normal ml-1.5">
                   ({selectedOption.sublabel})

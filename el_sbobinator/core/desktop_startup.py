@@ -33,6 +33,69 @@ _SNAPSHOT_JS = """JSON.stringify({
     save_settings: !!(window.pywebview && window.pywebview.api && window.pywebview.api.save_settings)
 })"""
 
+_POLL_INTERVAL = 0.05
+
+
+def _hash_build(root: Path, files: list[Path]) -> str:
+    digest = hashlib.sha256()
+    for path in files:
+        digest.update(path.relative_to(root).as_posix().encode())
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+    return digest.hexdigest()[:24]
+
+
+def _build_id_cache_file() -> Path:
+    from el_sbobinator.services.config_service import get_config_dir
+
+    # Never inside the app: writing into a signed macOS bundle breaks its signature.
+    return Path(get_config_dir()) / "desktop_build_id.json"
+
+
+def _build_id(root: Path) -> str:
+    files = [path for path in sorted(root.rglob("*")) if path.is_file()]
+    for path in files:
+        if not path.resolve().is_relative_to(root):
+            raise ValueError("Frontend asset outside build directory")
+    if not getattr(sys, "frozen", False):
+        return _hash_build(root, files)
+    # Installed files change only on reinstall or update, which rewrites their
+    # size or timestamp; development builds can change in place and are rehashed.
+    listing = [str(root)]
+    for path in files:
+        stat = path.stat()
+        listing.append(
+            f"{path.relative_to(root).as_posix()}\0{stat.st_size}\0{stat.st_mtime_ns}"
+        )
+    signature = hashlib.sha256("\n".join(listing).encode()).hexdigest()
+    try:
+        cache_file = _build_id_cache_file()
+    except Exception as exc:
+        record_incident("desktop-build-id-cache", str(exc))
+        return _hash_build(root, files)
+    try:
+        cached = json.loads(cache_file.read_text("utf-8"))
+        build_id = cached.get("build_id")
+        if (
+            cached.get("signature") == signature
+            and isinstance(build_id, str)
+            and len(build_id) == 24
+            and all(char in "0123456789abcdef" for char in build_id)
+        ):
+            return build_id
+    except (OSError, ValueError, AttributeError):
+        pass
+    build_id = _hash_build(root, files)
+    try:
+        from el_sbobinator.utils.file_ops import _atomic_write_json
+
+        _atomic_write_json(
+            str(cache_file), {"signature": signature, "build_id": build_id}
+        )
+    except Exception as exc:
+        record_incident("desktop-build-id-cache", str(exc))
+    return build_id
+
 
 class _DesktopHTTPServer(ThreadingHTTPServer):
     # Windows otherwise permits two HTTPServer listeners on the same address.
@@ -49,15 +112,7 @@ class DesktopStartupServer:
 
     def __init__(self, index_path: str, port: int = 42001):
         self.root = Path(index_path).resolve().parent
-        digest = hashlib.sha256()
-        for path in sorted(self.root.rglob("*")):
-            if path.is_file():
-                if not path.resolve().is_relative_to(self.root):
-                    raise ValueError("Frontend asset outside build directory")
-                digest.update(path.relative_to(self.root).as_posix().encode())
-                digest.update(b"\0")
-                digest.update(path.read_bytes())
-        self.build_id = digest.hexdigest()[:24]
+        self.build_id = _build_id(self.root)
         manifest = json.loads((self.root / "desktop-build.json").read_text("utf-8"))
         self.version = str(manifest["version"]).lstrip("v")
         if getattr(sys, "frozen", False):
@@ -94,7 +149,12 @@ class DesktopStartupServer:
             )
         self.origin = f"http://127.0.0.1:{self.httpd.server_port}"
         self.httpd.daemon_threads = True
-        self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
+        # The default half-second poll would delay every close() by up to that long.
+        self.thread = threading.Thread(
+            target=self.httpd.serve_forever,
+            kwargs={"poll_interval": _POLL_INTERVAL},
+            daemon=True,
+        )
         self.thread.start()
         self._record("recovery" if self.port_fallback else "loading")
 

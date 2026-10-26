@@ -2,7 +2,15 @@ import { type Dispatch, useEffect, useLayoutEffect, useRef } from 'react';
 import type React from 'react';
 import { createBridge, type ElSbobinatorBridge, type UpdateDownloadProgressPayload } from '../bridge';
 import type { AppStatus, FileDescriptor, FileDonePayload, FileItem, ProcessDonePayload, ProcessingAction } from '../appState';
+import { getHostCapabilities } from '../hostCapabilities';
 import { errorLabel, isPausedError, shortModelName } from '../utils';
+
+// On the web the dialog itself takes the new key, for this run only; the desktop points to the settings.
+function newKeyNotice(): string {
+  return getHostCapabilities().kind === 'web'
+    ? 'Limite API raggiunto: le tue chiavi Gemini hanno esaurito la quota gratuita. Incolla un’altra chiave nella finestra che si è aperta per continuare: vale solo per questa elaborazione.'
+    : 'Limite API raggiunto. Le tue chiavi Gemini hanno esaurito i crediti gratuiti o la capacità temporanea. Aggiungi una chiave nelle impostazioni per continuare.';
+}
 
 export function useBridgeCallbacks(options: {
   dispatch: Dispatch<ProcessingAction>;
@@ -121,7 +129,7 @@ export function useBridgeCallbacks(options: {
         if (addNotificationRef.current) {
           addNotificationRef.current(
             'Chiavi esaurite',
-            'Limite API raggiunto. Le tue chiavi Gemini hanno esaurito i crediti gratuiti o la capacità temporanea. Aggiungi una chiave nelle impostazioni per continuare.',
+            newKeyNotice(),
             'warning',
             'system'
           );
@@ -131,7 +139,7 @@ export function useBridgeCallbacks(options: {
           if (localStorage.getItem('notifications_enabled') !== 'false' && window.pywebview?.api?.show_notification) {
             void window.pywebview.api.show_notification(
               '⚠️ Chiavi esaurite — El Sbobinator',
-              'Limite API raggiunto. Le tue chiavi Gemini hanno esaurito i crediti gratuiti o la capacità temporanea. Aggiungi una chiave nelle impostazioni per continuare.',
+              newKeyNotice(),
             );
           }
         }
@@ -198,16 +206,6 @@ export function useBridgeCallbacks(options: {
               );
             }
           }
-        }
-      },
-      onRetryStateChanged: data => {
-        if (data.state === 'cooling_down') {
-          const sec = Math.round(data.seconds_remaining ?? 0);
-          appendConsoleRef.current(`⏳ Attesa cooldown (${data.attempt ?? 1}/${data.max_attempts ?? 4}): riprovo tra ${sec}s...`);
-        } else if (data.state === 'probing') {
-          appendConsoleRef.current(`🔍 Esecuzione sonda (${data.attempt ?? 1}/${data.max_attempts ?? 4}) con ${data.model ?? 'modello'}...`);
-        } else if (data.state === 'paused') {
-          appendConsoleRef.current(`⏸️ Batch sospeso: capacità Gemini non disponibile dopo ${data.max_attempts ?? 4} tentativi. Progressi salvati.`);
         }
       },
       onFileFailed: data => {

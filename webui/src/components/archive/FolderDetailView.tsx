@@ -13,6 +13,7 @@ import {
 } from '@dnd-kit/sortable';
 import type { ArchiveFolder, ArchiveSession, SearchSessionResult } from '../../bridge';
 import type { EditorSession } from '../../editorSessions';
+import { useStickyStuck } from '../../hooks/useStickyStuck';
 import { normalizeSessionPath } from '../../utils';
 import { KebabMenu, type KebabMenuItem } from '../KebabMenu';
 import { FullTextResultList } from './FullTextResults';
@@ -23,6 +24,7 @@ import { type ArchivePageProps } from './types';
 import { getFolderColor, getFolderSessionDirs } from '../../archiveFolders';
 import { FolderBreadcrumbs } from './FolderBreadcrumbs';
 import { FolderIndicatorChip } from '../FolderChip';
+import { ArchivePageTitle, ArchiveSectionHeading } from './ArchiveLayout';
 
 export interface FolderDetailViewProps {
   folder: ArchiveFolder;
@@ -79,6 +81,7 @@ export function FolderDetailView({
   onMove,
   onMoveSessions,
 }: FolderDetailViewProps) {
+  const [toolbarRef, toolbarStuck] = useStickyStuck();
   const [search, setSearch] = useState('');
   const [fullTextMode, setFullTextMode] = useState(false);
   const [ftResults, setFtResults] = useState<SearchSessionResult[] | null>(null);
@@ -197,6 +200,13 @@ export function FolderDetailView({
     prevManualFolderSelectionRef.current = null;
   }, []);
 
+  const deleteSelectedFolderSessions = onDeleteMultipleSessions ? () => {
+    const targets = folderSessions
+      .filter(s => selectedFolderSessionDirs.has(s.session_dir))
+      .map(s => ({ sessionDir: s.session_dir, name: s.name }));
+    onDeleteMultipleSessions(targets);
+  } : undefined;
+
   useEffect(() => {
     if (ftDebounceRef.current) clearTimeout(ftDebounceRef.current);
     const q = search.trim();
@@ -271,12 +281,9 @@ export function FolderDetailView({
             <ArrowLeft className="w-4 h-4 transition-transform duration-200 group-hover/back:-translate-x-0.5" />
           </button>
           <span className="folder-color-dot is-large" style={{ '--folder-color': folderColor } as React.CSSProperties} />
-          <div className="col-span-3 row-start-2 flex flex-wrap items-center gap-3 min-w-0">
-            <h1 className="min-w-0 max-w-full [overflow-wrap:anywhere] text-[1.75rem] font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-              {folder.name}
-            </h1>
-            <span className="status-pill shrink-0">{folderSessions.length}</span>
-          </div>
+          <ArchivePageTitle count={folderSessions.length} className="col-span-3 row-start-2">
+            {folder.name}
+          </ArchivePageTitle>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <button
@@ -299,8 +306,8 @@ export function FolderDetailView({
 
       {collectionGrid}
       <div className="flex flex-col gap-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Lezioni</h3>
-        <div className="archive-sticky-toolbar sticky top-0 z-20 py-2 -my-2 bg-[var(--bg-base)]/95 backdrop-blur-md flex flex-col gap-1.5">
+        <ArchiveSectionHeading>Lezioni</ArchiveSectionHeading>
+        <div ref={toolbarRef} data-stuck={toolbarStuck} className="archive-sticky-toolbar flex flex-col gap-1.5">
           <div className="flex items-center gap-2">
             <div className="search-pill-wrap">
               {isSearching
@@ -413,7 +420,7 @@ export function FolderDetailView({
                   items={pageData.map(s => s.session_dir)}
                   strategy={verticalListSortingStrategy}
                 >
-                  <div className="flex flex-col gap-2">
+                  <div className="archive-session-list flex flex-col gap-2">
                     {pageData.map((session) => (
                       <SortableSessionCard
                         key={session.session_dir}
@@ -428,7 +435,13 @@ export function FolderDetailView({
                         onRemove={() => onRemoveSession(session.session_dir)}
                         onPreview={onPreview}
                         onOpenFile={onOpenFile}
-                        onDeleteSession={onDeleteSession}
+                        onDeleteSession={(sessionDir, name) => {
+                          if (deleteSelectedFolderSessions && selectedFolderSessionDirs.size > 1 && selectedFolderSessionDirs.has(sessionDir)) {
+                            deleteSelectedFolderSessions();
+                          } else {
+                            onDeleteSession(sessionDir, name);
+                          }
+                        }}
                         onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
                         onShareSession={onShareSession}
                         onRenameSession={onRenameSession}
@@ -491,12 +504,7 @@ export function FolderDetailView({
               }
               clearSelectFolderSessions();
             }}
-            onDeleteSelected={onDeleteMultipleSessions ? () => {
-              const targets = folderSessions
-                .filter(s => selectedFolderSessionDirs.has(s.session_dir))
-                .map(s => ({ sessionDir: s.session_dir, name: s.name }));
-              onDeleteMultipleSessions(targets);
-            } : undefined}
+            onDeleteSelected={deleteSelectedFolderSessions}
             onClose={clearSelectFolderSessions}
           />
         )}

@@ -1,36 +1,7 @@
 import type { FileDescriptor } from './appState';
 import type { PywebviewApi } from './bridge';
+import { setHostCapabilities } from './hostCapabilities';
 import { STORAGE_KEYS } from './storageKeys';
-
-export interface HostCapabilities {
-  fileUpload: boolean;
-  fileDrop: boolean;
-  nativeFolderPicker: boolean;
-  openLocalPath: boolean;
-  osNotifications: boolean;
-  updateInstallation: boolean;
-  realPipeline: boolean;
-  credentialPersistence: boolean;
-  windowControls: boolean;
-}
-
-const DESKTOP_CAPABILITIES: HostCapabilities = {
-  fileUpload: true,
-  fileDrop: true,
-  nativeFolderPicker: true,
-  openLocalPath: true,
-  osNotifications: true,
-  updateInstallation: true,
-  realPipeline: true,
-  credentialPersistence: true,
-  windowControls: true,
-};
-
-let hostCapabilities: HostCapabilities = DESKTOP_CAPABILITIES;
-
-export function getHostCapabilities(): HostCapabilities {
-  return hostCapabilities;
-}
 
 let sessionToken = '';
 let lastSequence = 0;
@@ -205,7 +176,6 @@ export function createBrowserPywebviewApi(): PywebviewApi {
       callRpc('validate_environment', apiKey, checkApiKey, preferredModel),
     get_session_storage_info: () => callRpc('get_session_storage_info'),
     cleanup_old_sessions: (maxAgeDays, dryRun) => callRpc('cleanup_old_sessions', maxAgeDays, dryRun),
-    cleanup_completed_sessions: (maxAgeDays, dryRun) => callRpc('cleanup_completed_sessions', maxAgeDays, dryRun),
     get_completed_sessions: (limit) => callRpc('get_completed_sessions', limit),
     delete_session: (sessionDir) => callRpc('delete_session', sessionDir),
     rename_session: (sessionDir, name) => callRpc('rename_session', sessionDir, name),
@@ -315,7 +285,6 @@ export function createBrowserPywebviewApi(): PywebviewApi {
     move_session_root: async () => ({ ok: false, error: 'Disponibile nell’app desktop' }),
     get_session_move_status: async () => ({ status: 'idle', error: 'Disponibile nell’app desktop' }),
     download_and_install_update: async () => ({ ok: false, error: 'Disponibile nell’app desktop' }),
-    open_logs_folder: async () => ({ ok: false, error: 'Disponibile nell’app desktop' }),
   };
 }
 
@@ -337,9 +306,7 @@ export async function initBrowserHost(): Promise<boolean> {
     sessionToken = data.session_token || '';
     isolateBrowserStorage(sessionToken);
     lastSequence = Number(data.event_sequence || 0);
-    if (data.capabilities) {
-      hostCapabilities = { ...DESKTOP_CAPABILITIES, ...data.capabilities };
-    }
+    setHostCapabilities({ kind: 'browser', ...(data.capabilities ?? {}) });
 
     window.pywebview = {
       api: createBrowserPywebviewApi(),

@@ -1,11 +1,12 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { AlertCircle, AlertTriangle, CheckCircle, Clock, ExternalLink, FileAudio, FolderOpen, GripVertical, PenLine, RotateCcw, Settings, Trash2, X, XCircle } from 'lucide-react';
+import { DURATION, EASE_IN, enterTransition, exitTransition } from '../motion';
+import { AlertCircle, AlertTriangle, ArrowUpRight, CheckCircle, Clock, FileAudio, FolderOpen, GripVertical, Mic, RotateCcw, Settings, Trash2, X, XCircle } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { AppStatus, FileItem } from '../appState';
 import type { ArchiveFolder } from '../bridge';
-import { getHostCapabilities } from '../browserHost';
+import { getHostCapabilities } from '../hostCapabilities';
 import { errorLabel, formatDuration, formatRelativeTime, formatSize, isPausedError, isQuotaError, isResumableError, shortModelName } from '../utils';
 import { KebabMenu, type KebabMenuItem } from './KebabMenu';
 import { FolderIndicatorChip } from './FolderChip';
@@ -48,15 +49,21 @@ function QueueFileCardInner({
   };
 
   return (
-    <div ref={setNodeRef} style={sortableStyle} {...attributes}>
+    <div ref={setNodeRef} style={sortableStyle} className="queue-item" {...attributes}>
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: isDragging ? 0.4 : 1 }}
-        exit={{ opacity: 0, transition: { duration: 0.11, ease: 'easeIn' } }}
-        transition={{
-          opacity: { duration: 0.18, ease: 'easeOut' },
+        // Collapse while fading so the cards below close the gap instead of jumping.
+        exit={{
+          opacity: 0,
+          height: 0,
+          paddingTop: 0,
+          paddingBottom: 0,
+          overflow: 'hidden',
+          transition: { opacity: exitTransition, default: { duration: DURATION.base, ease: EASE_IN } },
         }}
-        className={`queue-card relative transition-colors px-4 py-3 group/card ${
+        transition={{ opacity: enterTransition() }}
+        className={`queue-card relative transition-colors px-4 py-2 group/card ${
           file.status === 'processing'
             ? isCanceling ? 'is-canceling' : 'is-processing'
             : file.status === 'error'
@@ -65,45 +72,50 @@ function QueueFileCardInner({
         }`}
       >
         <div className="relative z-10 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            {isDraggable && (
-              <div className="group/drag flex items-center shrink-0 gap-1">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            {/* The drag handle takes over the status icon's slot on hover, so no column is reserved for it. */}
+            <div className={`queue-icon-slot relative shrink-0 w-8 h-8${isDraggable ? ' has-handle' : ''}`}>
+              {isDraggable && (
                 <button
                   {...listeners}
-                  className="drag-handle-btn"
+                  className="drag-handle-btn absolute inset-0"
                   tabIndex={-1}
                   aria-label="Trascina per riordinare"
                 >
                   <GripVertical className="w-4 h-4" />
                 </button>
-              </div>
-            )}
-            <div
-              className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-lg transition-transform duration-200 group-hover/card:scale-105 ${
-                file.status === 'processing'
-                  ? isCanceling ? 'text-[var(--error-text)]' : 'text-[var(--processing-text)]'
+              )}
+              <div
+                className={`queue-status-icon flex items-center justify-center w-8 h-8 rounded-lg ${
+                  file.status === 'processing'
+                    ? isCanceling
+                      ? 'bg-[var(--error-subtle)] text-[var(--error-text)] border border-[var(--error-ring)]'
+                      : 'bg-[var(--processing-bg)] text-[var(--processing-text)] border border-[var(--processing-ring)]'
+                    : file.status === 'error'
+                      ? isPaused
+                        ? 'bg-[var(--warning-subtle)] text-[var(--warning-text)] border border-[var(--warning-ring)]'
+                        : 'bg-[var(--error-subtle)] text-[var(--error-text)] border border-[var(--error-ring)]'
+                      : 'bg-[var(--bg-hover)] text-[var(--text-muted)]'
+                }`}
+              >
+                {file.status === 'processing'
+                  ? isCanceling
+                    ? <XCircle className="w-4 h-4" />
+                    : file.isRetryingBlocks
+                      ? <RotateCcw className="w-4 h-4" />
+                      : <Mic className="w-4 h-4" data-testid="queue-icon-active" />
                   : file.status === 'error'
                     ? isPaused
-                      ? 'bg-[var(--warning-subtle)] text-[var(--warning-text)] border border-[var(--warning-ring)]'
-                      : 'bg-[var(--error-subtle)] text-[var(--error-text)] border border-[var(--error-ring)]'
-                    : 'text-[var(--text-muted)]'
-              }`}
-            >
-              {file.status === 'processing'
-                ? isCanceling
-                  ? <XCircle className="w-5 h-5" />
-                  : file.isRetryingBlocks
-                    ? <RotateCcw className="w-5 h-5 animate-spin text-[var(--accent-text)]" />
-                    : <Clock className="w-5 h-5 animate-pulse" />
-                : file.status === 'error'
-                  ? isPaused
-                    ? <AlertTriangle className="w-4 h-4" />
-                    : <AlertCircle className="w-4 h-4" />
-                  : <FileAudio className="w-5 h-5" />}
+                      ? <AlertTriangle className="w-4 h-4" />
+                      : <AlertCircle className="w-4 h-4" />
+                    : file.status === 'queued'
+                      ? <Clock className="w-4 h-4" data-testid="queue-icon-waiting" />
+                      : <FileAudio className="w-4 h-4" />}
+              </div>
             </div>
             <div className="min-w-0 flex-1">
               <h4 className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{file.name}</h4>
-              <div className="flex items-center gap-2.5 mt-1.5 text-xs text-[var(--text-muted)] min-w-0 flex-nowrap overflow-hidden">
+              <div className="queue-card-meta flex items-center gap-2 mt-0.5 text-xs text-[var(--text-muted)] min-w-0 flex-nowrap overflow-hidden">
                 <span className="shrink-0">{formatSize(file.size)}</span>
                 {file.duration > 0 && (
                   <>
@@ -115,7 +127,7 @@ function QueueFileCardInner({
                   <>
                     <span className="w-1 h-1 rounded-full bg-[var(--border-default)] shrink-0" />
                     <span className={`inline-flex items-center gap-1.5 font-medium shrink-0 ${isCanceling ? 'text-[var(--error-text)]' : 'text-[var(--processing-text)]'}`}>
-                      <span className={`inline-flex h-1.5 w-1.5 rounded-full animate-pulse ${isCanceling ? 'bg-[var(--error-text)]' : 'bg-[var(--processing-dot)]'}`} />
+                      <span className={`inline-flex h-1.5 w-1.5 rounded-full ${isCanceling ? 'bg-[var(--error-text)]' : 'bg-[var(--processing-dot)]'}`} />
                       {isCanceling
                         ? 'Annullamento in corso'
                         : file.isRetryingBlocks
@@ -207,8 +219,12 @@ interface CompletedFileCardProps {
   currentFolder?: Pick<ArchiveFolder, 'name' | 'color'>;
 }
 
+// A sbobina finished moments ago gets a brief background highlight instead of motion.
+const FRESH_COMPLETION_MS = 6000;
+
 function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetryFailedRevisionBlocks, currentFolder }: CompletedFileCardProps) {
   const canOpenLocalPath = getHostCapabilities().openLocalPath;
+  const [isFresh] = React.useState(() => file.completedAt !== undefined && Date.now() - file.completedAt < FRESH_COMPLETION_MS);
   const isClickable = Boolean(file.outputHtml);
   const [isRetryingBlocks, setIsRetryingBlocks] = React.useState(false);
   const isRetrying = file.isRetryingBlocks || isRetryingBlocks;
@@ -225,18 +241,29 @@ function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetry
       setIsRetryingBlocks(false);
     }
   };
+  const displayName = file.title || file.name;
+  const openEditor = () => onPreview(file.outputHtml!, displayName, file.path, file.id, file.outputDir);
+  const handleCardKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    // Only the card itself: Enter on the inner buttons keeps their own action.
+    if (event.target !== event.currentTarget) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      openEditor();
+    }
+  };
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0, transition: { duration: 0.11, ease: 'easeIn' } }}
-      transition={{
-        opacity: { duration: 0.2, ease: 'easeOut' },
-      }}
-      onClick={isClickable ? () => onPreview(file.outputHtml!, file.name, file.path, file.id, file.outputDir) : undefined}
+      exit={{ opacity: 0, transition: exitTransition }}
+      transition={{ opacity: enterTransition() }}
+      onClick={isClickable ? openEditor : undefined}
+      onKeyDown={isClickable ? handleCardKeyDown : undefined}
+      tabIndex={isClickable ? 0 : undefined}
+      aria-label={isClickable ? `Apri ${displayName} nell'editor` : undefined}
       className={`queue-card relative px-4 py-3 transition-colors group/card ${isClickable ? 'cursor-pointer' : ''} is-completed ${
         hasRevisionWarnings ? 'is-warning' : ''
-      }`}
+      }${isFresh ? ' is-fresh' : ''}`}
     >
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -251,12 +278,12 @@ function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetry
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 min-w-0">
-              <h4 className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{file.name}</h4>
+              <h4 className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{displayName}</h4>
               {currentFolder && (
                 <FolderIndicatorChip folder={currentFolder} />
               )}
             </div>
-            <div className="flex items-center gap-2.5 mt-1.5 text-xs text-[var(--text-muted)] min-w-0 flex-nowrap overflow-hidden">
+            <div className="queue-card-meta flex items-center gap-2 mt-0.5 text-xs text-[var(--text-muted)] min-w-0 flex-nowrap overflow-hidden">
               <span className="shrink-0">{formatSize(file.size)}</span>
               {file.duration > 0 && (
                 <>
@@ -273,7 +300,7 @@ function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetry
                 </>
               )}
               <span className="w-1 h-1 rounded-full bg-[var(--border-default)] shrink-0" />
-              <span className={`shrink-0 ${hasRevisionWarnings ? 'text-[var(--warning-text)] font-medium' : 'text-[var(--success-text)]'}`}>
+              <span className={`shrink-0 ${hasRevisionWarnings ? 'text-[var(--warning-text)] font-medium' : ''}`}>
                 {hasRevisionWarnings ? 'Completata con avvisi' : file.completedAt ? formatRelativeTime(file.completedAt) : 'Completato'}
               </span>
               {failedBlockCount > 0 && (
@@ -306,23 +333,24 @@ function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetry
               <span className="sr-only">{isRetrying ? 'Riprovo…' : 'Riprova revisione'}</span>
             </button>
           )}
+          {isClickable && (
+            <button
+              type="button"
+              onClick={openEditor}
+              className="completed-open-button"
+              title="Apri nell'editor"
+            >
+              Apri
+              <ArrowUpRight className="w-3.5 h-3.5" />
+            </button>
+          )}
           <KebabMenu
             items={[
               ...( file.outputHtml ? [
-                {
-                  label: 'Modifica',
-                  icon: <PenLine className="w-3.5 h-3.5" />,
-                  onClick: () => onPreview(file.outputHtml!, file.name, file.path, file.id, file.outputDir),
-                } as KebabMenuItem,
                 ...(canOpenLocalPath ? [{
                   label: 'Apri cartella',
                   icon: <FolderOpen className="w-3.5 h-3.5" />,
                   onClick: () => onOpenFile(file.outputDir ?? file.outputHtml!),
-                } as KebabMenuItem,
-                {
-                  label: 'Apri nel browser',
-                  icon: <ExternalLink className="w-3.5 h-3.5" />,
-                  onClick: () => onOpenFile(file.outputHtml!),
                 } as KebabMenuItem] : []),
               ] : []),
               {

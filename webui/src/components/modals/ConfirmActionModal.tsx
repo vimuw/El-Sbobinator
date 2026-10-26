@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { AlertTriangle, X } from 'lucide-react';
+import { modalCard } from '../../motion';
 
 interface ConfirmActionModalProps {
   isOpen: boolean;
@@ -96,9 +97,7 @@ export function ConfirmActionModal({
             aria-describedby={descriptionId}
             tabIndex={-1}
             onKeyDown={handleKeyDown}
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1, transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] } }}
-            exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.14, ease: 'easeIn' } }}
+            {...modalCard}
             className="modal-card relative w-full max-w-md max-h-[86vh] overflow-hidden flex flex-col"
           >
             <div className="modal-header">

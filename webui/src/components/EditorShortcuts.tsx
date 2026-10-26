@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Keyboard, X } from 'lucide-react';
+import { shortcutLabel } from '../keyboardLabels';
 
 const editorShortcutGroups = [
   { id: 'edit', title: 'Modifica', shortcuts: [
@@ -49,7 +50,7 @@ const audioShortcuts = [
 function ShortcutList({ shortcuts }: { shortcuts: readonly (readonly [string, string])[] }) {
   return <dl className="editor-shortcuts-list">
     {shortcuts.map(([keys, description]) => <div key={keys}>
-      <dt><kbd>{keys}</kbd></dt>
+      <dt><kbd>{shortcutLabel(keys)}</kbd></dt>
       <dd>{description}</dd>
     </div>)}
   </dl>;

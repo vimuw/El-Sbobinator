@@ -12,23 +12,21 @@ export function getCategoryLabel(category: NotificationMessage['category']) {
   }
 }
 
-export function getItemBackground(
-  type: NotificationMessage['type'],
-  category: NotificationMessage['category']
-) {
-  if (category === 'update' || type === 'info') {
-    return 'var(--accent-subtle)';
-  }
+export type NotificationTone = 'accent' | 'success' | 'warning' | 'error';
 
+/** The colour family of a row's unread gradient, matching its icon badge. */
+export function getItemTone(
+  category: NotificationMessage['category'],
+  type: NotificationMessage['type']
+): NotificationTone {
+  if (category === 'update' || type === 'info') return 'accent';
   switch (type) {
     case 'success':
-      return 'var(--success-subtle)';
     case 'warning':
-      return 'var(--warning-subtle)';
     case 'error':
-      return 'var(--error-subtle)';
+      return type;
     default:
-      return 'transparent';
+      return 'accent';
   }
 }
 

@@ -1,7 +1,7 @@
 import type { Mark } from '@tiptap/pm/model';
 
 export const attribute = 'data-editor-empty-marks';
-const typingMarks = new Set(['bold', 'italic', 'underline', 'strike', 'textStyle', 'highlight']);
+const typingMarks = new Set(['bold', 'unbold', 'italic', 'underline', 'strike', 'textStyle', 'highlight']);
 type EmptyTextMark = { type: string; attrs?: Record<string, unknown> };
 
 export function readMarks(value: unknown): EmptyTextMark[] | null {
@@ -31,6 +31,7 @@ function applyMarks(element: HTMLElement, marks: EmptyTextMark[]): void {
   const decorations: string[] = [];
   for (const mark of marks) {
     if (mark.type === 'bold') element.style.fontWeight = '700';
+    if (mark.type === 'unbold') element.style.fontWeight = '400';
     if (mark.type === 'italic') element.style.fontStyle = 'italic';
     if (mark.type === 'underline') decorations.push('underline');
     if (mark.type === 'strike') decorations.push('line-through');
@@ -55,4 +56,3 @@ export function emptyTextMarksTypography(value: unknown): string {
   element.style.removeProperty('text-decoration');
   return element.style.cssText;
 }
-

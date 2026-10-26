@@ -39,7 +39,8 @@ test('Docs script shortcuts, buttons, clipboard geometry and saved reopen', asyn
   expect(Math.abs(apice.x - apice.normalRight)).toBeLessThan(1);
   expect(apice.cssCaret).toBe('rgba(0, 0, 0, 0)');
   expect(await editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.state.doc.textContent)).toBe('xH2Oa');
-  expect(await editor.locator('.editor-script-caret').evaluate(caret => getComputedStyle(caret, '::after').animationName)).toBe('none');
+  // Windows reduced motion is ignored app-wide, so the script caret keeps blinking.
+  expect(await editor.locator('.editor-script-caret').evaluate(caret => getComputedStyle(caret, '::after').animationName)).toBe('editor-script-caret-blink');
   await page.screenshot({ path: testInfo.outputPath('caret-apice.png'), clip: { x: 300, y: 52, width: 520, height: 230 } });
   await page.keyboard.press('Control+,');
   await expect(page.getByRole('button', { name: 'Apice (Ctrl+.)', exact: true })).toHaveAttribute('aria-pressed', 'false');
@@ -53,9 +54,10 @@ test('Docs script shortcuts, buttons, clipboard geometry and saved reopen', asyn
   await page.keyboard.type('2');
   await expect(editor.locator('sup')).toHaveText('2');
   await page.keyboard.press('ArrowLeft');
-  expect(await editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.state.selection.from)).toBe(2);
+  // Native arrows reach ProseMirror through the async selectionchange event.
+  await expect.poll(() => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.state.selection.from)).toBe(2);
   await page.keyboard.press('ArrowRight');
-  expect(await editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.state.selection.from)).toBe(3);
+  await expect.poll(() => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.state.selection.from)).toBe(3);
   await page.keyboard.press('Control+.');
   const normale = await cursorMetrics();
   expect(Math.abs(normale.y - normale.normalY)).toBeLessThan(1);
