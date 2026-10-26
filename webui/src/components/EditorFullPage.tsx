@@ -2,8 +2,9 @@ import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Check, Copy, FileText, Headphones, Loader2, Moon, Plus, Sun } from 'lucide-react';
 import type { Heading } from './RichTextEditor';
-import { prepareHtmlForClipboard } from '../utils';
-import { writeEditorClipboard } from '../editorClipboard';
+import { prepareHtmlForClipboardSync } from '../utils';
+import { createNativeClipboardFormats, writeEditorClipboard } from '../editorClipboard';
+import { prepareHtmlLineSpacing } from '../editorLineSpacing';
 import { clipboardPlainText } from '../documentFormatting';
 import { reportClientError } from '../diagnostics';
 import { ConfirmActionModal } from './modals/ConfirmActionModal';
@@ -110,6 +111,8 @@ export function EditorFullPage({
   const [isTocOpen, setIsTocOpen] = useState(false);
   const [headings, setHeadings] = useState<Heading[]>([]);
   const [isCopied, setIsCopied] = useState(false);
+  const [isCopying, setIsCopying] = useState(false);
+  const isCopyingRef = useRef(false);
   const [relinkSuccess, setRelinkSuccess] = useState(false);
   const [isRelinking, setIsRelinking] = useState(false);
   const [isRemovingAudio, setIsRemovingAudio] = useState(false);
@@ -202,16 +205,33 @@ export function EditorFullPage({
   }, [previewContent, flushAndClose, handleZoomChange]);
 
   const handleCopy = async () => {
-    const rawHtml = getHtmlRef.current?.() ?? lastPersistedRef.current;
-    const sourceRoot = document.querySelector<HTMLElement>('.tiptap-editor') ?? undefined;
-    const clipboardHtml = await prepareHtmlForClipboard(rawHtml, sourceRoot);
-    const temp = document.createElement('div');
-    temp.innerHTML = clipboardHtml;
+    if (isCopyingRef.current) return;
+    isCopyingRef.current = true;
+    setIsCopying(true);
     try {
-      await writeEditorClipboard(clipboardHtml, clipboardPlainText(temp), sourceRoot);
+      // The copy below blocks the page: let the button show it was pressed first.
+      // execCommand('copy') still runs well within the click's user activation on Chromium;
+      // WebKit (Safari, macOS WKWebView) only allows the copy while the click is handled.
+      if (!/Apple/.test(navigator.vendor ?? '')) {
+        await new Promise<void>(resolve => requestAnimationFrame(() => window.setTimeout(resolve)));
+      }
+      const rawHtml = getHtmlRef.current?.() ?? lastPersistedRef.current;
+      const sourceRoot = document.querySelector<HTMLElement>('.tiptap-editor') ?? undefined;
+      const clipboardHtml = prepareHtmlForClipboardSync(rawHtml, sourceRoot);
+      // The native formats already carry the plain text; parse it separately only for the HTML fallback.
+      let formats = createNativeClipboardFormats(clipboardHtml, sourceRoot, false, undefined, true);
+      if (!formats) {
+        const temp = document.createElement('div');
+        temp.innerHTML = clipboardHtml;
+        formats = { 'text/html': prepareHtmlLineSpacing(clipboardHtml), 'text/plain': clipboardPlainText(temp) };
+      }
+      await writeEditorClipboard(clipboardHtml, formats['text/plain'], sourceRoot, formats);
     } catch (error) {
       reportClientError('Clipboard error', error);
       return;
+    } finally {
+      isCopyingRef.current = false;
+      setIsCopying(false);
     }
     setIsCopied(true);
     if (copiedTimerRef.current) window.clearTimeout(copiedTimerRef.current);
@@ -291,8 +311,9 @@ export function EditorFullPage({
                 className={`settings-pill-button editor-fullpage-copy${isCopied ? ' is-copied' : ''}`}
                 title={isCopied ? 'Copiato!' : 'Copia tutto il documento mantenendo la formattazione, pronto da incollare in Google Docs o Word.'}
                 aria-label="Copia documento"
+                aria-busy={isCopying}
               >
-                {isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                {isCopied ? <Check className="w-4 h-4" /> : isCopying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
                 <span className="editor-fullpage-copy-label">{isCopied ? 'Copiato!' : 'Copia documento'}</span>
               </button>
               <div className="editor-fullpage-utilities">

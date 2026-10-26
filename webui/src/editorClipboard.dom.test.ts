@@ -47,6 +47,17 @@ describe('Editor native image clipboard', () => {
     expect(image.pe_to! + image.ee_eo!.eo_mt).toBe(27.75);
     expect(root.querySelectorAll('.editor-image-node')).toHaveLength(2);
   });
+  it('skips only a redundant portable pass for HTML that was already prepared', () => {
+    const html = `<h1>Titolo</h1><h2 style="color:#c00">Rosso</h2><p style="text-align:center;line-height:2">Centro <mark>evid</mark> <a href="https://x.it">link</a> H<sub>2</sub>O <u>sotto</u> <s>barrato</s></p><p></p><blockquote><p>Citazione</p></blockquote><ol type="a" start="3"><li><p>Uno</p><ul><li><p>Annidato</p></li></ul></li><li style="list-style-type:none"><p>Due</p></li></ol><table><tr><th><p>A</p></th><td colspan="2" style="background-color:#eee"><p>B</p></td></tr><tr><td></td><td><p style="margin-bottom:12pt">C</p></td><td>D</td></tr></table><h3>Dopo</h3><pre>codice</pre><p style="font-size:18px;margin-top:1em">Grande</p>${figure()}<p>fine<br>riga</p>`;
+    const prepared = prepareHtmlForClipboardSync(html);
+    const { 'text/html': skippedHtml, ...skipped } = createNativeClipboardFormats(prepared, undefined, false, undefined, true)!;
+    const { 'text/html': formattedHtml, ...formatted } = createNativeClipboardFormats(prepared)!;
+    expect(skipped).toEqual(formatted);
+    // jsdom may reorder a rewritten style attribute; compare its declarations.
+    const declarations = (source: string) => Array.from(new DOMParser().parseFromString(source, 'text/html').body.querySelectorAll('*'))
+      .map(element => `${element.tagName}:${(element.getAttribute('style') ?? '').split(';').map(rule => rule.trim()).filter(Boolean).sort().join(';')}`);
+    expect(declarations(skippedHtml)).toEqual(declarations(formattedHtml));
+  });
   it.each([jpeg, 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABkAAAAPo'])('sends Docs the stored image pixels at full resolution, displayed at the editor size', src => {
     const root = document.createElement('div');
     root.innerHTML = `<img src="${src}">`;

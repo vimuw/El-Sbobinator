@@ -58,8 +58,12 @@ export const clipboardImageSize = (img: HTMLImageElement, sourceRoot?: HTMLEleme
   return null;
 };
 
-/** Return null for content we cannot represent faithfully in the native format. */
-export function createNativeClipboardFormats(html: string, sourceRoot?: HTMLElement, inlineSelection = false, sourceFigures?: readonly HTMLElement[]): ClipboardFormats | null {
+/**
+ * Return null for content we cannot represent faithfully in the native format.
+ * `portable` skips formatPortableHtml for HTML that prepareHtmlForClipboardSync
+ * just produced unchanged: the pass is idempotent, and costs tens of ms on a long lecture.
+ */
+export function createNativeClipboardFormats(html: string, sourceRoot?: HTMLElement, inlineSelection = false, sourceFigures?: readonly HTMLElement[], portable = false): ClipboardFormats | null {
   const body = new DOMParser().parseFromString(html, 'text/html').body;
   const displayedFigures = sourceFigures ?? Array.from(sourceRoot?.querySelectorAll<HTMLElement>('.editor-image-node') ?? []);
   let figureIndex = 0;
@@ -78,7 +82,7 @@ export function createNativeClipboardFormats(html: string, sourceRoot?: HTMLElem
     if (!size?.width || !size.height) return null;
     sizes.set(img, size);
   }
-  formatPortableHtml(body);
+  if (!portable) formatPortableHtml(body);
   const spacing = paragraphSpacing(body);
   const lineSpacing = nativeLineSpacingReader();
 

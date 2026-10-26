@@ -244,6 +244,62 @@ describe('EditorFullPage autosave', () => {
     }
   });
 
+  it('shows the pressed copy before the blocking clipboard work and ignores repeated clicks', async () => {
+    const execDescriptor = Object.getOwnPropertyDescriptor(document, 'execCommand');
+    // jsdom reports Apple as its vendor; the desktop app on Windows runs Chromium (WebView2).
+    const vendor = vi.spyOn(navigator, 'vendor', 'get').mockReturnValue('Google Inc.');
+    const exec = vi.fn(() => {
+      const event = new Event('copy', { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'clipboardData', { value: { setData: vi.fn() } });
+      document.activeElement!.dispatchEvent(event);
+      return true;
+    });
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: exec });
+    try {
+      editorMockState.html = '<p>Testo</p>';
+      render(<EditorFullPage {...baseProps} />);
+      await waitFor(() => expect(screen.getByTestId('rich-text-editor')).toBeTruthy());
+      // The motion mock remounts the page on every render, so query the button afresh.
+      const copyBtn = () => screen.getByRole('button', { name: 'Copia documento' });
+      fireEvent.click(copyBtn());
+      fireEvent.click(copyBtn());
+      // The busy state paints first; the synchronous copy waits for the next frame.
+      expect(copyBtn().getAttribute('aria-busy')).toBe('true');
+      expect(exec).not.toHaveBeenCalled();
+      await waitFor(() => expect(copyBtn().textContent).toContain('Copiato!'));
+      expect(exec).toHaveBeenCalledTimes(1);
+      expect(copyBtn().getAttribute('aria-busy')).toBe('false');
+    } finally {
+      vendor.mockRestore();
+      if (execDescriptor) Object.defineProperty(document, 'execCommand', execDescriptor);
+      else Reflect.deleteProperty(document, 'execCommand');
+    }
+  });
+
+  it('starts the copy inside the click on WebKit, which ends user activation after a frame', async () => {
+    const execDescriptor = Object.getOwnPropertyDescriptor(document, 'execCommand');
+    const vendor = vi.spyOn(navigator, 'vendor', 'get').mockReturnValue('Apple Computer, Inc.');
+    const exec = vi.fn(() => {
+      const event = new Event('copy', { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'clipboardData', { value: { setData: vi.fn() } });
+      document.activeElement!.dispatchEvent(event);
+      return true;
+    });
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: exec });
+    try {
+      editorMockState.html = '<p>Testo</p>';
+      render(<EditorFullPage {...baseProps} />);
+      await waitFor(() => expect(screen.getByTestId('rich-text-editor')).toBeTruthy());
+      fireEvent.click(screen.getByRole('button', { name: 'Copia documento' }));
+      expect(exec).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Copia documento' }).textContent).toContain('Copiato!'));
+    } finally {
+      vendor.mockRestore();
+      if (execDescriptor) Object.defineProperty(document, 'execCommand', execDescriptor);
+      else Reflect.deleteProperty(document, 'execCommand');
+    }
+  });
+
   it('supports domain-grouped props and binds saveControllerRef', async () => {
     const saveControllerRef = { current: null };
     render(
