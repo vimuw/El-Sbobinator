@@ -19,6 +19,8 @@ interface DiagnosticsSectionProps {
   onRunValidation: () => void;
   validationResult: ValidationResult | null;
   onCopyReport: (sessionDir?: string) => Promise<void>;
+  // FFmpeg, disk and session-folder checks only exist on desktop.
+  showEnvironmentCheck?: boolean;
 }
 
 export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(({
@@ -26,6 +28,7 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
   onRunValidation,
   validationResult,
   onCopyReport,
+  showEnvironmentCheck = true,
 }) => {
   const [copiedToast, setCopiedToast] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
@@ -109,83 +112,85 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
         {supportError && <p role="alert" className="text-xs text-[var(--error-text)]">{supportError}</p>}
       </section>
 
-      <section aria-labelledby="diagnostic-environment-heading" className="space-y-3 border-t border-[var(--border-default)] pt-4">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="space-y-0.5 min-w-0">
-            <SettingsSectionHeading id="diagnostic-environment-heading">Verifica ambiente</SettingsSectionHeading>
-            <p className="text-xs text-[var(--text-secondary)]">
-              Controlla chiave API, FFmpeg e cartella sessioni. Non consuma quota.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onRunValidation}
-            disabled={isValidatingEnvironment}
-            className="app-button-secondary is-settings-action shrink-0"
-            title={isValidatingEnvironment ? 'Verifica in corso…' : hasRun ? 'Riesegui verifica ambiente' : 'Verifica ambiente'}
-            aria-label={hasRun ? 'Riesegui verifica ambiente' : 'Verifica ambiente'}
-          >
-            {isValidatingEnvironment ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--accent-text)]" />
-                <span>Verifica in corso...</span>
-              </>
-            ) : (
-              <>
-                <RefreshCw className="w-3.5 h-3.5 text-[var(--accent-text)] transition-transform duration-500 ease-out settings-refresh-icon" />
-                <span>{hasRun ? 'Riesegui' : 'Verifica ora'}</span>
-              </>
-            )}
-          </button>
-        </div>
-
-        {validationResult && (() => {
-          const hasErrors = !validationResult.ok || problems.some(c => c.status === 'error');
-          const hasWarnings = !hasErrors && (Boolean(validationResult.has_warnings) || problems.length > 0);
-          const bannerClass = hasErrors ? 'is-error' : hasWarnings ? 'is-warning' : 'is-success';
-          const textColor = hasErrors ? 'var(--error-text)' : hasWarnings ? 'var(--warning-text)' : 'var(--success-text)';
-
-          return (
-            <div className={`alert-card ${bannerClass} flex-row items-center gap-2.5 animate-fade-in`}>
-              {hasErrors ? (
-                <AlertCircle className="w-4 h-4 text-[var(--error-text)] shrink-0" />
-              ) : hasWarnings ? (
-                <AlertTriangle className="w-4 h-4 text-[var(--warning-text)] shrink-0" />
-              ) : (
-                <CheckCircle2 className="w-4 h-4 text-[var(--success-text)] shrink-0" />
-              )}
-              <span className="text-sm font-bold" style={{ color: textColor }}>
-                {validationResult.summary}
-              </span>
+      {showEnvironmentCheck && (
+        <section aria-labelledby="diagnostic-environment-heading" className="space-y-3 border-t border-[var(--border-default)] pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="space-y-0.5 min-w-0">
+              <SettingsSectionHeading id="diagnostic-environment-heading">Verifica ambiente</SettingsSectionHeading>
+              <p className="text-xs text-[var(--text-secondary)]">
+                Controlla chiave API, FFmpeg e cartella sessioni. Non consuma quota.
+              </p>
             </div>
-          );
-        })()}
+            <button
+              type="button"
+              onClick={onRunValidation}
+              disabled={isValidatingEnvironment}
+              className="app-button-secondary is-settings-action shrink-0"
+              title={isValidatingEnvironment ? 'Verifica in corso…' : hasRun ? 'Riesegui verifica ambiente' : 'Verifica ambiente'}
+              aria-label={hasRun ? 'Riesegui verifica ambiente' : 'Verifica ambiente'}
+            >
+              {isValidatingEnvironment ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--accent-text)]" />
+                  <span>Verifica in corso...</span>
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 text-[var(--accent-text)] transition-transform duration-500 ease-out settings-refresh-icon" />
+                  <span>{hasRun ? 'Riesegui' : 'Verifica ora'}</span>
+                </>
+              )}
+            </button>
+          </div>
 
-        {problems.length > 0 && (
-          <ul aria-label="Problemi rilevati" className="divide-y divide-[var(--border-default)] border-t border-[var(--border-default)]">
-            {problems.map(check => (
-              <li key={check.id} className="flex justify-between items-start py-3 gap-3">
-                <div className="flex-1 min-w-0 space-y-0.5">
-                  <span className="text-sm font-bold text-[var(--text-primary)]">{check.label}</span>
-                  {check.message && (
-                    <p className="text-xs text-[var(--text-secondary)] leading-relaxed">{check.message}</p>
-                  )}
-                  {check.details && (
-                    <p className="text-xs font-mono text-[var(--text-secondary)] break-all whitespace-pre-wrap leading-relaxed">{check.details}</p>
-                  )}
-                </div>
-                <div className="shrink-0 pl-2">
-                  {check.status === 'warning' ? (
-                    <AlertTriangle className="w-4 h-4 text-[var(--warning-text)]" aria-label="Avviso" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 text-[var(--error-text)]" aria-label="Errore" />
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+          {validationResult && (() => {
+            const hasErrors = !validationResult.ok || problems.some(c => c.status === 'error');
+            const hasWarnings = !hasErrors && (Boolean(validationResult.has_warnings) || problems.length > 0);
+            const bannerClass = hasErrors ? 'is-error' : hasWarnings ? 'is-warning' : 'is-success';
+            const textColor = hasErrors ? 'var(--error-text)' : hasWarnings ? 'var(--warning-text)' : 'var(--success-text)';
+
+            return (
+              <div className={`alert-card ${bannerClass} flex-row items-center gap-2.5 animate-fade-in`}>
+                {hasErrors ? (
+                  <AlertCircle className="w-4 h-4 text-[var(--error-text)] shrink-0" />
+                ) : hasWarnings ? (
+                  <AlertTriangle className="w-4 h-4 text-[var(--warning-text)] shrink-0" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4 text-[var(--success-text)] shrink-0" />
+                )}
+                <span className="text-sm font-bold" style={{ color: textColor }}>
+                  {validationResult.summary}
+                </span>
+              </div>
+            );
+          })()}
+
+          {problems.length > 0 && (
+            <ul aria-label="Problemi rilevati" className="divide-y divide-[var(--border-default)] border-t border-[var(--border-default)]">
+              {problems.map(check => (
+                <li key={check.id} className="flex justify-between items-start py-3 gap-3">
+                  <div className="flex-1 min-w-0 space-y-0.5">
+                    <span className="text-sm font-bold text-[var(--text-primary)]">{check.label}</span>
+                    {check.message && (
+                      <p className="text-xs text-[var(--text-secondary)] leading-relaxed">{check.message}</p>
+                    )}
+                    {check.details && (
+                      <p className="text-xs font-mono text-[var(--text-secondary)] break-all whitespace-pre-wrap leading-relaxed">{check.details}</p>
+                    )}
+                  </div>
+                  <div className="shrink-0 pl-2">
+                    {check.status === 'warning' ? (
+                      <AlertTriangle className="w-4 h-4 text-[var(--warning-text)]" aria-label="Avviso" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-[var(--error-text)]" aria-label="Errore" />
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
     </div>
   );
 });

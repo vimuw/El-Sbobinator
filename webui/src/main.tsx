@@ -99,8 +99,14 @@ class RootErrorBoundary extends React.Component<React.PropsWithChildren, { hasEr
 }
 
 async function mountApp() {
-  validateDesktopBuild(APP_VERSION);
-  if (!window.elDesktopStartup) await initBrowserHost();
+  // The static web build runs everything in the page; Vite drops the other branch from each bundle.
+  if (import.meta.env.MODE === 'web') {
+    const { initWebHost } = await import('./web/webHost');
+    initWebHost();
+  } else {
+    validateDesktopBuild(APP_VERSION);
+    if (!window.elDesktopStartup) await initBrowserHost();
+  }
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <RootErrorBoundary>

@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import { ChevronDown, MoreVertical, X } from 'lucide-react';
 import { getSearchMatches, type SearchMatch } from '../editorExtensions';
+import { shortcutLabel } from '../keyboardLabels';
 
 export const FindReplacePanel = ({
   editor,
@@ -209,7 +210,7 @@ export const FindReplacePanel = ({
         <span className="find-bar-count">
           {findText ? (matchCount > 0 ? `${currentMatch} di ${matchCount}` : 'Nessun risultato') : ''}
         </span>
-        <button type="button" onClick={handlePrev} className="find-bar-btn" title="Precedente (Shift+Invio)" disabled={matchCount === 0}>
+        <button type="button" onClick={handlePrev} className="find-bar-btn" title={shortcutLabel('Precedente (Shift+Invio)')} disabled={matchCount === 0}>
           <ChevronDown size={15} style={{ transform: 'rotate(180deg)' }} />
         </button>
         <button type="button" onClick={handleNext} className="find-bar-btn" title="Successivo (Invio)" disabled={matchCount === 0}>

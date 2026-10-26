@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { ArchiveFolder, ArchiveSession, LowDiskWarning } from '../bridge';
 import type { FileItem, ProcessingAction } from '../appState';
+import { deletedFrom } from '../hostCapabilities';
 
 export type ConfirmActionState =
   | { type: 'stop-processing' }
@@ -104,7 +105,7 @@ export function useConfirmModal({
     if (confirmAction.type === 'delete-archive-session') {
       return {
         title: 'Eliminare questa sbobina?',
-        description: `"${confirmAction.name}" e tutti i suoi dati di sessione verranno eliminati definitivamente dal disco. L'operazione è irreversibile.`,
+        description: `"${confirmAction.name}" e tutti i suoi dati di sessione verranno eliminati definitivamente ${deletedFrom()}. L'operazione è irreversibile.`,
         confirmLabel: 'Elimina definitivamente',
         cancelLabel: 'Annulla',
       };
@@ -113,7 +114,7 @@ export function useConfirmModal({
       const count = confirmAction.sessions.length;
       return {
         title: count === 1 ? 'Eliminare questa sbobina?' : `Eliminare ${count} sbobine?`,
-        description: `Tutti i file e i dati di sessione relativi alle ${count} sbobine selezionate verranno eliminati definitivamente dal disco. L'operazione è irreversibile.`,
+        description: `Tutti i file e i dati di sessione relativi alle ${count} sbobine selezionate verranno eliminati definitivamente ${deletedFrom()}. L'operazione è irreversibile.`,
         confirmLabel: count === 1 ? 'Elimina definitivamente' : `Elimina ${count} sbobine`,
         cancelLabel: 'Annulla',
       };

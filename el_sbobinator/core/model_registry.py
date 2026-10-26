@@ -2,12 +2,15 @@
 Supported Gemini model registry and helpers.
 
 This keeps model allowlists, defaults and small sanitization helpers in one
-place so config/session/UI logic stay aligned.
+place so config/session/UI logic stay aligned. The options themselves live in
+generation_profile.json, shared with the web build.
 """
 
 from __future__ import annotations
 
 from typing import Any, NotRequired, TypedDict
+
+from el_sbobinator.core.generation_profile import GENERATION_PROFILE
 
 
 class ModelOption(TypedDict):
@@ -21,49 +24,18 @@ class ModelOption(TypedDict):
     is_default: NotRequired[bool]
 
 
-SUPPORTED_MODELS: tuple[str, ...] = (
-    "gemini-2.5-flash",
-    "gemini-3.6-flash",
-    "gemini-3.8-flash",
-)
+_MODELS = GENERATION_PROFILE["models"]
 
-DEFAULT_MODEL = "gemini-3.6-flash"
+# generation_profile.json notes: gemini-2.5-flash has phase1_thinking_budget
+# because normal chunks think 1-5k tokens and a stuck chunk reached 63k and took
+# almost 7 minutes. Gemini 3 models take thinking_level instead.
+MODEL_OPTIONS: tuple[ModelOption, ...] = tuple(_MODELS["options"])
 
-_LEGACY_MODEL_ALIASES = {
-    "gemini-3.5-flash": "gemini-3.6-flash",
-    "gemini-3.7-flash": "gemini-3.8-flash",
-}
+SUPPORTED_MODELS: tuple[str, ...] = tuple(str(opt["id"]) for opt in MODEL_OPTIONS)
 
-MODEL_OPTIONS: tuple[ModelOption, ...] = (
-    {
-        "id": "gemini-2.5-flash",
-        "label": "Gemini 2.5 Flash",
-        "summary": "",
-        "default_chunk_minutes": 15,
-        "default_macro_char_limit": 22000,
-        "phase1_temperature": 0.35,
-        # Normal chunks think 1-5k tokens; a stuck chunk reached 63k and took
-        # almost 7 minutes. Gemini 3 models take thinking_level instead.
-        "phase1_thinking_budget": 16384,
-    },
-    {
-        "id": "gemini-3.6-flash",
-        "label": "Gemini 3.6 Flash",
-        "summary": "",
-        "default_chunk_minutes": 15,
-        "default_macro_char_limit": 22000,
-        "phase1_temperature": 0.35,
-        "is_default": True,
-    },
-    {
-        "id": "gemini-3.8-flash",
-        "label": "Gemini 3.8 Flash",
-        "summary": "",
-        "default_chunk_minutes": 15,
-        "default_macro_char_limit": 22000,
-        "phase1_temperature": 0.35,
-    },
-)
+DEFAULT_MODEL: str = _MODELS["default"]
+
+_LEGACY_MODEL_ALIASES: dict[str, str] = dict(_MODELS["legacy_aliases"])
 
 
 def is_supported_model(model_name: Any) -> bool:

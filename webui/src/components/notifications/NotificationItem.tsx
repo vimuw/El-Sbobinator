@@ -217,7 +217,7 @@ export function NotificationItem({
         </div>
       </div>
 
-      {/* Quick Dismiss / Archive Button (hover) */}
+      {/* Quick Dismiss / Archive Button: shown on hover, keyboard focus, and always on touch screens. */}
       <button
         onClick={(e) => {
           e.stopPropagation();
@@ -225,7 +225,7 @@ export function NotificationItem({
           onDelete(notification.id);
         }}
         disabled={isLoading}
-        className="absolute top-2.5 right-2.5 p-1 rounded-full opacity-0 group-hover:opacity-100 hover:bg-neutral-500/15 transition-all text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+        className="absolute top-2.5 right-2.5 p-1 rounded-full opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 hover:bg-neutral-500/15 transition-all text-[var(--text-muted)] hover:text-[var(--text-primary)]"
         title="Archivia"
         aria-label="Archivia notifica"
         style={{ cursor: isLoading ? 'default' : 'pointer' }}

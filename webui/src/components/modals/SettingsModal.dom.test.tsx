@@ -12,6 +12,9 @@ import {
 } from './SettingsModal';
 import type { ModelOption } from '../../bridge';
 import { STORAGE_KEYS } from '../../storageKeys';
+import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../../hostCapabilities';
+import { WEB_CAPABILITIES } from '../../web/webHost';
+import { APP_VERSION } from '../../branding';
 
 const motionCache = new Map<string, React.ForwardRefExoticComponent<React.PropsWithoutRef<Record<string, unknown>> & React.RefAttributes<unknown>>>();
 vi.mock('motion/react', () => ({
@@ -1235,5 +1238,63 @@ describe('SettingsModal — validate environment', () => {
     expect(buttonTexts[0]).toContain('Generale');
     expect(buttonTexts[1]).toContain('Archiviazione');
     expect(buttonTexts[2]).toContain('Assistenza');
+  });
+});
+
+describe('SettingsModal on the web host', () => {
+  beforeEach(() => {
+    setHostCapabilities(WEB_CAPABILITIES);
+  });
+  afterEach(() => {
+    setHostCapabilities(DESKTOP_CAPABILITIES);
+  });
+
+  it('shows browser keys with the shared-device warning and hides desktop-only sections', () => {
+    render(<SettingsModal {...makeProps({ apiKey: 'AIzaSyPrimary1234567890123', fallbackKeys: ['AIzaSyReserve1234567890123'] })} />);
+
+    expect((screen.getByLabelText('Chiavi API Gemini, una per riga') as HTMLTextAreaElement).value)
+      .toBe('AIzaSyPrimary1234567890123\nAIzaSyReserve1234567890123');
+    expect(screen.getByTestId('shared-device-warning').textContent).toContain('solo in questo browser');
+    expect(screen.getByRole('button', { name: 'Rimuovi chiavi' })).toBeTruthy();
+    expect(screen.queryByText('Chiavi API')).toBeNull();
+    expect(screen.queryByText('Notifiche di sistema')).toBeNull();
+    expect(screen.queryByText('Versione e aggiornamenti')).toBeNull();
+    // No updater on the web: the version is shown, updates arrive with the next load.
+    expect(screen.getByTestId('web-version').textContent).toContain(`${APP_VERSION}. Gli aggiornamenti arrivano da soli`);
+
+    fireEvent.click(screen.getByRole('button', { name: /Assistenza/ }));
+    expect(screen.getByRole('button', { name: 'Copia report diagnostico' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Verifica ambiente' })).toBeNull();
+  });
+
+  it('splits the field into main and reserve keys, one per line', () => {
+    const setApiKey = vi.fn();
+    const setFallbackKeys = vi.fn();
+    render(<SettingsModal {...makeProps({ apiKey: '', setApiKey, setFallbackKeys })} />);
+
+    fireEvent.change(screen.getByLabelText('Chiavi API Gemini, una per riga'), {
+      target: { value: ' AIzaSyOne12345678901234567 \n\nAIzaSyTwo12345678901234567\nAIzaSyOne12345678901234567' },
+    });
+
+    expect(setApiKey).toHaveBeenLastCalledWith('AIzaSyOne12345678901234567');
+    expect(setFallbackKeys).toHaveBeenLastCalledWith(['AIzaSyTwo12345678901234567']);
+  });
+
+  it('removes the keys from the browser right away', async () => {
+    const saveSettings = vi.fn().mockResolvedValue({ ok: true });
+    const setApiKey = vi.fn();
+    const setFallbackKeys = vi.fn();
+    const onSettingsSaved = vi.fn();
+    setPywebview({ save_settings: saveSettings });
+    render(<SettingsModal {...makeProps({ apiKey: 'AIzaSyPrimary1234567890123', setApiKey, setFallbackKeys, onSettingsSaved, preferredModel: 'gemini-3.6-flash' })} />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Rimuovi chiave' }));
+    });
+
+    expect(saveSettings).toHaveBeenCalledWith('', [], 'gemini-3.6-flash');
+    expect(setApiKey).toHaveBeenCalledWith('');
+    expect(setFallbackKeys).toHaveBeenCalledWith([]);
+    expect(onSettingsSaved).toHaveBeenCalledTimes(1);
   });
 });

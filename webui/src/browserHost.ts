@@ -1,36 +1,7 @@
 import type { FileDescriptor } from './appState';
 import type { PywebviewApi } from './bridge';
+import { setHostCapabilities } from './hostCapabilities';
 import { STORAGE_KEYS } from './storageKeys';
-
-export interface HostCapabilities {
-  fileUpload: boolean;
-  fileDrop: boolean;
-  nativeFolderPicker: boolean;
-  openLocalPath: boolean;
-  osNotifications: boolean;
-  updateInstallation: boolean;
-  realPipeline: boolean;
-  credentialPersistence: boolean;
-  windowControls: boolean;
-}
-
-const DESKTOP_CAPABILITIES: HostCapabilities = {
-  fileUpload: true,
-  fileDrop: true,
-  nativeFolderPicker: true,
-  openLocalPath: true,
-  osNotifications: true,
-  updateInstallation: true,
-  realPipeline: true,
-  credentialPersistence: true,
-  windowControls: true,
-};
-
-let hostCapabilities: HostCapabilities = DESKTOP_CAPABILITIES;
-
-export function getHostCapabilities(): HostCapabilities {
-  return hostCapabilities;
-}
 
 let sessionToken = '';
 let lastSequence = 0;
@@ -335,9 +306,7 @@ export async function initBrowserHost(): Promise<boolean> {
     sessionToken = data.session_token || '';
     isolateBrowserStorage(sessionToken);
     lastSequence = Number(data.event_sequence || 0);
-    if (data.capabilities) {
-      hostCapabilities = { ...DESKTOP_CAPABILITIES, ...data.capabilities };
-    }
+    setHostCapabilities({ kind: 'browser', ...(data.capabilities ?? {}) });
 
     window.pywebview = {
       api: createBrowserPywebviewApi(),

@@ -3,6 +3,7 @@ import { clipboardPlainText, DOCUMENT_FORMATTING, EDITOR_CONTENT_WIDTH_PX, forma
 import { createClipboardEquation, type ClipboardEquation } from './clipboardEquations';
 import { nativeLineSpacingReader, prepareHtmlLineSpacing } from './editorLineSpacing';
 import { videoLink } from './editorLinks';
+import { getHostCapabilities } from './hostCapabilities';
 
 // Docs ignores CSS floats on HTML paste. Its native clipboard slice carries the
 // positioned entities. Keep this adapter separate from saved editor HTML.
@@ -463,10 +464,24 @@ export function setClipboardFormats(event: ClipboardEvent, formats: ClipboardFor
   return true;
 }
 
-/** Button/context-menu copies use the same ClipboardEvent formats as Ctrl+C. */
+/**
+ * Web build in Safari/WebKit (iPad): the hidden-textarea copy below pops up the on-screen keyboard,
+ * and Safari keeps custom clipboard types to the page's own origin, so Google Docs would only get
+ * HTML anyway. There the copy goes through navigator.clipboard.write, started inside the tap.
+ */
+function prefersAsyncClipboard(): boolean {
+  return getHostCapabilities().kind === 'web'
+    && typeof navigator !== 'undefined' && /Apple/.test(navigator.vendor ?? '')
+    && typeof ClipboardItem !== 'undefined' && typeof navigator.clipboard?.write === 'function';
+}
+
+/**
+ * Button/context-menu copies use the same ClipboardEvent formats as Ctrl+C. The write starts
+ * before the first await: Safari only allows it while the tap is being handled.
+ */
 export async function writeEditorClipboard(html: string, plainText: string, sourceRoot?: HTMLElement, preparedFormats?: ClipboardFormats): Promise<void> {
   const formats = preparedFormats ?? createNativeClipboardFormats(html, sourceRoot);
-  if (!formats || !formats[NATIVE_SLICE_MIME]) {
+  if (!formats || !formats[NATIVE_SLICE_MIME] || prefersAsyncClipboard()) {
     await navigator.clipboard.write([new ClipboardItem({
       'text/html': new Blob([formats?.['text/html'] ?? prepareHtmlLineSpacing(html)], { type: 'text/html' }),
       'text/plain': new Blob([formats?.['text/plain'] ?? plainText], { type: 'text/plain' }),

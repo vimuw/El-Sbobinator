@@ -2,6 +2,8 @@ import React from 'react';
 import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EditorFullPage } from './EditorFullPage';
+import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
+import { WEB_CAPABILITIES } from '../web/webHost';
 
 const editorMockState = vi.hoisted(() => ({ html: '<p>editor content</p>' }));
 
@@ -222,12 +224,15 @@ describe('EditorFullPage autosave', () => {
     }
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { write } });
     Object.defineProperty(globalThis, 'ClipboardItem', { configurable: true, value: TestClipboardItem });
+    // The macOS desktop app runs in WKWebView (Apple vendor too): it keeps the Docs-native formats.
+    const vendor = vi.spyOn(navigator, 'vendor', 'get').mockReturnValue('Apple Computer, Inc.');
     try {
       editorMockState.html = '<h2>Appunti corretti</h2><p>Testo <strong>importante</strong></p>';
       render(<EditorFullPage {...baseProps} />);
       await waitFor(() => expect(screen.getByTestId('rich-text-editor')).toBeTruthy());
       fireEvent.click(screen.getByRole('button', { name: 'Copia documento' }));
-      await waitFor(() => expect(formats['text/html']).toBeTruthy());
+      // Safari rejects clipboard writes that start after the click handler has returned.
+      expect(formats['text/html']).toBeTruthy();
       const copied = new DOMParser().parseFromString(formats['text/html'], 'text/html');
       expect(copied.querySelector('strong')?.textContent).toBe('importante');
       expect(copied.querySelector('h2')?.style.fontSize).toBe('16pt');
@@ -235,6 +240,49 @@ describe('EditorFullPage autosave', () => {
       expect(formats['application/x-vnd.google-docs-document-slice-clip+wrapped']).toBeTruthy();
       expect(write).not.toHaveBeenCalled();
     } finally {
+      vendor.mockRestore();
+      if (clipboardDescriptor) Object.defineProperty(navigator, 'clipboard', clipboardDescriptor);
+      else Reflect.deleteProperty(navigator, 'clipboard');
+      if (clipboardItemDescriptor) Object.defineProperty(globalThis, 'ClipboardItem', clipboardItemDescriptor);
+      else Reflect.deleteProperty(globalThis, 'ClipboardItem');
+      if (execDescriptor) Object.defineProperty(document, 'execCommand', execDescriptor);
+      else Reflect.deleteProperty(document, 'execCommand');
+    }
+  });
+
+  it('web on iPad Safari: writes the clipboard with ClipboardItem inside the tap, no hidden textarea', async () => {
+    const write = vi.fn().mockResolvedValue(undefined);
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    const clipboardItemDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'ClipboardItem');
+    const execDescriptor = Object.getOwnPropertyDescriptor(document, 'execCommand');
+    const vendor = vi.spyOn(navigator, 'vendor', 'get').mockReturnValue('Apple Computer, Inc.');
+    const execCommand = vi.fn(() => true);
+    class TestClipboardItem {
+      constructor(public data: Record<string, Blob>) {}
+    }
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: execCommand });
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { write } });
+    Object.defineProperty(globalThis, 'ClipboardItem', { configurable: true, value: TestClipboardItem });
+    setHostCapabilities({ kind: 'web' });
+    try {
+      editorMockState.html = '<h2>Appunti corretti</h2><p>Testo <strong>importante</strong></p><ul><li><p>uno</p><ul><li><p>due</p></li></ul></li></ul>';
+      render(<EditorFullPage {...baseProps} />);
+      await waitFor(() => expect(screen.getByTestId('rich-text-editor')).toBeTruthy());
+      fireEvent.click(screen.getByRole('button', { name: 'Copia documento' }));
+      // Started before the click handler returned: Safari refuses a write that starts later.
+      expect(write).toHaveBeenCalledTimes(1);
+      expect(execCommand).not.toHaveBeenCalled();
+      const [item] = write.mock.calls[0][0] as TestClipboardItem[];
+      expect(Object.keys(item.data).sort()).toEqual(['text/html', 'text/plain']);
+      const copied = new DOMParser().parseFromString(await item.data['text/html'].text(), 'text/html');
+      expect(copied.querySelector('strong')?.textContent).toBe('importante');
+      expect(copied.querySelector('h2')?.style.fontSize).toBe('16pt');
+      expect(copied.querySelector('ul ul li')?.textContent).toBe('due');
+      expect(await item.data['text/plain'].text()).toContain('Testo importante');
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Copia documento' }).textContent).toContain('Copiato!'));
+    } finally {
+      setHostCapabilities(DESKTOP_CAPABILITIES);
+      vendor.mockRestore();
       if (clipboardDescriptor) Object.defineProperty(navigator, 'clipboard', clipboardDescriptor);
       else Reflect.deleteProperty(navigator, 'clipboard');
       if (clipboardItemDescriptor) Object.defineProperty(globalThis, 'ClipboardItem', clipboardItemDescriptor);
@@ -410,6 +458,82 @@ describe('EditorFullPage autosave', () => {
       expect((await screen.findByTestId('rich-text-editor')).getAttribute('data-bottom-inset')).toBe('62');
     } finally {
       rect.mockRestore();
+    }
+  });
+});
+
+describe('EditorFullPage on hosts without session audio', () => {
+  afterEach(() => setHostCapabilities(DESKTOP_CAPABILITIES));
+
+  it('shows no audio dock and no player shortcuts', async () => {
+    setHostCapabilities({ kind: 'web', editorAudio: false });
+    render(<EditorFullPage {...baseProps} audio={{ src: null, relinkNeeded: true, onRelink: vi.fn(), init: {}, onStateChange: vi.fn() }} />);
+    await waitFor(() => expect(screen.getByTestId('rich-text-editor')).toBeTruthy());
+
+    expect(screen.queryByText('Nessun audio collegato')).toBeNull();
+    expect(screen.queryByText('Audio non trovato')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Aggiungi audio|Ricollega audio/ })).toBeNull();
+    expect(screen.getByTestId('rich-text-editor').getAttribute('data-bottom-inset')).toBe('0');
+  });
+});
+
+describe('EditorFullPage on the web build', () => {
+  afterEach(() => setHostCapabilities(DESKTOP_CAPABILITIES));
+
+  it('docks the player for the audio kept in the browser, and offers to add one when there is none', async () => {
+    setHostCapabilities(WEB_CAPABILITIES);
+    const { container, rerender } = render(<EditorFullPage {...baseProps} audioSrc="blob:https://web.test/1" onClose={vi.fn()} />);
+    expect(container.querySelector('.editor-player-dock [data-testid="audio-player"]')).not.toBeNull();
+
+    const onRelink = vi.fn().mockResolvedValue(true);
+    rerender(<EditorFullPage {...baseProps} audio={{ src: null, relinkNeeded: false, onRelink, init: {}, onStateChange: vi.fn() }} />);
+    expect(screen.getByText('Nessun audio collegato')).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Aggiungi audio/ }));
+    });
+    expect(onRelink).toHaveBeenCalledTimes(1);
+  });
+
+  it('fits above the on-screen keyboard so the player and the caret stay visible', async () => {
+    vi.stubGlobal('innerHeight', 1180);
+    const viewport = Object.assign(new EventTarget(), { height: 1180, offsetTop: 0, scale: 1 });
+    vi.stubGlobal('visualViewport', viewport);
+    try {
+      setHostCapabilities(WEB_CAPABILITIES);
+      const { container } = render(<EditorFullPage {...baseProps} audioSrc="blob:https://web.test/1" />);
+      await waitFor(() => expect(screen.getByTestId('rich-text-editor')).toBeTruthy());
+      // Queried each time: the motion mock remounts the element on every render.
+      const page = () => container.querySelector<HTMLElement>('.editor-fullpage')!;
+      expect(page().style.bottom).toBe('');
+
+      act(() => {
+        Object.assign(viewport, { height: 760, offsetTop: 40 });
+        viewport.dispatchEvent(new Event('resize'));
+      });
+      expect(page().style.top).toBe('40px');
+      expect(page().style.bottom).toBe('380px');
+
+      act(() => {
+        Object.assign(viewport, { height: 1180, offsetTop: 0 });
+        viewport.dispatchEvent(new Event('resize'));
+      });
+      expect(page().style.bottom).toBe('');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe('EditorFullPage on the desktop with a visual viewport', () => {
+  it('keeps the full window: pywebview resizes the page itself', () => {
+    vi.stubGlobal('innerHeight', 1180);
+    const viewport = Object.assign(new EventTarget(), { height: 700, offsetTop: 0, scale: 1 });
+    vi.stubGlobal('visualViewport', viewport);
+    try {
+      const { container } = render(<EditorFullPage {...baseProps} />);
+      expect(container.querySelector<HTMLElement>('.editor-fullpage')!.style.bottom).toBe('');
+    } finally {
+      vi.unstubAllGlobals();
     }
   });
 });

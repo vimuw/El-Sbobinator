@@ -2,6 +2,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import type { ArchiveFolder, ArchiveSession } from '../../bridge';
 import { DraggableSessionCard, SortableSessionCard } from './SessionCard';
+import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../../hostCapabilities';
 
 vi.mock('@dnd-kit/sortable', () => ({
   useSortable: () => ({
@@ -332,5 +333,34 @@ describe('SessionCard components selection styling', () => {
       expect(card2.style.borderColor).toBe('');
       expect(card2.style.background).toBe('');
     });
+  });
+});
+
+describe('SessionCard on hosts without local folders', () => {
+  it('offers "Apri cartella" only when the host can open local paths', () => {
+    const renderCard = () => render(
+      <DraggableSessionCard
+        session={mockSession}
+        allFolders={mockFolders}
+        onAssignToFolder={vi.fn()}
+        onRemoveFromFolder={vi.fn()}
+        onPreview={vi.fn()}
+        onOpenFile={vi.fn()}
+        onDeleteSession={vi.fn()}
+      />,
+    );
+    const first = renderCard();
+    fireEvent.click(screen.getByLabelText('Altre opzioni'));
+    expect(screen.getByText('Apri cartella')).toBeTruthy();
+    first.unmount();
+
+    setHostCapabilities({ kind: 'web', openLocalPath: false });
+    try {
+      renderCard();
+      fireEvent.click(screen.getByLabelText('Altre opzioni'));
+      expect(screen.queryByText('Apri cartella')).toBeNull();
+    } finally {
+      setHostCapabilities(DESKTOP_CAPABILITIES);
+    }
   });
 });

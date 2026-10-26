@@ -2,6 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import { Link2, Link2Off } from 'lucide-react';
+import { shortcutLabel } from '../../../keyboardLabels';
 
 export const LinkButton = ({ editor, openRequest = 0 }: { editor: TiptapEditor; openRequest?: number }) => {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -75,7 +76,7 @@ export const LinkButton = ({ editor, openRequest = 0 }: { editor: TiptapEditor; 
         type="button"
         onClick={openPanel}
         className={`editor-button${isActive ? ' is-active' : ''}`}
-        title={isActive ? 'Rimuovi link' : 'Inserisci link (Ctrl+K)'}
+        title={isActive ? 'Rimuovi link' : shortcutLabel('Inserisci link (Ctrl+K)')}
       >
         {isActive ? <Link2Off className="h-4 w-4" /> : <Link2 className="h-4 w-4" />}
       </button>

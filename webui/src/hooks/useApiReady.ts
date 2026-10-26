@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ModelOption, SettingsPayload } from '../bridge';
 import { credentialStorageWarning } from '../credentialStorage';
 import { DEFAULT_MODEL } from '../utils';
+import { getHostCapabilities } from '../hostCapabilities';
 
 export function useApiReady(appendConsole: (msg: string) => void) {
   const [apiReady, setApiReady] = useState(false);
@@ -75,7 +76,7 @@ export function useApiReady(appendConsole: (msg: string) => void) {
         initDoneRef.current = true;
         setBridgeDelayed(false);
         setApiReady(true);
-        appendConsoleRef.current('Connesso a Python.');
+        appendConsoleRef.current(getHostCapabilities().kind === 'web' ? 'Pronto.' : 'Connesso a Python.');
         applySettings(cfg);
       } catch (e) {
         reportClientError('Load settings failed:', e);

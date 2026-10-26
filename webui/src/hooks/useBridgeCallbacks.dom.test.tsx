@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { useRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 import { useBridgeCallbacks } from './useBridgeCallbacks';
 import type { AppStatus, FileItem, ProcessDonePayload, ProcessingAction } from '../appState';
 
@@ -418,6 +419,23 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
       expect.stringContaining('Limite API raggiunto'),
     );
     vi.restoreAllMocks();
+  });
+
+  it('askNewKey on the web points to the dialog, not to the settings', () => {
+    const addNotification = vi.fn();
+    setHostCapabilities({ kind: 'web' });
+    try {
+      renderHook(() => { useBridgeCallbacks(makeMinimalHook({ addNotification })); });
+      act(() => { window.elSbobinatorBridge?.askNewKey(); });
+      expect(addNotification).toHaveBeenCalledWith('Chiavi esaurite', expect.stringContaining('vale solo per questa elaborazione'), 'warning', 'system');
+      expect(addNotification.mock.calls[0][1]).not.toContain('impostazioni');
+    } finally {
+      setHostCapabilities(DESKTOP_CAPABILITIES);
+    }
+    const desktopNotification = vi.fn();
+    renderHook(() => { useBridgeCallbacks(makeMinimalHook({ addNotification: desktopNotification })); });
+    act(() => { window.elSbobinatorBridge?.askNewKey(); });
+    expect(desktopNotification.mock.calls[0][1]).toContain('Aggiungi una chiave nelle impostazioni');
   });
 
   it('fileDone callback: covers warning notification for completed file with warnings', () => {

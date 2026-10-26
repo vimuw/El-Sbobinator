@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { AlertCircle, ArrowRight, CheckCircle2, ExternalLink, Eye, EyeOff, Loader2 } from 'lucide-react';
 import type { CredentialStorage, ValidationCheck } from '../bridge';
 import { GEMINI_KEY_PATTERN } from '../utils';
+import { getHostCapabilities } from '../hostCapabilities';
 import { BrandLogo } from './BrandLogo';
 import { SetupErrorNotice } from './SetupErrorNotice';
 
@@ -132,7 +133,7 @@ export function SetupPage({
                 type="button"
                 onClick={() => setSetupKeyShowRaw(v => !v)}
                 tabIndex={-1}
-                className="absolute inset-y-0 right-3.5 z-10 flex items-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+                className="touch-hit absolute inset-y-0 right-3.5 z-10 flex items-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
                 aria-label={setupKeyShowRaw ? 'Nascondi chiave' : 'Mostra chiave'}
               >
                 {setupKeyShowRaw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -176,6 +177,12 @@ export function SetupPage({
 
         {setupKeyError && (
           <SetupErrorNotice check={setupKeyError} apiKey={trimmedKey} />
+        )}
+
+        {getHostCapabilities().keyStorage === 'browser' && (
+          <p className="text-xs text-[var(--text-muted)]" data-testid="setup-browser-key-note">
+            La chiave resta solo in questo browser e viene inviata solo a Google. Su un dispositivo condiviso rimuovila da Impostazioni quando hai finito.
+          </p>
         )}
       </div>
 

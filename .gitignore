@@ -61,6 +61,7 @@ env/
 # WebUI artifacts
 node_modules/
 webui/dist/
+webui/dist-web/
 webui/.env.local
 
 # IDE-specific config

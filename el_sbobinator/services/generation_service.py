@@ -25,6 +25,7 @@ from google.genai import types
 from el_sbobinator.core.model_registry import (
     MODEL_OPTIONS,
 )
+from el_sbobinator.core.prompts import CHUNK_PROMPT, CHUNK_PROMPT_CONTINUATION
 from el_sbobinator.services import network_service, usage_service
 from el_sbobinator.services.config_service import load_config
 from el_sbobinator.services.gemini_errors import (
@@ -1086,18 +1087,7 @@ def describe_response_timing(response, seconds: float) -> str:
 
 
 def build_chunk_prompt(previous_tail: str) -> str:
-    prompt = (
-        "Trascrivi TUTTO il contenuto di questo blocco audio seguendo rigorosamente le istruzioni di sistema. "
-        "Non omettere nessun concetto, esempio, cifra o termine tecnico. "
-        "Non riassumere: la lunghezza dell'output deve essere proporzionale a quella dell'audio. "
-        "Ogni paragrafo generato deve essere unico: non ripetere mai lo stesso paragrafo o frase."
-    )
+    prompt = CHUNK_PROMPT
     if previous_tail:
-        prompt += (
-            "\n\nATTENZIONE: Stai continuando una stesura. Questo è l'ultimo paragrafo che hai generato nel blocco precedente:\n"
-            f'"...{previous_tail}"\n\n'
-            "Riprendi il discorso da qui IN MODO FLUIDO. Usa la stessa grandezza per i titoli. "
-            "Se all'inizio di questo blocco c'è sovrapposizione, NON ripetere testualmente le frasi già dette, "
-            "ma se compare anche solo un dettaglio nuovo includilo."
-        )
+        prompt += CHUNK_PROMPT_CONTINUATION.replace("{previous_tail}", previous_tail)
     return prompt

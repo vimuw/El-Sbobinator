@@ -87,6 +87,12 @@ class TestGenerateChangelog(unittest.TestCase):
         self.assertEqual(get_previous_tag("v2.7.3", current_tag="v2.7.3"), "")
         self.assertEqual(get_previous_tag("HEAD"), "v2.10.0")
 
+    @patch("scripts.generate_changelog.run_git")
+    def test_get_previous_tag_ignores_web_site_tags(self, mock_run_git) -> None:
+        # web-v* tags publish the web site; desktop notes never start from them.
+        mock_run_git.return_value = "v2.8.0\nweb-v2.9.0\nweb-v1.0.0\nv2.9.0"
+        self.assertEqual(get_previous_tag("v2.9.0", current_tag="v2.9.0"), "v2.8.0")
+
     def test_main_custom_release_body_empty_env_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_file = os.path.join(tmpdir, "changelog.md")

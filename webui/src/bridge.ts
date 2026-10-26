@@ -297,7 +297,14 @@ export interface PywebviewApi {
     preferredModel?: string,
 
   ) => Promise<{ ok: boolean; result?: ValidationResult; error?: string }>;
-  get_session_storage_info?: () => Promise<{ ok: boolean; total_bytes?: number; total_sessions?: number; session_root?: string; error?: string }>;
+  get_session_storage_info?: () => Promise<{ ok: boolean; total_bytes?: number; total_sessions?: number; session_root?: string; usage_detail?: string; persisted?: boolean; error?: string }>;
+  // Web build only: asks the browser to keep this site's data; false when it may still clear it.
+  get_storage_protection?: () => Promise<{ ok: boolean; persisted: boolean }>;
+  // Web build only: backup of the archive kept in this browser (webBackup.ts).
+  get_web_backup_info?: () => Promise<{ ok: boolean; sessions?: number; text_bytes?: number; audio_bytes?: number; audio_files?: number; last_backup_at?: string | null; error?: string }>;
+  create_web_backup?: (includeAudio: boolean, onProgress?: (done: number, total: number) => void) => Promise<{ ok: boolean; blob?: Blob; filename?: string; sessions?: number; audio_files?: number; error?: string }>;
+  import_web_backup?: (file: File) => Promise<{ ok: boolean; summary?: string; error?: string }>;
+  record_web_backup_download?: () => Promise<{ ok: boolean; last_backup_at?: string }>;
   cleanup_old_sessions?: (maxAgeDays?: number, dryRun?: boolean) => Promise<{ ok: boolean; removed?: number; freed_bytes?: number; errors?: number; candidates?: number; preserved_completed?: number; missing_completed_html?: number; error?: string }>;
   get_completed_sessions?: (limit?: number) => Promise<{ ok: boolean; sessions?: ArchiveSession[]; total?: number; error?: string }>;
   delete_session?: (sessionDir: string) => Promise<{ ok: boolean; error?: string }>;

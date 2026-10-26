@@ -8,16 +8,18 @@ import { ApiKeySection, type DeleteKeyTarget } from './settings/ApiKeySection';
 import { ModelSection } from './settings/ModelSection';
 import { NotificationSection } from './settings/NotificationSection';
 import { StorageSection } from './settings/StorageSection';
+import { WebBackupSection } from './settings/WebBackupSection';
 import { DiagnosticsSection } from './settings/DiagnosticsSection';
 import { ApiStatusSection } from './settings/ApiStatusSection';
+import { WebKeysSection } from './settings/WebKeysSection';
 import { UpdaterSection, UpdateNotice, type SettingsUpdateInstallState } from './settings/UpdaterSection';
-import { SettingsDivider, SettingsPageHeader } from './settings/SettingsLayout';
+import { SettingsDivider, SettingsPageHeader, SettingsSectionHeading } from './settings/SettingsLayout';
 
 import { useSettingsStorage } from '../../hooks/useSettingsStorage';
 import { formatSize } from '../../utils';
 import { credentialStorageWarning } from '../../credentialStorage';
-import { getHostCapabilities } from '../../browserHost';
-import { APP_VERSION } from '../../branding';
+import { getHostCapabilities } from '../../hostCapabilities';
+import { APP_VERSION, WEB_PREVIEW_BUILD } from '../../branding';
 import { STORAGE_KEYS } from '../../storageKeys';
 import { modalCard } from '../../motion';
 
@@ -55,6 +57,8 @@ export interface SettingsUpdaterProps {
 
 export interface SettingsStorageProps {
   onSessionRootMoved?: (payload?: { oldRoot?: string; newRoot?: string }) => void;
+  /** Web build: a backup was imported, the archive must be reloaded. */
+  onArchiveImported?: () => void;
 }
 
 export interface SettingsModalProps {
@@ -83,6 +87,11 @@ const TAB_HEADERS: Record<TabType, { title: string; description: string }> = {
     title: 'Assistenza',
     description: "Segnala un problema e controlla che l'app sia pronta a trascrivere.",
   },
+};
+
+const WEB_STORAGE_HEADER = {
+  title: 'Archiviazione',
+  description: 'Spazio occupato in questo browser da sbobine, audio delle lezioni ed elaborazioni.',
 };
 
 // The settings card mounts a large tree whose first style and layout pass can outlast several
@@ -454,6 +463,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     onClose();
   }, [onClose, setApiKey, setFallbackKeys, setPreferredModel]);
 
+  // Web build: "Rimuovi chiave" deletes the keys from this browser right away, not on "Salva".
+  const handleRemoveWebKeys = useCallback(async () => {
+    if (isSavingRef.current || !window.pywebview?.api?.save_settings) return;
+    isSavingRef.current = true;
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      const result = await window.pywebview.api.save_settings('', [], preferredModel);
+      if (!isMountedRef.current) return;
+      if (!result?.ok) {
+        setSaveError(`Rimozione non riuscita: ${result?.error || 'errore sconosciuto'}`);
+        return;
+      }
+      setApiKey('');
+      setFallbackKeys([]);
+      if (settingsSnapshotRef.current) settingsSnapshotRef.current = { ...settingsSnapshotRef.current, apiKey: '', fallbackKeys: [] };
+      appendConsole('Chiavi API rimosse da questo browser.');
+      await onSettingsSaved?.();
+    } catch (e: unknown) {
+      if (isMountedRef.current) setSaveError(`Rimozione non riuscita: ${getErrorMessage(e)}`);
+    } finally {
+      isSavingRef.current = false;
+      if (isMountedRef.current) setIsSaving(false);
+    }
+  }, [appendConsole, onSettingsSaved, preferredModel, setApiKey, setFallbackKeys]);
+
   const handleConfirmDeleteKey = useCallback(() => {
     if (!keyDeleteTarget) return;
 
@@ -554,7 +589,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 {/* The page title and the close button stay put above the scrolling content,
                     so nothing slides under the X. */}
                 <div className="flex items-start justify-between gap-4 px-6 md:px-8 pt-6 md:pt-8 pb-4 border-b border-[var(--border-subtle)]">
-                  <SettingsPageHeader {...TAB_HEADERS[activeTab]} />
+                  <SettingsPageHeader {...(activeTab === 'storage' && hostCapabilities.kind === 'web' ? WEB_STORAGE_HEADER : TAB_HEADERS[activeTab])} />
                   <button
                     type="button"
                     onClick={handleClose}
@@ -583,47 +618,78 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                       <SettingsDivider />
 
-                      <ApiKeySection
-                        apiKey={apiKey}
-                        setApiKey={key => {
-                          if (key.trim()) setClearProtectedPrimary(false);
-                          setApiKey(key);
-                        }}
-                        hasProtectedKey={hasProtectedKey && !clearProtectedPrimary}
-                        credentialStorage={credentialStorage}
-                        apiKeyInsecure={apiKeyInsecure}
-                        apiKeyInsecureReason={apiKeyInsecureReason || ''}
-                        fallbackKeys={fallbackKeys}
-                        setFallbackKeys={setFallbackKeys}
-                        onClearProtectedPrimary={() => setClearProtectedPrimary(true)}
-                        apiUsage={apiUsage}
-                        isLoadingUsage={isLoadingUsage}
-                        preferredModel={preferredModel}
-                        onAskDeleteKey={setKeyDeleteTarget}
-                        onRefreshUsage={handleRefreshUsage}
-                        statusSummary={<ApiStatusSection apiUsage={apiUsage} isLoadingUsage={isLoadingUsage} />}
-                      />
+                      {hostCapabilities.keyStorage === 'browser' ? (
+                        <WebKeysSection
+                          apiKey={apiKey}
+                          fallbackKeys={fallbackKeys}
+                          setApiKey={setApiKey}
+                          setFallbackKeys={setFallbackKeys}
+                          onRemoveKeys={() => void handleRemoveWebKeys()}
+                          disabled={isSaving}
+                        />
+                      ) : (
+                        <ApiKeySection
+                          apiKey={apiKey}
+                          setApiKey={key => {
+                            if (key.trim()) setClearProtectedPrimary(false);
+                            setApiKey(key);
+                          }}
+                          hasProtectedKey={hasProtectedKey && !clearProtectedPrimary}
+                          credentialStorage={credentialStorage}
+                          apiKeyInsecure={apiKeyInsecure}
+                          apiKeyInsecureReason={apiKeyInsecureReason || ''}
+                          fallbackKeys={fallbackKeys}
+                          setFallbackKeys={setFallbackKeys}
+                          onClearProtectedPrimary={() => setClearProtectedPrimary(true)}
+                          apiUsage={apiUsage}
+                          isLoadingUsage={isLoadingUsage}
+                          preferredModel={preferredModel}
+                          onAskDeleteKey={setKeyDeleteTarget}
+                          onRefreshUsage={handleRefreshUsage}
+                          statusSummary={<ApiStatusSection apiUsage={apiUsage} isLoadingUsage={isLoadingUsage} />}
+                        />
+                      )}
 
-                      <SettingsDivider />
+                      {hostCapabilities.osNotifications && (
+                        <>
+                          <SettingsDivider />
 
-                      <NotificationSection
-                        notificationsEnabled={notificationsEnabled}
-                        onChange={setNotificationsEnabled}
-                        disabled={isSaving}
-                      />
+                          <NotificationSection
+                            notificationsEnabled={notificationsEnabled}
+                            onChange={setNotificationsEnabled}
+                            disabled={isSaving}
+                          />
+                        </>
+                      )}
 
-                      <SettingsDivider />
+                      {hostCapabilities.updateInstallation && (
+                        <>
+                          <SettingsDivider />
 
-                      <UpdaterSection
-                        latestVersion={latestVersion}
-                        checkForUpdates={checkForUpdates}
-                        isCheckingUpdate={isCheckingUpdate}
-                        hasChecked={hasChecked}
-                        checkFailed={checkFailed}
-                        updateInstallState={updateInstallState}
-                        onInstallUpdate={onInstallUpdate && installUpdateFromSection}
-                        showsInstallFeedback={updateStartedInSection}
-                      />
+                          <UpdaterSection
+                            latestVersion={latestVersion}
+                            checkForUpdates={checkForUpdates}
+                            isCheckingUpdate={isCheckingUpdate}
+                            hasChecked={hasChecked}
+                            checkFailed={checkFailed}
+                            updateInstallState={updateInstallState}
+                            onInstallUpdate={onInstallUpdate && installUpdateFromSection}
+                            showsInstallFeedback={updateStartedInSection}
+                          />
+                        </>
+                      )}
+
+                      {hostCapabilities.kind === 'web' && (
+                        <>
+                          <SettingsDivider />
+                          <div className="space-y-1" data-testid="web-version">
+                            <SettingsSectionHeading>Versione</SettingsSectionHeading>
+                            <p className="text-xs text-[var(--text-secondary)]">
+                              {WEB_PREVIEW_BUILD ? `${APP_VERSION} (anteprima)` : APP_VERSION}. Gli aggiornamenti arrivano da soli alla prossima apertura del sito, senza toccare sbobine e chiavi salvate in questo browser.
+                            </p>
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
 
@@ -642,7 +708,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         cleanupResult={cleanupResult}
                         onDismissCleanupResult={handleDismissCleanupResult}
                         canManageSessionFolder={hostCapabilities.nativeFolderPicker && hostCapabilities.openLocalPath}
+                        inBrowser={hostCapabilities.kind === 'web'}
                       />
+                      {hostCapabilities.kind === 'web' && (
+                        <>
+                          <SettingsDivider />
+                          <WebBackupSection
+                            onArchiveImported={() => {
+                              storage?.onArchiveImported?.();
+                              fetchSessionStorageInfo();
+                            }}
+                          />
+                        </>
+                      )}
                     </div>
                   )}
 
@@ -653,6 +731,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         onRunValidation={runEnvironmentValidation}
                         validationResult={validationResult}
                         onCopyReport={handleCopyReport}
+                        showEnvironmentCheck={hostCapabilities.environmentCheck}
                       />
                     </div>
                   )}
