@@ -47,21 +47,21 @@ describe('Editor native image clipboard', () => {
     expect(image.pe_to! + image.ee_eo!.eo_mt).toBe(27.75);
     expect(root.querySelectorAll('.editor-image-node')).toHaveLength(2);
   });
-  it('preserves the HTML source and resamples only the native image derivative', () => {
+  it.each([jpeg, 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABkAAAAPo'])('sends Docs the stored image pixels at full resolution, displayed at the editor size', src => {
     const root = document.createElement('div');
-    root.innerHTML = `<img src="${jpeg}">`;
+    root.innerHTML = `<img src="${src}">`;
     const source = root.querySelector('img')!;
     Object.defineProperties(source, { complete: { value: true }, naturalWidth: { value: 1600 }, naturalHeight: { value: 1000 } });
-    const create = document.createElement.bind(document);
-    vi.spyOn(document, 'createElement').mockImplementation(tag => tag === 'canvas' ? {
-      width: 0, height: 0, getContext: () => ({ fillRect: vi.fn(), drawImage: vi.fn() }),
-      toDataURL: () => 'data:image/jpeg;base64,native-derivative',
-    } as unknown as HTMLCanvasElement : create(tag));
-    const formats = createNativeClipboardFormats(figure(), root)!;
+    const create = vi.spyOn(document, 'createElement');
+    const formats = createNativeClipboardFormats(figure('', src), root)!;
+    // A canvas re-encode shrank 1600 px figures to their on-page width and turned transparent PNGs into JPEGs.
+    expect(create).not.toHaveBeenCalledWith('canvas');
     const images = JSON.parse(JSON.parse(formats[NATIVE_IMAGES_MIME]).data).image_urls;
-    expect(Object.values(images)).toEqual(['data:image/jpeg;base64,native-derivative']);
-    expect(new DOMParser().parseFromString(formats['text/html'], 'text/html').querySelector('img')!.getAttribute('src')).toBe(jpeg);
-    expect(source.getAttribute('src')).toBe(jpeg);
+    expect(Object.values(images)).toEqual([src]);
+    const entity = Object.values(JSON.parse(JSON.parse(formats[NATIVE_SLICE_MIME]).data).resolved.dsl_entitymap)[0] as { ee_eo: { i_wth: number; i_ht: number } };
+    expect(entity.ee_eo).toMatchObject({ i_wth: figureWidth * 0.75, i_ht: figureWidth / 1.6 * 0.75 });
+    expect(new DOMParser().parseFromString(formats['text/html'], 'text/html').querySelector('img')!.getAttribute('src')).toBe(src);
+    expect(source.getAttribute('src')).toBe(src);
   });
   it('exports signed offsets outside the page and retains them in the HTML fallback', () => {
     const doc = model(figure('data-offset-x="-600" data-offset-y="-80"'));

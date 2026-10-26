@@ -287,30 +287,6 @@ export { EDITOR_CONTENT_WIDTH_PX } from './documentFormatting';
 
 export const clampWidthPercent = normalizeImageWidth;
 
-// The copy event must remain synchronous. Reuse an already loaded editor
-// image to resize its bitmap without starting a later clipboard write.
-export const resampleClipboardImageSync = (img: HTMLImageElement, targetPx: number, sourceRoot?: HTMLElement) => {
-  const src = img.getAttribute('src');
-  if (!src?.startsWith('data:image/') || src.startsWith('data:image/svg+xml') || src.startsWith('data:image/gif')) return;
-  const displayed = Array.from(sourceRoot?.querySelectorAll('img') ?? [])
-    .find(candidate => candidate.getAttribute('src') === src);
-  if (!displayed?.complete || !displayed.naturalWidth || !displayed.naturalHeight) return;
-  try {
-    const { width, height } = calculateOptimalDimensions(displayed.naturalWidth, displayed.naturalHeight, targetPx, Math.round(targetPx * 3));
-    if (src.startsWith('data:image/jpeg') && displayed.naturalWidth <= targetPx && displayed.naturalHeight <= targetPx * 3 && src.length < 200_000) return;
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext('2d');
-    if (!context) return;
-    context.fillStyle = '#ffffff';
-    context.fillRect(0, 0, width, height);
-    context.drawImage(displayed, 0, 0, width, height);
-    const resampled = canvas.toDataURL('image/jpeg', 0.92);
-    if (resampled.startsWith('data:image/jpeg')) img.setAttribute('src', resampled);
-  } catch { /* Keep the original asset if the browser cannot read its pixels. */ }
-};
-
 export const prepareHtmlForClipboardSync = (html: string, sourceRoot?: HTMLElement): string => {
   if (!html || typeof html !== 'string') {
     return html;

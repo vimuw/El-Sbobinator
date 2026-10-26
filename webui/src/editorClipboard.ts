@@ -1,7 +1,6 @@
 import { normalizeImageAspectRatio, normalizeImageAlignment, normalizeImageLayout, normalizeImagePosition, normalizeImageOffsetY, normalizeImageWidth } from './imageLayout';
 import { clipboardPlainText, DOCUMENT_FORMATTING, EDITOR_CONTENT_WIDTH_PX, formatPortableHtml, headingStyle, orderedListStyle, paragraphSpacing, pointSize } from './documentFormatting';
 import { createClipboardEquation, type ClipboardEquation } from './clipboardEquations';
-import { resampleClipboardImageSync } from './utils';
 import { nativeLineSpacingReader, prepareHtmlLineSpacing } from './editorLineSpacing';
 import { videoLink } from './editorLinks';
 
@@ -190,9 +189,9 @@ export function createNativeClipboardFormats(html: string, sourceRoot?: HTMLElem
     const entityId = id();
     const placeholder = `PLACEHOLDER_sbobinator_${serial}`;
     const wrapMargins = !caption && layout === 'wrap' ? { top: 3, bottom: 12, left: 12, right: 12 } : { top: 0, bottom: 0, left: 0, right: 0 };
-    const nativeImage = img.cloneNode(true) as HTMLImageElement;
-    resampleClipboardImageSync(nativeImage, width, sourceRoot);
-    imageUrls[placeholder] = nativeImage.getAttribute('src')!;
+    // Docs receives the stored source pixels; the entity size only sets how
+    // large it is displayed, so enlarging it in Docs keeps the full detail.
+    imageUrls[placeholder] = img.getAttribute('src')!;
     if (caption) {
       separateAdjacentTables();
       setStyle('tbl', spacers.length, {
