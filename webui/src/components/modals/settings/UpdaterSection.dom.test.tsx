@@ -94,18 +94,65 @@ describe('UpdaterSection component', () => {
   });
 
   it('leaves an update already known on opening to the top notice', () => {
-    const { rerender } = render(
+    render(
       <UpdaterSection {...defaultProps} hasChecked={true} latestVersion="v9.9.9" />,
     );
 
     expect(screen.queryByText(/È disponibile la versione/)).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Installa aggiornamento' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Aggiorna a/ })).toBeNull();
     expect(screen.queryByRole('link', { name: 'Note di rilascio ↗' })).toBeNull();
+    expect(screen.queryByText('→')).toBeNull();
+  });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cerca aggiornamenti' }));
-    rerender(<UpdaterSection {...defaultProps} hasChecked={true} latestVersion="v9.9.9" />);
-    expect(screen.getByText('È disponibile la versione v9.9.9.')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Installa aggiornamento' })).toBeTruthy();
+  it('turns the check button into the install action after a manual check', () => {
+    const onInstallUpdate = vi.fn().mockResolvedValue(undefined);
+    const props = { ...defaultProps, hasChecked: true, latestVersion: 'v9.9.9', onInstallUpdate };
+    const { rerender } = render(<UpdaterSection {...props} />);
+    screen.getByRole('status').scrollIntoView = vi.fn();
+    const checkButton = screen.getByRole('button', { name: 'Cerca aggiornamenti' });
+    checkButton.focus();
+
+    fireEvent.click(checkButton);
+    rerender(<UpdaterSection {...props} isCheckingUpdate={true} />);
+    expect(screen.queryByRole('button', { name: /Aggiorna a/ })).toBeNull();
+    rerender(<UpdaterSection {...props} />);
+
+    // One button, morphed in place and still focused; no second call to action below it.
+    const installButton = screen.getByRole('button', { name: 'Aggiorna a v9.9.9' });
+    expect(installButton).toBe(checkButton);
+    expect(document.activeElement).toBe(installButton);
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: 'Cerca aggiornamenti' })).toBeNull();
+    expect(screen.getByText(/Installata:/).textContent).toMatch(/v\d+\.\d+\.\d+→disponibile v9\.9\.9/);
+    expect(screen.getByRole('link', { name: 'Note di rilascio ↗' })).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toBe('È disponibile la versione v9.9.9.');
+
+    fireEvent.click(installButton);
+    expect(onInstallUpdate).toHaveBeenCalledWith('v9.9.9');
+    rerender(<UpdaterSection {...props} showsInstallFeedback updateInstallState={{ status: 'downloading', bytesDone: 1, bytesTotal: 2 }} />);
+    expect(screen.getByRole('progressbar')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Cerca aggiornamenti' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('shows install progress only where the install was started', () => {
+    const updateInstallState = { status: 'downloading' as const, bytesDone: 1, bytesTotal: 2 };
+    const { rerender } = render(
+      <>
+        <UpdateNotice latestVersion="v9.9.9" updateInstallState={updateInstallState} showsInstallFeedback={false} />
+        <UpdaterSection {...defaultProps} latestVersion="v9.9.9" updateInstallState={updateInstallState} showsInstallFeedback />
+      </>,
+    );
+    expect(screen.getAllByRole('progressbar')).toHaveLength(1);
+    expect(screen.getByRole('region', { name: 'Versione e aggiornamenti' }).contains(screen.getByRole('progressbar'))).toBe(true);
+
+    rerender(
+      <>
+        <UpdateNotice latestVersion="v9.9.9" updateInstallState={{ status: 'done' }} showsInstallFeedback={false} />
+        <UpdaterSection {...defaultProps} latestVersion="v9.9.9" updateInstallState={{ status: 'done' }} showsInstallFeedback />
+      </>,
+    );
+    expect(screen.getAllByText('Installer avviato. Segui le istruzioni a schermo.')).toHaveLength(1);
+    expect(screen.queryByRole('region', { name: 'Aggiornamento applicazione' })).toBeNull();
   });
 
   it('renders up to date notice when checked with no update', () => {

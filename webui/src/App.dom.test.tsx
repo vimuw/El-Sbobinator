@@ -154,9 +154,16 @@ afterEach(() => {
 });
 
 describe('App', () => {
-  function expectUpdateInstallFeedback(message: RegExp) {
-    expect(within(screen.getByRole('region', { name: 'Aggiornamento applicazione' })).getByText(message)).toBeTruthy();
-    expect(within(screen.getByRole('region', { name: 'Versione e aggiornamenti' })).getByText(message)).toBeTruthy();
+  function expectUpdateInstallFeedback(message: RegExp, startedIn: 'notice' | 'section' = 'notice') {
+    // Settings shows the feedback once, where the install was started.
+    const section = within(screen.getByRole('region', { name: 'Versione e aggiornamenti' }));
+    if (startedIn === 'section') {
+      expect(section.getByText(message)).toBeTruthy();
+      expect(screen.queryByRole('region', { name: 'Aggiornamento applicazione' })?.textContent ?? '').not.toMatch(message);
+    } else {
+      expect(within(screen.getByRole('region', { name: 'Aggiornamento applicazione' })).getByText(message)).toBeTruthy();
+      expect(section.queryByText(message)).toBeNull();
+    }
     const notifications = within(screen.getByRole('dialog', { name: 'Notifiche' }));
     expect(notifications.getAllByRole('heading', { name: 'Installazione aggiornamento' })).toHaveLength(1);
     expect(notifications.getByText(message)).toBeTruthy();
@@ -290,12 +297,12 @@ describe('App', () => {
       fireEvent.click(within(updateSection).getByRole('button', { name: 'Cerca aggiornamenti' }));
     });
     await act(async () => {
-      fireEvent.click(within(updateSection).getByRole('button', { name: 'Installa aggiornamento' }));
+      fireEvent.click(within(updateSection).getByRole('button', { name: 'Aggiorna a v2.0.0' }));
     });
 
     expect(downloadUpdate).toHaveBeenCalledWith('v2.0.0');
     expect(downloadUpdate).toHaveBeenCalledTimes(1);
-    expectUpdateInstallFeedback(/Download aggiornamento/i);
+    expectUpdateInstallFeedback(/Download aggiornamento/i, 'section');
     const bridgeOptions = vi.mocked(useBridgeCallbacks).mock.calls.at(-1)?.[0];
     expect(bridgeOptions).toBeTruthy();
     await act(async () => {
@@ -307,7 +314,7 @@ describe('App', () => {
       });
     });
 
-    expectUpdateInstallFeedback(/Verifica integrità fallita/i);
+    expectUpdateInstallFeedback(/Verifica integrità fallita/i, 'section');
     await act(async () => {
       fireEvent.click(within(screen.getByRole('dialog', { name: 'Notifiche' })).getByRole('button', { name: 'Apri GitHub' }));
     });
@@ -405,7 +412,7 @@ describe('App', () => {
     expect(notifications.queryByRole('heading', { name: 'Installazione aggiornamento' })).toBeNull();
     expect(notifications.queryByText(/Verifica integrità fallita/i)).toBeNull();
     expect(within(updateNotice).getByText(/Verifica integrità fallita/i)).toBeTruthy();
-    expect(within(screen.getByRole('region', { name: 'Versione e aggiornamenti' })).getByText(/Verifica integrità fallita/i)).toBeTruthy();
+    expect(within(screen.getByRole('region', { name: 'Versione e aggiornamenti' })).queryByText(/Verifica integrità fallita/i)).toBeNull();
 
     await act(async () => {
       fireEvent.click(within(updateNotice).getByRole('button', { name: 'Installa aggiornamento' }));

@@ -934,24 +934,60 @@ describe('SettingsModal — version status display', () => {
     expect(statusScrollIntoView).not.toHaveBeenCalled();
 
     rerender(<SettingsModal {...props} updater={{ ...props.updater, latestVersion: 'v9.9.9', hasChecked: true }} />);
-    expect(screen.getByText('È disponibile la versione v9.9.9.').closest('[role="status"]')).toBeTruthy();
+    expect(within(section).getByRole('status').textContent).toBe('È disponibile la versione v9.9.9.');
     expect(content.scrollTop).toBe(500);
     expect(statusScrollIntoView).toHaveBeenCalledWith({ block: 'nearest' });
     const notice = screen.getByRole('region', { name: 'Aggiornamento applicazione' });
     expect(notice.compareDocumentPosition(screen.getByText('Modello di trascrizione')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getAllByRole('button', { name: 'Installa aggiornamento' })).toHaveLength(2);
-    // The top notice already links the release notes
-    expect(within(section).queryByRole('link', { name: 'Note di rilascio ↗' })).toBeNull();
+    expect(within(notice).getByRole('button', { name: 'Installa aggiornamento' })).toBeTruthy();
+    // The check button became the section's only install action, beside the release notes
+    expect(within(section).getAllByRole('button')).toHaveLength(1);
+    expect(within(section).getByRole('link', { name: 'Note di rilascio ↗' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Mostra aggiornamento' })).toBeNull();
 
     const scrollIntoView = vi.fn();
     notice.scrollIntoView = scrollIntoView;
     expect(onInstallUpdate).not.toHaveBeenCalled();
-    fireEvent.click(within(section).getByRole('button', { name: 'Installa aggiornamento' }));
+    fireEvent.click(within(section).getByRole('button', { name: 'Aggiorna a v9.9.9' }));
     expect(onInstallUpdate).toHaveBeenCalledWith('v9.9.9');
     expect(onInstallUpdate).toHaveBeenCalledTimes(1);
     expect(scrollIntoView).not.toHaveBeenCalled();
     expect(content.scrollTop).toBe(500);
+
+    // Progress shows only where the install was started
+    rerender(<SettingsModal {...props} updater={{
+      ...props.updater,
+      latestVersion: 'v9.9.9',
+      hasChecked: true,
+      updateInstallState: { status: 'downloading', bytesDone: 5242880, bytesTotal: 10485760 },
+    }} />);
+    expect(within(section).getByRole('progressbar').getAttribute('aria-valuenow')).toBe('50');
+    expect(within(notice).queryByRole('progressbar')).toBeNull();
+    expect(screen.getAllByText('Download aggiornamento…')).toHaveLength(1);
+  });
+
+  it('moves the progress of an install started in the section to the top notice after a tab switch', () => {
+    // jsdom has no scrollIntoView; the section reveals its feedback with it.
+    Element.prototype.scrollIntoView = vi.fn();
+    onTestFinished(() => { delete (Element.prototype as Partial<Element>).scrollIntoView; });
+    const props = makeProps({ hasChecked: false, onInstallUpdate: vi.fn().mockResolvedValue(undefined) });
+    const { rerender } = render(<SettingsModal {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Cerca aggiornamenti' }));
+    const found = { ...props.updater, latestVersion: 'v9.9.9', hasChecked: true };
+    rerender(<SettingsModal {...props} updater={found} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Aggiorna a v9.9.9' }));
+    const downloading = { ...found, updateInstallState: { status: 'downloading', bytesDone: 5242880, bytesTotal: 10485760 } as const };
+    rerender(<SettingsModal {...props} updater={downloading} />);
+    expect(within(screen.getByRole('region', { name: 'Versione e aggiornamenti' })).getByRole('progressbar')).toBeTruthy();
+
+    // Back on Generale the page starts at the top: the progress must be visible there.
+    fireEvent.click(screen.getByRole('button', { name: 'Archiviazione' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Generale' }));
+    const notice = screen.getByRole('region', { name: 'Aggiornamento applicazione' });
+    const section = screen.getByRole('region', { name: 'Versione e aggiornamenti' });
+    expect(within(notice).getByRole('progressbar').getAttribute('aria-valuenow')).toBe('50');
+    expect(within(section).queryByRole('progressbar')).toBeNull();
+    expect(screen.getAllByText('Download aggiornamento…')).toHaveLength(1);
   });
 
   it.each([
@@ -960,7 +996,7 @@ describe('SettingsModal — version status display', () => {
     ['installing', 'Installazione aggiornamento…'],
     ['done', 'Installer avviato. Segui le istruzioni a schermo.'],
     ['error', 'Errore download di prova.'],
-  ] as const)('shows shared %s feedback in the top banner and lower section', (status, message) => {
+  ] as const)('shows %s feedback once, in the top notice, for an install started elsewhere', (status, message) => {
     render(<SettingsModal {...makeProps({
       latestVersion: 'v9.9.9',
       onInstallUpdate: vi.fn().mockResolvedValue(undefined),
@@ -968,12 +1004,12 @@ describe('SettingsModal — version status display', () => {
     })} />);
     const section = screen.getByRole('region', { name: 'Versione e aggiornamenti' });
     const notice = screen.getByRole('region', { name: 'Aggiornamento applicazione' });
-    expect(within(section).getByText(message)).toBeTruthy();
     expect(within(notice).getByText(message)).toBeTruthy();
+    expect(within(section).queryByText(message)).toBeNull();
     expect(screen.queryByText(/Sei aggiornato/)).toBeNull();
     if (status === 'downloading') {
-      expect(within(section).getByRole('progressbar').getAttribute('aria-valuenow')).toBe('50');
       expect(within(notice).getByRole('progressbar').getAttribute('aria-valuenow')).toBe('50');
+      expect(within(section).queryByRole('progressbar')).toBeNull();
     }
     if (status !== 'error') {
       expect(screen.queryByRole('button', { name: 'Installa aggiornamento' })).toBeNull();
@@ -1001,7 +1037,7 @@ describe('SettingsModal — version status display', () => {
     expect(screen.queryByText(/non riuscita/i)).toBeNull();
   });
 
-  it('shows shared async install error state', () => {
+  it('shows the async install error state once', () => {
     render(
       <SettingsModal
         {...makeProps({
@@ -1017,10 +1053,10 @@ describe('SettingsModal — version status display', () => {
       />,
     );
 
-    expect(screen.getAllByText(/Verifica integrità fallita/i)).toHaveLength(2);
+    expect(screen.getAllByText(/Verifica integrità fallita/i)).toHaveLength(1);
   });
 
-  it('shows shared async install success state', () => {
+  it('shows the async install success state once', () => {
     render(
       <SettingsModal
         {...makeProps({
@@ -1036,7 +1072,7 @@ describe('SettingsModal — version status display', () => {
       />,
     );
 
-    expect(screen.getAllByText(/Installer avviato/i)).toHaveLength(2);
+    expect(screen.getAllByText(/Installer avviato/i)).toHaveLength(1);
   });
 });
 

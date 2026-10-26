@@ -165,6 +165,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [isLoadingUsage, setIsLoadingUsage] = useState(false);
   const [clearProtectedPrimary, setClearProtectedPrimary] = useState(false);
   const [keyDeleteTarget, setKeyDeleteTarget] = useState<DeleteKeyTarget | null>(null);
+  // Update progress shows only where the install was started: the top notice by default,
+  // the version section when the user installed from there.
+  const [updateStartedInSection, setUpdateStartedInSection] = useState(false);
+  const installUpdateFromNotice = useCallback((version: string) => {
+    setUpdateStartedInSection(false);
+    return onInstallUpdate!(version);
+  }, [onInstallUpdate]);
+  const installUpdateFromSection = useCallback((version: string) => {
+    setUpdateStartedInSection(true);
+    return onInstallUpdate!(version);
+  }, [onInstallUpdate]);
 
   const isSavingRef = useRef(false);
   const isMountedRef = useRef(true);
@@ -231,6 +242,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       };
     } else if (!isOpen) {
       settingsSnapshotRef.current = null;
+      // Reopened, the page starts at the top again, where the notice shows the progress.
+      setUpdateStartedInSection(false);
     }
     wasOpenRef.current = isOpen;
   }, [apiKey, fallbackKeys, isOpen, preferredModel]);
@@ -316,6 +329,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
     setSaveError(null);
+    // The new page starts at the top, where the notice shows the progress.
+    setUpdateStartedInSection(false);
   };
 
   const runEnvironmentValidation = async () => {
@@ -556,7 +571,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <UpdateNotice
                         latestVersion={latestVersion}
                         updateInstallState={updateInstallState}
-                        onInstallUpdate={onInstallUpdate}
+                        onInstallUpdate={onInstallUpdate && installUpdateFromNotice}
+                        showsInstallFeedback={!updateStartedInSection}
                       />
 
                       <ModelSection
@@ -605,7 +621,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         hasChecked={hasChecked}
                         checkFailed={checkFailed}
                         updateInstallState={updateInstallState}
-                        onInstallUpdate={onInstallUpdate}
+                        onInstallUpdate={onInstallUpdate && installUpdateFromSection}
+                        showsInstallFeedback={updateStartedInSection}
                       />
                     </div>
                   )}
