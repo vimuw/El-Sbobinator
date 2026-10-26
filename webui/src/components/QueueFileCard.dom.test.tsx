@@ -316,7 +316,7 @@ describe('QueueFileCard', () => {
         <QueueFileCard file={makeFile()} appState="idle" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} />
       </QueueWrapper>,
     );
-    expect(screen.getByText('1.0 MB')).toBeTruthy();
+    expect(screen.getByText('1,0 MB')).toBeTruthy();
     expect(screen.getByText('1h 0m')).toBeTruthy();
   });
 });

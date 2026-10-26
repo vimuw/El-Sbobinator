@@ -167,11 +167,11 @@ describe('formatSize', () => {
   });
 
   it('formats bytes to MB', () => {
-    expect(formatSize(1024 * 1024 * 2.5)).toBe('2.5 MB');
+    expect(formatSize(1024 * 1024 * 2.5)).toBe('2,5 MB');
   });
 
   it('formats bytes to GB', () => {
-    expect(formatSize(1024 * 1024 * 1024 * 1.2)).toBe('1.2 GB');
+    expect(formatSize(1024 * 1024 * 1024 * 1.2)).toBe('1,2 GB');
   });
 });
 

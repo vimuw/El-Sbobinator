@@ -29,7 +29,7 @@ describe('StorageSection component', () => {
   it('shows the used space as one line under the folder instead of stat cards', () => {
     const { container } = render(<StorageSection {...baseProps} />);
 
-    expect(screen.getByTestId('storage-usage').textContent).toBe('3 sbobine · 1.0 MB occupati');
+    expect(screen.getByTestId('storage-usage').textContent).toBe('3 sbobine · 1,0 MB occupati');
     expect(container.querySelector('.premium-panel')).toBeNull();
     expect(screen.queryByText('Spazio occupato')).toBeNull();
     expect(screen.queryByText('Spazio disco e archivio')).toBeNull();
@@ -50,16 +50,28 @@ describe('StorageSection component', () => {
     expect(screen.queryByRole('button', { name: 'Pulisci elaborazioni incomplete' })).toBeNull();
   });
 
-  it('web: calls the figure a total and says what the backup leaves out', () => {
-    // The backup estimate (sbobine only) read as a contradiction of this total.
+  it('web: calls the figure a total', () => {
     render(<StorageSection {...baseProps} canManageSessionFolder={false} inBrowser />);
-    expect(screen.getByTestId('storage-usage').textContent).toBe('3 sbobine · 1.0 MB occupati in totale');
-    expect(screen.getByTestId('storage-usage-backup-note').textContent).toContain('avanzamento delle elaborazioni');
+    expect(screen.getByTestId('storage-usage').textContent).toBe('3 sbobine · 1,0 MB occupati in totale');
   });
 
-  it('desktop: keeps the folder figure without the backup note', () => {
-    render(<StorageSection {...baseProps} />);
-    expect(screen.queryByTestId('storage-usage-backup-note')).toBeNull();
+  it('web: no folder path box, so the browser message is not cut mid-word or said twice', () => {
+    // The path box (break-all) split "non" into "no / n" and repeated the yellow warning below it.
+    const sessionRoot = 'Memoria di questo browser: il browser può svuotarla se manca spazio o se non apri il sito per molti giorni';
+    const webProps = { ...baseProps, canManageSessionFolder: false, inBrowser: true };
+    const { container, rerender } = render(<StorageSection {...webProps} sessionInfo={{ ...baseProps.sessionInfo, session_root: sessionRoot, persisted: false }} />);
+    expect(screen.queryByText(sessionRoot)).toBeNull();
+    expect(container.querySelector('.break-all')).toBeNull();
+    expect(screen.queryByTestId('storage-persisted')).toBeNull();
+
+    rerender(<StorageSection {...webProps} sessionInfo={{ ...baseProps.sessionInfo, session_root: sessionRoot, persisted: true }} />);
+    expect(screen.getByTestId('storage-persisted').textContent).toBe('Il browser protegge questi dati dalla pulizia automatica.');
+  });
+
+  it('shows the folder total in the same units as the rest of the app', () => {
+    // A second formatter wrote "0 B" here beside "0 KB" in the breakdown.
+    render(<StorageSection {...baseProps} sessionInfo={{ ...baseProps.sessionInfo, total_bytes: 0 }} />);
+    expect(screen.getByTestId('storage-usage').textContent).toBe('3 sbobine · 0 KB occupati');
   });
 
   it('web: warns that the browser may clear the data only when it did not promise to keep it', () => {

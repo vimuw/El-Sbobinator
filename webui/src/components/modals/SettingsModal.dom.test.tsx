@@ -1267,6 +1267,17 @@ describe('SettingsModal on the web host', () => {
     expect(screen.queryByRole('button', { name: 'Verifica ambiente' })).toBeNull();
   });
 
+  it('describes only what each tab holds on the web', () => {
+    render(<SettingsModal {...makeProps()} />);
+
+    // The desktop headers promised system preferences and an environment check the web does not have.
+    expect(screen.getByText('Modello di trascrizione e chiavi API Google Gemini salvate in questo browser.')).toBeTruthy();
+    expect(screen.queryByText(/preferenze di sistema/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Assistenza/ }));
+    expect(screen.getByText('Segnala un problema e allega il report con gli errori registrati.')).toBeTruthy();
+    expect(screen.queryByText(/pronta a trascrivere/)).toBeNull();
+  });
+
   it('splits the field into main and reserve keys, one per line', () => {
     const setApiKey = vi.fn();
     const setFallbackKeys = vi.fn();

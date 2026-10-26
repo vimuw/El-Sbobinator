@@ -49,12 +49,23 @@ describe('WebBackupSection', () => {
     await seed();
     render(<WebBackupSection />);
 
-    await waitFor(() => expect(screen.getByTestId('web-backup-estimate').textContent).toMatch(/^1 sbobina · dimensione stimata 2\.0 MB$/));
-    expect(screen.getByText('1 file, 2.0 MB')).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId('web-backup-estimate').textContent).toMatch(/^1 sbobina · dimensione stimata 2,0 MB$/));
+    expect(screen.getByText('1 file, 2,0 MB')).toBeTruthy();
+    // What the backup leaves out sits beside its estimate, not under the browser total.
+    expect(screen.getByTestId('web-backup-scope').textContent).toContain('avanzamento delle elaborazioni');
     expect(screen.getByTestId('web-backup-last').textContent).toBe('Nessun backup scaricato da questo browser.');
 
     fireEvent.click(screen.getByRole('switch', { name: 'Includi gli audio delle lezioni nel backup' }));
     expect(screen.getByTestId('web-backup-estimate').textContent).toMatch(/dimensione stimata \d+ KB$/);
+  });
+
+  it('says there is no audio to include instead of "0 file, 0 KB", and locks the switch', async () => {
+    await createWebArchive(factory).create({ name: 'Solo testo', completed_at_iso: '2026-10-20T10:00:00.000Z', effective_model: 'gemini-2.5-flash', input_path: '' }, '<p>Testo</p>');
+    render(<WebBackupSection />);
+
+    expect(await screen.findByText('Nessun audio salvato in questo browser')).toBeTruthy();
+    expect(screen.queryByText(/^0 file/)).toBeNull();
+    expect((screen.getByRole('switch', { name: 'Includi gli audio delle lezioni nel backup' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('prepares the zip, then saves it from a real download link and records the date', async () => {
@@ -68,7 +79,7 @@ describe('WebBackupSection', () => {
     const link = await screen.findByTestId('web-backup-download');
     expect(link.getAttribute('href')).toBe('blob:backup-1');
     expect(link.getAttribute('download')).toMatch(/^El-Sbobinator-backup-\d{4}-\d{2}-\d{2}\.zip$/);
-    expect(link.textContent).toMatch(/Salva il backup \(2\.0 MB\)/);
+    expect(link.textContent).toMatch(/Salva il backup \(2,0 MB\)/);
     expect(await created[0].text()).not.toContain('AIzaSyNeverInTheBackup');
 
     link.addEventListener('click', event => event.preventDefault());

@@ -106,9 +106,9 @@ describe('web host', () => {
     const info = await api.get_session_storage_info!();
     expect(info.total_bytes).toBeGreaterThanOrEqual(3 * 1024 * 1024);
     // A picked file not yet sbobinato is a queue copy: the backup would not include it.
-    expect(info.usage_detail).toBe('Testi delle sbobine 0 KB · audio delle sbobine 0 KB · audio in coda 3.0 MB · avanzamento elaborazioni 0 KB · stima del browser 1 KB');
+    expect(info.usage_detail).toBe('Testi delle sbobine 0 KB · audio delle sbobine 0 KB · audio in coda 3,0 MB · avanzamento elaborazioni 0 KB · stima del browser 1 KB');
     const { report } = await api.get_diagnostic_report!();
-    expect(report).toContain('- Spazio usato: Testi delle sbobine 0 KB · audio delle sbobine 0 KB · audio in coda 3.0 MB · avanzamento elaborazioni 0 KB · stima del browser 1 KB');
+    expect(report).toContain('- Spazio usato: Testi delle sbobine 0 KB · audio delle sbobine 0 KB · audio in coda 3,0 MB · avanzamento elaborazioni 0 KB · stima del browser 1 KB');
   });
 
   it('runs the simulated pipeline into an archived document the editor can open and save', async () => {
