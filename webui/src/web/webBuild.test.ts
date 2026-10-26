@@ -24,6 +24,7 @@ describe('web build page policy', () => {
     expect(html).not.toContain('startup-guard.js');
     expect(html).toContain('<script src="./boot-theme.js"></script>');
     expect(html).toContain('src="/src/main.tsx"');
+    expect(html).toContain('<link rel="icon" type="image/png" href="./icon.png" />');
   });
 
   it('sends the same policy as a header, without cross-origin isolation', () => {
