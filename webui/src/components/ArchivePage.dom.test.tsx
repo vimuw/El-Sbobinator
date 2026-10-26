@@ -457,6 +457,49 @@ describe('ArchivePage', () => {
     expect(screen.getByText('Deseleziona')).toBeTruthy();
   });
 
+  it('deletes the whole selection when "Elimina" is chosen from a selected row menu', () => {
+    const s1 = makeSession('s1', 'Lezione 1');
+    const s2 = makeSession('s2', 'Lezione 2');
+    const s3 = makeSession('s3', 'Lezione 3');
+    const onDeleteSession = vi.fn();
+    const onDeleteMultipleSessions = vi.fn();
+
+    render(
+      <ArchivePage
+        sessions={[s1, s2, s3]}
+        folders={[]}
+        onFoldersChange={vi.fn()}
+        onPreview={vi.fn()}
+        onOpenFile={vi.fn()}
+        onDeleteSession={onDeleteSession}
+        onDeleteMultipleSessions={onDeleteMultipleSessions}
+      />,
+    );
+
+    // The selection bar has its own "Elimina"; pick the row-menu entry.
+    const clickRowMenuDelete = (rowIndex: number) => {
+      fireEvent.click(screen.getAllByLabelText('Altre opzioni')[rowIndex]);
+      const menuDelete = screen.getAllByRole('button', { name: 'Elimina' })
+        .find(btn => btn.getAttribute('title') !== 'Elimina le sbobine selezionate dal disco');
+      fireEvent.click(menuDelete!);
+    };
+
+    const selectButtons = screen.getAllByTitle('Seleziona');
+    fireEvent.click(selectButtons[0]);
+    fireEvent.click(selectButtons[1]);
+
+    clickRowMenuDelete(0);
+
+    expect(onDeleteSession).not.toHaveBeenCalled();
+    expect(onDeleteMultipleSessions).toHaveBeenCalledTimes(1);
+    expect(onDeleteMultipleSessions.mock.calls[0][0]).toHaveLength(2);
+
+    // A row outside the selection still deletes only itself.
+    clickRowMenuDelete(2);
+    expect(onDeleteSession).toHaveBeenCalledTimes(1);
+    expect(onDeleteMultipleSessions).toHaveBeenCalledTimes(1);
+  });
+
   it('matches sessions and displays correct folder count regardless of path casing or backslashes', () => {
     const s1: ArchiveSession = {
       session_dir: 'C:\\Users\\vimuw\\AppData\\Local\\El Sbobinator\\Sessions\\s1',

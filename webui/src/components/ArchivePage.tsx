@@ -251,6 +251,15 @@ export function ArchivePage({
     setDeleteFolderConfirm(null);
   };
 
+  // "Elimina" from a row menu applies to the whole selection when that row is part of it.
+  const handleRowDeleteSession = (sessionDir: string, name: string) => {
+    if (selectedSessionDirs.size > 1 && selectedSessionDirs.has(sessionDir)) {
+      handleOpenDeleteMultiple();
+    } else {
+      onDeleteSession(sessionDir, name);
+    }
+  };
+
   const handleBulkDeleteSessions = () => {
     if (!deleteMultipleConfirm) return;
     deleteMultipleConfirm.sessions.forEach(s => onDeleteSession(s.sessionDir, s.name));
@@ -600,7 +609,7 @@ export function ArchivePage({
                     }}
                     onPreview={onPreview}
                     onOpenFile={onOpenFile}
-                    onDeleteSession={onDeleteSession}
+                    onDeleteSession={handleRowDeleteSession}
                     onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
                     onShareSession={setSharingSession}
                     onRenameSession={onRenameSession ? setRenamingSession : undefined}

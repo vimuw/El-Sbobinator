@@ -200,6 +200,13 @@ export function FolderDetailView({
     prevManualFolderSelectionRef.current = null;
   }, []);
 
+  const deleteSelectedFolderSessions = onDeleteMultipleSessions ? () => {
+    const targets = folderSessions
+      .filter(s => selectedFolderSessionDirs.has(s.session_dir))
+      .map(s => ({ sessionDir: s.session_dir, name: s.name }));
+    onDeleteMultipleSessions(targets);
+  } : undefined;
+
   useEffect(() => {
     if (ftDebounceRef.current) clearTimeout(ftDebounceRef.current);
     const q = search.trim();
@@ -428,7 +435,13 @@ export function FolderDetailView({
                         onRemove={() => onRemoveSession(session.session_dir)}
                         onPreview={onPreview}
                         onOpenFile={onOpenFile}
-                        onDeleteSession={onDeleteSession}
+                        onDeleteSession={(sessionDir, name) => {
+                          if (deleteSelectedFolderSessions && selectedFolderSessionDirs.size > 1 && selectedFolderSessionDirs.has(sessionDir)) {
+                            deleteSelectedFolderSessions();
+                          } else {
+                            onDeleteSession(sessionDir, name);
+                          }
+                        }}
                         onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
                         onShareSession={onShareSession}
                         onRenameSession={onRenameSession}
@@ -491,12 +504,7 @@ export function FolderDetailView({
               }
               clearSelectFolderSessions();
             }}
-            onDeleteSelected={onDeleteMultipleSessions ? () => {
-              const targets = folderSessions
-                .filter(s => selectedFolderSessionDirs.has(s.session_dir))
-                .map(s => ({ sessionDir: s.session_dir, name: s.name }));
-              onDeleteMultipleSessions(targets);
-            } : undefined}
+            onDeleteSelected={deleteSelectedFolderSessions}
             onClose={clearSelectFolderSessions}
           />
         )}
