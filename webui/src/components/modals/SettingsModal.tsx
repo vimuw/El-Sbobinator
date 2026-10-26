@@ -11,7 +11,7 @@ import { StorageSection } from './settings/StorageSection';
 import { WebBackupSection } from './settings/WebBackupSection';
 import { DiagnosticsSection } from './settings/DiagnosticsSection';
 import { ApiStatusSection } from './settings/ApiStatusSection';
-import { WebKeysSection } from './settings/WebKeysSection';
+import { WebRemoveKeysButton, WebSharedDeviceNotice } from './settings/WebSharedDeviceNotice';
 import { UpdaterSection, UpdateNotice, type SettingsUpdateInstallState } from './settings/UpdaterSection';
 import { SettingsDivider, SettingsPageHeader, SettingsSectionHeading } from './settings/SettingsLayout';
 
@@ -474,7 +474,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     onClose();
   }, [onClose, setApiKey, setFallbackKeys, setPreferredModel]);
 
-  // Web build: "Rimuovi chiave" deletes the keys from this browser right away, not on "Salva".
+  const webKeyCount = [apiKey, ...fallbackKeys].filter(key => key.trim()).length;
+  // Web build: "Rimuovi tutte le chiavi" deletes the keys from this browser right away, not on "Salva".
   const handleRemoveWebKeys = useCallback(async () => {
     if (isSavingRef.current || !window.pywebview?.api?.save_settings) return;
     isSavingRef.current = true;
@@ -629,37 +630,35 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                       <SettingsDivider />
 
-                      {hostCapabilities.keyStorage === 'browser' ? (
-                        <WebKeysSection
-                          apiKey={apiKey}
-                          fallbackKeys={fallbackKeys}
-                          setApiKey={setApiKey}
-                          setFallbackKeys={setFallbackKeys}
-                          onRemoveKeys={() => void handleRemoveWebKeys()}
-                          disabled={isSaving}
-                        />
-                      ) : (
-                        <ApiKeySection
-                          apiKey={apiKey}
-                          setApiKey={key => {
-                            if (key.trim()) setClearProtectedPrimary(false);
-                            setApiKey(key);
-                          }}
-                          hasProtectedKey={hasProtectedKey && !clearProtectedPrimary}
-                          credentialStorage={credentialStorage}
-                          apiKeyInsecure={apiKeyInsecure}
-                          apiKeyInsecureReason={apiKeyInsecureReason || ''}
-                          fallbackKeys={fallbackKeys}
-                          setFallbackKeys={setFallbackKeys}
-                          onClearProtectedPrimary={() => setClearProtectedPrimary(true)}
-                          apiUsage={apiUsage}
-                          isLoadingUsage={isLoadingUsage}
-                          preferredModel={preferredModel}
-                          onAskDeleteKey={setKeyDeleteTarget}
-                          onRefreshUsage={handleRefreshUsage}
-                          statusSummary={<ApiStatusSection apiUsage={apiUsage} isLoadingUsage={isLoadingUsage} />}
-                        />
-                      )}
+                      <ApiKeySection
+                        apiKey={apiKey}
+                        setApiKey={key => {
+                          if (key.trim()) setClearProtectedPrimary(false);
+                          setApiKey(key);
+                        }}
+                        hasProtectedKey={hasProtectedKey && !clearProtectedPrimary}
+                        credentialStorage={credentialStorage}
+                        apiKeyInsecure={apiKeyInsecure}
+                        apiKeyInsecureReason={apiKeyInsecureReason || ''}
+                        fallbackKeys={fallbackKeys}
+                        setFallbackKeys={setFallbackKeys}
+                        onClearProtectedPrimary={() => setClearProtectedPrimary(true)}
+                        apiUsage={apiUsage}
+                        isLoadingUsage={isLoadingUsage}
+                        preferredModel={preferredModel}
+                        onAskDeleteKey={setKeyDeleteTarget}
+                        onRefreshUsage={handleRefreshUsage}
+                        statusSummary={<ApiStatusSection apiUsage={apiUsage} isLoadingUsage={isLoadingUsage} />}
+                        headerActions={hostCapabilities.keyStorage === 'browser' && (
+                          <WebRemoveKeysButton
+                            keyCount={webKeyCount}
+                            onRemoveKeys={() => void handleRemoveWebKeys()}
+                            disabled={isSaving}
+                          />
+                        )}
+                      />
+
+                      {hostCapabilities.keyStorage === 'browser' && <WebSharedDeviceNotice keyCount={webKeyCount} />}
 
                       {hostCapabilities.osNotifications && (
                         <>

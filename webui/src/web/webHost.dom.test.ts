@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DESKTOP_CAPABILITIES, getHostCapabilities, setHostCapabilities } from '../hostCapabilities';
 import { STORAGE_KEYS } from '../storageKeys';
 import type { BridgeEventName } from './fakePipeline';
+import { createApiUsageStore } from './apiUsage';
 import { createBridgeEmitter, createWebPywebviewApi, initWebHost } from './webHost';
 
 function recorder() {
@@ -29,6 +30,31 @@ afterEach(() => {
 });
 
 describe('web host', () => {
+  it('get_api_usage: the desktop panel data from this browser, probing the main key only on Verifica connessione', async () => {
+    const values = new Map<string, string>();
+    const usage = createApiUsageStore({ getItem: key => values.get(key) ?? null, setItem: (key, value) => void values.set(key, value) });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { status: 'UNAUTHENTICATED', message: 'API key not valid.' } }), { status: 401 }));
+    vi.stubGlobal('fetch', fetchMock);
+    localStorage.setItem(STORAGE_KEYS.WEB_GEMINI_KEYS_V1, 'AIzaSyPrimary1234567890123\nAIzaSyReserve1234567890456');
+    const api = createWebPywebviewApi(() => {}, { database: new IDBFactory(), usage });
+
+    const plain = await api.get_api_usage!();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(plain.result?.credentials?.map(c => [c.label, c.masked_key, c.operational_status])).toEqual([
+      ['Chiave Principale', 'AIzaSy...0123', 'unused'],
+      ['Chiave Riserva 1', 'AIzaSy...0456', 'unused'],
+    ]);
+
+    const checked = await api.get_api_usage!('AIzaSyPrimary1234567890123', ['AIzaSyReserve1234567890456'], 'gemini-3.6-flash', true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash');
+    expect(url).not.toContain('AIza');
+    expect((init.headers as Record<string, string>)['x-goog-api-key']).toBe('AIzaSyPrimary1234567890123');
+    expect(checked.result?.credentials?.[0]).toMatchObject({ operational_status: 'invalid', last_error_code: 401 });
+    expect(checked.result?.credentials?.[1].operational_status).toBe('unused');
+  });
+
   it('installs the in-page API with web capabilities and announces it', () => {
     const onReady = vi.fn();
     window.addEventListener('pywebviewready', onReady, { once: true });

@@ -5,7 +5,7 @@
 import { PROMPT_REVISIONE, PROMPT_SISTEMA, buildChunkPrompt, profileModel } from '../../generationProfile';
 import { phaseText } from '../../phaseLabels';
 import { buildBody, buildFinalMarkdown } from './export';
-import { GeminiClient, type GeminiFile, type GenerateResult, type Part } from './gemini';
+import { GeminiClient, type GeminiFile, type GenerateResult, type GenerateUsage, type Part } from './gemini';
 import {
   CancelledError,
   DegenerateOutputError,
@@ -97,6 +97,8 @@ export interface PipelineEnv {
   /** "Inserisci una nuova chiave" when every key has run out; null when none was given. */
   requestNewKey?: () => Promise<string | null>;
   geminiBase?: string;
+  /** Per-key availability shown in the settings (apiUsage.ts). */
+  usage?: GenerateUsage;
 }
 
 const PHASE1_SPAN: [number, number] = [0.05, 0.7];
@@ -144,7 +146,7 @@ function createPipeline(state: SessionState, env: PipelineEnv) {
   if (!env.keys.length) throw new Error('Nessuna chiave API');
   const { reporter, signal } = env;
   const ring: KeyRing = { keys: [...env.keys], index: 0 };
-  let client = new GeminiClient(ring.keys[0], env.geminiBase);
+  let client = new GeminiClient(ring.keys[0], env.geminiBase, env.usage);
   const model = profileModel(state.settings.model);
   let currentPhase = '';
 
@@ -173,7 +175,7 @@ function createPipeline(state: SessionState, env: PipelineEnv) {
     signal,
   };
   const withKeys = <T>(run: () => Promise<T>) => withKeyRotation(ring, run, (from, to, why) => {
-    client = new GeminiClient(ring.keys[to], env.geminiBase);
+    client = new GeminiClient(ring.keys[to], env.geminiBase, env.usage);
     state.keyRotations += 1;
     reporter.console(why === 'quota'
       ? `⚠ Quota giornaliera della chiave ${from + 1} esaurita: continuo con la chiave ${to + 1}/${ring.keys.length}.`

@@ -49,6 +49,7 @@ export interface WebRunOptions {
   now?: () => number;
   wakeLock?: ScreenWakeLock;
   geminiBase?: string;
+  usage?: PipelineEnv['usage'];
 }
 
 export function sleepWithSignal(seconds: number, signal: AbortSignal): Promise<void> {
@@ -181,6 +182,7 @@ export async function runWebFile(options: WebRunOptions): Promise<WebRunOutcome>
       sleep,
       now,
       geminiBase: options.geminiBase,
+      usage: options.usage,
       requestNewKey: async () => {
         emit('appendConsole', '⚠ Quota esaurita su tutte le chiavi: inserisci una nuova chiave per continuare.');
         const key = await options.askNewKey();
