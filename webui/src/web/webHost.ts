@@ -76,10 +76,17 @@ function audioSupport(): string {
 }
 
 // Safari's estimate() leaves out the audio Blobs (27 MB of audio showed as 1.1 MB): the space shown
-// is counted from what this app stored; the browser's figure stays as a secondary reading.
+// is counted from what this app stored; the browser's figure stays as a secondary reading. Texts and
+// lecture audio are the backup's figures; queue copies and run progress are named apart, since the
+// backup leaves them out.
 function describeUsage(usage: WebStorageUsage | null, browserEstimate: number | undefined): string {
   const parts = usage
-    ? [`audio delle lezioni ${formatSize(usage.audio)}`, `testi ${formatSize(usage.documents)}`, `avanzamento elaborazioni ${formatSize(usage.checkpoints)}`]
+    ? [
+        `testi delle sbobine ${formatSize(usage.documents)}`,
+        `audio delle sbobine ${formatSize(usage.audio)}`,
+        ...(usage.queueAudio > 0 ? [`audio in coda ${formatSize(usage.queueAudio)}`] : []),
+        `avanzamento elaborazioni ${formatSize(usage.checkpoints)}`,
+      ]
     : ['spazio delle sbobine non calcolabile'];
   if (browserEstimate !== undefined) parts.push(`stima del browser ${formatSize(browserEstimate)}`);
   const text = parts.join(' · ');

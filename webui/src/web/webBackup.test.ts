@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ArchiveSession } from '../bridge';
 import { STORAGE_KEYS } from '../storageKeys';
 import { BACKUP_FORMAT, BACKUP_MANIFEST, BACKUP_VERSION, backupFileName, createBackup, describeBackup, describeImport, importBackup, loadLastBackupAt, saveLastBackupAt, type BackupManifest } from './webBackup';
+import { measureWebStorage } from './webDatabase';
 import { createWebMediaStore } from './webMedia';
 import { createWebArchive, webSessionHtmlPath } from './webSessions';
 import { createZip, readZip } from './zipArchive';
@@ -48,6 +49,20 @@ describe('web backup', () => {
     const info = await describeBackup(factory);
     expect(info).toMatchObject({ sessions: 2, audioBytes: 3_000, audioFiles: 1 });
     expect(info.textBytes).toBeGreaterThan(100);
+  });
+
+  it("agrees with the settings' space figures for texts and lecture audio", async () => {
+    // Regression: settings showed 1.1 MB for three sbobine while the backup estimate said 202 KB.
+    const factory = new IDBFactory();
+    const { media } = await seed(factory);
+    await media.save('queued', lecture('In coda.m4a', 5_000));
+    const [info, usage] = await Promise.all([describeBackup(factory), measureWebStorage(factory)]);
+    expect(usage.audio).toBe(info.audioBytes);
+    expect(usage.queueAudio).toBe(5_000);
+    // The manifest adds only its own header to the same sessions and folders.
+    expect(info.textBytes - usage.documents).toBeGreaterThanOrEqual(0);
+    expect(info.textBytes - usage.documents).toBeLessThan(200);
+    expect(usage.total).toBe(usage.audio + usage.queueAudio + usage.documents + usage.checkpoints);
   });
 
   it('writes a versioned manifest, the audio as it is and never the API keys', async () => {

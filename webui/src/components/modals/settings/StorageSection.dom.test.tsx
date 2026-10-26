@@ -50,6 +50,18 @@ describe('StorageSection component', () => {
     expect(screen.queryByRole('button', { name: 'Pulisci elaborazioni incomplete' })).toBeNull();
   });
 
+  it('web: calls the figure a total and says what the backup leaves out', () => {
+    // The backup estimate (sbobine only) read as a contradiction of this total.
+    render(<StorageSection {...baseProps} canManageSessionFolder={false} inBrowser />);
+    expect(screen.getByTestId('storage-usage').textContent).toBe('3 sbobine · 1.0 MB occupati in totale');
+    expect(screen.getByTestId('storage-usage-backup-note').textContent).toContain('avanzamento delle elaborazioni');
+  });
+
+  it('desktop: keeps the folder figure without the backup note', () => {
+    render(<StorageSection {...baseProps} />);
+    expect(screen.queryByTestId('storage-usage-backup-note')).toBeNull();
+  });
+
   it('web: warns that the browser may clear the data only when it did not promise to keep it', () => {
     const webProps = { ...baseProps, canManageSessionFolder: false, inBrowser: true };
     const { rerender } = render(<StorageSection {...webProps} sessionInfo={{ ...baseProps.sessionInfo, persisted: false }} />);

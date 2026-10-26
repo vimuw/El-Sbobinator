@@ -94,13 +94,20 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
             {isLoadingSessionInfo
               ? 'Calcolo dello spazio occupato…'
               : sessionInfo
-                ? `${sessionInfo.total_sessions} ${sessionInfo.total_sessions === 1 ? 'sbobina' : 'sbobine'} · ${formatSize(sessionInfo.total_bytes)} occupati`
+                ? `${sessionInfo.total_sessions} ${sessionInfo.total_sessions === 1 ? 'sbobina' : 'sbobine'} · ${formatSize(sessionInfo.total_bytes)} occupati${inBrowser ? ' in totale' : ''}`
                 : 'Spazio occupato non disponibile.'}
           </p>
 
           {!isLoadingSessionInfo && sessionInfo?.usage_detail && (
             <p data-testid="storage-usage-detail" className="text-xs text-[var(--text-secondary)]">
               {sessionInfo.usage_detail}
+            </p>
+          )}
+
+          {/* The backup estimate below counts only the sbobine: say why the two figures differ. */}
+          {inBrowser && !isLoadingSessionInfo && sessionInfo && (
+            <p data-testid="storage-usage-backup-note" className="text-xs text-[var(--text-secondary)]">
+              Il backup contiene solo i testi e, se lo scegli, gli audio delle sbobine: l’avanzamento delle elaborazioni e gli audio in coda restano solo in questo browser.
             </p>
           )}
 

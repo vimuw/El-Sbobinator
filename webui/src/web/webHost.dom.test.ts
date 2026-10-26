@@ -105,9 +105,10 @@ describe('web host', () => {
 
     const info = await api.get_session_storage_info!();
     expect(info.total_bytes).toBeGreaterThanOrEqual(3 * 1024 * 1024);
-    expect(info.usage_detail).toBe('Audio delle lezioni 3.0 MB · testi 0 KB · avanzamento elaborazioni 0 KB · stima del browser 1 KB');
+    // A picked file not yet sbobinato is a queue copy: the backup would not include it.
+    expect(info.usage_detail).toBe('Testi delle sbobine 0 KB · audio delle sbobine 0 KB · audio in coda 3.0 MB · avanzamento elaborazioni 0 KB · stima del browser 1 KB');
     const { report } = await api.get_diagnostic_report!();
-    expect(report).toContain('- Spazio usato: Audio delle lezioni 3.0 MB · testi 0 KB · avanzamento elaborazioni 0 KB · stima del browser 1 KB');
+    expect(report).toContain('- Spazio usato: Testi delle sbobine 0 KB · audio delle sbobine 0 KB · audio in coda 3.0 MB · avanzamento elaborazioni 0 KB · stima del browser 1 KB');
   });
 
   it('runs the simulated pipeline into an archived document the editor can open and save', async () => {
@@ -118,7 +119,7 @@ describe('web host', () => {
     const api = createWebPywebviewApi(emit, { simulation: true, storage });
     expect(await api.get_session_storage_info!()).toEqual({
       ok: true, total_bytes: 0, total_sessions: 0, session_root: expect.stringContaining('il browser può svuotarla'),
-      usage_detail: 'Audio delle lezioni 0 KB · testi 0 KB · avanzamento elaborazioni 0 KB · stima del browser 4 KB', persisted: false,
+      usage_detail: 'Testi delle sbobine 0 KB · audio delle sbobine 0 KB · avanzamento elaborazioni 0 KB · stima del browser 4 KB', persisted: false,
     });
     const [file] = await api.upload_browser_files!([new File(['a'], 'Anatomia.m4a')]);
 
