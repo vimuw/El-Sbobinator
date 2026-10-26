@@ -46,6 +46,8 @@ export interface NotificationDropdownProps {
   leftOffset?: number;
   valign?: 'top' | 'bottom';
   bottomOffset?: number;
+  /** The pointer towards the sidebar bell; off when the panel is not beside it. */
+  showCaret?: boolean;
 }
 
 // The caret sits 48px above the panel's bottom and is 18px tall; the open animation scales from its tip.
@@ -75,6 +77,7 @@ export function NotificationDropdown({
   leftOffset = 72,
   valign = 'top',
   bottomOffset = 16,
+  showCaret = true,
 }: NotificationDropdownProps) {
   const [activeTab, setActiveTab] = useState<'all' | 'unread'>('all');
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -91,7 +94,7 @@ export function NotificationDropdown({
       ? `clamp(320px, 52vh, min(480px, calc(var(--app-height) - ${bottomOffset + 16}px)))`
       : 'clamp(320px, 52vh, min(480px, calc(var(--app-height) - 88px)))';
 
-  const hasCaret = align === 'left' && valign === 'bottom';
+  const hasCaret = showCaret && align === 'left' && valign === 'bottom';
 
   return (
     <>
@@ -131,7 +134,8 @@ export function NotificationDropdown({
           transformOrigin: hasCaret
             ? `left calc(100% - ${CARET_CENTER_FROM_BOTTOM}px)`
             : `${valign === 'bottom' ? 'bottom' : 'top'} ${align === 'left' ? 'left' : 'right'}`,
-          width: 380,
+          // A phone is narrower than the panel: it fills the room beside the sidebar instead.
+          width: `min(380px, calc(100vw - ${(align === 'left' ? leftOffset : 72) + 8}px))`,
           height: dynamicHeightStyle,
           maxHeight: `calc(var(--app-height) - ${valign === 'bottom' ? bottomOffset + 16 : 88}px)`,
           top: valign === 'bottom' ? undefined : 64,

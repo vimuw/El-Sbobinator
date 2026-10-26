@@ -121,6 +121,31 @@ describe('RichTextEditor Component', () => {
     expect(trigger.hasAttribute('inert')).toBe(true);
   });
 
+  it('closes the index after a jump on a phone, where it covers the text', () => {
+    const heading = { id: 'h-0', level: 2, text: 'Capitolo indice' };
+    const onTocToggle = vi.fn();
+    const onScrollToHeading = vi.fn();
+    const props = { initialContent: '<p>Appunti</p>', tocHeadings: [heading], onTocToggle, onScrollToHeading, isTocOpen: true };
+
+    vi.stubGlobal('matchMedia', () => ({ matches: false }));
+    const desktop = render(<RichTextEditor {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: heading.text }));
+    expect(onScrollToHeading).toHaveBeenCalledWith(heading);
+    expect(onTocToggle).not.toHaveBeenCalled();
+    desktop.unmount();
+    vi.unstubAllGlobals();
+
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(max-width: 640px)' }));
+    try {
+      render(<RichTextEditor {...props} />);
+      fireEvent.click(screen.getByRole('button', { name: heading.text }));
+      expect(onScrollToHeading).toHaveBeenCalledTimes(2);
+      expect(onTocToggle).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('preserves local edits through toolbar undo and redo', async () => {
     const onChange = vi.fn();
     render(<RichTextEditor initialContent="<p>Appunti originali</p>" onChange={onChange} />);

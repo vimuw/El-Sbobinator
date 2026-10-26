@@ -2477,24 +2477,10 @@ button {
   }
 }
 
-/* Narrower margins on portrait tablets; phones narrow them further below. */
+/* Narrower margins on portrait tablets; phones drop the sheet (PHONE, at the end of the file). */
 @media (max-width: 900px) {
   .editor-page .tiptap-editor {
     padding: 64px 48px;
-  }
-}
-
-@media (max-width: 640px) {
-  .editor-page {
-    min-width: 0;
-  }
-
-  .editor-page .tiptap-editor {
-    padding: 40px 28px;
-  }
-
-  .editor-page-outer {
-    padding: 12px 8px 24px;
   }
 }
 
@@ -5810,4 +5796,224 @@ input::-webkit-contacts-auto-fill-button {
   :root[data-host="web"] .player-speed-dropdown-panel .editor-dropdown-item {
     min-height: 40px;
   }
+}
+
+/* ═══ PHONE ═══ Last in the file, so these rules win over the base ones above. */
+
+/* Phones (usePhoneLayout uses the same breakpoint): like Google Docs on a phone there is no A4
+   sheet, the text takes the whole width. Only the view changes: the HTML, and so the copy for
+   Google Docs, stays the same. */
+@media (max-width: 640px) {
+  .editor-page-container,
+  :root[data-theme="dark"] .editor-page-container {
+    background: #ffffff;
+  }
+
+  :root[data-theme="dark"] .editor-page-container {
+    background: #1e1e1e;
+  }
+
+  .editor-page-outer {
+    padding: 0;
+  }
+
+  .editor-page,
+  :root[data-theme="dark"] .editor-page {
+    min-width: 0;
+    max-width: none;
+    box-shadow: none;
+  }
+
+  .editor-page .tiptap-editor {
+    padding: 20px 16px 32px;
+  }
+
+  /* The index opens from the toolbar as a sheet over the text: beside it the text had one word per line. */
+  .editor-toc-col,
+  .editor-toc-spacer {
+    width: 0 !important;
+    padding: 0;
+  }
+
+  .editor-toc-trigger {
+    display: none;
+  }
+
+  .editor-toc-sticky {
+    position: static;
+  }
+
+  .editor-toc-content {
+    inset: auto 8px 8px;
+    z-index: 40;
+    max-height: 60%;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-strong);
+  }
+
+  .editor-toc-content .toc-item {
+    padding-block: 10px;
+  }
+
+  .editor-fullpage-header {
+    gap: 4px;
+    padding: 0 8px;
+  }
+
+  .editor-fullpage-title > svg:first-child {
+    display: none;
+  }
+
+  /* The save state is an icon; an error keeps its words. */
+  .editor-autosave-badge[data-status="idle"] {
+    display: none;
+  }
+
+  .editor-autosave-badge:not([data-status="error"]) {
+    justify-content: center;
+    width: 28px;
+    padding: 0;
+  }
+
+  .editor-autosave-badge:not([data-status="error"]) .editor-autosave-label {
+    display: none;
+  }
+
+  .editor-autosave-badge svg {
+    margin-right: 0;
+  }
+
+  .editor-fullpage-utilities {
+    margin-left: 2px;
+    padding-left: 6px;
+  }
+
+  .editor-fullpage-footer {
+    padding: 0 8px 8px;
+  }
+
+  .editor-player-dock:has(> div > audio) {
+    padding: 0 8px 0 4px;
+  }
+
+  .find-bar-float {
+    left: 8px;
+    right: 8px;
+    min-width: 0;
+  }
+
+  .dashboard-section-header {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  /* A long lecture title keeps two lines instead of a few letters. */
+  .queue-card h4.truncate {
+    display: -webkit-box;
+    white-space: normal;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  /* The whole card opens the sbobina: its title gets the room of the extra button. */
+  .completed-open-button {
+    display: none;
+  }
+
+  .recent-session-action {
+    width: 36px;
+    padding: 0;
+  }
+
+  .recent-session-action-label {
+    display: none;
+  }
+}
+
+/* Phone navigation: the sidebar becomes a bar at the bottom, so every page gets its 54px back.
+   Its inline sizes are the desktop ones, hence !important. */
+@media (max-width: 640px) {
+  .app-shell {
+    flex-direction: column-reverse;
+  }
+
+  .app-main-column {
+    height: auto;
+    min-height: 0;
+  }
+
+  .app-sidebar {
+    flex-direction: row !important;
+    align-items: center;
+    justify-content: space-between;
+    width: 100% !important;
+    height: 56px !important;
+    padding: 0 8px;
+    position: relative !important;
+    border-right: none !important;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  /* The Dashboard item already leads home. */
+  .app-sidebar > div:first-child {
+    display: none;
+  }
+
+  .app-sidebar > div {
+    flex-direction: row;
+    flex: 0 0 auto;
+    padding: 0 !important;
+    border-top: none !important;
+  }
+
+  .app-sidebar .sidebar-tooltip {
+    display: none;
+  }
+}
+
+/* iPhone Safari zooms the page into any field whose text is under 16px and leaves it zoomed.
+   Web build on touch phones only: the desktop app and mouse windows keep their compact fields. */
+@media (max-width: 640px) and (pointer: coarse) {
+  :root[data-host="web"] :is(input:not([type="range"], [type="checkbox"], [type="radio"], [type="file"]), textarea, select) {
+    font-size: 16px !important;
+  }
+}
+
+/* Phone toolbar (EditorToolbar compact): one row, the rest under "Aa". */
+.editor-toolbar-compact {
+  flex-shrink: 0;
+}
+
+.editor-toolbar.is-compact {
+  flex-wrap: nowrap;
+  gap: 2px;
+  padding: 6px 6px;
+}
+
+.editor-toolbar-row {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.editor-toolbar-row::-webkit-scrollbar {
+  display: none;
+}
+
+.editor-toolbar.editor-toolbar-more {
+  gap: 4px;
+  padding: 6px 8px;
+}
+
+/* Sized so the row fits a 390px iPhone with the index and "Aa" beside it; narrower phones scroll it. */
+.editor-toolbar.is-compact .editor-button.heading-dropdown-btn {
+  width: 88px;
+  min-width: 88px;
+  max-width: 88px;
 }

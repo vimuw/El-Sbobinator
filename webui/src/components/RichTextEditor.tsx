@@ -21,6 +21,7 @@ import { EditorBubbleMenu } from './EditorBubbleMenu';
 import { FindReplacePanel } from './EditorFindReplace';
 import { useEditorImageDrop } from '../hooks/useEditorImageDrop';
 import { useTocScrollSpy } from '../hooks/useTocScrollSpy';
+import { usePhoneLayout } from '../hooks/usePhoneLayout';
 import { EditorContextMenu } from './EditorContextMenu';
 import { EditorLinkCard } from './EditorLinkCard';
 import { openDocumentLink } from '../editorLinks';
@@ -72,6 +73,7 @@ export function RichTextEditor({
 }: RichTextEditorProps) {
   const bottomInsetRef = useRef(bottomInset);
   useEffect(() => { bottomInsetRef.current = bottomInset; }, [bottomInset]);
+  const isPhone = usePhoneLayout();
   const [contextMenu, setContextMenu] = React.useState<{ x: number; y: number } | null>(null);
   const [isMathOpen, setIsMathOpen] = useState(false);
   // Each request opens the shared link panel once (Ctrl+K and the context menu).
@@ -446,6 +448,8 @@ export function RichTextEditor({
         onToggleFindReplace={() => setFindMode(p => p ? null : 'find')}
         zoomLevel={zoomLevel}
         onZoomChange={onZoomChange}
+        isTocOpen={isTocOpen}
+        onTocToggle={onTocToggle}
       />
       {findMode && editor && (
         <FindReplacePanel editor={editor} onClose={() => setFindMode(null)} initialMode={findMode} focusTrigger={findFocusTrigger} initialFindText={initialSearchTerm} />
@@ -487,7 +491,11 @@ export function RichTextEditor({
                         key={h.id}
                         className={`toc-item toc-item-h${h.level}${activeHeadingId === h.id ? ' toc-item-active' : ''}`}
                         style={{ paddingLeft: `${(h.level - 1) * 12 + 14}px` }}
-                        onClick={() => onScrollToHeading?.(h)}
+                        onClick={() => {
+                          onScrollToHeading?.(h);
+                          // On a phone the index covers the text: close it to show the heading.
+                          if (isPhone) onTocToggle?.();
+                        }}
                         title={h.text}
                       >
                         {h.text}

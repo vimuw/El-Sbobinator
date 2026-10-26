@@ -1,8 +1,9 @@
 import { reportClientError } from '../diagnostics';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Link, Minus, Pause, Play, Plus, RefreshCw, RotateCcw, RotateCw, Unlink, Volume2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Link, Minus, Pause, Play, Plus, RefreshCw, RotateCcw, RotateCw, Unlink, Volume2 } from 'lucide-react';
 import { ConfirmActionModal } from './modals/ConfirmActionModal';
+import { usePhoneLayout } from '../hooks/usePhoneLayout';
 
 interface AudioPlayerProps {
   src: string;
@@ -51,6 +52,10 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
   const [playbackRate, setPlaybackRate] = useState(initialPlaybackRate ?? 1);
   const [volume, setVolume] = useState(initialVolume ?? 1);
   const [showVolume] = useState(canSetMediaVolume);
+  // A phone keeps one row over the text: speed and the audio menu open on request.
+  const isPhone = usePhoneLayout();
+  const [showMoreControls, setShowMoreControls] = useState(false);
+  const folded = isPhone && !showMoreControls;
   const [isSpeedOpen, setIsSpeedOpen] = useState(false);
   const [speedPanelPos, setSpeedPanelPos] = useState({ bottom: 0, left: 0 });
   const speedBtnRef = useRef<HTMLButtonElement>(null);
@@ -387,7 +392,7 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
         </button>
       </div>
 
-      <div className="flex min-w-48 flex-1 items-center gap-3">
+      <div className={`flex ${isPhone ? 'min-w-0' : 'min-w-48'} flex-1 items-center gap-3`}>
         <input
           type="range"
           min={0}
@@ -402,14 +407,37 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
           className="custom-scrubber min-w-0 flex-1"
           style={{ '--progress': duration ? `${(currentTime / duration) * 100}%` : '0%' } as React.CSSProperties}
         />
+        {isPhone ? (
+          // Stacked, so the scrubber keeps most of the narrow row.
+          <span className="flex shrink-0 flex-col items-end text-[10px] font-semibold leading-tight tabular-nums" style={{ color: 'var(--text-muted)' }}>
+            <span>{formatTime(currentTime)}</span>
+            <span aria-label={`di ${formatTime(duration)}`}>{formatTime(duration)}</span>
+          </span>
+        ) : (
         <span className="shrink-0 pr-0.5 text-xs font-semibold tabular-nums" style={{ color: 'var(--text-muted)' }}>
           {formatTime(currentTime)} / {formatTime(duration)}
         </span>
+        )}
+        {!folded && (
         <button type="button" onClick={() => skip(-duration)} className="player-control mr-2 shrink-0" aria-label="Torna all'inizio" title="Torna all'inizio">
           <RotateCcw className="h-4 w-4" />
         </button>
+        )}
+        {isPhone && (
+          <button
+            type="button"
+            onClick={() => setShowMoreControls(v => !v)}
+            className="player-control shrink-0"
+            aria-label={showMoreControls ? 'Nascondi altri controlli audio' : 'Mostra altri controlli audio'}
+            title={showMoreControls ? 'Meno controlli' : 'Velocità e altri controlli'}
+            aria-expanded={showMoreControls}
+          >
+            {showMoreControls ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+          </button>
+        )}
       </div>
 
+      {!folded && (
       <div className="flex items-center gap-2">
         <div className="player-speed-wrap relative" aria-label="Velocita di riproduzione">
           <button
@@ -564,6 +592,7 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
           </div>
         )}
       </div>
+      )}
 
       {/* Portaled: the glass dock's backdrop-filter would otherwise trap the fixed overlay inside it. */}
       {createPortal(
