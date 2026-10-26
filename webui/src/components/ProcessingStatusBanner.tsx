@@ -9,6 +9,7 @@ import {
   FileDown,
   FileSearch,
   Files,
+  Layers,
   Loader,
   MessageSquareOff,
   Mic,
@@ -514,12 +515,16 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
         ? 'var(--success-subtle)'
         : 'var(--processing-bg)';
 
+  // Where the run is (file, then block or section) comes first; model and time follow.
   const metaItems: Array<{ icon: React.ReactElement; label: string }> = [];
-  if (currentModel && kind !== 'success') {
-    metaItems.push({ icon: <Bot className="h-3.5 w-3.5" />, label: shortModelName(currentModel) });
-  }
   if (currentBatchTotal > 1) {
     metaItems.push({ icon: <Files className="h-3.5 w-3.5" />, label: `File ${currentFileIndex + 1} di ${currentBatchTotal}` });
+  }
+  if (progressLabel) {
+    metaItems.push({ icon: <Layers className="h-3.5 w-3.5" />, label: progressLabel });
+  }
+  if (currentModel && kind !== 'success') {
+    metaItems.push({ icon: <Bot className="h-3.5 w-3.5" />, label: shortModelName(currentModel) });
   }
   if (startedAt && elapsedSecs > 0 && kind !== 'success') {
     metaItems.push({ icon: <Timer className="h-3.5 w-3.5" />, label: formatElapsed(elapsedSecs) });
@@ -573,13 +578,9 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
                 {title}
               </motion.h2>
             </AnimatePresence>
-            {(currentFileName || progressLabel) && (
-              <p className="flex max-w-full items-center justify-center gap-1.5 text-sm tabular-nums" style={{ color: 'var(--text-secondary)' }}>
-                {currentFileName && (
-                  <span className="truncate font-medium" style={{ color: 'var(--text-primary)' }} title={currentFileName}>{currentFileName}</span>
-                )}
-                {progressLabel && currentFileName && <span aria-hidden="true">·</span>}
-                {progressLabel && <span className="shrink-0">{progressLabel}</span>}
+            {currentFileName && (
+              <p className="flex max-w-full items-center justify-center text-sm" data-testid="processing-file-name">
+                <span className="truncate font-medium" style={{ color: 'var(--text-primary)' }} title={currentFileName}>{currentFileName}</span>
               </p>
             )}
           </div>
@@ -679,6 +680,7 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
             {metaItems.length > 0 && (
               <div
                 className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs tabular-nums"
+                data-testid="processing-meta"
                 style={{ color: 'var(--text-secondary)', opacity: isDimmed ? 0.6 : 1, transition: 'opacity 0.3s' }}
               >
                 {metaItems.map(({ icon, label }, index) => (

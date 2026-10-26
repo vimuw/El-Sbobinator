@@ -61,6 +61,46 @@ describe('ProcessingStatusBanner', () => {
     expect(screen.getByText('File 2 di 3')).toBeTruthy();
   });
 
+  it('lists the block counter with the run details, not beside the file name', () => {
+    render(
+      <ProcessingStatusBanner
+        appState="processing"
+        currentPhase="Fase 1/3: trascrizione (chunk 3/12)"
+        currentModel="gemini-2.5-flash"
+        activeProgress={20}
+        workDone={{ chunks: 2, macro: 0 }}
+        workTotals={{ chunks: 12, macro: 0 }}
+        currentFileIndex={0}
+        currentBatchTotal={5}
+        currentFileName="Fisiologia II Lezione 3 pt 2.m4a"
+        startedAt={Date.now() - 30_000}
+      />,
+    );
+    expect(screen.getByTestId('processing-file-name').textContent).toBe('Fisiologia II Lezione 3 pt 2.m4a');
+    const meta = screen.getByTestId('processing-meta').textContent ?? '';
+    expect(meta).toMatch(/^File 1 di 5Blocco 3 di 122\.5-flash/);
+  });
+
+  it('fills the transcription segment as chunks complete', () => {
+    const props = {
+      appState: 'processing' as const,
+      currentPhase: 'Fase 1/3: trascrizione (chunk 5/10)',
+      currentModel: 'gemini-2.5-flash',
+      activeProgress: 28,
+      workTotals: { chunks: 10, macro: 0 },
+      currentFileIndex: 0,
+      currentBatchTotal: 1,
+    };
+    const { rerender } = render(<ProcessingStatusBanner {...props} workDone={{ chunks: 0, macro: 0 }} />);
+    const segment = screen.getByTestId('phase-segment-trascrizione');
+    expect(segment.getAttribute('data-state')).toBe('active');
+    rerender(<ProcessingStatusBanner {...props} workDone={{ chunks: 4, macro: 0 }} />);
+    return waitFor(() => {
+      const fill = segment.firstElementChild as HTMLElement;
+      expect(parseFloat(fill.style.width)).toBeGreaterThan(20);
+    });
+  });
+
   it('shows all-done stepper for __completed__ phase', () => {
     render(
       <ProcessingStatusBanner
