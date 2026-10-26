@@ -1234,7 +1234,8 @@ describe('SettingsModal — validate environment', () => {
 
     const sidebar = container.querySelector('nav[aria-label="Sezioni delle impostazioni"]');
     expect(sidebar).toBeTruthy();
-    const buttons = sidebar ? Array.from(sidebar.querySelectorAll('button')) : [];
+    // The close button shares the tab row on the compact card: count the tabs only.
+    const buttons = sidebar ? Array.from(sidebar.querySelectorAll('button.settings-nav-item')) : [];
     const buttonTexts = buttons.map(b => b.textContent?.trim() || '');
     expect(buttonTexts).toHaveLength(3);
     expect(buttonTexts[0]).toContain('Generale');

@@ -1281,7 +1281,8 @@ button {
 
 .settings-nav {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* Three tabs and the close button (.settings-close). */
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
   flex-shrink: 0;
   gap: 4px;
   padding: 12px;
@@ -1322,6 +1323,12 @@ button {
   outline-offset: 2px;
 }
 
+/* Compact card: a fourth column of the tab row, at the top right. */
+.settings-close {
+  align-self: center;
+  justify-self: end;
+}
+
 @media (max-width: 767px) {
   .settings-nav-item {
     justify-content: center;
@@ -1344,6 +1351,16 @@ button {
     overflow-y: auto;
     border-bottom: none;
     border-right: 1px solid var(--border-subtle);
+  }
+
+  /* Wide card: back at the right of the page title (pt-8 / px-8 of the header, less its own padding).
+     The nav is not positioned, so the card places it and the nav's scrolling does not clip it. */
+  .settings-close {
+    position: absolute;
+    top: 28px;
+    right: 24px;
+    /* Above the content column, which comes later and paints its own background. */
+    z-index: 1;
   }
 }
 
