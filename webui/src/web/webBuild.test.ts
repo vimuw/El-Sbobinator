@@ -154,8 +154,8 @@ describe('Drive sync in the web build', () => {
   });
 
   it('leaves the build as it was without a client ID', () => {
-    expect(driveClientId(undefined, true)).toBeNull();
-    expect(driveClientId('  ', false)).toBeNull();
+    expect(driveClientId(undefined)).toBeNull();
+    expect(driveClientId('  ')).toBeNull();
     expect(webCsp()).toBe(WEB_CSP);
     expect(webStaticPages()).toEqual(WEB_STATIC_PAGES);
     expect(webHeadersFile(['icon.png'])).toBe(webHeadersFile(['icon.png'], false));
@@ -163,10 +163,9 @@ describe('Drive sync in the web build', () => {
     expect(webHeadersFile()).not.toContain('googleapis.com https://www');
   });
 
-  it('builds the return page and the wider policy into previews only', () => {
-    expect(driveClientId(` ${clientId} `, true)).toBe(clientId);
-    expect(() => driveClientId(clientId, false)).toThrow(/solo nelle anteprime/);
-    expect(() => driveClientId('client-secret-or-typo', true)).toThrow(/non valido/);
+  it('builds the return page and the wider policy into any build with a client ID', () => {
+    expect(driveClientId(` ${clientId} `)).toBe(clientId);
+    expect(() => driveClientId('client-secret-or-typo')).toThrow(/non valido/);
     expect(webStaticPages(true)).toEqual(['privacy', 'drive-auth']);
     const rules = webHeadersFile([], true).split('\n');
     expect(rules[1]).toBe(`  Content-Security-Policy: ${webCsp(true)}; frame-ancestors 'none'`);
@@ -182,6 +181,11 @@ describe('Drive sync in the web build', () => {
     expect(scripts).toEqual([['src="./boot-theme.js"', ''], ['type="module" src="./src/web/drive/authReturn.ts"', '']]);
     expect(html).not.toMatch(/(?:href|src)="(?:https?:)?\/\//i);
     expect(/<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]+)"/i.exec(toWebIndexHtml(html, true))?.[1]).toBe(webCsp(true));
+    // Its script never reaches the app's move to the official address (canonicalOrigin.ts, from
+    // main.tsx): on elsbobinator.com/drive-auth nothing redirects and the fragment stays for the app.
+    const imports = (file: string) => [...readFileSync(new URL(file, import.meta.url), 'utf8').matchAll(/^import\s[^;]*from '([^']+)'/gm)].map(([, from]) => from);
+    expect(imports('./drive/authReturn.ts')).toEqual(['./oauth']);
+    expect(imports('./drive/oauth.ts')).toEqual([]);
   });
 });
 

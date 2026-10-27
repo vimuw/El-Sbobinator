@@ -31,6 +31,8 @@ describe('Drive OAuth', () => {
 
   it('builds the return address and a random state', () => {
     expect(redirectUriFor('https://anteprima.elsbobinator.pages.dev')).toBe('https://anteprima.elsbobinator.pages.dev/drive-auth');
+    // The redirect URI registered in the Google client for the released site.
+    expect(redirectUriFor('https://elsbobinator.com')).toBe('https://elsbobinator.com/drive-auth');
     expect(newState(bytes => bytes.fill(171))).toBe('ab'.repeat(16));
   });
 

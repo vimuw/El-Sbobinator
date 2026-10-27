@@ -17,8 +17,8 @@ export function createViteConfig(target: 'desktop' | 'web'): UserConfig {
   const isWeb = target === 'web';
   // The web release workflow passes its tag (web-v1.2.3); other web builds are previews.
   const web = isWeb ? webBuildVersion(process.env.EL_SBOBINATOR_WEB_VERSION, packageInfo.version) : null;
-  // Drive sync: only previews built with a Google OAuth client ID have it (and its return page).
-  const driveClient = web ? driveClientId(process.env.EL_SBOBINATOR_GOOGLE_CLIENT_ID, web.preview) : null;
+  // Drive sync: only web builds with a Google OAuth client ID have it (and its return page).
+  const driveClient = web ? driveClientId(process.env.EL_SBOBINATOR_GOOGLE_CLIENT_ID) : null;
   const drive = driveClient !== null;
   const staticPages = webStaticPages(drive);
   const isStaticPagePath = (url: string) => staticPages.some(page => url === `/${page}.html` || url === `/${page}`);
