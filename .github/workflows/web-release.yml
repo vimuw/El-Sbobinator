@@ -6,6 +6,8 @@ name: Publish El Sbobinator Web
 # never sees these. It deploys to Cloudflare only: no GitHub Release and no uploaded
 # artifacts, so nothing about the web site appears on the repository's Releases page
 # or for the desktop updater.
+# Google Drive sync is optional: the build includes it only when the repository variable
+# EL_SBOBINATOR_GOOGLE_CLIENT_ID holds the site's OAuth client ID (public, not a secret).
 on:
   push:
     tags:
@@ -68,9 +70,24 @@ jobs:
         working-directory: webui
         env:
           EL_SBOBINATOR_WEB_VERSION: ${{ github.ref_name }}
+          EL_SBOBINATOR_GOOGLE_CLIENT_ID: ${{ vars.EL_SBOBINATOR_GOOGLE_CLIENT_ID }}
         run: |
           npm run build:web
           node -e "const v = require('./dist-web/version.json'); if (v.preview) throw new Error('version.json says preview'); console.log('Version', v.version);"
+
+      - name: Check the Google Drive sync of the build
+        working-directory: webui
+        env:
+          EL_SBOBINATOR_GOOGLE_CLIENT_ID: ${{ vars.EL_SBOBINATOR_GOOGLE_CLIENT_ID }}
+        run: |
+          if [ -n "$EL_SBOBINATOR_GOOGLE_CLIENT_ID" ]; then
+            test -f dist-web/drive-auth.html               || { echo "::error::The client ID is set but dist-web/drive-auth.html is missing."; exit 1; }
+            grep -q 'https://www.googleapis.com' dist-web/_headers               || { echo "::error::The client ID is set but _headers does not reach the Drive API."; exit 1; }
+            echo "Google Drive sync: on"
+          else
+            # Not an error: the site goes out as before, without Drive.
+            echo "::warning::EL_SBOBINATOR_GOOGLE_CLIENT_ID is not set: the site is published without Google Drive sync."
+          fi
 
       - name: Deploy to Cloudflare Pages (production branch)
         uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4.1.3

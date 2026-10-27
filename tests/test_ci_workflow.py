@@ -93,6 +93,34 @@ def test_web_release_pins_actions_and_deploys_only_after_tests_and_build():
     assert "--project-name=elsbobinator --branch=main" in web
 
 
+def test_web_release_builds_drive_from_the_repository_variable_and_checks_it():
+    web = WEB_RELEASE.read_text(encoding="utf-8")
+    variable = (
+        "EL_SBOBINATOR_GOOGLE_CLIENT_ID: ${{ vars.EL_SBOBINATOR_GOOGLE_CLIENT_ID }}"
+    )
+    build = web.split("- name: Build the static site", 1)[1].split(
+        "\n      - name:", 1
+    )[0]
+    assert variable in build and "npm run build:web" in build
+    # The client ID is public: never a secret, which would also hide it from the build logs.
+    assert "secrets.EL_SBOBINATOR_GOOGLE_CLIENT_ID" not in web
+    check = web.split("- name: Check the Google Drive sync", 1)[1].split(
+        "\n      - name:", 1
+    )[0]
+    assert variable in check
+    with_drive, without_drive = check.split("\n          else\n", 1)
+    assert 'if [ -n "$EL_SBOBINATOR_GOOGLE_CLIENT_ID" ]' in with_drive
+    assert "test -f dist-web/drive-auth.html" in with_drive and "exit 1" in with_drive
+    # Without the variable the release goes on without Drive.
+    assert "::warning::" in without_drive and "exit" not in without_drive
+    order = [
+        web.index("npm run build:web"),
+        web.index("- name: Check the Google Drive sync"),
+        web.index("cloudflare/wrangler-action@"),
+    ]
+    assert order == sorted(order)
+
+
 def test_web_release_publishes_nothing_on_github():
     # The web site stays out of the desktop repository's Releases page and artifacts.
     web = WEB_RELEASE.read_text(encoding="utf-8")
