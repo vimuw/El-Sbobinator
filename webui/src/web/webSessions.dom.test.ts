@@ -5,7 +5,7 @@ import { STORAGE_KEYS } from '../storageKeys';
 import { createCheckpointStore } from './checkpointStore';
 import { defaultSettings } from './pipeline/run';
 import { newSession } from './pipeline/session';
-import { WEB_DB_NAME, openWebDatabase } from './webDatabase';
+import { WEB_DB_NAME, WEB_DB_VERSION, openWebDatabase } from './webDatabase';
 import { createWebArchive, requestPersistentStorage, webSessionHtmlPath, type NewArchiveSession } from './webSessions';
 
 const identity = { name: 'Lezione.mp3', size: 10, headHash: 'ab' };
@@ -47,8 +47,8 @@ describe('web archive in IndexedDB', () => {
 
     const archive = createWebArchive(factory);
     expect(await archive.list()).toEqual([legacy]);
-    expect((await openWebDatabase(factory)).version).toBe(3);
-    expect((await openWebDatabase(factory)).objectStoreNames.contains('media')).toBe(true);
+    expect((await openWebDatabase(factory)).version).toBe(WEB_DB_VERSION);
+    expect((await openWebDatabase(factory)).objectStoreNames.contains('sync')).toBe(true);
     expect(await archive.readHtml(legacy.html_path)).toContain('<body><p>Testo salvato</p></body>');
     expect(await archive.generation(legacy.session_dir)).toBe(3);
     expect(await archive.loadFolders()).toEqual([{ id: 'f1', name: 'Fisiologia', color: '', session_dirs: ['web-session://old'] }]);

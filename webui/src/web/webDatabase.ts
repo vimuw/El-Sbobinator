@@ -2,9 +2,10 @@ import type { ArchiveFolder, ArchiveSession } from '../bridge';
 import { STORAGE_KEYS } from '../storageKeys';
 
 // The web build's IndexedDB database: pipeline checkpoints (v1), the archive (v2): session
-// metadata, the editor document of each sbobina and the archive folders, and the audio files (v3).
+// metadata, the editor document of each sbobina and the archive folders, the audio files (v3), and
+// the Drive sync state (v4: drive/syncState.ts).
 export const WEB_DB_NAME = 'el-sbobinator-web';
-export const WEB_DB_VERSION = 3;
+export const WEB_DB_VERSION = 4;
 export const CHECKPOINTS = 'checkpoints';
 export const CHECKPOINTS_BY_FILE = 'byFile';
 export const SESSIONS = 'sessions';
@@ -12,6 +13,7 @@ export const DOCUMENTS = 'documents';
 export const FOLDERS = 'folders';
 export const MEDIA = 'media';
 export const MEDIA_BY_SESSION = 'bySession';
+export const SYNC = 'sync';
 // The spike (served at el-sbobinator-web.pages.dev) had a database with this same name at version
 // 1 with a single `sessions` store of its own: renamed out of the way, never deleted.
 export const SPIKE_SESSIONS = 'spike-sessions';
@@ -68,6 +70,9 @@ function openDatabase(factory: IDBFactory): Promise<IDBDatabase> {
       }
       if (event.oldVersion < 3) {
         db.createObjectStore(MEDIA, { keyPath: 'id' }).createIndex(MEDIA_BY_SESSION, 'sessionDir');
+      }
+      if (event.oldVersion < 4) {
+        db.createObjectStore(SYNC, { keyPath: 'key' });
       }
     };
     request.onsuccess = () => {
