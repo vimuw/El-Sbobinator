@@ -173,13 +173,17 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
   }, []);
 
   const relinkPreviewAudio = useCallback(async () => {
-    if (!window.pywebview?.api?.ask_media_file) return;
+    const api = window.pywebview?.api;
+    // The web build picks the file for this page only, without copying it into the browser.
+    const askFile = api?.ask_editor_media_file ?? api?.ask_media_file;
+    if (!askFile) return;
     const sessionKey = currentPreviewSessionKeyRef.current;
     try {
-      const selectedFile = await window.pywebview.api.ask_media_file();
+      const selectedFile = await askFile();
       if (!selectedFile?.path) return;
       if (sessionKey !== currentPreviewSessionKeyRef.current) return false;
       let persistOk = true;
+      let relinkWarning = '';
       if (preview.sessionDir) {
         if (!window.pywebview?.api?.update_session_input_path) {
           // The bridge is present but the persist endpoint is missing — treat as
@@ -190,6 +194,7 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
           const saveRes = await window.pywebview.api.update_session_input_path(preview.sessionDir, selectedFile.path);
           if (sessionKey !== currentPreviewSessionKeyRef.current) return false;
           if (saveRes?.ok) {
+            relinkWarning = saveRes.warning || '';
             setArchiveSessions(prev => prev.map(s =>
               normalizeSessionPath(s.session_dir) === normalizeSessionPath(preview.sessionDir) ? { ...s, input_path: selectedFile.path } : s,
             ));
@@ -210,6 +215,11 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
       setPreview(prev => ({ ...prev, sourcePath: selectedFile.path, audioRelinkNeeded: false }));
       const didLoad = await loadPreviewAudio(selectedFile.path, preview.sessionDir);
       if (didLoad) appendConsole(`Audio ricollegato: ${selectedFile.name}`);
+      // A file that may not be the lecture is still used: the dock says why the times may not match.
+      if (relinkWarning && sessionKey === currentPreviewSessionKeyRef.current) {
+        appendConsole(`⚠️ ${relinkWarning}`);
+        setPreview(prev => ({ ...prev, audioWarning: relinkWarning }));
+      }
       return didLoad;
     } catch (error: unknown) {
       setPreview(prev => ({ ...prev, audioLoading: false }));

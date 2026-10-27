@@ -311,6 +311,35 @@ describe('usePreview', () => {
     expect(stream_media_file).toHaveBeenLastCalledWith('/new/audio.mp3', '/session');
   });
 
+  it('picks the web editor file for this page only, and keeps the warning that it may not be the lecture', async () => {
+    const appendConsole = vi.fn();
+    const ask_media_file = vi.fn();
+    const ask_editor_media_file = vi.fn().mockResolvedValue({ path: 'local://n/Altra.mp3', name: 'Altra.mp3', size: 10 });
+    const warning = 'Sembra un file diverso dalla lezione originale: i tempi dell’audio potrebbero non corrispondere.';
+    setPywebview({
+      read_html_content: vi.fn().mockResolvedValue({ ok: true, content: '<body>text</body>' }),
+      ask_media_file,
+      ask_editor_media_file,
+      update_session_input_path: vi.fn().mockResolvedValue({ ok: true, warning }),
+      stream_media_file: vi.fn()
+        .mockResolvedValueOnce({ ok: false, has_audio: true })
+        .mockResolvedValue({ ok: true, url: 'blob:test/2' }),
+    });
+    const { result } = renderHook(() => usePreview(makeOptions({ appendConsole })));
+    await act(async () => {
+      await result.current.openPreview('web-session://a/sbobina.html', 'Lezione', 'local://o/Lezione.mp3', undefined, 'web-session://a');
+    });
+    expect(result.current.preview.audioRelinkNeeded).toBe(true);
+
+    await act(async () => {
+      await result.current.relinkPreviewAudio();
+    });
+    expect(ask_editor_media_file).toHaveBeenCalledTimes(1);
+    expect(ask_media_file).not.toHaveBeenCalled();
+    expect(result.current.preview).toMatchObject({ audioSrc: 'blob:test/2', audioRelinkNeeded: false, audioWarning: warning });
+    expect(appendConsole).toHaveBeenCalledWith(`⚠️ ${warning}`);
+  });
+
   it('relinkPreviewAudio aborts when sessionDir is set but update_session_input_path is absent', async () => {
     // Regression test: previously persistOk stayed true when the endpoint was
     // missing, causing in-memory queue state to be updated without a disk write.

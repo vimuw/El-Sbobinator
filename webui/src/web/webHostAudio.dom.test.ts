@@ -125,7 +125,7 @@ describe('audio kept in the browser by the web host', () => {
     expect(await reload().api.stream_media_file!(session.input_path, done.session_dir)).toMatchObject({ ok: false, has_audio: true });
   });
 
-  it('lets the user relink, remove or delete the audio of a sbobina', async () => {
+  it('plays a file chosen in the editor without copying it, and warns when it is not the lecture', async () => {
     mockGemini();
     const first = host();
     const [queued] = await first.api.upload_browser_files!([lecture()]);
@@ -135,28 +135,40 @@ describe('audio kept in the browser by the web host', () => {
     const [session] = (await first.api.get_completed_sessions!()).sessions!;
     localStorage.setItem(STORAGE_KEYS.QUEUE_V1, '[]');
     const second = reload();
+    expect(await second.api.stream_media_file!(session.input_path, done.session_dir)).toMatchObject({ ok: false, has_audio: true });
+    const media = createWebMediaStore(database);
 
-    // "Ricollega audio" with another file: it replaces the copy; the old URL is released.
+    // The same lecture, renamed on this device: no warning, no copy in the browser.
+    pickNextFile(lecture('Fisiologia lezione 3.mp3'));
+    const same = await second.api.ask_editor_media_file!();
+    expect(await second.api.update_session_input_path!(done.session_dir, same!.path!)).toEqual({ ok: true });
+    expect(await media.has(same!.id)).toBe(false);
+    expect((await second.api.get_completed_sessions!()).sessions![0]).toMatchObject({ input_path: same!.path, input_name: 'Fisiologia lezione 3.mp3', input_identity: session.input_identity });
+    const streamed = await second.api.stream_media_file!(same!.path!, done.session_dir);
+    expect(await urls.get(streamed.url!)!.text()).toBe('audio della lezione');
+
+    // Another file is still used, with a warning; the lecture identity stays the original one.
     pickNextFile(lecture('Registrazione.m4a', 'nuovo audio'));
-    const picked = await second.api.ask_media_file!();
-    expect(await second.api.update_session_input_path!(done.session_dir, picked!.path!)).toEqual({ ok: true });
-    expect((await second.api.get_completed_sessions!()).sessions![0]).toMatchObject({ input_path: picked!.path, input_name: 'Registrazione.m4a' });
-    const replaced = await reload().api.stream_media_file!(picked!.path!, done.session_dir);
+    const other = await second.api.ask_editor_media_file!();
+    expect(await second.api.update_session_input_path!(done.session_dir, other!.path!)).toEqual({
+      ok: true,
+      warning: 'Sembra un file diverso dalla lezione originale: i tempi dell’audio potrebbero non corrispondere.',
+    });
+    const replaced = await second.api.stream_media_file!(other!.path!, done.session_dir);
     expect(await urls.get(replaced.url!)!.text()).toBe('nuovo audio');
     expect(urls.get(replaced.url!)!.type).toBe('audio/mp4');
+    expect((await second.api.get_completed_sessions!()).sessions![0].input_identity).toEqual(session.input_identity);
 
-    const third = reload();
-    expect(await third.api.remove_session_audio!(done.session_dir)).toEqual({ ok: true, name: session.name });
-    expect((await third.api.get_completed_sessions!()).sessions![0].input_path).toBe('');
-    // No audio linked: the editor offers "Aggiungi audio", not a relink.
-    expect(await third.api.stream_media_file!('', done.session_dir)).toMatchObject({ ok: false, has_audio: false });
-    expect(await createWebMediaStore(database).forSession(done.session_dir)).toBeNull();
+    // Nothing was kept: after a reload the editor asks again.
+    expect(await reload().api.stream_media_file!(other!.path!, done.session_dir)).toMatchObject({ ok: false, has_audio: true });
+    expect(await second.api.update_session_input_path!(done.session_dir, 'local://gone/Lezione.mp3')).toMatchObject({ ok: false });
+  });
 
-    pickNextFile(lecture('Aggiunto.mp3', 'audio aggiunto'));
-    const added = await third.api.ask_media_file!();
-    expect(await third.api.update_session_input_path!(done.session_dir, added!.path!)).toEqual({ ok: true });
-    expect(await third.api.delete_session!(done.session_dir)).toEqual({ ok: true });
-    expect(await createWebMediaStore(database).has(added!.id)).toBe(false);
+  it('refuses an unsupported file for the editor', async () => {
+    const { api, named } = host();
+    pickNextFile(lecture('Lezione.wav'));
+    expect(await api.ask_editor_media_file!()).toBeNull();
+    await vi.waitFor(() => expect(named('appendConsole')).toContainEqual(expect.stringContaining('Formato non supportato nella versione web: Lezione.wav')));
   });
 
   it('asks to relink when the sbobina points to audio this browser no longer has', async () => {

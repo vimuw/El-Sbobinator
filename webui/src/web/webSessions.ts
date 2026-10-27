@@ -13,6 +13,7 @@ export type SaveHtmlResult = { ok: boolean; saved?: boolean; error?: string };
 export interface WebArchive {
   create(input: NewArchiveSession, body: string): Promise<ArchiveSession>;
   list(): Promise<ArchiveSession[]>;
+  get(sessionDir: string): Promise<ArchiveSession | null>;
   /** Full HTML document with its shell, like the desktop's read_html_content. */
   readHtml(path: string): Promise<string | null>;
   saveHtml(path: string, body: string, generation?: number): Promise<SaveHtmlResult>;
@@ -77,6 +78,11 @@ export function createWebArchive(factory: IDBFactory | undefined = globalThis.in
       const sessions = await inTransaction(factory, SESSIONS, 'readonly', transaction =>
         requestValue(transaction.objectStore(SESSIONS).getAll() as IDBRequest<ArchiveSession[]>));
       return sessions.sort(byCompletedDesc);
+    },
+
+    async get(sessionDir) {
+      const dir = sessionDirOf(sessionDir);
+      return (await inTransaction(factory, SESSIONS, 'readonly', transaction => getSession(transaction, dir))) ?? null;
     },
 
     async readHtml(path) {

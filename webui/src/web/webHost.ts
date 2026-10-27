@@ -13,6 +13,7 @@ import { createApiUsageStore, type ApiUsageStore } from './apiUsage';
 import { GeminiClient, GeminiHttpError, isAbortError } from './pipeline/gemini';
 import { CancelledError } from './pipeline/retry';
 import { retryFailedSections, type AudioSource, type PipelineEnv } from './pipeline/run';
+import { fileIdentity, sameContent } from './pipeline/session';
 import { getWebFile, hasWebFile, isWebSupportedMedia, promptWebFiles, registerWebFile, restoreWebFile, webFileId } from './webFiles';
 import { createWebMediaStore, mediaType, type WebMediaStore } from './webMedia';
 import { createBackup, describeBackup, describeImport, importBackup, loadLastBackupAt, saveLastBackupAt } from './webBackup';
@@ -36,14 +37,18 @@ export const WEB_CAPABILITIES: Partial<HostCapabilities> = {
   credentialPersistence: true,
   windowControls: false,
   keyStorage: 'browser',
-  // The lecture is kept in IndexedDB with the sbobina (webMedia.ts).
+  // The sbobina keeps no audio: the editor asks for the lecture file, unless the user kept a copy
+  // in IndexedDB (webMedia.ts).
   editorAudio: true,
+  sessionKeepsAudio: false,
   sbobinaPackages: false,
   environmentCheck: false,
 };
 
 // A file picked a moment ago may not be in the saved queue yet: its copy is never pruned that soon.
 const MEDIA_PRUNE_GRACE_MS = 10 * 60_000;
+
+export const DIFFERENT_LECTURE_WARNING = 'Sembra un file diverso dalla lezione originale: i tempi dell’audio potrebbero non corrispondere.';
 
 function mediaSaveWarning(name: string, error: unknown): string {
   if ((error as { name?: string } | null)?.name === 'QuotaExceededError') {
@@ -347,6 +352,16 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
     ask_files: async () => acceptFiles(await promptWebFiles(true)),
     upload_browser_files: async files => acceptFiles(files),
     ask_media_file: async () => acceptFiles(await promptWebFiles(false))[0] ?? null,
+    // The editor's player needs the file in this page only: copying a lecture would cost hundreds of MB.
+    ask_editor_media_file: async () => {
+      const [file] = await promptWebFiles(false);
+      if (!file) return null;
+      if (!isWebSupportedMedia(file.name)) {
+        emit('appendConsole', `⚠ Formato non supportato nella versione web: ${file.name}. Usa un file MP3, M4A o MP4.`);
+        return null;
+      }
+      return registerWebFile(file);
+    },
     check_path_exists: async path => {
       const id = webFileId(path);
       return { ok: true, exists: hasWebFile(path) || (id !== null && await storedInBrowser(id)) };
@@ -500,7 +515,8 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
     },
     save_html_content: async (path, content, generation) => archive.saveHtml(path, content, generation),
 
-    // The editor's player: the sbobina's stored copy, else the file behind its path. One URL at a time.
+    // The editor's player: the copy the user kept, else the file behind its path in this page; without
+    // either the editor asks for the file. One URL at a time.
     stream_media_file: async (path, sessionDir) => {
       const file = (sessionDir ? await media.forSession(sessionDir).catch(() => null) : null) ?? (path ? await resolveFile(path) : undefined);
       if (!file) return { ok: false, has_audio: Boolean(path), error: 'Audio non salvato in questo browser.' };
@@ -509,15 +525,23 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
       mediaUrl = URL.createObjectURL(type === file.type ? file : new Blob([file], { type }));
       return { ok: true, url: mediaUrl };
     },
-    // "Aggiungi audio" / "Ricollega audio": the file picked with ask_media_file becomes the sbobina's.
+    // "Scegli il file audio": the file picked in this page becomes the sbobina's audio. A file that is
+    // not the lecture is still used, with a warning; a copy the user kept is replaced by the new file.
     update_session_input_path: async (sessionDir, newPath) => {
-      const id = webFileId(newPath);
+      const file = getWebFile(newPath);
+      if (!file) return { ok: false, error: 'Audio non più disponibile in questa pagina: selezionalo di nuovo.' };
       try {
-        if (!id || !await storedInBrowser(id) || !await media.link(id, sessionDir)) {
-          return { ok: false, error: 'Audio non salvato in questo browser.' };
+        const session = await archive.get(sessionDir);
+        if (!session) return { ok: false, error: 'Sbobina non trovata.' };
+        if (await media.forSession(sessionDir)) {
+          const copyId = crypto.randomUUID();
+          await media.save(copyId, file);
+          await media.link(copyId, sessionDir);
         }
-        const updated = await archive.update(sessionDir, { input_path: newPath, input_name: getWebFile(newPath)?.name });
-        return updated ? { ok: true } : { ok: false, error: 'Sbobina non trovata.' };
+        await archive.update(sessionDir, { input_path: newPath, input_name: file.name });
+        const expected = session.input_identity;
+        const different = expected !== undefined && !sameContent(await fileIdentity(file, file.name), expected);
+        return different ? { ok: true, warning: DIFFERENT_LECTURE_WARNING } : { ok: true };
       } catch (error) {
         return { ok: false, error: storageErrorMessage(error) };
       }
