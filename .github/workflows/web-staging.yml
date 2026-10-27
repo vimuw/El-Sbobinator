@@ -1,0 +1,69 @@
+name: Preview El Sbobinator Web (staging)
+
+# Manual preview of the static web site before a web-v* tag: the same tests and build as
+# web-release.yml, deployed to the Cloudflare Pages preview branch "staging", reachable at
+# https://staging.elsbobinator.pages.dev/ from any phone or tablet. Production
+# (elsbobinator.com, branch main) is untouched. Run it from Actions → "Run workflow",
+# choosing the branch to preview. The build has no web-v* version, so it says preview.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  staging:
+    name: Test, build and deploy the staging preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout the chosen branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: webui/package-lock.json
+
+      - name: Install the locked frontend dependencies
+        working-directory: webui
+        run: npm ci
+
+      - name: Type check
+        working-directory: webui
+        run: npm run typecheck
+
+      - name: Run the frontend unit and DOM tests
+        working-directory: webui
+        run: npm test
+
+      - name: Install Chromium for the web browser tests
+        working-directory: webui
+        run: npx playwright install chromium
+
+      - name: Run the web browser tests (fake Gemini, Chromium)
+        working-directory: webui
+        run: npm run test:e2e:web
+
+      - name: Build the static site as a preview
+        working-directory: webui
+        run: |
+          npm run build:web
+          node -e "const v = require('./dist-web/version.json'); if (!v.preview) throw new Error('version.json is not a preview'); console.log('Version', v.version);"
+
+      - name: Deploy to Cloudflare Pages (staging preview branch)
+        uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4.1.3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: '4.149.0'
+          command: pages deploy webui/dist-web --project-name=elsbobinator --branch=staging --commit-hash=${{ github.sha }}

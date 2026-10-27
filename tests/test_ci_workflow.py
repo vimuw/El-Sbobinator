@@ -115,3 +115,36 @@ def test_pull_requests_build_and_browser_test_the_web_site_before_the_gate():
     assert "check_jobs = ['checks', 'web-checks'," in text
     web_job = text.split("\n  web-checks:\n", 1)[1].split("\n  checks-windows:\n", 1)[0]
     assert "npm run build:web" in web_job and "npm run test:e2e:web" in web_job
+
+
+WEB_STAGING = WORKFLOW.parent / "web-staging.yml"
+
+
+def test_web_staging_is_manual_and_never_deploys_production():
+    staging = WEB_STAGING.read_text(encoding="utf-8")
+    trigger = staging.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+    assert trigger.strip() == "workflow_dispatch:"
+    assert "permissions:\n  contents: read" in staging
+    uses = re.findall(r"uses: (\S+)", staging)
+    assert uses and all(
+        re.fullmatch(r"[\w.-]+/[\w.-]+@[0-9a-f]{40}", action) for action in uses
+    )
+    assert "--project-name=elsbobinator --branch=staging" in staging
+    assert "--branch=main" not in staging
+    # A staging build must carry no web-v* version, so the site labels itself a preview.
+    assert "EL_SBOBINATOR_WEB_VERSION" not in staging
+    order = [
+        staging.index("npm run typecheck"),
+        staging.index("npm test"),
+        staging.index("npm run test:e2e:web"),
+        staging.index("npm run build:web"),
+        staging.index("cloudflare/wrangler-action@"),
+    ]
+    assert order == sorted(order)
+    for public in (
+        "action-gh-release",
+        "upload-artifact",
+        "gh release",
+        "contents: write",
+    ):
+        assert public not in staging
