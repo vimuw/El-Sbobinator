@@ -1,7 +1,9 @@
 // An in-memory Google Drive app folder speaking the few REST calls of driveApi.ts, for unit tests
 // (as a fetch) and for the Playwright web tests (as a page.route handler). Not part of the app.
 
+import type { DriveAuth, DriveAuthError } from './auth';
 import { DRIVE_API, DRIVE_UPLOAD } from './driveApi';
+import { DRIVE_APPDATA_SCOPE } from './oauth';
 
 export interface FakeDriveRequest {
   url: string;
@@ -138,4 +140,33 @@ export function createFakeDrive(): FakeDrive {
     expireTokens: () => { for (const token of seen) expired.add(token); },
     requests,
   };
+}
+
+/** A Google login that answers at once, for the tests of what sits above auth.ts. */
+export function createFakeAuth(device: string, initial: { token?: boolean; email?: string | null } = {}) {
+  let count = 0;
+  let token: string | null = initial.token ? `${device}-0` : null;
+  let email = initial.email ?? null;
+  const calls: Array<{ silent: boolean }> = [];
+  const failures: DriveAuthError[] = [];
+  const disconnects: string[] = [];
+  const auth: DriveAuth = {
+    token: () => token,
+    account: () => email,
+    setAccount: value => { email = value; },
+    connect: ({ silent = false } = {}) => {
+      calls.push({ silent });
+      const failure = failures.shift();
+      if (failure) return Promise.reject(failure);
+      token = `${device}-${++count}`;
+      return Promise.resolve({ accessToken: token, expiresAt: Date.now() + 3_600_000, scopes: [DRIVE_APPDATA_SCOPE] });
+    },
+    expire: () => { token = null; },
+    disconnect: async () => {
+      disconnects.push(token ?? '');
+      token = null;
+      email = null;
+    },
+  };
+  return { auth, calls, failures, disconnects };
 }

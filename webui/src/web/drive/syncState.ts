@@ -47,6 +47,8 @@ export interface SyncMeta {
   folders: FoldersSyncState;
   /** Changed on Drive while open in the editor here: applied once the editor closes. */
   deferred: DeferredFile[];
+  /** Google account this state belongs to: another account starts from scratch. */
+  account?: string;
 }
 
 function newMeta(): SyncMeta {
@@ -70,6 +72,27 @@ export async function writeMeta(factory: IDBFactory | undefined, update: (meta: 
     const next = update((await requestValue(store.get(META_KEY) as IDBRequest<SyncMeta | undefined>)) ?? newMeta());
     store.put(next);
     return next;
+  });
+}
+
+/**
+ * Binds the sync state to the account just connected. Another account's Drive has none of the files
+ * recorded here: records and watermark go, so the next round sends every sbobina to the new Drive.
+ * Returns whether the state was reset.
+ */
+export async function bindAccount(factory: IDBFactory | undefined, account: string): Promise<boolean> {
+  return inTransaction(factory, SYNC, 'readwrite', async transaction => {
+    const store = transaction.objectStore(SYNC);
+    const meta = await requestValue(store.get(META_KEY) as IDBRequest<SyncMeta | undefined>);
+    // First account of this state: whatever it holds was synced with it.
+    if (meta?.account === undefined) {
+      store.put({ ...(meta ?? newMeta()), account });
+      return false;
+    }
+    if (meta.account === account) return false;
+    store.clear();
+    store.put({ ...newMeta(), device_id: meta.device_id, account });
+    return true;
   });
 }
 
