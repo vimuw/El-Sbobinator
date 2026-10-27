@@ -5,7 +5,7 @@ import { defineConfig, devices } from '@playwright/test';
 // The static web build (vite.web.config.ts) needs no backend: the runner builds it once and
 // serves it with vite preview. Chromium only — this is not Safari or an iPad.
 // A second build carries a made-up Google client ID: the drive*.spec.ts tests run on it, with
-// Google answered by page.route (the released site has no Drive sync).
+// Google answered by page.route; the OAuth route sends the login back to the build's /drive-auth page.
 const portOffset = Number.parseInt(process.env.E2E_PORT_OFFSET ?? '0', 10);
 const port = 4300 + portOffset;
 const drivePort = 4350 + portOffset;
@@ -14,16 +14,13 @@ const cache = path.join(import.meta.dirname, 'node_modules', '.cache', 'el-sbobi
 const dist = path.join(cache, `dist-web-${portOffset}`);
 const driveDist = path.join(cache, `dist-web-drive-${portOffset}`);
 const vite = path.join(import.meta.dirname, 'node_modules', 'vite', 'bin', 'vite.js');
-const DRIVE_SPECS = /drive.*\.spec\.ts$/;
+// Playwright matches the whole path: only the file name counts, a checkout folder may say "drive".
+const DRIVE_SPECS = /(?:^|[\\/])drive[^\\/]*\.spec\.ts$/;
 
 function build(outDir: string, clientId: string | undefined) {
   const env = { ...process.env };
   delete env.EL_SBOBINATOR_GOOGLE_CLIENT_ID;
-  if (clientId) {
-    env.EL_SBOBINATOR_GOOGLE_CLIENT_ID = clientId;
-    // Drive sync exists only in previews: a version tag in the environment would refuse the client ID.
-    delete env.EL_SBOBINATOR_WEB_VERSION;
-  }
+  if (clientId) env.EL_SBOBINATOR_GOOGLE_CLIENT_ID = clientId;
   execFileSync(process.execPath, [vite, 'build', '--config', 'vite.web.config.ts', '--outDir', outDir, '--logLevel', 'error'], {
     cwd: import.meta.dirname,
     stdio: 'inherit',
