@@ -311,6 +311,22 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
     expect(onRequestQuitConfirmation).toHaveBeenCalled();
   });
 
+  it('forwards the Drive sync events of the web previews', () => {
+    const onArchiveChangedRemotely = vi.fn();
+    const onDocumentChangedElsewhere = vi.fn();
+    const onDriveNeedsReconnect = vi.fn();
+    const opts = makeMinimalHook({ onArchiveChangedRemotely, onDocumentChangedElsewhere, onDriveNeedsReconnect });
+    renderHook(() => { useBridgeCallbacks(opts); });
+    act(() => {
+      window.elSbobinatorBridge?.archiveChangedRemotely?.();
+      window.elSbobinatorBridge?.documentChangedElsewhere?.({ session_dir: 'web-session://a' });
+      window.elSbobinatorBridge?.driveNeedsReconnect?.();
+    });
+    expect(onArchiveChangedRemotely).toHaveBeenCalledTimes(1);
+    expect(onDocumentChangedElsewhere).toHaveBeenCalledWith({ session_dir: 'web-session://a' });
+    expect(onDriveNeedsReconnect).toHaveBeenCalledTimes(1);
+  });
+
   it('filesDropped calls enqueueUniqueFiles when appState is idle or processing', () => {
     const enqueueUniqueFiles = vi.fn();
     const opts = makeMinimalHook({ enqueueUniqueFiles });

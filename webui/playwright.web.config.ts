@@ -4,16 +4,44 @@ import { defineConfig, devices } from '@playwright/test';
 
 // The static web build (vite.web.config.ts) needs no backend: the runner builds it once and
 // serves it with vite preview. Chromium only — this is not Safari or an iPad.
+// A second build carries a made-up Google client ID: the drive*.spec.ts tests run on it, with
+// Google answered by page.route (the released site has no Drive sync).
 const portOffset = Number.parseInt(process.env.E2E_PORT_OFFSET ?? '0', 10);
 const port = 4300 + portOffset;
-const dist = path.join(import.meta.dirname, 'node_modules', '.cache', 'el-sbobinator-e2e', `dist-web-${portOffset}`);
+const drivePort = 4350 + portOffset;
+const E2E_GOOGLE_CLIENT_ID = '123456789-abc.apps.googleusercontent.com';
+const cache = path.join(import.meta.dirname, 'node_modules', '.cache', 'el-sbobinator-e2e');
+const dist = path.join(cache, `dist-web-${portOffset}`);
+const driveDist = path.join(cache, `dist-web-drive-${portOffset}`);
 const vite = path.join(import.meta.dirname, 'node_modules', 'vite', 'bin', 'vite.js');
-if (process.env.TEST_WORKER_INDEX === undefined) {
-  execFileSync(process.execPath, [vite, 'build', '--config', 'vite.web.config.ts', '--outDir', dist, '--logLevel', 'error'], {
+const DRIVE_SPECS = /drive.*\.spec\.ts$/;
+
+function build(outDir: string, clientId: string | undefined) {
+  const env = { ...process.env };
+  delete env.EL_SBOBINATOR_GOOGLE_CLIENT_ID;
+  if (clientId) {
+    env.EL_SBOBINATOR_GOOGLE_CLIENT_ID = clientId;
+    // Drive sync exists only in previews: a version tag in the environment would refuse the client ID.
+    delete env.EL_SBOBINATOR_WEB_VERSION;
+  }
+  execFileSync(process.execPath, [vite, 'build', '--config', 'vite.web.config.ts', '--outDir', outDir, '--logLevel', 'error'], {
     cwd: import.meta.dirname,
     stdio: 'inherit',
+    env,
   });
 }
+
+if (process.env.TEST_WORKER_INDEX === undefined) {
+  build(dist, undefined);
+  build(driveDist, E2E_GOOGLE_CLIENT_ID);
+}
+
+const preview = (outDir: string, servedPort: number) => ({
+  command: `"${process.execPath}" "${vite}" preview --config vite.web.config.ts --outDir "${outDir}" --port ${servedPort} --strictPort`,
+  url: `http://localhost:${servedPort}`,
+  reuseExistingServer: false,
+  timeout: 30000,
+});
 
 export default defineConfig({
   testDir: './e2e/web',
@@ -25,15 +53,12 @@ export default defineConfig({
   retries: 0,
   reporter: 'list',
   use: {
-    baseURL: `http://localhost:${port}`,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  projects: [{ name: 'web-chromium', use: { ...devices['Desktop Chrome'] } }],
-  webServer: {
-    command: `"${process.execPath}" "${vite}" preview --config vite.web.config.ts --outDir "${dist}" --port ${port} --strictPort`,
-    url: `http://localhost:${port}`,
-    reuseExistingServer: false,
-    timeout: 30000,
-  },
+  projects: [
+    { name: 'web-chromium', testIgnore: DRIVE_SPECS, use: { ...devices['Desktop Chrome'], baseURL: `http://localhost:${port}` } },
+    { name: 'web-drive-chromium', testMatch: DRIVE_SPECS, use: { ...devices['Desktop Chrome'], baseURL: `http://localhost:${drivePort}` } },
+  ],
+  webServer: [preview(dist, port), preview(driveDist, drivePort)],
 });

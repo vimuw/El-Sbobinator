@@ -105,3 +105,9 @@ test('downloads a backup and restores sbobina, edit and audio in an empty browse
   await expect(other.getByTestId('web-backup').getByRole('status')).toHaveText('Backup importato: 1 già presente e lasciata com’era.');
   await empty.close();
 });
+
+test('without a Google client ID the settings have no Drive panel', async ({ page }) => {
+  await startWithKey(page);
+  await openStorageSettings(page);
+  await expect(page.getByTestId('web-drive')).toHaveCount(0);
+});

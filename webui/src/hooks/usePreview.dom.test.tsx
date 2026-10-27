@@ -38,6 +38,26 @@ afterEach(() => {
 });
 
 describe('usePreview', () => {
+  it('web Drive sync: flags a change from another device on the open sbobina only, and releases it on close', async () => {
+    const release = vi.fn().mockResolvedValue({ ok: true });
+    setPywebview({
+      read_html_content: vi.fn().mockResolvedValue({ ok: true, content: '<p>Lezione</p>' }),
+      release_html_content: release,
+    });
+    const { result } = renderHook(() => usePreview(makeOptions()));
+    await act(async () => { await result.current.openPreview('web-session://a/sbobina.html', 'Lezione', undefined, undefined, 'web-session://a'); });
+    act(() => { result.current.markChangedElsewhere('web-session://b'); });
+    expect(result.current.preview.changedElsewhere).toBe(false);
+    act(() => { result.current.markChangedElsewhere('web-session://a'); });
+    expect(result.current.preview.changedElsewhere).toBe(true);
+    expect(release).not.toHaveBeenCalled();
+    act(() => { result.current.closePreview(); });
+    expect(release).toHaveBeenCalledWith('web-session://a/sbobina.html');
+    expect(result.current.preview.changedElsewhere).toBe(false);
+    // Closing again releases nothing more.
+    act(() => { result.current.closePreview(); });
+    expect(release).toHaveBeenCalledTimes(1);
+  });
   it('preserves a custom title ending in an audio extension when removing audio', async () => {
     setPywebview({
       read_html_content: vi.fn().mockResolvedValue({ ok: true, content: '<h1>Intestazione personale</h1>' }),

@@ -210,6 +210,20 @@ export interface SaveHtmlResult {
   error?: string;
 }
 
+/** Web previews with Drive sync: what the settings show (web/drive/driveService.ts). */
+export interface DriveStatus {
+  /** This build syncs with Drive. */
+  available: boolean;
+  /** An account is linked (remembered across reloads), even if its token expired. */
+  connected: boolean;
+  email: string | null;
+  /** The token is gone (new tab, an hour passed, 401): a tap on "Drive: tocca per riconnettere". */
+  needs_reconnect: boolean;
+  syncing: boolean;
+  last_sync_at: string | null;
+  error: string | null;
+}
+
 export type ElSbobinatorBridge = BridgeCallbacks | null;
 
 export interface UpdateDownloadProgressPayload {
@@ -258,6 +272,13 @@ export interface BridgeCallbacks {
   apiUsageUpdated?: (data: ApiUsageResult) => void;
   retryStateChanged?: (data: RetryStatePayload) => void;
   requestQuitConfirmation?: () => void;
+  // Web previews with Drive sync only.
+  /** Drive brought new or changed sbobine or raccolte: the archive reloads them. */
+  archiveChangedRemotely?: () => void;
+  /** The sbobina open in the editor changed on another device: applied once the editor closes. */
+  documentChangedElsewhere?: (data: { session_dir: string }) => void;
+  /** A sync found the Drive login expired. */
+  driveNeedsReconnect?: () => void;
 }
 
 export interface PywebviewApi {
@@ -311,6 +332,13 @@ export interface PywebviewApi {
   create_web_backup?: (includeAudio: boolean, onProgress?: (done: number, total: number) => void) => Promise<{ ok: boolean; blob?: Blob; filename?: string; sessions?: number; audio_files?: number; error?: string }>;
   import_web_backup?: (file: File) => Promise<{ ok: boolean; summary?: string; error?: string }>;
   record_web_backup_download?: () => Promise<{ ok: boolean; last_backup_at?: string }>;
+  // Web previews with Drive sync only. connect_drive opens the Google window: call it inside a tap.
+  get_drive_status?: () => Promise<DriveStatus>;
+  connect_drive?: () => Promise<DriveStatus>;
+  disconnect_drive?: () => Promise<DriveStatus>;
+  sync_drive_now?: () => Promise<DriveStatus>;
+  /** The editor closed this document: changes from Drive may now be applied to it. */
+  release_html_content?: (path: string) => Promise<{ ok: boolean }>;
   cleanup_old_sessions?: (maxAgeDays?: number, dryRun?: boolean) => Promise<{ ok: boolean; removed?: number; freed_bytes?: number; errors?: number; candidates?: number; preserved_completed?: number; missing_completed_html?: number; error?: string }>;
   get_completed_sessions?: (limit?: number) => Promise<{ ok: boolean; sessions?: ArchiveSession[]; total?: number; error?: string }>;
   delete_session?: (sessionDir: string) => Promise<{ ok: boolean; error?: string }>;
@@ -412,6 +440,9 @@ export function createBridge(options: {
   onApiUsageUpdated?: (data: ApiUsageResult) => void;
   onRetryStateChanged?: (data: RetryStatePayload) => void;
   onRequestQuitConfirmation?: () => void;
+  onArchiveChangedRemotely?: () => void;
+  onDocumentChangedElsewhere?: (data: { session_dir: string }) => void;
+  onDriveNeedsReconnect?: () => void;
 }): BridgeCallbacks {
   const {
     dispatch,
@@ -428,6 +459,9 @@ export function createBridge(options: {
     onApiUsageUpdated,
     onRetryStateChanged,
     onRequestQuitConfirmation,
+    onArchiveChangedRemotely,
+    onDocumentChangedElsewhere,
+    onDriveNeedsReconnect,
   } = options;
   let lastPhaseMessage = '';
 
@@ -468,5 +502,8 @@ export function createBridge(options: {
     apiUsageUpdated: data => { onApiUsageUpdated?.(data); },
     retryStateChanged: data => { onRetryStateChanged?.(data); },
     requestQuitConfirmation: () => { onRequestQuitConfirmation?.(); },
+    archiveChangedRemotely: () => { onArchiveChangedRemotely?.(); },
+    documentChangedElsewhere: data => { onDocumentChangedElsewhere?.(data); },
+    driveNeedsReconnect: () => { onDriveNeedsReconnect?.(); },
   };
 }

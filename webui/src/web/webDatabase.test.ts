@@ -26,7 +26,7 @@ describe('web database', () => {
 
     const db = await openWebDatabase(factory);
     expect(db.version).toBe(WEB_DB_VERSION);
-    expect([...db.objectStoreNames].sort()).toEqual(['checkpoints', 'documents', 'folders', 'media', 'sessions', SPIKE_SESSIONS].sort());
+    expect([...db.objectStoreNames].sort()).toEqual(['checkpoints', 'documents', 'folders', 'media', 'sessions', 'sync', SPIKE_SESSIONS].sort());
 
     const archive = createWebArchive(factory);
     const session = await archive.create({ name: 'Nuova', completed_at_iso: '2026-10-22T10:00:00.000Z', effective_model: 'gemini-2.5-flash', input_path: '' }, '<p>ok</p>');

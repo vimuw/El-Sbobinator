@@ -1,6 +1,6 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
-import { WEB_DB_NAME, openWebDatabase } from './webDatabase';
+import { WEB_DB_NAME, WEB_DB_VERSION, openWebDatabase } from './webDatabase';
 import { createWebMediaStore, mediaType } from './webMedia';
 import { createWebArchive } from './webSessions';
 
@@ -35,8 +35,8 @@ describe('audio kept in the browser', () => {
     v2.close();
 
     const db = await openWebDatabase(factory);
-    expect(db.version).toBe(3);
-    expect(Array.from(db.objectStoreNames).sort()).toEqual(['checkpoints', 'documents', 'folders', 'media', 'sessions']);
+    expect(db.version).toBe(WEB_DB_VERSION);
+    expect(Array.from(db.objectStoreNames).sort()).toEqual(['checkpoints', 'documents', 'folders', 'media', 'sessions', 'sync']);
     expect((await createWebArchive(factory).list()).map(session => session.name)).toEqual(['A']);
   });
 

@@ -28,7 +28,11 @@ export interface EditorDocumentProps {
   htmlPath: string;
   initScrollTop?: number;
   initialSearchTerm?: string;
+  /** Web with Drive sync: this sbobina changed on another device while open here. */
+  changedElsewhere?: boolean;
 }
+
+export const CHANGED_ELSEWHERE_NOTICE = 'Questa sbobina è stata modificata su un altro dispositivo. La nuova versione arriva quando chiudi l’editor; se intanto la modifichi anche qui, verranno tenute tutte e due (una con “(conflitto)” nel nome).';
 
 export interface EditorAudioProps {
   src: string | null;
@@ -346,6 +350,17 @@ export function EditorFullPage({
               </div>
             </div>
           </div>
+
+          {docProp?.changedElsewhere && (
+            <p
+              role="status"
+              data-testid="editor-changed-elsewhere"
+              className="px-4 py-2 text-xs"
+              style={{ color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-subtle)' }}
+            >
+              {CHANGED_ELSEWHERE_NOTICE}
+            </p>
+          )}
 
           <div className="editor-fullpage-body">
             {/* The fallback fills the body so the footer player stays at the bottom while the editor chunk loads. */}

@@ -9,6 +9,7 @@ import { ModelSection } from './settings/ModelSection';
 import { NotificationSection } from './settings/NotificationSection';
 import { StorageSection } from './settings/StorageSection';
 import { WebBackupSection } from './settings/WebBackupSection';
+import { WebDriveSection } from './settings/WebDriveSection';
 import { DiagnosticsSection } from './settings/DiagnosticsSection';
 import { ApiStatusSection } from './settings/ApiStatusSection';
 import { WebRemoveKeysButton, WebSharedDeviceNotice } from './settings/WebSharedDeviceNotice';
@@ -743,6 +744,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               fetchSessionStorageInfo();
                             }}
                           />
+                          {/* Previews built with a Google client ID only. */}
+                          {window.pywebview?.api?.get_drive_status && (
+                            <>
+                              <SettingsDivider />
+                              <WebDriveSection />
+                            </>
+                          )}
                         </>
                       )}
                     </div>

@@ -292,7 +292,7 @@ export default function App() {
     refreshArchiveSessions,
   });
 
-  const { preview, openPreview, closePreview, relinkPreviewAudio, removePreviewAudio, setPreviewAudioKept, handleAudioStateChange, handleScrollTopChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed, onArchiveRefresh: refreshArchiveSessions });
+  const { preview, openPreview, closePreview, markChangedElsewhere, relinkPreviewAudio, removePreviewAudio, setPreviewAudioKept, handleAudioStateChange, handleScrollTopChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed, onArchiveRefresh: refreshArchiveSessions });
 
   // Web: the screen lives in the URL, so Back/Forward and a reload keep it (editor included).
   const openEditorForSession = useCallback(async (sessionDir: string) => {
@@ -441,6 +441,15 @@ export default function App() {
     batchTotal,
     onDownloadProgress: handleDownloadProgress,
     onRequestQuitConfirmation: requestQuitConfirmation,
+    onArchiveChangedRemotely: () => void handleSessionRootMoved(),
+    onDocumentChangedElsewhere: data => markChangedElsewhere(data.session_dir),
+    onDriveNeedsReconnect: () => addNotification(
+      'Google Drive da ricollegare',
+      'L’accesso a Google Drive è scaduto: le sbobine restano in questo browser. Apri Impostazioni → Archiviazione e tocca “Drive: tocca per riconnettere”.',
+      'warning',
+      'system',
+      { dedupeKey: 'drive-reconnect', actionType: 'open_settings' },
+    ),
   });
   useBodyScrollLock(isSettingsOpen || regeneratePrompt !== null || preview.content !== null || askNewKeyPrompt || confirmAction !== null || duplicatePrompt !== null || regenDirtyConfirm !== null);
 
@@ -751,6 +760,7 @@ export default function App() {
               htmlPath: preview.path,
               initScrollTop: preview.initScrollTop,
               initialSearchTerm: preview.initialSearchTerm,
+              changedElsewhere: preview.changedElsewhere,
             }}
             audio={{
               src: preview.audioSrc,

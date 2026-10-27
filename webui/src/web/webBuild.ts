@@ -3,8 +3,11 @@
 // No COOP/COEP: nothing needs SharedArrayBuffer and require-corp would break the YouTube previews.
 
 const GEMINI_ORIGIN = 'https://generativelanguage.googleapis.com';
+// Drive sync (drive/): the REST API and token revocation. The login itself is a window to
+// accounts.google.com, so no Google script, frame or connect is needed for it.
+const DRIVE_ORIGINS = 'https://www.googleapis.com https://oauth2.googleapis.com';
 
-const WEB_CSP_DIRECTIVES: Array<[string, string]> = [
+const webCspDirectives = (drive: boolean): Array<[string, string]> => [
   ['default-src', "'self'"],
   ['script-src', "'self'"],
   ['style-src', "'self' 'unsafe-inline'"],
@@ -12,7 +15,7 @@ const WEB_CSP_DIRECTIVES: Array<[string, string]> = [
   ['font-src', "'self' data:"],
   ['frame-src', 'https://www.youtube.com https://www.youtube-nocookie.com'],
   // Gemini requests and resumable uploads (Files API) share this origin.
-  ['connect-src', `'self' ${GEMINI_ORIGIN}`],
+  ['connect-src', `'self' ${GEMINI_ORIGIN}${drive ? ` ${DRIVE_ORIGINS}` : ''}`],
   // M2b plays session audio from OPFS through blob: URLs; the M1 chunker runs in a worker.
   ['media-src', "'self' blob:"],
   ['worker-src', "'self' blob:"],
@@ -22,15 +25,35 @@ const WEB_CSP_DIRECTIVES: Array<[string, string]> = [
   ['form-action', "'none'"],
 ];
 
-export const WEB_CSP = WEB_CSP_DIRECTIVES.map(([name, value]) => `${name} ${value}`).join('; ');
+/** The site policy; with the Drive sync built in, connect-src also reaches the Drive API. */
+export function webCsp(drive = false): string {
+  return webCspDirectives(drive).map(([name, value]) => `${name} ${value}`).join('; ');
+}
+
+export const WEB_CSP = webCsp();
+
+/**
+ * OAuth client ID of the Drive sync (EL_SBOBINATOR_GOOGLE_CLIENT_ID), or null when the build
+ * leaves Drive out. Until the trash, the export and the Google app review are done (B4–B6) only
+ * branch previews may carry it: a tagged release with it fails.
+ */
+export function driveClientId(value: string | undefined, preview: boolean): string | null {
+  const clientId = value?.trim();
+  if (!clientId) return null;
+  if (!preview) throw new Error('La sincronizzazione Drive (EL_SBOBINATOR_GOOGLE_CLIENT_ID) per ora si include solo nelle anteprime, non con un tag di versione.');
+  if (!/^[0-9]+-[0-9a-z]+\.apps\.googleusercontent\.com$/.test(clientId)) {
+    throw new Error(`Client ID OAuth non valido: ${clientId} (atteso 1234567890-abc123.apps.googleusercontent.com).`);
+  }
+  return clientId;
+}
 
 // Desktop-only boot script: it talks to the pywebview startup check.
 const DESKTOP_ONLY_SCRIPTS = ['startup-guard.js'];
 
-export function toWebIndexHtml(html: string): string {
+export function toWebIndexHtml(html: string, drive = false): string {
   const cspPattern = /(<meta\s+http-equiv="Content-Security-Policy"\s+content=")[^"]*(")/i;
   if (!cspPattern.test(html)) throw new Error('index.html has no Content-Security-Policy meta tag to replace.');
-  let result = html.replace(cspPattern, `$1${WEB_CSP}$2`);
+  let result = html.replace(cspPattern, `$1${webCsp(drive)}$2`);
   for (const script of DESKTOP_ONLY_SCRIPTS) {
     result = result.replace(new RegExp(`\\s*<script src="\\./${script.replace('.', '\\.')}"></script>`), '');
   }
@@ -41,16 +64,21 @@ export function toWebIndexHtml(html: string): string {
  * The web dev server keeps the permissive desktop policy (HMR needs inline scripts and websockets)
  * but must still reach Gemini, or every request fails as "Failed to fetch".
  */
-export function toWebDevIndexHtml(html: string): string {
+export function toWebDevIndexHtml(html: string, drive = false): string {
   const connectPattern = /(connect-src\s[^;"]*)/i;
   if (!connectPattern.test(html)) throw new Error('index.html has no connect-src directive to extend.');
-  return html.replace(connectPattern, `$1 ${GEMINI_ORIGIN}`);
+  return html.replace(connectPattern, `$1 ${GEMINI_ORIGIN}${drive ? ` ${DRIVE_ORIGINS}` : ''}`);
 }
 
 // Static pages of the site besides the app: webui/<name>.html, extra entries of the web build only
 // (no app script, the app's theme.css for colors and font). Cloudflare Pages serves privacy.html
-// at /privacy and redirects /privacy.html there.
+// at /privacy and redirects /privacy.html there. drive-auth is Google's return page for the Drive
+// login (drive/authReturn.ts), built only with a client ID.
 export const WEB_STATIC_PAGES = ['privacy'];
+
+export function webStaticPages(drive = false): string[] {
+  return drive ? [...WEB_STATIC_PAGES, 'drive-auth'] : WEB_STATIC_PAGES;
+}
 
 /** The web dev server injects its client and inline styles: a static page goes without its policy there. */
 export function toWebDevStaticPageHtml(html: string): string {
@@ -64,15 +92,15 @@ export function toWebDevStaticPageHtml(html: string): string {
  * load. Cloudflare merges every rule matching a path, so Cache-Control is never set by '/*', and
  * the static pages get the app's policy from it.
  */
-export function webHeadersFile(publicFiles: string[] = []): string {
+export function webHeadersFile(publicFiles: string[] = [], drive = false): string {
   const revalidated = [
     '/', '/index.html', '/version.json',
-    ...WEB_STATIC_PAGES.flatMap(page => [`/${page}`, `/${page}.html`]),
+    ...webStaticPages(drive).flatMap(page => [`/${page}`, `/${page}.html`]),
     ...publicFiles.map(name => `/${name}`),
   ];
   return [
     '/*',
-    `  Content-Security-Policy: ${WEB_CSP}; frame-ancestors 'none'`,
+    `  Content-Security-Policy: ${webCsp(drive)}; frame-ancestors 'none'`,
     '  X-Content-Type-Options: nosniff',
     '  Referrer-Policy: strict-origin-when-cross-origin',
     '  Permissions-Policy: camera=(), microphone=(), geolocation=()',

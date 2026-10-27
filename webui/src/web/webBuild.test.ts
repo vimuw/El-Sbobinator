@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { WEB_CSP, WEB_STATIC_PAGES, toWebDevIndexHtml, toWebDevStaticPageHtml, toWebIndexHtml, webBuildVersion, webHeadersFile } from './webBuild';
+import { WEB_CSP, WEB_STATIC_PAGES, driveClientId, toWebDevIndexHtml, toWebDevStaticPageHtml, toWebIndexHtml, webBuildVersion, webCsp, webHeadersFile, webStaticPages } from './webBuild';
 
 function directive(csp: string, name: string): string {
   return csp.split(';').map(part => part.trim()).find(part => part.startsWith(`${name} `)) ?? '';
@@ -126,6 +126,51 @@ describe('privacy page of the web site', () => {
     ]) expect(html).toContain(`href="${url}`);
     expect(html).toContain('<code>drive.appdata</code>');
     expect(html).toMatch(/Ultimo aggiornamento: \d{1,2} \w+ \d{4}/);
+  });
+});
+
+describe('Drive sync in the web build', () => {
+  const clientId = '123456789-abc123def.apps.googleusercontent.com';
+
+  it('reaches only the Drive API and token revocation, with no Google script or frame', () => {
+    const csp = webCsp(true);
+    expect(directive(csp, 'connect-src')).toBe("connect-src 'self' https://generativelanguage.googleapis.com https://www.googleapis.com https://oauth2.googleapis.com");
+    expect(directive(csp, 'script-src')).toBe("script-src 'self'");
+    expect(directive(csp, 'frame-src')).toBe(directive(WEB_CSP, 'frame-src'));
+    expect(csp).not.toContain('accounts.google.com');
+    // Same policy everywhere else: only connect-src differs.
+    expect(csp.replace(/connect-src [^;]*/, '')).toBe(WEB_CSP.replace(/connect-src [^;]*/, ''));
+  });
+
+  it('leaves the build as it was without a client ID', () => {
+    expect(driveClientId(undefined, true)).toBeNull();
+    expect(driveClientId('  ', false)).toBeNull();
+    expect(webCsp()).toBe(WEB_CSP);
+    expect(webStaticPages()).toEqual(WEB_STATIC_PAGES);
+    expect(webHeadersFile(['icon.png'])).toBe(webHeadersFile(['icon.png'], false));
+    expect(webHeadersFile()).not.toContain('drive-auth');
+    expect(webHeadersFile()).not.toContain('googleapis.com https://www');
+  });
+
+  it('builds the return page and the wider policy into previews only', () => {
+    expect(driveClientId(` ${clientId} `, true)).toBe(clientId);
+    expect(() => driveClientId(clientId, false)).toThrow(/solo nelle anteprime/);
+    expect(() => driveClientId('client-secret-or-typo', true)).toThrow(/non valido/);
+    expect(webStaticPages(true)).toEqual(['privacy', 'drive-auth']);
+    const rules = webHeadersFile([], true).split('\n');
+    expect(rules[1]).toBe(`  Content-Security-Policy: ${webCsp(true)}; frame-ancestors 'none'`);
+    expect(rules[rules.indexOf('/drive-auth') + 1]).toBe('  Cache-Control: no-cache');
+    const desktopHtml = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+    expect(toWebIndexHtml(desktopHtml, true)).toContain(`content="${webCsp(true)}"`);
+    expect(toWebDevIndexHtml(desktopHtml, true)).toContain('https://www.googleapis.com');
+  });
+
+  it('serves a return page with its own module script only and no outside resources', () => {
+    const html = readFileSync(new URL('../../drive-auth.html', import.meta.url), 'utf8');
+    const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)].map(([, attributes, body]) => [attributes.trim(), body.trim()]);
+    expect(scripts).toEqual([['src="./boot-theme.js"', ''], ['type="module" src="./src/web/drive/authReturn.ts"', '']]);
+    expect(html).not.toMatch(/(?:href|src)="(?:https?:)?\/\//i);
+    expect(/<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]+)"/i.exec(toWebIndexHtml(html, true))?.[1]).toBe(webCsp(true));
   });
 });
 

@@ -42,6 +42,10 @@ export function useBridgeCallbacks(options: {
     }
   ) => void;
   onRequestQuitConfirmation?: () => void;
+  // Web previews with Drive sync.
+  onArchiveChangedRemotely?: () => void;
+  onDocumentChangedElsewhere?: (data: { session_dir: string }) => void;
+  onDriveNeedsReconnect?: () => void;
 }) {
   const {
     dispatch,
@@ -71,6 +75,9 @@ export function useBridgeCallbacks(options: {
   const addNotificationRef = useRef(addNotification);
   const batchTotalRef = useRef(batchTotal);
   const onRequestQuitConfirmationRef = useRef(options.onRequestQuitConfirmation);
+  const onArchiveChangedRemotelyRef = useRef(options.onArchiveChangedRemotely);
+  const onDocumentChangedElsewhereRef = useRef(options.onDocumentChangedElsewhere);
+  const onDriveNeedsReconnectRef = useRef(options.onDriveNeedsReconnect);
 
   useLayoutEffect(() => {
     dispatchRef.current = dispatch;
@@ -87,6 +94,9 @@ export function useBridgeCallbacks(options: {
     addNotificationRef.current = options.addNotification;
     batchTotalRef.current = options.batchTotal ?? 0;
     onRequestQuitConfirmationRef.current = options.onRequestQuitConfirmation;
+    onArchiveChangedRemotelyRef.current = options.onArchiveChangedRemotely;
+    onDocumentChangedElsewhereRef.current = options.onDocumentChangedElsewhere;
+    onDriveNeedsReconnectRef.current = options.onDriveNeedsReconnect;
   });
 
   useEffect(() => {
@@ -94,6 +104,9 @@ export function useBridgeCallbacks(options: {
       dispatch: (...args) => dispatchRef.current(...args),
       appendConsole: msg => appendConsoleRef.current(msg),
       onRequestQuitConfirmation: () => { onRequestQuitConfirmationRef.current?.(); },
+      onArchiveChangedRemotely: () => { onArchiveChangedRemotelyRef.current?.(); },
+      onDocumentChangedElsewhere: data => { onDocumentChangedElsewhereRef.current?.(data); },
+      onDriveNeedsReconnect: () => { onDriveNeedsReconnectRef.current?.(); },
       onRegenerate: data => {
         setRegeneratePromptRef.current(data);
         if (!document.hasFocus()) {
