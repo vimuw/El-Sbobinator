@@ -22,6 +22,13 @@ export interface GenerateResult {
   thoughtsTokens?: number;
 }
 
+/** Told about every generateContent call, like usage_service around retry_with_quota. */
+export interface GenerateUsage {
+  recordAttempt(apiKey: string, model: string): void;
+  recordSuccess(apiKey: string, model: string): void;
+  recordFailure(apiKey: string, model: string, error: unknown): void;
+}
+
 export interface GeminiFile {
   name: string;
   uri: string;
@@ -93,10 +100,12 @@ async function call(url: string, init: RequestInit): Promise<Response> {
 export class GeminiClient {
   private readonly apiKey: string;
   private readonly base: string;
+  private readonly usage?: GenerateUsage;
 
-  constructor(apiKey: string, base = GEMINI_BASE) {
+  constructor(apiKey: string, base = GEMINI_BASE, usage?: GenerateUsage) {
     this.apiKey = apiKey;
     this.base = base;
+    this.usage = usage;
   }
 
   private headers(extra: Record<string, string> = {}): Record<string, string> {
@@ -104,6 +113,23 @@ export class GeminiClient {
   }
 
   async generate(request: GenerateRequest): Promise<GenerateResult> {
+    this.usage?.recordAttempt(this.apiKey, request.model);
+    try {
+      const result = await this.generateOnce(request);
+      this.usage?.recordSuccess(this.apiKey, request.model);
+      return result;
+    } catch (error) {
+      if (!isAbortError(error)) this.usage?.recordFailure(this.apiKey, request.model, error);
+      throw error;
+    }
+  }
+
+  /** models.get: free metadata read the desktop uses to check a key ("Verifica connessione"). */
+  async getModel(model: string, signal?: AbortSignal): Promise<void> {
+    await call(`${this.base}/v1beta/models/${encodeURIComponent(model)}`, { headers: this.headers(), signal });
+  }
+
+  private async generateOnce(request: GenerateRequest): Promise<GenerateResult> {
     const generationConfig: Record<string, unknown> = { temperature: request.temperature };
     if (request.thinkingBudget !== undefined) generationConfig.thinkingConfig = { thinkingBudget: request.thinkingBudget };
     const response = await call(`${this.base}/v1beta/models/${encodeURIComponent(request.model)}:generateContent`, {

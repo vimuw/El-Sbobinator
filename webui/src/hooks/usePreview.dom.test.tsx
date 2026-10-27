@@ -367,9 +367,29 @@ describe('usePreview', () => {
     expect(result.current.preview.sourcePath).toBe('');
     expect(result.current.preview.audioRelinkNeeded).toBe(false);
     expect(result.current.preview.title).toBe('cellule_staminali');
-    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'queue/update_source', path: '', name: '', size: 0 }));
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'queue/update_source', path: '', name: 'cellule_staminali', size: 0 }));
     expect(setArchiveSessions).toHaveBeenCalled();
     expect(appendConsole).toHaveBeenCalledWith('Audio rimosso dalla sbobina.');
+  });
+
+  it('removePreviewAudio keeps the queue card named after the sbobina, not an empty name', async () => {
+    // Regression: the queue entry lost its name and came back as "file-0" after a reload.
+    const dispatch = vi.fn() as unknown as Dispatch<ProcessingAction>;
+    setPywebview({
+      read_html_content: vi.fn().mockResolvedValue({ ok: true, content: '<body>text</body>' }),
+      stream_media_file: vi.fn().mockResolvedValue({ ok: true, url: 'blob:audio' }),
+      remove_session_audio: vi.fn().mockResolvedValue({ ok: true, name: 'Lezione di anatomia' }),
+    });
+    const { result } = renderHook(() => usePreview(makeOptions({ dispatch })));
+    await act(async () => {
+      await result.current.openPreview('web-session://a/sbobina.html', 'Lezione di anatomia', 'local://a/registrazione.mp3', 'f1', 'web-session://a');
+    });
+    await act(async () => { await result.current.removePreviewAudio(); });
+
+    const update = (dispatch as unknown as ReturnType<typeof vi.fn>).mock.calls
+      .map(([action]) => action as ProcessingAction)
+      .find(action => action.type === 'queue/update_source');
+    expect(update).toMatchObject({ path: '', name: 'Lezione di anatomia' });
   });
 
   it('removePreviewAudio aborts and logs error when remove_session_audio fails', async () => {

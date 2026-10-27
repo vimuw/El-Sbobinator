@@ -44,6 +44,8 @@ export interface ApiKeySectionProps {
   preferredModel?: string;
   onAskDeleteKey?: (target: DeleteKeyTarget) => void;
   statusSummary?: React.ReactNode;
+  /** Extra actions beside "Verifica connessione" (the web build's "Rimuovi tutte le chiavi"). */
+  headerActions?: React.ReactNode;
 }
 
 export interface DeleteKeyTarget {
@@ -69,6 +71,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
   preferredModel,
   onAskDeleteKey,
   statusSummary,
+  headerActions,
 }) => {
   const storageWarning = credentialStorageWarning(credentialStorage, credentialStorage ? apiKeyInsecure : false) || (apiKeyInsecure ? (apiKeyInsecureReason || 'Credenziali presenti in chiaro nel file di configurazione.') : '');
   const [newKeyInput, setNewKeyInput] = useState('');
@@ -498,7 +501,8 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <SettingsSectionHeading>Chiavi API</SettingsSectionHeading>
 
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {headerActions}
           {onRefreshUsage && (
             <button type="button" onClick={onRefreshUsage} disabled={isLoadingUsage}
               className="app-button-secondary is-settings-action min-w-[166px]"

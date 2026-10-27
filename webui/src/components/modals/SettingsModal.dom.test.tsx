@@ -13,7 +13,9 @@ import {
 import type { ModelOption } from '../../bridge';
 import { STORAGE_KEYS } from '../../storageKeys';
 import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../../hostCapabilities';
-import { WEB_CAPABILITIES } from '../../web/webHost';
+import { IDBFactory } from 'fake-indexeddb';
+import { createApiUsageStore } from '../../web/apiUsage';
+import { WEB_CAPABILITIES, createWebPywebviewApi } from '../../web/webHost';
 import { APP_VERSION } from '../../branding';
 
 const motionCache = new Map<string, React.ForwardRefExoticComponent<React.PropsWithoutRef<Record<string, unknown>> & React.RefAttributes<unknown>>>();
@@ -1232,7 +1234,8 @@ describe('SettingsModal — validate environment', () => {
 
     const sidebar = container.querySelector('nav[aria-label="Sezioni delle impostazioni"]');
     expect(sidebar).toBeTruthy();
-    const buttons = sidebar ? Array.from(sidebar.querySelectorAll('button')) : [];
+    // The close button shares the tab row on the compact card: count the tabs only.
+    const buttons = sidebar ? Array.from(sidebar.querySelectorAll('button.settings-nav-item')) : [];
     const buttonTexts = buttons.map(b => b.textContent?.trim() || '');
     expect(buttonTexts).toHaveLength(3);
     expect(buttonTexts[0]).toContain('Generale');
@@ -1249,14 +1252,19 @@ describe('SettingsModal on the web host', () => {
     setHostCapabilities(DESKTOP_CAPABILITIES);
   });
 
-  it('shows browser keys with the shared-device warning and hides desktop-only sections', () => {
-    render(<SettingsModal {...makeProps({ apiKey: 'AIzaSyPrimary1234567890123', fallbackKeys: ['AIzaSyReserve1234567890123'] })} />);
+  it('lists the keys like the desktop, with the shared-device warning and no desktop-only sections', () => {
+    render(<SettingsModal {...makeProps({ apiKey: 'AIzaSyPrimary1234567890123', fallbackKeys: ['AIzaSyReserve1234567890456'] })} />);
 
-    expect((screen.getByLabelText('Chiavi API Gemini, una per riga') as HTMLTextAreaElement).value)
-      .toBe('AIzaSyPrimary1234567890123\nAIzaSyReserve1234567890123');
+    // Same key section as the desktop: rows with a menu and the add field, not a free text box.
+    expect(screen.queryByLabelText('Chiavi API Gemini, una per riga')).toBeNull();
+    expect(screen.getByText('Chiave Principale')).toBeTruthy();
+    expect(screen.getByText('...0123')).toBeTruthy();
+    expect(screen.getByText('Chiave Riserva 1')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Opzioni chiave principale' })).toBeTruthy();
+    expect(screen.getByLabelText('Nuova chiave di riserva')).toBeTruthy();
+    expect(screen.queryByText('Protetta')).toBeNull();
     expect(screen.getByTestId('shared-device-warning').textContent).toContain('solo in questo browser');
-    expect(screen.getByRole('button', { name: 'Rimuovi chiavi' })).toBeTruthy();
-    expect(screen.queryByText('Chiavi API')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Rimuovi tutte le chiavi' })).toBeTruthy();
     expect(screen.queryByText('Notifiche di sistema')).toBeNull();
     expect(screen.queryByText('Versione e aggiornamenti')).toBeNull();
     // No updater on the web: the version is shown, updates arrive with the next load.
@@ -1267,20 +1275,47 @@ describe('SettingsModal on the web host', () => {
     expect(screen.queryByRole('button', { name: 'Verifica ambiente' })).toBeNull();
   });
 
-  it('splits the field into main and reserve keys, one per line', () => {
-    const setApiKey = vi.fn();
+  it('describes only what each tab holds on the web', () => {
+    render(<SettingsModal {...makeProps()} />);
+
+    // The desktop headers promised system preferences and an environment check the web does not have.
+    expect(screen.getByText('Modello di trascrizione e chiavi API Google Gemini salvate in questo browser.')).toBeTruthy();
+    expect(screen.queryByText(/preferenze di sistema/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Assistenza/ }));
+    expect(screen.getByText('Segnala un problema e allega il report con gli errori registrati.')).toBeTruthy();
+    expect(screen.queryByText(/pronta a trascrivere/)).toBeNull();
+  });
+
+  it('adds a reserve key from the add field, as on the desktop', () => {
     const setFallbackKeys = vi.fn();
-    render(<SettingsModal {...makeProps({ apiKey: '', setApiKey, setFallbackKeys })} />);
+    render(<SettingsModal {...makeProps({ apiKey: 'AIzaSyPrimary1234567890123', setFallbackKeys })} />);
 
-    fireEvent.change(screen.getByLabelText('Chiavi API Gemini, una per riga'), {
-      target: { value: ' AIzaSyOne12345678901234567 \n\nAIzaSyTwo12345678901234567\nAIzaSyOne12345678901234567' },
-    });
+    fireEvent.change(screen.getByLabelText('Nuova chiave di riserva'), { target: { value: 'AIzaSyTwo12345678901234567' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Aggiungi chiave di riserva' }));
 
-    expect(setApiKey).toHaveBeenLastCalledWith('AIzaSyOne12345678901234567');
     expect(setFallbackKeys).toHaveBeenLastCalledWith(['AIzaSyTwo12345678901234567']);
   });
 
-  it('removes the keys from the browser right away', async () => {
+  it('shows from the web host which key is exhausted today and which takes over', async () => {
+    const values = new Map<string, string>();
+    const usage = createApiUsageStore({ getItem: key => values.get(key) ?? null, setItem: (key, value) => void values.set(key, value) });
+    usage.markQuotaExhausted('AIzaSyPrimary1234567890123', 'gemini-2.5-flash');
+    localStorage.setItem(STORAGE_KEYS.WEB_GEMINI_KEYS_V1, 'AIzaSyPrimary1234567890123\nAIzaSyReserve1234567890456');
+    setPywebview(createWebPywebviewApi(() => {}, { database: new IDBFactory(), usage }) as unknown as Record<string, unknown>);
+    onTestFinished(() => localStorage.removeItem(STORAGE_KEYS.WEB_GEMINI_KEYS_V1));
+
+    render(<SettingsModal {...makeProps({ apiKey: 'AIzaSyPrimary1234567890123', fallbackKeys: ['AIzaSyReserve1234567890456'], preferredModel: 'gemini-2.5-flash' })} />);
+
+    expect(await screen.findByText('Esaurita oggi')).toBeTruthy();
+    expect(screen.getByText('Attiva')).toBeTruthy();
+    expect(screen.getByTestId('api-key-availability').textContent).toContain('1 di 2 chiavi disponibili oggi');
+    expect(screen.getByText('Reset quote: ore 09:00 (ora italiana / 00:00 PT)')).toBeTruthy();
+    expect(screen.getByRole('table', { name: 'Disponibilità delle chiavi per modello' })).toBeTruthy();
+    expect(screen.getByRole('cell', { name: 'Chiave Principale: non disponibile per Gemini 2.5 Flash' })).toBeTruthy();
+    expect(screen.getByRole('cell', { name: 'Chiave Principale: disponibile per Gemini 3.6 Flash' })).toBeTruthy();
+  });
+
+  it('removes all the keys from the browser right away', async () => {
     const saveSettings = vi.fn().mockResolvedValue({ ok: true });
     const setApiKey = vi.fn();
     const setFallbackKeys = vi.fn();
@@ -1289,7 +1324,7 @@ describe('SettingsModal on the web host', () => {
     render(<SettingsModal {...makeProps({ apiKey: 'AIzaSyPrimary1234567890123', setApiKey, setFallbackKeys, onSettingsSaved, preferredModel: 'gemini-3.6-flash' })} />);
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Rimuovi chiave' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Rimuovi la chiave' }));
     });
 
     expect(saveSettings).toHaveBeenCalledWith('', [], 'gemini-3.6-flash');

@@ -11,7 +11,7 @@ import { StorageSection } from './settings/StorageSection';
 import { WebBackupSection } from './settings/WebBackupSection';
 import { DiagnosticsSection } from './settings/DiagnosticsSection';
 import { ApiStatusSection } from './settings/ApiStatusSection';
-import { WebKeysSection } from './settings/WebKeysSection';
+import { WebRemoveKeysButton, WebSharedDeviceNotice } from './settings/WebSharedDeviceNotice';
 import { UpdaterSection, UpdateNotice, type SettingsUpdateInstallState } from './settings/UpdaterSection';
 import { SettingsDivider, SettingsPageHeader, SettingsSectionHeading } from './settings/SettingsLayout';
 
@@ -89,9 +89,20 @@ const TAB_HEADERS: Record<TabType, { title: string; description: string }> = {
   },
 };
 
-const WEB_STORAGE_HEADER = {
-  title: 'Archiviazione',
-  description: 'Spazio occupato in questo browser da sbobine, audio delle lezioni ed elaborazioni.',
+// The web build has no system preferences, folder or environment check: its headers say what is there.
+const WEB_TAB_HEADERS: Record<TabType, { title: string; description: string }> = {
+  general: {
+    title: 'Generale',
+    description: 'Modello di trascrizione e chiavi API Google Gemini salvate in questo browser.',
+  },
+  storage: {
+    title: 'Archiviazione',
+    description: 'Spazio occupato in questo browser da sbobine, audio delle lezioni ed elaborazioni.',
+  },
+  diagnostics: {
+    title: 'Assistenza',
+    description: 'Segnala un problema e allega il report con gli errori registrati.',
+  },
 };
 
 // The settings card mounts a large tree whose first style and layout pass can outlast several
@@ -463,7 +474,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     onClose();
   }, [onClose, setApiKey, setFallbackKeys, setPreferredModel]);
 
-  // Web build: "Rimuovi chiave" deletes the keys from this browser right away, not on "Salva".
+  const webKeyCount = [apiKey, ...fallbackKeys].filter(key => key.trim()).length;
+  // Web build: "Rimuovi tutte le chiavi" deletes the keys from this browser right away, not on "Salva".
   const handleRemoveWebKeys = useCallback(async () => {
     if (isSavingRef.current || !window.pywebview?.api?.save_settings) return;
     isSavingRef.current = true;
@@ -583,22 +595,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <span className="truncate">Assistenza</span>
                   </div>
                 </button>
+
+                {/* One close button for both layouts (index.css .settings-close): beside the tabs at
+                    the top of the compact card, at the page title's right on the wide one. */}
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  disabled={isSaving}
+                  className="icon-button modal-icon-button settings-close"
+                  aria-label="Chiudi finestra"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </nav>
 
               <div className="flex-1 min-h-0 flex flex-col min-w-0 bg-[var(--bg-surface)] relative">
-                {/* The page title and the close button stay put above the scrolling content,
-                    so nothing slides under the X. */}
-                <div className="flex items-start justify-between gap-4 px-6 md:px-8 pt-6 md:pt-8 pb-4 border-b border-[var(--border-subtle)]">
-                  <SettingsPageHeader {...(activeTab === 'storage' && hostCapabilities.kind === 'web' ? WEB_STORAGE_HEADER : TAB_HEADERS[activeTab])} />
-                  <button
-                    type="button"
-                    onClick={handleClose}
-                    disabled={isSaving}
-                    className="icon-button modal-icon-button shrink-0 -mt-1 -mr-2"
-                    aria-label="Chiudi finestra"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
+                {/* The page title stays put above the scrolling content; on the wide card it leaves
+                    room for the close button placed over its right end. */}
+                <div className="px-6 md:pl-8 md:pr-16 pt-6 md:pt-8 pb-4 border-b border-[var(--border-subtle)]">
+                  <SettingsPageHeader {...(hostCapabilities.kind === 'web' ? WEB_TAB_HEADERS : TAB_HEADERS)[activeTab]} />
                 </div>
                 <div ref={contentRef} data-testid="settings-content" className="app-scroll flex-1 overflow-y-auto overflow-x-hidden px-6 md:px-8 pt-5 pb-6 md:pb-8 space-y-6 [scrollbar-gutter:stable]">
                   {activeTab === 'general' && (
@@ -618,37 +633,35 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                       <SettingsDivider />
 
-                      {hostCapabilities.keyStorage === 'browser' ? (
-                        <WebKeysSection
-                          apiKey={apiKey}
-                          fallbackKeys={fallbackKeys}
-                          setApiKey={setApiKey}
-                          setFallbackKeys={setFallbackKeys}
-                          onRemoveKeys={() => void handleRemoveWebKeys()}
-                          disabled={isSaving}
-                        />
-                      ) : (
-                        <ApiKeySection
-                          apiKey={apiKey}
-                          setApiKey={key => {
-                            if (key.trim()) setClearProtectedPrimary(false);
-                            setApiKey(key);
-                          }}
-                          hasProtectedKey={hasProtectedKey && !clearProtectedPrimary}
-                          credentialStorage={credentialStorage}
-                          apiKeyInsecure={apiKeyInsecure}
-                          apiKeyInsecureReason={apiKeyInsecureReason || ''}
-                          fallbackKeys={fallbackKeys}
-                          setFallbackKeys={setFallbackKeys}
-                          onClearProtectedPrimary={() => setClearProtectedPrimary(true)}
-                          apiUsage={apiUsage}
-                          isLoadingUsage={isLoadingUsage}
-                          preferredModel={preferredModel}
-                          onAskDeleteKey={setKeyDeleteTarget}
-                          onRefreshUsage={handleRefreshUsage}
-                          statusSummary={<ApiStatusSection apiUsage={apiUsage} isLoadingUsage={isLoadingUsage} />}
-                        />
-                      )}
+                      <ApiKeySection
+                        apiKey={apiKey}
+                        setApiKey={key => {
+                          if (key.trim()) setClearProtectedPrimary(false);
+                          setApiKey(key);
+                        }}
+                        hasProtectedKey={hasProtectedKey && !clearProtectedPrimary}
+                        credentialStorage={credentialStorage}
+                        apiKeyInsecure={apiKeyInsecure}
+                        apiKeyInsecureReason={apiKeyInsecureReason || ''}
+                        fallbackKeys={fallbackKeys}
+                        setFallbackKeys={setFallbackKeys}
+                        onClearProtectedPrimary={() => setClearProtectedPrimary(true)}
+                        apiUsage={apiUsage}
+                        isLoadingUsage={isLoadingUsage}
+                        preferredModel={preferredModel}
+                        onAskDeleteKey={setKeyDeleteTarget}
+                        onRefreshUsage={handleRefreshUsage}
+                        statusSummary={<ApiStatusSection apiUsage={apiUsage} isLoadingUsage={isLoadingUsage} />}
+                        headerActions={hostCapabilities.keyStorage === 'browser' && (
+                          <WebRemoveKeysButton
+                            keyCount={webKeyCount}
+                            onRemoveKeys={() => void handleRemoveWebKeys()}
+                            disabled={isSaving}
+                          />
+                        )}
+                      />
+
+                      {hostCapabilities.keyStorage === 'browser' && <WebSharedDeviceNotice keyCount={webKeyCount} />}
 
                       {hostCapabilities.osNotifications && (
                         <>

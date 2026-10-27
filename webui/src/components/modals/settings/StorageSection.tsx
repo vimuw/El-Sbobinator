@@ -1,14 +1,8 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CheckCircle2, FolderInput, FolderOpen, Info, Loader2, Trash2, X } from 'lucide-react';
+import { formatSize } from '../../../utils';
 import { SettingsSectionHeading } from './SettingsLayout';
-
-function formatSize(bytes: number): string {
-  if (bytes <= 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
-}
 
 interface StorageSectionProps {
   sessionInfo: { total_bytes: number; total_sessions: number; session_root: string; usage_detail?: string; persisted?: boolean } | null;
@@ -86,21 +80,30 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
             )}
           </div>
 
-          <div className={`p-2.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] text-xs break-all text-[var(--text-primary)] font-medium${inBrowser ? '' : ' font-mono'}`}>
-            {sessionInfo?.session_root || (isLoadingSessionInfo ? '…' : '—')}
-          </div>
+          {/* The path box is for a folder on disk; the browser's own warning sits below. */}
+          {!inBrowser && (
+            <div className="p-2.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)] text-xs break-all text-[var(--text-primary)] font-medium font-mono">
+              {sessionInfo?.session_root || (isLoadingSessionInfo ? '…' : '—')}
+            </div>
+          )}
 
           <p data-testid="storage-usage" className="text-xs text-[var(--text-secondary)]">
             {isLoadingSessionInfo
               ? 'Calcolo dello spazio occupato…'
               : sessionInfo
-                ? `${sessionInfo.total_sessions} ${sessionInfo.total_sessions === 1 ? 'sbobina' : 'sbobine'} · ${formatSize(sessionInfo.total_bytes)} occupati`
+                ? `${sessionInfo.total_sessions} ${sessionInfo.total_sessions === 1 ? 'sbobina' : 'sbobine'} · ${formatSize(sessionInfo.total_bytes)} occupati${inBrowser ? ' in totale' : ''}`
                 : 'Spazio occupato non disponibile.'}
           </p>
 
           {!isLoadingSessionInfo && sessionInfo?.usage_detail && (
             <p data-testid="storage-usage-detail" className="text-xs text-[var(--text-secondary)]">
               {sessionInfo.usage_detail}
+            </p>
+          )}
+
+          {inBrowser && !isLoadingSessionInfo && sessionInfo?.persisted === true && (
+            <p data-testid="storage-persisted" className="text-xs text-[var(--text-secondary)]">
+              Il browser protegge questi dati dalla pulizia automatica.
             </p>
           )}
 

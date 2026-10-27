@@ -191,10 +191,15 @@ describe('runPipeline', () => {
   it('moves to the next key on the daily quota and redoes the same chunk', async () => {
     const quota = { status: 429, json: { error: { status: 'RESOURCE_EXHAUSTED', message: 'Quota exceeded for metric: generate_content_free_tier_requests, limit: 20' } } };
     const { calls } = mockGemini([quota, okText(chunkText(1)), okText('## R\n\nTesto rivisto.')]);
-    const { env, consoleLines } = makeEnv(fakeAudio(1), { keys: ['KEY-1', 'KEY-2'] });
+    const usage = { recordAttempt: vi.fn(), recordSuccess: vi.fn(), recordFailure: vi.fn() };
+    const { env, consoleLines } = makeEnv(fakeAudio(1), { keys: ['KEY-1', 'KEY-2'], usage });
     const state = await runPipeline(session(), env);
     expect(calls.map(call => call.key)).toEqual(['KEY-1', 'KEY-2', 'KEY-2']);
     expect(state.keyRotations).toBe(1);
+    // The settings learn which key ran out, on the session's model, and that the next one works.
+    expect(usage.recordFailure).toHaveBeenCalledTimes(1);
+    expect(usage.recordFailure.mock.calls[0].slice(0, 2)).toEqual(['KEY-1', 'gemini-2.5-flash']);
+    expect(usage.recordSuccess.mock.calls.map(call => call[0])).toEqual(['KEY-2', 'KEY-2']);
     expect(consoleLines.join('\n')).toContain('continuo con la chiave 2/2');
     expect(consoleLines.join('\n')).not.toContain('KEY-');
   });

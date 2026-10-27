@@ -136,7 +136,7 @@ export const WebBackupSection: React.FC<WebBackupSectionProps> = ({ onArchiveImp
         <div className="space-y-0.5 min-w-0">
           <span className="text-sm font-bold text-[var(--text-primary)] block">Includi gli audio delle lezioni</span>
           <p className="text-xs text-[var(--text-secondary)]">
-            {info ? `${info.audioFiles} file, ${formatSize(info.audioBytes)}` : '…'}
+            {!info ? '…' : info.audioFiles === 0 ? 'Nessun audio salvato in questo browser' : `${info.audioFiles} file, ${formatSize(info.audioBytes)}`}
           </p>
         </div>
         <button
@@ -144,7 +144,7 @@ export const WebBackupSection: React.FC<WebBackupSectionProps> = ({ onArchiveImp
           role="switch"
           aria-checked={includeAudio}
           aria-label="Includi gli audio delle lezioni nel backup"
-          disabled={busy}
+          disabled={busy || !info || info.audioFiles === 0}
           onClick={() => {
             setIncludeAudio(value => !value);
             dropPrepared();
@@ -165,6 +165,10 @@ export const WebBackupSection: React.FC<WebBackupSectionProps> = ({ onArchiveImp
         {info
           ? `${info.sessions} ${info.sessions === 1 ? 'sbobina' : 'sbobine'} · dimensione stimata ${formatSize(estimate)}`
           : 'Calcolo della dimensione…'}
+      </p>
+      {/* The total under "Spazio in questo browser" counts more than this estimate: say why. */}
+      <p data-testid="web-backup-scope" className="text-xs text-[var(--text-secondary)]">
+        Il backup contiene solo i testi e, se lo scegli, gli audio delle sbobine: l’avanzamento delle elaborazioni e gli audio in coda restano solo in questo browser.
       </p>
 
       <div className="flex flex-wrap items-center gap-2">

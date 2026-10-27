@@ -10,6 +10,7 @@ import { reportClientError } from '../diagnostics';
 import { ConfirmActionModal } from './modals/ConfirmActionModal';
 import { useTheme } from '../hooks/useTheme';
 import { useKeyboardInsets } from '../hooks/useKeyboardInsets';
+import { usePhoneLayout } from '../hooks/usePhoneLayout';
 import { useEditorAutosave, type EditorSaveController } from '../hooks/useEditorAutosave';
 import { STORAGE_KEYS } from '../storageKeys';
 import { getHostCapabilities } from '../hostCapabilities';
@@ -125,6 +126,7 @@ export function EditorFullPage({
   const showAudioDock = getHostCapabilities().editorAudio;
   // On a tablet the editor shrinks to the area above the on-screen keyboard, player included.
   const keyboard = useKeyboardInsets(getHostCapabilities().kind === 'web');
+  const isPhone = usePhoneLayout();
   const footerRef = useRef<HTMLDivElement>(null);
   const [footerHeight, setFooterHeight] = useState(0);
 
@@ -282,6 +284,7 @@ export function EditorFullPage({
               <span className="truncate">{previewTitle}</span>
               <span
                 className="editor-autosave-badge shrink-0"
+                data-status={autosaveStatus}
                 style={{
                   color:
                     autosaveStatus === 'error' ? 'var(--error-text)'
@@ -296,17 +299,17 @@ export function EditorFullPage({
                 {autosaveStatus === 'saving' ? (
                   <>
                     <Loader2 className="w-3 h-3 animate-spin mr-1.5" />
-                    <span>Autosave</span>
+                    <span className="editor-autosave-label">Autosave</span>
                   </>
                 ) : autosaveStatus === 'saved' ? (
                   <>
                     <Check className="w-3 h-3 mr-1.5" />
-                    <span>Salvato</span>
+                    <span className="editor-autosave-label">Salvato</span>
                   </>
                 ) : autosaveStatus === 'error' ? (
                   <span>Errore salvataggio</span>
                 ) : (
-                  <span>Autosave</span>
+                  <span className="editor-autosave-label">Autosave</span>
                 )}
               </span>
             </div>
@@ -323,7 +326,8 @@ export function EditorFullPage({
                 <span className="editor-fullpage-copy-label">{isCopied ? 'Copiato!' : 'Copia documento'}</span>
               </button>
               <div className="editor-fullpage-utilities">
-                <EditorShortcuts audioAvailable={showAudioDock && Boolean(audioSrc)} />
+                {/* Keyboard shortcuts mean nothing on a phone's touch keyboard. */}
+                {!isPhone && <EditorShortcuts audioAvailable={showAudioDock && Boolean(audioSrc)} />}
                 <button
                   onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
                   className="icon-button theme-toggle-btn"

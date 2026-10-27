@@ -9,6 +9,8 @@ import { createCheckpointStore } from './checkpointStore';
 import { type BridgeEventName, type EmitBridgeEvent, runFakePipeline } from './fakePipeline';
 import { createPageState } from './pageLifecycle';
 import { measureWebStorage, type WebStorageUsage } from './webDatabase';
+import { createApiUsageStore, type ApiUsageStore } from './apiUsage';
+import { GeminiClient, GeminiHttpError, isAbortError } from './pipeline/gemini';
 import { CancelledError } from './pipeline/retry';
 import { retryFailedSections, type AudioSource, type PipelineEnv } from './pipeline/run';
 import { getWebFile, hasWebFile, isWebSupportedMedia, promptWebFiles, registerWebFile, restoreWebFile, webFileId } from './webFiles';
@@ -76,10 +78,17 @@ function audioSupport(): string {
 }
 
 // Safari's estimate() leaves out the audio Blobs (27 MB of audio showed as 1.1 MB): the space shown
-// is counted from what this app stored; the browser's figure stays as a secondary reading.
+// is counted from what this app stored; the browser's figure stays as a secondary reading. Texts and
+// lecture audio are the backup's figures; queue copies and run progress are named apart, since the
+// backup leaves them out.
 function describeUsage(usage: WebStorageUsage | null, browserEstimate: number | undefined): string {
   const parts = usage
-    ? [`audio delle lezioni ${formatSize(usage.audio)}`, `testi ${formatSize(usage.documents)}`, `avanzamento elaborazioni ${formatSize(usage.checkpoints)}`]
+    ? [
+        `testi delle sbobine ${formatSize(usage.documents)}`,
+        `audio delle sbobine ${formatSize(usage.audio)}`,
+        ...(usage.queueAudio > 0 ? [`audio in coda ${formatSize(usage.queueAudio)}`] : []),
+        `avanzamento elaborazioni ${formatSize(usage.checkpoints)}`,
+      ]
     : ['spazio delle sbobine non calcolabile'];
   if (browserEstimate !== undefined) parts.push(`stima del browser ${formatSize(browserEstimate)}`);
   const text = parts.join(' · ');
@@ -138,6 +147,8 @@ export interface WebHostOptions {
   createPage?: () => PipelineEnv['page'] & { dispose(): void };
   sleep?: PipelineEnv['sleep'];
   geminiBase?: string;
+  /** Per-key availability for the settings (tests pass one over a fake storage). */
+  usage?: ApiUsageStore;
 }
 
 type AnswerSlot<T> = { current: ((value: T) => void) | null };
@@ -180,6 +191,7 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
     if (activeRun === run) setActiveRun(null);
   };
   const frontendEvents: string[] = [];
+  const usage = options.usage ?? createApiUsageStore();
   const regenerateAnswer: AnswerSlot<RegenerateAnswer> = { current: null };
   const newKeyAnswer: AnswerSlot<string | null | 'timeout'> = { current: null };
   const database = options.database ?? globalThis.indexedDB;
@@ -286,6 +298,35 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
       return saved ? { ok: true } : { ok: false, error: 'Il browser non consente di salvare le impostazioni (memoria locale non disponibile).' };
     },
     save_theme_preference: async () => {},
+    // Same panel data as the desktop, kept in this browser. "Verifica connessione" reads the
+    // model with the main key (models.get, which spends no generation quota) like the desktop.
+    get_api_usage: async (apiKey, fallbackKeys, preferredModel, forceRefresh) => {
+      const saved = loadWebKeys();
+      const primary = (apiKey ?? saved[0] ?? '').trim();
+      const reserves = fallbackKeys ?? saved.slice(1);
+      const model = preferredModel || loadWebModel();
+      if (forceRefresh) {
+        let probe: 'active' | 'invalid' | 'permission_denied' | null = null;
+        let code: number | null = null;
+        let message: string | null = null;
+        if (primary) {
+          try {
+            await new GeminiClient(primary, options.geminiBase).getModel(model, AbortSignal.timeout(15000));
+            probe = 'active';
+          } catch (error) {
+            if (error instanceof GeminiHttpError && (error.status === 401 || error.status === 403)) {
+              probe = error.status === 401 ? 'invalid' : 'permission_denied';
+              code = error.status;
+              message = error.apiMessage;
+            } else if (!isAbortError(error)) {
+              frontendEvents.push(`${new Date().toISOString()} api-usage-probe: ${error instanceof Error ? error.name : 'errore'}`);
+            }
+          }
+        }
+        usage.refresh(primary, probe, code, message);
+      }
+      return { ok: true, result: usage.getDailyUsage(primary, reserves, model) };
+    },
     // Format check only: a real request would spend free-tier quota.
     validate_environment: async (apiKey) => {
       const key = (apiKey ?? loadWebKeys()[0] ?? '').trim();
@@ -332,6 +373,7 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
           page,
           sleep,
           geminiBase: options.geminiBase,
+          usage,
           askRegenerate: (mode, sessionDir) => {
             emit('askRegenerate', { filename: file.name, mode, sessionDir });
             return waitForAnswer<RegenerateAnswer>(regenerateAnswer, 'timeout', null, REGENERATE_TIMEOUT_MS, run.signal);
@@ -405,6 +447,7 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
           sleep,
           now: () => performance.now(),
           geminiBase: options.geminiBase,
+          usage,
           requestNewKey: async () => {
             const answer = await askNewKey(run.signal);
             if (answer === null || answer === 'timeout') {

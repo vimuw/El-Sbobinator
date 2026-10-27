@@ -171,6 +171,50 @@ jobs:
           flags: python,frontend
           fail_ci_if_error: false
 
+  web-checks:
+    name: Web site build and browser tests
+    needs: [change-scope]
+    if: needs.change-scope.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: webui/package-lock.json
+
+      - name: Install the locked frontend dependencies
+        working-directory: webui
+        run: npm ci
+
+      # The same build and browser tests as web-release.yml, so a dependency update that
+      # breaks the web site fails here instead of at the web-v* tag.
+      - name: Build the static web site
+        working-directory: webui
+        run: npm run build:web
+
+      - name: Install Chromium for the web browser tests
+        working-directory: webui
+        run: npx playwright install chromium
+
+      - name: Run the web browser tests (fake Gemini, Chromium)
+        working-directory: webui
+        run: npm run test:e2e:web
+
+      - name: Upload web browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-browser-failures
+          path: webui/test-results-web-*/
+          if-no-files-found: ignore
+          retention-days: 7
+
   checks-windows:
     name: Lint and Test (Windows)
     needs: [change-scope]
@@ -322,7 +366,7 @@ jobs:
   dependency-gate:
     name: Dependency gate
     if: always()
-    needs: [change-scope, checks, checks-windows, checks-macos, audit, browser-e2e]
+    needs: [change-scope, checks, web-checks, checks-windows, checks-macos, audit, browser-e2e]
     runs-on: ubuntu-latest
     steps:
       - name: Require successful checks or the documentation-only exemption
@@ -342,7 +386,7 @@ jobs:
               raise SystemExit('Change detection did not return a valid scope.')
 
           expected = 'skipped' if docs_only == 'true' else 'success'
-          check_jobs = ['checks', 'checks-windows', 'checks-macos', 'audit']
+          check_jobs = ['checks', 'web-checks', 'checks-windows', 'checks-macos', 'audit']
           unexpected = {
               name: results[name]['result']
               for name in check_jobs

@@ -193,4 +193,67 @@ describe('EditorToolbar MenuBar', () => {
       expect(fireEvent.mouseDown(input)).toBe(true);
     } finally { editor.destroy(); }
   });
+
+  it('keeps one row on a phone, with the index and the other tools behind "Aa"', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(max-width: 640px)' }));
+    try {
+      const { editor } = createMockEditor();
+      const onTocToggle = vi.fn();
+      const { container } = render(
+        <MenuBar
+          editor={editor as unknown as TiptapEditor}
+          onOpenMath={vi.fn()} onOpenImagePicker={vi.fn()}
+          showFindReplace={false}
+          onToggleFindReplace={vi.fn()}
+          onOpenLink={vi.fn()}
+          zoomLevel={100}
+          onZoomChange={vi.fn()}
+          isTocOpen={false}
+          onTocToggle={onTocToggle}
+        />
+      );
+
+      const row = container.querySelector('.editor-toolbar-row')!;
+      expect(row.querySelector('[title^="Grassetto"]')).toBeTruthy();
+      expect(row.querySelector('[title="Elenco puntato"]')).toBeTruthy();
+      // Font, size and the insert buttons wait under "Aa".
+      expect(screen.queryByTitle('Barrato')).toBeNull();
+      expect(container.querySelector('.font-family-dropdown-btn')).toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Indice' }));
+      expect(onTocToggle).toHaveBeenCalledTimes(1);
+
+      const more = screen.getByRole('button', { name: 'Altri strumenti' });
+      fireEvent.click(more);
+      expect(more.getAttribute('aria-expanded')).toBe('true');
+      const panel = screen.getByRole('group', { name: 'Altri strumenti' });
+      expect(panel.querySelector('[title="Barrato"]')).toBeTruthy();
+      expect(panel.querySelector('.font-family-dropdown-btn')).toBeTruthy();
+      expect(panel.querySelector('[title^="Trova e sostituisci"]')).toBeTruthy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('keeps the full toolbar without the index button above phone width', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: false }));
+    try {
+      const { editor } = createMockEditor();
+      const { container } = render(
+        <MenuBar
+          editor={editor as unknown as TiptapEditor}
+          onOpenMath={vi.fn()} onOpenImagePicker={vi.fn()}
+          showFindReplace={false}
+          onToggleFindReplace={vi.fn()}
+          onOpenLink={vi.fn()}
+          onTocToggle={vi.fn()}
+        />
+      );
+      expect(container.querySelector('.editor-toolbar-row')).toBeNull();
+      expect(screen.getByTitle('Barrato')).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Indice' })).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

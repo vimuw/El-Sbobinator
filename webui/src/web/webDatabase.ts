@@ -143,9 +143,11 @@ export function requestValue<T>(request: IDBRequest<T>): Promise<T> {
 
 /** Bytes this app keeps in IndexedDB, counted from the records (Safari's estimate() misses Blobs). */
 export interface WebStorageUsage {
-  /** Audio files: queue copies and the sbobine's lectures. */
+  /** Lectures linked to a sbobina: what a backup with audio includes. */
   audio: number;
-  /** Editor documents, archive metadata and folders. */
+  /** Copies of picked files not (yet) linked to a sbobina: they go once they leave the queue. */
+  queueAudio: number;
+  /** Sbobine (metadata + editor document) and folders, counted like the backup's manifest. */
   documents: number;
   /** Pipeline checkpoints (progress of runs, finished or not). */
   checkpoints: number;
@@ -165,13 +167,22 @@ export async function measureWebStorage(factory: IDBFactory | undefined): Promis
   return inTransaction(factory, [MEDIA, DOCUMENTS, SESSIONS, FOLDERS, CHECKPOINTS], 'readonly', async transaction => {
     const all = (store: string) => requestValue(transaction.objectStore(store).getAll() as IDBRequest<unknown[]>);
     const [media, documents, sessions, folders, checkpoints] = await Promise.all([all(MEDIA), all(DOCUMENTS), all(SESSIONS), all(FOLDERS), all(CHECKPOINTS)]);
-    const audio = media.reduce<number>((sum, record) => {
-      const { blob, size } = record as { blob?: Blob; size?: number };
-      return sum + (blob?.size ?? size ?? 0);
-    }, 0);
-    const text = documents.reduce<number>((sum, record) => sum + encoder.encode((record as StoredDocument).body ?? '').length, 0)
-      + [...sessions, ...folders].reduce<number>((sum, record) => sum + jsonBytes(record), 0);
+    const sessionDirs = new Set(sessions.map(session => (session as ArchiveSession).session_dir));
+    let audio = 0;
+    let queueAudio = 0;
+    for (const record of media) {
+      const { blob, size, sessionDir } = record as { blob?: Blob; size?: number; sessionDir?: string };
+      const bytes = blob?.size ?? size ?? 0;
+      if (sessionDir && sessionDirs.has(sessionDir)) audio += bytes;
+      else queueAudio += bytes;
+    }
+    // Same shape as the backup's sessions and folders, so the two figures agree.
+    const bodies = new Map((documents as StoredDocument[]).map(document => [document.session_dir, document]));
+    const text = (sessions as ArchiveSession[]).reduce<number>((sum, session) => {
+      const document = bodies.get(session.session_dir);
+      return sum + jsonBytes({ session, body: document?.body ?? '', generation: document?.generation ?? 0 });
+    }, 0) + folders.reduce<number>((sum, folder) => sum + jsonBytes(folder), 0);
     const progress = checkpoints.reduce<number>((sum, record) => sum + jsonBytes(record), 0);
-    return { audio, documents: text, checkpoints: progress, total: audio + text + progress };
+    return { audio, queueAudio, documents: text, checkpoints: progress, total: audio + queueAudio + text + progress };
   });
 }

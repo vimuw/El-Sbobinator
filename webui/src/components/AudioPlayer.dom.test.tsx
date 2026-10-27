@@ -50,6 +50,26 @@ describe('AudioPlayer', () => {
     }
   });
 
+  it('folds speed and the audio menu behind one button on a phone, keeping play and seeking', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(max-width: 640px)' }));
+    try {
+      render(<AudioPlayer src="/audio/test.mp3" onRelink={vi.fn()} />);
+      expect(screen.getByRole('button', { name: 'Avvia riproduzione' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Indietro di 10 secondi' })).toBeTruthy();
+      expect(screen.getByRole('slider', { name: 'Posizione audio' })).toBeTruthy();
+      expect(screen.queryByLabelText('Velocita di riproduzione')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Opzioni audio collegato' })).toBeNull();
+      expect(screen.queryByLabelText("Torna all'inizio")).toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Mostra altri controlli audio' }));
+      expect(screen.getByLabelText('Velocita di riproduzione')).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Opzioni audio collegato' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Nascondi altri controlli audio' }).getAttribute('aria-expanded')).toBe('true');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('shows time display 00:00:00 / 00:00:00 initially', () => {
     render(<AudioPlayer src="/audio/test.mp3" />);
     expect(screen.getByText('00:00:00 / 00:00:00')).toBeTruthy();

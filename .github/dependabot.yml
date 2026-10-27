@@ -1,11 +1,13 @@
 version: 2
+# Weekly: one batch of grouped updates to review instead of a daily stream. Security
+# updates do not follow this schedule and still open as soon as an advisory appears.
 updates:
   - package-ecosystem: uv
     directory: /
     allow:
       - dependency-type: all
     schedule:
-      interval: daily
+      interval: weekly
     open-pull-requests-limit: 10
     labels: [dependencies]
     groups:
@@ -15,7 +17,7 @@ updates:
   - package-ecosystem: pip
     directory: /requirements
     schedule:
-      interval: daily
+      interval: weekly
     labels: [dependencies]
     groups:
       bootstrap:
@@ -23,7 +25,7 @@ updates:
   - package-ecosystem: npm
     directory: /webui
     schedule:
-      interval: daily
+      interval: weekly
     open-pull-requests-limit: 10
     labels: [dependencies]
     groups:
@@ -41,12 +43,12 @@ updates:
   - package-ecosystem: pre-commit
     directory: /
     schedule:
-      interval: daily
+      interval: weekly
     labels: [dependencies]
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: daily
+      interval: weekly
     labels: [dependencies]
     groups:
       actions:

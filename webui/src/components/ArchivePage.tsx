@@ -432,7 +432,7 @@ export function ArchivePage({
               type="button"
               className="archive-action-button is-accent recent-session-action"
             >
-              <span>Riprendi</span>
+              <span className="recent-session-action-label">Riprendi</span>
               <ArrowRight className="w-3.5 h-3.5 recent-session-arrow" />
             </button>
           </div>

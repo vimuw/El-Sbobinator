@@ -242,17 +242,6 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
         appendConsole('❌ Impossibile rimuovere il link audio dalla sessione.');
         return false;
       }
-      if (preview.fileId || preview.sessionDir) {
-        dispatch({
-          type: 'queue/update_source',
-          id: preview.fileId ?? undefined,
-          sessionDir: preview.sessionDir || undefined,
-          path: '',
-          name: '',
-          size: 0,
-        });
-      }
-
       let nextTitle = persistedTitle ?? preview.title;
       if (!persistedTitle && preview.path && /\.(mp3|m4a|wav|ogg|flac|aac|opus|mp4|mkv|webm)$/i.test(nextTitle)) {
         const base = preview.path.split(/[/\\]/).pop() || '';
@@ -261,6 +250,19 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
         } else if (base.endsWith('.html')) {
           nextTitle = base.slice(0, -'.html'.length);
         }
+      }
+
+      // The queue card keeps showing the sbobina by its title: an empty name came back as
+      // "file-N" after a reload.
+      if (preview.fileId || preview.sessionDir) {
+        dispatch({
+          type: 'queue/update_source',
+          id: preview.fileId ?? undefined,
+          sessionDir: preview.sessionDir || undefined,
+          path: '',
+          name: nextTitle || undefined,
+          size: 0,
+        });
       }
 
       if (currentEditorSessionRef.current) {

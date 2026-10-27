@@ -37,6 +37,7 @@ import { ConfirmActionModal } from './components/modals/ConfirmActionModal';
 import { DuplicateFileModal } from './components/modals/DuplicateFileModal';
 import { NavSidebar, type ActivePage } from './components/NavSidebar';
 import { NotificationDropdown } from './components/NotificationDropdown';
+import { usePhoneLayout } from './hooks/usePhoneLayout';
 import { EditorFullPageChunk } from './editorPreload';
 
 const EditorFullPage = EditorFullPageChunk.Component;
@@ -86,6 +87,7 @@ export default function App() {
 
   const [activePage, setActivePage] = useState<ActivePage>('queue');
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const isPhone = usePhoneLayout();
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isConsoleExpanded, setIsConsoleExpanded] = useState(false);
@@ -550,7 +552,7 @@ export default function App() {
         completionFlash={completionFlash}
       />
 
-      <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden">
+      <div className="app-main-column flex flex-col flex-1 min-w-0 h-full overflow-hidden">
         {/* The next page mounts at once and fades in; the previous one leaves
             instantly. Waiting for its exit held every switch for ~165 ms. */}
         {activePage === 'queue' ? (
@@ -771,9 +773,11 @@ export default function App() {
           }
         }}
         align="left"
-        leftOffset={72}
+        // On a phone the sidebar is a bar at the bottom: the panel opens above it, full width.
+        leftOffset={isPhone ? 8 : 72}
         valign="bottom"
-        bottomOffset={16}
+        bottomOffset={isPhone ? 64 : 16}
+        showCaret={!isPhone}
       />
     </div>
     </MotionConfig>

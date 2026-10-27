@@ -375,5 +375,14 @@ describe('NotificationDropdown component', () => {
 
     rerender(<NotificationDropdown {...props} align="left" valign="top" />);
     expect(container.querySelector('svg polygon')).toBeNull();
+
+    // Phone: above the bottom bar, no pointer, never wider than the screen.
+    rerender(<NotificationDropdown {...props} align="left" valign="bottom" leftOffset={8} bottomOffset={64} showCaret={false} />);
+    expect(container.querySelector('svg polygon')).toBeNull();
+    const panel = screen.getByRole('dialog', { name: 'Notifiche' });
+    // jsdom rewrites calc(100vw - 16px) as -16px + 100vw.
+    expect(panel.style.width.startsWith('min(380px, ')).toBe(true);
+    expect(panel.style.width).toContain('16px');
+    expect(panel.style.bottom).toBe('64px');
   });
 });

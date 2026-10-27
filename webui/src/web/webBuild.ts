@@ -2,6 +2,8 @@
 // Unlike the desktop page there is no local backend: the page talks only to itself and to Gemini.
 // No COOP/COEP: nothing needs SharedArrayBuffer and require-corp would break the YouTube previews.
 
+const GEMINI_ORIGIN = 'https://generativelanguage.googleapis.com';
+
 const WEB_CSP_DIRECTIVES: Array<[string, string]> = [
   ['default-src', "'self'"],
   ['script-src', "'self'"],
@@ -10,7 +12,7 @@ const WEB_CSP_DIRECTIVES: Array<[string, string]> = [
   ['font-src', "'self' data:"],
   ['frame-src', 'https://www.youtube.com https://www.youtube-nocookie.com'],
   // Gemini requests and resumable uploads (Files API) share this origin.
-  ['connect-src', "'self' https://generativelanguage.googleapis.com"],
+  ['connect-src', `'self' ${GEMINI_ORIGIN}`],
   // M2b plays session audio from OPFS through blob: URLs; the M1 chunker runs in a worker.
   ['media-src', "'self' blob:"],
   ['worker-src', "'self' blob:"],
@@ -33,6 +35,16 @@ export function toWebIndexHtml(html: string): string {
     result = result.replace(new RegExp(`\\s*<script src="\\./${script.replace('.', '\\.')}"></script>`), '');
   }
   return result;
+}
+
+/**
+ * The web dev server keeps the permissive desktop policy (HMR needs inline scripts and websockets)
+ * but must still reach Gemini, or every request fails as "Failed to fetch".
+ */
+export function toWebDevIndexHtml(html: string): string {
+  const connectPattern = /(connect-src\s[^;"]*)/i;
+  if (!connectPattern.test(html)) throw new Error('index.html has no connect-src directive to extend.');
+  return html.replace(connectPattern, `$1 ${GEMINI_ORIGIN}`);
 }
 
 /**

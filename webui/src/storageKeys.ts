@@ -21,6 +21,8 @@ export const STORAGE_KEYS = {
   WEB_LAST_BACKUP_V1: 'el-sbobinator.web.last-backup.v1',
   // Set once the "data stay in this browser" notice has been shown after the first sbobina.
   WEB_STORAGE_NOTICE_V1: 'el-sbobinator.web.storage-notice.v1',
+  // What each Gemini key can still do today (apiUsage.ts): hashes and masked keys only.
+  WEB_API_USAGE_V1: 'el-sbobinator.web.api-usage.v1',
   // M0 archive: copied once into IndexedDB by the M2 upgrade, then removed.
   WEB_M0_SESSIONS_V1: 'el-sbobinator.web.m0-sessions.v1',
 } as const;
