@@ -47,10 +47,10 @@ const MEDIA_PRUNE_GRACE_MS = 10 * 60_000;
 
 function mediaSaveWarning(name: string, error: unknown): string {
   if ((error as { name?: string } | null)?.name === 'QuotaExceededError') {
-    return `⚠ Spazio del browser esaurito: ${name} non è stato salvato in questo browser. L’elaborazione funziona lo stesso, ma se ricarichi la pagina dovrai selezionarlo di nuovo e l’editor non avrà l’audio.`;
+    return `⚠ Spazio del browser esaurito: non è stato possibile tenere una copia temporanea di ${name}. L’elaborazione funziona lo stesso, ma se ricarichi la pagina prima della fine dovrai selezionarlo di nuovo.`;
   }
   const reason = error instanceof Error && error.message ? ` (${error.message})` : '';
-  return `⚠ Impossibile salvare ${name} in questo browser${reason}: se ricarichi la pagina dovrai selezionarlo di nuovo.`;
+  return `⚠ Impossibile tenere una copia temporanea di ${name} in questo browser${reason}: se ricarichi la pagina prima della fine dovrai selezionarlo di nuovo.`;
 }
 
 /** Ids of the local:// files in the queue the UI saved in localStorage. */
@@ -242,7 +242,8 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
   };
   pruneMedia();
   // A finished sbobina is the first thing worth keeping: ask the browser not to clear the site.
-  // Its audio copy moves from the queue to the sbobina, for the editor's player.
+  // Its audio copy only served a resume after a reload: it goes (a lecture weighs hundreds of MB).
+  // The File stays in this page, so the editor opened right after still plays it.
   const saveArchive = async (session: NewArchiveSession, body: string) => {
     let saved;
     try {
@@ -251,7 +252,11 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
       throw new Error(storageErrorMessage(error), { cause: error });
     }
     const id = webFileId(session.input_path);
-    if (id && await storedInBrowser(id)) await media.link(id, saved.session_dir).catch(() => false);
+    if (id) {
+      // A copy still being written would come back after the removal.
+      await pendingSaves.get(id);
+      await media.remove(id).catch(() => {});
+    }
     void requestPersistentStorage(storage);
     return saved;
   };

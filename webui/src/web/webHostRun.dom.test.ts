@@ -112,7 +112,7 @@ describe('web host with the real pipeline', () => {
     await vi.runAllTimersAsync();
     expect(fetchMock).not.toHaveBeenCalled();
     expect(await window.pywebview!.api.get_completed_sessions!()).toMatchObject({ total: 1 });
-    // The run ends after the archive (its audio is linked last): no event may arrive after this test.
+    // The run ends after the archive (its audio copy is removed last): no event may arrive after this test.
     await vi.waitFor(async () => expect((await window.pywebview!.api.is_processing_active!()).active).toBe(false));
   });
 

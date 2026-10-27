@@ -82,6 +82,19 @@ describe('audio kept in the browser', () => {
     expect(await media.has('q1')).toBe(false);
   });
 
+  it('removes a queue copy at once but never the audio a sbobina keeps', async () => {
+    const media = createWebMediaStore(new IDBFactory());
+    await media.save('queued', lecture());
+    await media.save('kept', lecture());
+    await media.link('kept', 'web-session://a');
+
+    await media.remove('queued');
+    await media.remove('kept');
+    await media.remove('missing');
+    expect(await media.has('queued')).toBe(false);
+    expect((await media.forSession('web-session://a'))?.name).toBe('Lezione.m4a');
+  });
+
   it('prunes only old queue copies the queue no longer lists', async () => {
     const media = createWebMediaStore(new IDBFactory());
     await media.save('gone', lecture(), 1_000);

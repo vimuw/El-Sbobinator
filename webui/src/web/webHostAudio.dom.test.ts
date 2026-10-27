@@ -104,7 +104,7 @@ describe('audio kept in the browser by the web host', () => {
     expect(second.named('fileDone')).toHaveLength(1);
   });
 
-  it('plays the sbobina audio in the editor after a reload, and lets the user replace, remove or delete it', async () => {
+  it('drops the temporary copy when the sbobina is done: the editor plays the file in this page, after a reload it asks for it', async () => {
     mockGemini();
     const first = host();
     const [queued] = await first.api.upload_browser_files!([lecture()]);
@@ -113,15 +113,28 @@ describe('audio kept in the browser by the web host', () => {
     const [done] = first.named('fileDone') as Array<{ session_dir: string }>;
     const [session] = (await first.api.get_completed_sessions!()).sessions!;
     expect(session.input_path).toBe(queued.path);
+    const media = createWebMediaStore(database);
+    expect(await media.has(queued.id)).toBe(false);
+    expect(await media.forSession(done.session_dir)).toBeNull();
 
-    // The queue is emptied and the page reloaded: the copy now belongs to the sbobina.
+    const streamed = await first.api.stream_media_file!(session.input_path, done.session_dir);
+    expect(streamed).toMatchObject({ ok: true, url: 'blob:test/1' });
+    expect(urls.get(streamed.url!)!.type).toBe('audio/mpeg');
+    expect(await urls.get(streamed.url!)!.text()).toBe('audio della lezione');
+
+    expect(await reload().api.stream_media_file!(session.input_path, done.session_dir)).toMatchObject({ ok: false, has_audio: true });
+  });
+
+  it('lets the user relink, remove or delete the audio of a sbobina', async () => {
+    mockGemini();
+    const first = host();
+    const [queued] = await first.api.upload_browser_files!([lecture()]);
+    await first.api.start_processing!([queued], KEY, true, 'gemini-2.5-flash');
+    await first.finished();
+    const [done] = first.named('fileDone') as Array<{ session_dir: string }>;
+    const [session] = (await first.api.get_completed_sessions!()).sessions!;
     localStorage.setItem(STORAGE_KEYS.QUEUE_V1, '[]');
     const second = reload();
-    const streamed = await second.api.stream_media_file!(session.input_path, done.session_dir);
-    expect(streamed).toEqual({ ok: true, url: 'blob:test/1' });
-    const blob = urls.get(streamed.url!)!;
-    expect(blob.type).toBe('audio/mpeg');
-    expect(await blob.text()).toBe('audio della lezione');
 
     // "Ricollega audio" with another file: it replaces the copy; the old URL is released.
     pickNextFile(lecture('Registrazione.m4a', 'nuovo audio'));
@@ -158,7 +171,7 @@ describe('audio kept in the browser by the web host', () => {
     const { api, named, finished } = host(full);
     const [queued] = await api.upload_browser_files!([lecture()]);
 
-    await vi.waitFor(() => expect(named('appendConsole')).toContainEqual(expect.stringContaining('Spazio del browser esaurito: Fisiologia.mp3 non è stato salvato')));
+    await vi.waitFor(() => expect(named('appendConsole')).toContainEqual(expect.stringContaining('Spazio del browser esaurito: non è stato possibile tenere una copia temporanea di Fisiologia.mp3')));
     expect(await api.start_processing!([queued], KEY, true, 'gemini-2.5-flash')).toEqual({ ok: true });
     await finished();
     expect(named('fileDone')).toHaveLength(1);

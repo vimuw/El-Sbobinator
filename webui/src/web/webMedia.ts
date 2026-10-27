@@ -1,10 +1,10 @@
 import { MEDIA, MEDIA_BY_SESSION, inTransaction, requestValue } from './webDatabase';
 
 // Audio files kept in this browser (IndexedDB store `media`, one record per picked file): a queued
-// file survives a reload, and a finished sbobina keeps its lecture for the editor's player. The
-// original file is stored as it is: MP3/M4A plays and seeks in every browser, Safari included.
-// A record without sessionDir belongs to the queue; linking it to a sbobina keeps it until the
-// sbobina is deleted or its audio removed.
+// file survives a reload while it is processed, and a sbobina keeps its lecture only when the user
+// asks for it in the editor. The original file is stored as it is: MP3/M4A plays and seeks in every
+// browser, Safari included. A record without sessionDir belongs to the queue; linking it to a
+// sbobina keeps it until the sbobina is deleted or the user stops keeping its audio.
 
 export interface StoredMedia {
   id: string;
@@ -27,6 +27,8 @@ export interface WebMediaStore {
   link(id: string, sessionDir: string): Promise<boolean>;
   /** Removes the audio of sessionDir. */
   unlinkSession(sessionDir: string): Promise<void>;
+  /** Removes the queue copy id; a copy linked to a sbobina stays. */
+  remove(id: string): Promise<void>;
   /** Removes queue copies not in keepIds and added before `before`; returns how many. */
   prune(keepIds: ReadonlySet<string>, before: number): Promise<number>;
 }
@@ -97,6 +99,13 @@ export function createWebMediaStore(factory: IDBFactory | undefined = globalThis
       await inTransaction(factory, MEDIA, 'readwrite', async transaction => {
         const store = transaction.objectStore(MEDIA);
         for (const record of await sessionRecords(transaction, sessionDir)) store.delete(record.id);
+      });
+    },
+
+    async remove(id) {
+      await inTransaction(factory, MEDIA, 'readwrite', async transaction => {
+        const record = await getRecord(transaction, id);
+        if (record && !record.sessionDir) transaction.objectStore(MEDIA).delete(id);
       });
     },
 
