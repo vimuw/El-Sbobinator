@@ -1,0 +1,29 @@
+<!doctype html>
+<!--
+  Google's return page for the Drive login (src/web/drive/auth.ts): it hands the answer in the
+  fragment to the app tab that opened this window, then closes. Entry of the web build only when
+  EL_SBOBINATOR_GOOGLE_CLIENT_ID is set (vite.config.ts), with the site policy like the app.
+-->
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- The web build writes the site policy here (webBuild.ts), as in the app's page. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'" />
+    <meta name="robots" content="noindex" />
+    <title>Accesso a Google Drive · El Sbobinator</title>
+    <link rel="icon" type="image/png" href="./icon.png" />
+    <script src="./boot-theme.js"></script>
+    <link rel="stylesheet" href="./src/web/pages/privacy.css" />
+    <script type="module" src="./src/web/drive/authReturn.ts"></script>
+  </head>
+  <body>
+    <main>
+      <article>
+        <h1>Accesso a Google Drive</h1>
+        <p id="drive-auth-message">Un momento…</p>
+        <p><a href="./">Torna a El Sbobinator</a></p>
+      </article>
+    </main>
+  </body>
+</html>

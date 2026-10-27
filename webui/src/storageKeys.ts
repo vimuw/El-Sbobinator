@@ -25,6 +25,10 @@ export const STORAGE_KEYS = {
   WEB_API_USAGE_V1: 'el-sbobinator.web.api-usage.v1',
   // M0 archive: copied once into IndexedDB by the M2 upgrade, then removed.
   WEB_M0_SESSIONS_V1: 'el-sbobinator.web.m0-sessions.v1',
+  // Drive sync (drive/auth.ts): the Google access token in sessionStorage only, with its expiry,
+  // and the connected account's email in localStorage for a silent reconnect.
+  WEB_DRIVE_TOKEN_V1: 'el-sbobinator.web.drive-token.v1',
+  WEB_DRIVE_ACCOUNT_V1: 'el-sbobinator.web.drive-account.v1',
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

@@ -4,13 +4,12 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'path';
 import { defineConfig, type UserConfig } from 'vite';
-import { WEB_STATIC_PAGES, toWebDevIndexHtml, toWebDevStaticPageHtml, toWebIndexHtml, webBuildVersion, webHeadersFile } from './src/web/webBuild.ts';
+import { driveClientId, toWebDevIndexHtml, toWebDevStaticPageHtml, toWebIndexHtml, webBuildVersion, webHeadersFile, webStaticPages } from './src/web/webBuild.ts';
 
 const packageInfo = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8')) as { version: string };
 const version = (process.env.EL_SBOBINATOR_BUILD_VERSION ?? packageInfo.version).replace(/^v/, '');
 const backendPort = Number.parseInt(process.env.EL_SBOBINATOR_BACKEND_PORT ?? '8000', 10);
 
-const isStaticPagePath = (url: string) => WEB_STATIC_PAGES.some(page => url === `/${page}.html` || url === `/${page}`);
 
 // The desktop bundle (webui/dist) is the default; vite.web.config.ts builds the static web site
 // (webui/dist-web) from the same sources.
@@ -18,22 +17,27 @@ export function createViteConfig(target: 'desktop' | 'web'): UserConfig {
   const isWeb = target === 'web';
   // The web release workflow passes its tag (web-v1.2.3); other web builds are previews.
   const web = isWeb ? webBuildVersion(process.env.EL_SBOBINATOR_WEB_VERSION, packageInfo.version) : null;
+  // Drive sync: only previews built with a Google OAuth client ID have it (and its return page).
+  const driveClient = web ? driveClientId(process.env.EL_SBOBINATOR_GOOGLE_CLIENT_ID, web.preview) : null;
+  const drive = driveClient !== null;
+  const staticPages = webStaticPages(drive);
+  const isStaticPagePath = (url: string) => staticPages.some(page => url === `/${page}.html` || url === `/${page}`);
   return {
     ...(isWeb ? { mode: 'web' } : {}),
     plugins: [react(), tailwindcss(), ...(isWeb ? [{
       name: 'web-dev-gemini',
       apply: 'serve' as const,
       transformIndexHtml: (html: string, ctx: { path: string }) => (
-        isStaticPagePath(ctx.path) ? toWebDevStaticPageHtml(html) : toWebDevIndexHtml(html)
+        isStaticPagePath(ctx.path) ? toWebDevStaticPageHtml(html) : toWebDevIndexHtml(html, drive)
       ),
     }] : []), isWeb ? {
       name: 'web-static-site',
       // The dev server keeps the permissive desktop policy: HMR needs inline scripts and websockets.
       apply: 'build',
-      transformIndexHtml: (html: string) => toWebIndexHtml(html),
+      transformIndexHtml: (html: string) => toWebIndexHtml(html, drive),
       generateBundle() {
         const publicFiles = readdirSync(new URL('./public', import.meta.url));
-        this.emitFile({ type: 'asset', fileName: '_headers', source: webHeadersFile(publicFiles) });
+        this.emitFile({ type: 'asset', fileName: '_headers', source: webHeadersFile(publicFiles, drive) });
         this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify(web) });
       },
     } : {
@@ -50,6 +54,7 @@ export function createViteConfig(target: 'desktop' | 'web'): UserConfig {
     define: {
       __APP_VERSION__: JSON.stringify(`v${web?.version ?? version}`),
       __WEB_PREVIEW__: JSON.stringify(web?.preview ?? false),
+      __GOOGLE_CLIENT_ID__: JSON.stringify(driveClient ?? ''),
       'process.env': {},
       global: 'globalThis',
     },
@@ -67,7 +72,7 @@ export function createViteConfig(target: 'desktop' | 'web'): UserConfig {
       // The web site also builds its static pages (privacy.html), with the app's theme and font.
       ...(isWeb ? {
         rolldownOptions: {
-          input: Object.fromEntries(['index', ...WEB_STATIC_PAGES].map(name => [name, path.resolve(import.meta.dirname, `${name}.html`)])),
+          input: Object.fromEntries(['index', ...staticPages].map(name => [name, path.resolve(import.meta.dirname, `${name}.html`)])),
         },
       } : {}),
       target: 'esnext',
