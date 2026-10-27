@@ -94,6 +94,14 @@ describe('privacy page of the web site', () => {
     expect(drive).toContain('resta solo nella scheda aperta, al massimo un’ora');
   });
 
+  it('describes Drive as available and optional, not coming soon', () => {
+    const drive = html.slice(html.indexOf('id="google-drive"'), html.indexOf('id="diritti"'));
+    expect(drive).toMatch(/^id="google-drive">Google Drive \(facoltativo\)<\/h2>/);
+    expect(html).not.toMatch(/in arrivo|non è ancora disponibile|quando arriverà/i);
+    expect(drive).toContain('Impostazioni → Archiviazione → Google Drive');
+    expect(html.slice(html.indexOf('id="in-breve"'), html.indexOf('id="titolare"'))).toContain('Google Drive');
+  });
+
   it("looks like the app: its theme tokens and Manrope, no colors of its own", () => {
     // The page's only styles are its stylesheet, which starts from the app's theme.css.
     expect(html).not.toMatch(/<style\b/i);

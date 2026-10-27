@@ -53,7 +53,9 @@ describe('Drive OAuth', () => {
 
   it('explains blocked accounts and silent failures in Italian', () => {
     expect(oauthErrorMessage('admin_policy_enforced')).toContain('ateneo');
-    expect(oauthErrorMessage('access_denied')).toContain('utenti di prova');
+    // The app is published: no more talk of test users.
+    expect(oauthErrorMessage('access_denied')).toContain('ateneo');
+    expect(oauthErrorMessage('access_denied')).not.toMatch(/utenti di prova|in prova/);
     expect(oauthErrorMessage('popup_blocked')).toContain('pop-up');
     expect(oauthErrorMessage('strano', 'dettaglio')).toBe('Accesso a Google non riuscito: dettaglio');
     expect(oauthErrorMessage('strano')).toBe('Accesso a Google non riuscito (strano).');
