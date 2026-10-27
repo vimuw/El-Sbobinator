@@ -151,6 +151,8 @@ describe('web host with the real pipeline', () => {
     const { sessions, total } = await second.api.get_completed_sessions!();
     expect(total).toBe(1);
     expect(sessions![0]).toMatchObject({ name: 'Istologia', session_dir: done.session_dir, last_opened_at_iso: opened.last_opened_at_iso });
+    // The lecture's identity, to check a file picked later for the editor's player.
+    expect(sessions![0].input_identity).toEqual(await fileIdentity(new File(['audio-a'], 'Istologia.mp3'), 'Istologia.mp3'));
     expect((await second.api.read_html_content!(done.html_path)).content).toContain('<p>Appunto aggiunto a mano.</p>');
     expect((await second.api.get_archive_folders!()).folders).toEqual([{ id: 'f', name: 'Primo anno', color: '', session_dirs: [done.session_dir] }]);
     expect((await second.api.search_sessions!('aggiunto a mano')).total).toBe(1);

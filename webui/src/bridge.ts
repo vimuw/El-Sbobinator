@@ -10,6 +10,7 @@ import type {
   WorkDonePayload,
   WorkTotalsPayload,
 } from './appState';
+import type { FileIdentity } from './web/pipeline/session';
 
 export interface ValidationCheck {
   id: string;
@@ -161,6 +162,8 @@ export interface ArchiveSession {
   duration_sec?: number;
   completion_status?: 'completed' | 'completed_with_warnings';
   revision_failed_blocks?: number[];
+  /** Web: the lecture the sbobina was made from, to check a file picked later for its player. */
+  input_identity?: FileIdentity;
 }
 
 export interface SearchSnippet {

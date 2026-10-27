@@ -209,6 +209,7 @@ export async function runWebFile(options: WebRunOptions): Promise<WebRunOutcome>
         duration_sec: state.durationSec ?? descriptor.duration,
         completion_status: failed.length ? 'completed_with_warnings' : 'completed',
         revision_failed_blocks: failed,
+        input_identity: state.file,
       }, state.body!);
       state.archiveSessionDir = archived.session_dir;
       await store.save(state);
