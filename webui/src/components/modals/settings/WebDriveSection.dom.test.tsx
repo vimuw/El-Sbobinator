@@ -38,7 +38,7 @@ describe('WebDriveSection', () => {
     render(<WebDriveSection />);
     await screen.findByRole('radio', { name: 'Solo in questo browser' });
     expect(radio('Solo in questo browser').checked).toBe(true);
-    expect(screen.getByTestId('web-drive-local-only').textContent).toContain('Safari può cancellarle');
+    expect(screen.getByTestId('web-drive-local-only').textContent).toContain('Safari può cancellarle se non apri il sito per circa 7 giorni');
     expect(screen.queryByRole('button', { name: 'Elimina tutti i miei dati da Drive' })).toBeNull();
 
     fireEvent.click(radio('In questo browser + Google Drive'));

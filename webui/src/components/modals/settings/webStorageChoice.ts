@@ -5,7 +5,7 @@ import { STORAGE_KEYS } from '../../../storageKeys';
 
 export type WebStorageChoice = 'browser' | 'drive';
 
-export const LOCAL_ONLY_WARNING = 'Le sbobine stanno solo in questo browser, su questo dispositivo. Safari può cancellarle se non apri il sito per qualche settimana o se manca spazio: ogni tanto fai un backup.';
+export const LOCAL_ONLY_WARNING = 'Le sbobine stanno solo in questo browser, su questo dispositivo. Safari può cancellarle se non apri il sito per circa 7 giorni o se manca spazio. Ogni tanto fai un backup.';
 
 export function loadStorageChoice(): WebStorageChoice | null {
   try {

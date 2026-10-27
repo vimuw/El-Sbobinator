@@ -40,7 +40,7 @@ describe('WebStorageChoicePrompt', () => {
     const { connect } = setup();
     render(<WebStorageChoicePrompt sessionCount={2} blocked={false} />);
     fireEvent.click(await screen.findByRole('button', { name: /Solo in questo browser/ }));
-    expect(screen.getByRole('note').textContent).toContain('Safari può cancellarle');
+    expect(screen.getByRole('note').textContent).toContain('Safari può cancellarle se non apri il sito per circa 7 giorni');
     expect(choice()).toBe('browser');
     fireEvent.click(screen.getByRole('button', { name: 'Ho capito' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
