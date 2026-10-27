@@ -10,6 +10,7 @@ import type {
   WorkDonePayload,
   WorkTotalsPayload,
 } from './appState';
+import type { FileIdentity } from './web/pipeline/session';
 
 export interface ValidationCheck {
   id: string;
@@ -161,6 +162,8 @@ export interface ArchiveSession {
   duration_sec?: number;
   completion_status?: 'completed' | 'completed_with_warnings';
   revision_failed_blocks?: number[];
+  /** Web: the lecture the sbobina was made from, to check a file picked later for its player. */
+  input_identity?: FileIdentity;
 }
 
 export interface SearchSnippet {
@@ -267,6 +270,8 @@ export interface PywebviewApi {
   ) => Promise<{ ok: boolean; error?: string; credential_storage?: CredentialStorage; api_key_insecure?: boolean; api_key_insecure_reason?: string }>;
   ask_files?: () => Promise<FileDescriptor[]>;
   ask_media_file?: () => Promise<FileDescriptor | null>;
+  /** Web: a file for the editor's player, held by the page only (no copy in the browser). */
+  ask_editor_media_file?: () => Promise<FileDescriptor | null>;
   check_path_exists?: (path: string) => Promise<{ ok: boolean; exists: boolean }>;
   collect_dropped_files?: (names: string[]) => Promise<{ ok: boolean }>;
   start_processing?: (
@@ -288,7 +293,8 @@ export interface PywebviewApi {
   open_link?: (url: string) => Promise<{ ok: boolean; error?: string }>;
   read_html_content?: (path: string) => Promise<{ ok: boolean; content?: string; error?: string }>;
   save_html_content?: (path: string, content: string, generation?: number) => Promise<SaveHtmlResult>;
-  stream_media_file?: (path: string, sessionDir?: string) => Promise<{ ok: boolean; url?: string; has_audio?: boolean; error?: string; warning?: string }>;
+  /** audio_kept/audio_size (web): the audio comes from a copy kept in this browser, and its size. */
+  stream_media_file?: (path: string, sessionDir?: string) => Promise<{ ok: boolean; url?: string; has_audio?: boolean; error?: string; warning?: string; audio_kept?: boolean; audio_size?: number }>;
   show_notification?: (title: string, message: string) => Promise<void>;
   flash_window?: () => Promise<{ ok: boolean; error?: string }>;
   validate_environment?: (
@@ -309,8 +315,10 @@ export interface PywebviewApi {
   get_completed_sessions?: (limit?: number) => Promise<{ ok: boolean; sessions?: ArchiveSession[]; total?: number; error?: string }>;
   delete_session?: (sessionDir: string) => Promise<{ ok: boolean; error?: string }>;
   rename_session?: (sessionDir: string, name: string) => Promise<{ ok: boolean; name?: string; error?: string }>;
-  update_session_input_path?: (sessionDir: string, newPath: string) => Promise<{ ok: boolean; error?: string }>;
+  update_session_input_path?: (sessionDir: string, newPath: string) => Promise<{ ok: boolean; error?: string; warning?: string }>;
   remove_session_audio?: (sessionDir: string) => Promise<{ ok: boolean; name?: string; error?: string }>;
+  /** Web: keeps (or stops keeping) a copy of the sbobina's audio in this browser. */
+  set_session_audio_kept?: (sessionDir: string, keep: boolean) => Promise<{ ok: boolean; audio_kept?: boolean; error?: string }>;
   touch_session_opened?: (sessionDir: string) => Promise<{ ok: boolean; last_opened_at_iso?: string; error?: string }>;
   open_session_folder?: () => Promise<{ ok: boolean; error?: string }>;
   ask_session_folder?: () => Promise<{ ok: boolean; path?: string; cancelled?: boolean; error?: string }>;

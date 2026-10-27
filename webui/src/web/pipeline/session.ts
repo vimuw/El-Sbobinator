@@ -99,3 +99,8 @@ export function fileKey(file: FileIdentity): string {
 export function sameFile(a: FileIdentity, b: FileIdentity): boolean {
   return fileKey(a) === fileKey(b);
 }
+
+/** Same bytes whatever the name: a renamed copy of the lecture still matches its times. */
+export function sameContent(a: FileIdentity, b: FileIdentity): boolean {
+  return a.size === b.size && a.headHash === b.headHash;
+}

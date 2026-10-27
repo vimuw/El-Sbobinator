@@ -16,6 +16,9 @@ export type PreviewState = {
   audioRelinkNeeded: boolean;
   audioLoading: boolean;
   audioWarning: string;
+  /** Web: the audio playing is a copy kept in this browser; its size in bytes. */
+  audioKept: boolean;
+  audioSize: number;
   initAudio: { time?: number; playbackRate?: number; volume?: number };
   initScrollTop?: number;
   initialSearchTerm?: string;
@@ -32,6 +35,8 @@ export const initialPreviewState: PreviewState = {
   audioRelinkNeeded: false,
   audioLoading: false,
   audioWarning: '',
+  audioKept: false,
+  audioSize: 0,
   initAudio: {},
   initScrollTop: undefined,
 };
@@ -80,7 +85,15 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
       const streamRes = await window.pywebview.api.stream_media_file(normalizedSource, normalizedSessionDir || undefined);
       if (request !== audioRequestRef.current) return false;
       if (streamRes.ok && streamRes.url) {
-        setPreview(prev => ({ ...prev, audioSrc: streamRes.url, audioRelinkNeeded: false, audioLoading: false, audioWarning: streamRes.warning || '' }));
+        setPreview(prev => ({
+          ...prev,
+          audioSrc: streamRes.url,
+          audioRelinkNeeded: false,
+          audioLoading: false,
+          audioWarning: streamRes.warning || '',
+          audioKept: Boolean(streamRes.audio_kept),
+          audioSize: streamRes.audio_size ?? 0,
+        }));
         if (streamRes.warning) appendConsole(`⚠️ ${streamRes.warning}`);
         return true;
       }
@@ -138,6 +151,8 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
           audioRelinkNeeded: false,
           audioLoading: Boolean(sourcePath || sessionDir),
           audioWarning: '',
+          audioKept: false,
+          audioSize: 0,
           initAudio: { time: savedSession.audioTime, playbackRate: savedSession.playbackRate, volume: savedSession.volume },
           initScrollTop: savedSession.scrollTop,
           initialSearchTerm: searchTerm || undefined,
@@ -173,13 +188,17 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
   }, []);
 
   const relinkPreviewAudio = useCallback(async () => {
-    if (!window.pywebview?.api?.ask_media_file) return;
+    const api = window.pywebview?.api;
+    // The web build picks the file for this page only, without copying it into the browser.
+    const askFile = api?.ask_editor_media_file ?? api?.ask_media_file;
+    if (!askFile) return;
     const sessionKey = currentPreviewSessionKeyRef.current;
     try {
-      const selectedFile = await window.pywebview.api.ask_media_file();
+      const selectedFile = await askFile();
       if (!selectedFile?.path) return;
       if (sessionKey !== currentPreviewSessionKeyRef.current) return false;
       let persistOk = true;
+      let relinkWarning = '';
       if (preview.sessionDir) {
         if (!window.pywebview?.api?.update_session_input_path) {
           // The bridge is present but the persist endpoint is missing — treat as
@@ -190,6 +209,7 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
           const saveRes = await window.pywebview.api.update_session_input_path(preview.sessionDir, selectedFile.path);
           if (sessionKey !== currentPreviewSessionKeyRef.current) return false;
           if (saveRes?.ok) {
+            relinkWarning = saveRes.warning || '';
             setArchiveSessions(prev => prev.map(s =>
               normalizeSessionPath(s.session_dir) === normalizeSessionPath(preview.sessionDir) ? { ...s, input_path: selectedFile.path } : s,
             ));
@@ -210,6 +230,11 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
       setPreview(prev => ({ ...prev, sourcePath: selectedFile.path, audioRelinkNeeded: false }));
       const didLoad = await loadPreviewAudio(selectedFile.path, preview.sessionDir);
       if (didLoad) appendConsole(`Audio ricollegato: ${selectedFile.name}`);
+      // A file that may not be the lecture is still used: the dock says why the times may not match.
+      if (relinkWarning && sessionKey === currentPreviewSessionKeyRef.current) {
+        appendConsole(`⚠️ ${relinkWarning}`);
+        setPreview(prev => ({ ...prev, audioWarning: relinkWarning }));
+      }
       return didLoad;
     } catch (error: unknown) {
       setPreview(prev => ({ ...prev, audioLoading: false }));
@@ -290,6 +315,30 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
     }
   }, [appendConsole, dispatch, onArchiveRefresh, preview.fileId, preview.path, preview.sessionDir, preview.title, setArchiveSessions]);
 
+  // Web: "Tieni l'audio in questo browser". The player keeps playing either way; without a copy the
+  // file is asked for again after a reload.
+  const setPreviewAudioKept = useCallback(async (keep: boolean) => {
+    const api = window.pywebview?.api;
+    const sessionKey = currentPreviewSessionKeyRef.current;
+    if (!preview.sessionDir || !api?.set_session_audio_kept) return false;
+    try {
+      const res = await api.set_session_audio_kept(preview.sessionDir, keep);
+      if (sessionKey !== currentPreviewSessionKeyRef.current) return false;
+      if (!res?.ok) {
+        appendConsole(`❌ ${res?.error || 'Impossibile cambiare la copia dell’audio in questo browser.'}`);
+        return false;
+      }
+      const kept = res.audio_kept ?? keep;
+      setPreview(prev => ({ ...prev, audioKept: kept }));
+      await onArchiveRefresh?.();
+      appendConsole(kept ? 'Audio tenuto in questo browser.' : 'Copia dell’audio tolta da questo browser: dopo aver ricaricato la pagina scegli di nuovo il file.');
+      return true;
+    } catch (error: unknown) {
+      appendConsole(`❌ Impossibile cambiare la copia dell’audio: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
+    }
+  }, [appendConsole, onArchiveRefresh, preview.sessionDir]);
+
   const handleAudioStateChange = useCallback(({ currentTime, playbackRate, volume }: { currentTime: number; playbackRate: number; volume: number }) => {
     currentEditorSessionRef.current = { ...currentEditorSessionRef.current, audioTime: currentTime, playbackRate, volume };
   }, []);
@@ -304,6 +353,7 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
     closePreview,
     relinkPreviewAudio,
     removePreviewAudio,
+    setPreviewAudioKept,
     handleAudioStateChange,
     handleScrollTopChange,
   };

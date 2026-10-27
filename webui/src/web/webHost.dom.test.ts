@@ -67,7 +67,7 @@ describe('web host', () => {
     const capabilities = getHostCapabilities();
     expect(capabilities).toMatchObject({
       kind: 'web', keyStorage: 'browser', openLocalPath: false, nativeFolderPicker: false,
-      updateInstallation: false, osNotifications: false, editorAudio: true, sbobinaPackages: false, environmentCheck: false,
+      updateInstallation: false, osNotifications: false, editorAudio: true, sessionKeepsAudio: false, sbobinaPackages: false, environmentCheck: false,
     });
     const api = window.pywebview?.api;
     expect(api?.start_processing).toBeTypeOf('function');

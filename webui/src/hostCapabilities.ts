@@ -16,6 +16,8 @@ export interface HostCapabilities {
   keyStorage: 'system' | 'browser';
   // Audio player docked in the editor, linked to the session's media file.
   editorAudio: boolean;
+  // The sbobina keeps its audio with it; without this (web) the editor asks for the lecture file.
+  sessionKeepsAudio: boolean;
   // .sbobina package import/export.
   sbobinaPackages: boolean;
   // "Verifica ambiente" (FFmpeg, disk, session folder).
@@ -35,6 +37,7 @@ export const DESKTOP_CAPABILITIES: HostCapabilities = {
   windowControls: true,
   keyStorage: 'system',
   editorAudio: true,
+  sessionKeepsAudio: true,
   sbobinaPackages: true,
   environmentCheck: true,
 };

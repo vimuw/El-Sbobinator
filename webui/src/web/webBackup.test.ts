@@ -11,6 +11,8 @@ import { createZip, readZip } from './zipArchive';
 const KEY = 'AIzaSyBackupKey12345678901234';
 const lecture = (name: string, bytes: number) => new File([new Uint8Array(bytes).fill(5)], name, { type: 'audio/mp4', lastModified: 1_700_000_000_000 });
 
+const IDENTITY = { name: 'Fisiologia.m4a', size: 3_000, headHash: 'ab'.repeat(32) };
+
 function sessionInput(name: string, completed: string) {
   return { name, completed_at_iso: completed, effective_model: 'gemini-2.5-flash', input_path: `local://${name}`, input_name: `${name}.m4a` };
 }
@@ -19,7 +21,7 @@ function sessionInput(name: string, completed: string) {
 async function seed(factory: IDBFactory) {
   const archive = createWebArchive(factory);
   const media = createWebMediaStore(factory);
-  const first = await archive.create(sessionInput('Fisiologia', '2026-10-20T10:00:00.000Z'), '<h1>Rene</h1><p>Il nefrone</p>');
+  const first = await archive.create({ ...sessionInput('Fisiologia', '2026-10-20T10:00:00.000Z'), input_identity: IDENTITY }, '<h1>Rene</h1><p>Il nefrone</p>');
   const second = await archive.create(sessionInput('Anatomia', '2026-10-21T10:00:00.000Z'), '<p>Il cuore</p>');
   await archive.saveHtml(first.html_path, '<h1>Rene</h1><p>Il nefrone filtra</p>', 1_000);
   await media.save('audio-1', lecture('Fisiologia.m4a', 3_000));
@@ -107,6 +109,8 @@ describe('web backup', () => {
 
     const archive = createWebArchive(target);
     expect((await archive.list()).map(session => session.name)).toEqual(['Anatomia', 'Fisiologia']);
+    // The lecture's identity comes along: the editor checks a file picked on this device against it.
+    expect((await archive.list()).find(session => session.name === 'Fisiologia')?.input_identity).toEqual(IDENTITY);
     expect(await archive.readHtml(first.html_path)).toContain('Il nefrone filtra');
     expect(await archive.generation(first.html_path)).toBe(1_000);
     expect(await archive.generation(second.html_path)).toBe(0);

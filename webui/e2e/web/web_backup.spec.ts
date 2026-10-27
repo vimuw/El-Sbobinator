@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { expectAutosaved } from '../autosave';
 
-// Backup round trip in the static build: a sbobina with an edit and its audio is downloaded as a
-// zip, then imported into an empty browser (a new context: no IndexedDB, no keys), where text and
+// Backup round trip in the static build: a sbobina with an edit and the audio the user kept in the
+// browser is downloaded as a zip, then imported into an empty browser (a new context: no IndexedDB, no keys), where text and
 // audio come back. Gemini is answered by page.route. Chromium only, not Safari or an iPad.
 const DUMMY_KEY = 'AIzaSyE2EDUMMYKEY000000000000000000000';
 const GEMINI = 'https://generativelanguage.googleapis.com';
@@ -53,6 +53,11 @@ test('downloads a backup and restores sbobina, edit and audio in an empty browse
   await page.keyboard.press('End');
   await page.keyboard.type(' Modifica da salvare nel backup.');
   await expectAutosaved(page);
+  // A sbobina keeps its audio only on request; only a kept audio goes into the backup.
+  await page.getByRole('button', { name: 'Opzioni audio collegato' }).click();
+  const keep = page.getByRole('switch', { name: /Tieni l’audio in questo browser/ });
+  await keep.click();
+  await expect(keep).toHaveAttribute('aria-checked', 'true');
   await page.getByRole('button', { name: 'Torna indietro' }).click();
   await expect(editor).toHaveCount(0);
 

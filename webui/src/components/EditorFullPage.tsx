@@ -37,6 +37,10 @@ export interface EditorAudioProps {
   warning?: string;
   onRelink: () => Promise<boolean | undefined>;
   onRemoveAudio?: () => Promise<boolean | undefined> | void;
+  /** Web: a copy of the playing file is kept in this browser (size in bytes). */
+  kept?: boolean;
+  size?: number;
+  onKeepChange?: (keep: boolean) => Promise<boolean | undefined>;
   init: { time?: number; playbackRate?: number; volume?: number };
   onStateChange: (state: { currentTime: number; playbackRate: number; volume: number }) => void;
 }
@@ -102,6 +106,7 @@ export function EditorFullPage({
   const audioLoading = audioProp?.loading ?? false;
   const onRelink = audioProp?.onRelink ?? flatOnRelink ?? (() => Promise.resolve(undefined));
   const onRemoveAudio = audioProp?.onRemoveAudio ?? flatOnRemoveAudio;
+  const onKeepChange = audioProp?.onKeepChange;
   const previewInitAudio = audioProp?.init ?? flatPreviewInitAudio ?? {};
   const onAudioStateChange = audioProp?.onStateChange ?? flatOnAudioStateChange ?? (() => {});
 
@@ -124,6 +129,8 @@ export function EditorFullPage({
   const copiedTimerRef = useRef<number | null>(null);
   const getHtmlRef = useRef<(() => string) | null>(null);
   const showAudioDock = getHostCapabilities().editorAudio;
+  // Web: the sbobina keeps no audio, so the dock asks for the lecture file instead of a relink.
+  const audioPicked = !getHostCapabilities().sessionKeepsAudio;
   // On a tablet the editor shrinks to the area above the on-screen keyboard, player included.
   const keyboard = useKeyboardInsets(getHostCapabilities().kind === 'web');
   const isPhone = usePhoneLayout();
@@ -383,18 +390,22 @@ export function EditorFullPage({
                     initialVolume={previewInitAudio.volume}
                     onStateChange={onAudioStateChange}
                     onRelink={onRelink}
-                    onRemoveAudio={onRemoveAudio}
+                    // Web: nothing to unlink, the user decides whether this browser keeps a copy.
+                    onRemoveAudio={audioPicked ? undefined : onRemoveAudio}
+                    keep={audioPicked && onKeepChange ? { kept: Boolean(audioProp?.kept), size: audioProp?.size ?? 0, onChange: onKeepChange } : undefined}
                   />
                 ) : audioRelinkNeeded ? (
                   <div className="flex items-center justify-between gap-3 py-3.5">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Audio non trovato</p>
+                      <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{audioPicked ? 'Audio della lezione' : 'Audio non trovato'}</p>
                       <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                        Seleziona di nuovo il file per conservarne una copia nella sbobina.
+                        {audioPicked
+                          ? 'L’audio non resta salvato nel browser: scegli il file della lezione per ascoltarlo.'
+                          : 'Seleziona di nuovo il file per conservarne una copia nella sbobina.'}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      {onRemoveAudio && (
+                      {onRemoveAudio && !audioPicked && (
                         <button
                           type="button"
                           onClick={() => setShowConfirmRemove(true)}
@@ -423,7 +434,9 @@ export function EditorFullPage({
                         className="app-button-secondary is-settings-action"
                         style={relinkSuccess ? { borderColor: 'var(--success-ring)', color: 'var(--success-text)' } : {}}
                       >
-                        {relinkSuccess ? <><Check className="w-3.5 h-3.5" /> Ricollegato</> : isRelinking ? 'Selezione...' : 'Ricollega audio'}
+                        {relinkSuccess
+                          ? <><Check className="w-3.5 h-3.5" /> {audioPicked ? 'Audio pronto' : 'Ricollegato'}</>
+                          : isRelinking ? 'Selezione...' : audioPicked ? 'Scegli il file audio' : 'Ricollega audio'}
                       </button>
                     </div>
                   </div>
@@ -439,7 +452,9 @@ export function EditorFullPage({
                       <div className="min-w-0">
                         <p className="text-sm font-medium leading-none mb-1" style={{ color: 'var(--text-primary)' }}>Nessun audio collegato</p>
                         <p className="text-xs leading-none" style={{ color: 'var(--text-muted)' }}>
-                          Aggiungi un file audio: una copia verrà conservata nella sbobina.
+                          {audioPicked
+                            ? 'Scegli il file della lezione per ascoltarlo mentre rileggi.'
+                            : 'Aggiungi un file audio: una copia verrà conservata nella sbobina.'}
                         </p>
                       </div>
                     </div>
@@ -471,7 +486,7 @@ export function EditorFullPage({
                         ) : (
                           <>
                             <Plus className="w-3.5 h-3.5" />
-                            <span>Aggiungi audio</span>
+                            <span>{audioPicked ? 'Scegli il file audio' : 'Aggiungi audio'}</span>
                           </>
                         )}
                       </button>

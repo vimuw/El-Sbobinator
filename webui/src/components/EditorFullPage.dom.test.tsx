@@ -6,6 +6,7 @@ import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 import { WEB_CAPABILITIES } from '../web/webHost';
 
 const editorMockState = vi.hoisted(() => ({ html: '<p>editor content</p>' }));
+const audioPlayerProps = vi.hoisted(() => ({ current: null as Record<string, unknown> | null }));
 
 vi.mock('motion/react', () => ({
   motion: new Proxy({}, {
@@ -37,7 +38,10 @@ vi.mock('./RichTextEditor', () => ({
 }));
 
 vi.mock('./AudioPlayer', () => ({
-  AudioPlayer: () => React.createElement('div', { 'data-testid': 'audio-player' }, 'Player'),
+  AudioPlayer: (props: Record<string, unknown>) => {
+    audioPlayerProps.current = props;
+    return React.createElement('div', { 'data-testid': 'audio-player' }, 'Player');
+  },
 }));
 
 const baseProps = {
@@ -480,7 +484,7 @@ describe('EditorFullPage on hosts without session audio', () => {
 describe('EditorFullPage on the web build', () => {
   afterEach(() => setHostCapabilities(DESKTOP_CAPABILITIES));
 
-  it('docks the player for the audio kept in the browser, and offers to add one when there is none', async () => {
+  it('docks the player for the audio of the sbobina, and offers to choose the file when there is none', async () => {
     setHostCapabilities(WEB_CAPABILITIES);
     const { container, rerender } = render(<EditorFullPage {...baseProps} audioSrc="blob:https://web.test/1" onClose={vi.fn()} />);
     expect(container.querySelector('.editor-player-dock [data-testid="audio-player"]')).not.toBeNull();
@@ -488,10 +492,40 @@ describe('EditorFullPage on the web build', () => {
     const onRelink = vi.fn().mockResolvedValue(true);
     rerender(<EditorFullPage {...baseProps} audio={{ src: null, relinkNeeded: false, onRelink, init: {}, onStateChange: vi.fn() }} />);
     expect(screen.getByText('Nessun audio collegato')).toBeTruthy();
+    expect(screen.queryByText(/una copia verrà conservata/)).toBeNull();
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /Aggiungi audio/ }));
+      fireEvent.click(screen.getByRole('button', { name: 'Scegli il file audio' }));
     });
     expect(onRelink).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives the web player the switch to keep the audio in the browser instead of removing it', () => {
+    setHostCapabilities(WEB_CAPABILITIES);
+    const onKeepChange = vi.fn();
+    render(<EditorFullPage {...baseProps} audio={{ src: 'blob:test/1', relinkNeeded: false, onRelink: vi.fn(), onRemoveAudio: vi.fn(), kept: true, size: 2048, onKeepChange, init: {}, onStateChange: vi.fn() }} />);
+    expect(audioPlayerProps.current).toMatchObject({ onRemoveAudio: undefined, keep: { kept: true, size: 2048, onChange: onKeepChange } });
+
+    setHostCapabilities(DESKTOP_CAPABILITIES);
+    const onRemoveAudio = vi.fn();
+    render(<EditorFullPage {...baseProps} audio={{ src: '/audio.mp3', relinkNeeded: false, onRelink: vi.fn(), onRemoveAudio, onKeepChange, init: {}, onStateChange: vi.fn() }} />);
+    expect(audioPlayerProps.current).toMatchObject({ onRemoveAudio, keep: undefined });
+  });
+
+  it('asks for the lecture file the browser does not keep, with nothing to remove', async () => {
+    setHostCapabilities(WEB_CAPABILITIES);
+    const onRelink = vi.fn().mockResolvedValue(true);
+    render(<EditorFullPage {...baseProps} audio={{ src: null, relinkNeeded: true, onRelink, onRemoveAudio: vi.fn(), init: {}, onStateChange: vi.fn() }} />);
+
+    expect(screen.getByText('Audio della lezione')).toBeTruthy();
+    expect(screen.getByText('L’audio non resta salvato nel browser: scegli il file della lezione per ascoltarlo.')).toBeTruthy();
+    expect(screen.queryByText('Audio non trovato')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Rimuovi audio/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Ricollega audio' })).toBeNull();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Scegli il file audio' }));
+    });
+    expect(onRelink).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText('Audio pronto')).toBeTruthy();
   });
 
   it('fits above the on-screen keyboard so the player and the caret stay visible', async () => {
