@@ -144,23 +144,70 @@ async function expectAudioPlays(page: Page) {
   await page.getByRole('button', { name: 'Metti in pausa' }).click();
 }
 
-test('plays the lecture in the editor, also after a reload', async ({ page }) => {
+/** Audio copies in the browser database (queue copies and the ones a sbobina keeps). */
+function storedAudio(page: Page): Promise<number> {
+  return page.evaluate(() => new Promise<number>((resolve, reject) => {
+    const open = indexedDB.open('el-sbobinator-web');
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => {
+      const count = open.result.transaction('media').objectStore('media').count();
+      count.onsuccess = () => {
+        open.result.close();
+        resolve(count.result);
+      };
+      count.onerror = () => reject(count.error);
+    };
+  }));
+}
+
+async function openFromArchive(page: Page, name: string) {
+  await page.getByRole('button', { name: 'Archivio', exact: true }).click();
+  await page.locator('.archive-session-card').filter({ has: page.getByRole('button', { name: `Seleziona ${name}` }) }).click();
+  await expect(page.locator('.tiptap-editor h1')).toHaveText(name);
+}
+
+test('plays the lecture in the editor; after a reload asks for the file and keeps a copy only on request', async ({ page }) => {
   await fakeGemini(page);
   await startWithKey(page);
   await pickFile(page, 'Anatomia.mp3');
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
   await expect(page.getByText('Sbobinatura completata!')).toBeVisible({ timeout: 40_000 });
 
+  // The temporary copy is gone; the file is still in the page, so the editor plays it.
   await page.locator('.queue-card.is-completed', { hasText: 'Anatomia.mp3' }).click();
   await expect(page.locator('.tiptap-editor h1')).toHaveText('Anatomia');
   await expectAudioPlays(page);
+  expect(await storedAudio(page)).toBe(0);
 
   await closeEditor(page);
   await page.reload();
-  await page.getByRole('button', { name: 'Archivio', exact: true }).click();
-  await page.locator('.archive-session-card').filter({ has: page.getByRole('button', { name: 'Seleziona Anatomia' }) }).click();
-  await expect(page.locator('.tiptap-editor h1')).toHaveText('Anatomia');
+  await openFromArchive(page, 'Anatomia');
+  await expect(page.getByText('Audio della lezione')).toBeVisible();
+  const chooserPromise = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Scegli il file audio' }).click();
+  await (await chooserPromise).setFiles({ name: 'Anatomia.mp3', mimeType: 'audio/mpeg', buffer: syntheticMp3(400) });
   await expectAudioPlays(page);
+  await expect(page.getByText(/Sembra un file diverso/)).toHaveCount(0);
+  expect(await storedAudio(page)).toBe(0);
+
+  // "Tieni l'audio in questo browser": after the next reload it plays without asking.
+  await page.getByRole('button', { name: 'Opzioni audio collegato' }).click();
+  const keep = page.getByRole('switch', { name: /Tieni l’audio in questo browser · \d+ KB/ });
+  await expect(keep).toHaveAttribute('aria-checked', 'false');
+  await keep.click();
+  await expect(keep).toHaveAttribute('aria-checked', 'true');
+  expect(await storedAudio(page)).toBe(1);
+
+  // Opened from the archive, the editor goes back to it.
+  await page.getByRole('button', { name: 'Torna indietro' }).click();
+  await expect(page.locator('.tiptap-editor')).toHaveCount(0);
+  await expect.poll(() => new URL(page.url()).hash).toBe('#/archivio');
+  await page.reload();
+  let asked = 0;
+  page.on('filechooser', () => { asked += 1; });
+  await openFromArchive(page, 'Anatomia');
+  await expectAudioPlays(page);
+  expect(asked).toBe(0);
 });
 
 test('after a reload during a run, starts again without picking the file', async ({ page }) => {
