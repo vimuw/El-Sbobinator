@@ -1275,6 +1275,15 @@ describe('SettingsModal on the web host', () => {
     expect(screen.queryByRole('button', { name: 'Verifica ambiente' })).toBeNull();
   });
 
+  it('opens on Archiviazione when asked, e.g. from the moved-address notice', () => {
+    const props = makeProps({ isOpen: false });
+    const { rerender } = render(<SettingsModal {...props} />);
+    rerender(<SettingsModal {...props} isOpen initialTab="storage" />);
+
+    expect(screen.getByRole('heading', { name: 'Archiviazione', level: 2 })).toBeTruthy();
+    expect(screen.getByText('Backup delle sbobine')).toBeTruthy();
+  });
+
   it('describes only what each tab holds on the web', () => {
     render(<SettingsModal {...makeProps()} />);
 

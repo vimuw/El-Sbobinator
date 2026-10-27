@@ -4,6 +4,8 @@ import { PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-ki
 import { GithubIcon } from './components/icons/GithubIcon';
 import { fade } from './motion';
 import { ReportProblemLink } from './components/ReportProblemLink';
+import { MovedAddressBanner } from './components/MovedAddressBanner';
+import { hasMovedAddressNotice } from './movedAddress';
 import { GITHUB_URL } from './branding';
 import { type ElSbobinatorBridge, type PywebviewApi } from './bridge';
 import { createInitialProcessingState, processingReducer } from './appState';
@@ -39,6 +41,7 @@ import { NavSidebar, type ActivePage } from './components/NavSidebar';
 import { NotificationDropdown } from './components/NotificationDropdown';
 import { usePhoneLayout } from './hooks/usePhoneLayout';
 import { EditorFullPageChunk } from './editorPreload';
+import type { SettingsTab } from './components/modals/SettingsModal';
 
 const EditorFullPage = EditorFullPageChunk.Component;
 const SettingsModal = React.lazy(() => import('./components/modals/SettingsModal').then(m => ({ default: m.SettingsModal })));
@@ -90,6 +93,7 @@ export default function App() {
   const isPhone = usePhoneLayout();
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab | undefined>();
   const [isConsoleExpanded, setIsConsoleExpanded] = useState(false);
   const [hasOpenedSettings, setHasOpenedSettings] = useState(false);
   const shouldRenderSettings = isSettingsOpen || hasOpenedSettings;
@@ -519,6 +523,11 @@ export default function App() {
     setIsSettingsOpen(true);
   }, [setIsSettingsOpen]);
 
+  const handleOpenBackupSettings = useCallback(() => {
+    setSettingsInitialTab('storage');
+    setIsSettingsOpen(true);
+  }, [setIsSettingsOpen]);
+
   const handleRemoveDoneFile = useCallback((id: string) => {
     const f = filesRef.current.find(item => item.id === id);
     if (!f) return;
@@ -553,6 +562,7 @@ export default function App() {
       />
 
       <div className="app-main-column flex flex-col flex-1 min-w-0 h-full overflow-hidden">
+        {hasMovedAddressNotice() && <MovedAddressBanner onOpenBackup={handleOpenBackupSettings} />}
         {/* The next page mounts at once and fades in; the previous one leaves
             instantly. Waiting for its exit held every switch for ~165 ms. */}
         {activePage === 'queue' ? (
@@ -695,7 +705,9 @@ export default function App() {
             isOpen={isSettingsOpen}
             onClose={() => {
               setIsSettingsOpen(false);
+              setSettingsInitialTab(undefined);
             }}
+            initialTab={settingsInitialTab}
             appendConsole={appendConsole}
             onSettingsSaved={refreshSettings}
             auth={{

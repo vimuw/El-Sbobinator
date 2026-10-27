@@ -70,9 +70,12 @@ export interface SettingsModalProps {
   models: SettingsModelsProps;
   updater: SettingsUpdaterProps;
   storage?: SettingsStorageProps;
+  /** Section shown when the modal opens, e.g. the backup from the moved-address notice. */
+  initialTab?: SettingsTab;
 }
 
-type TabType = 'general' | 'storage' | 'diagnostics';
+export type SettingsTab = 'general' | 'storage' | 'diagnostics';
+type TabType = SettingsTab;
 
 const TAB_HEADERS: Record<TabType, { title: string; description: string }> = {
   general: {
@@ -151,6 +154,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   models,
   updater,
   storage,
+  initialTab,
 }) => {
   const {
     apiKey,
@@ -169,7 +173,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const { latestVersion, checkForUpdates, isCheckingUpdate, hasChecked, checkFailed, updateInstallState, onInstallUpdate } = updater;
   const onSessionRootMoved = storage?.onSessionRootMoved;
   const hostCapabilities = getHostCapabilities();
-  const [activeTab, setActiveTab] = useState<TabType>('general');
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab ?? 'general');
+  useEffect(() => {
+    if (isOpen && initialTab) setActiveTab(initialTab);
+  }, [isOpen, initialTab]);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(
