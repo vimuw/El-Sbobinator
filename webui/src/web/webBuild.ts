@@ -47,9 +47,15 @@ export function toWebDevIndexHtml(html: string): string {
   return html.replace(connectPattern, `$1 ${GEMINI_ORIGIN}`);
 }
 
-// Static pages of the site besides the app, from src/web/pages/<name>.html. Only the web build
-// emits them; Cloudflare Pages serves privacy.html at /privacy (and redirects /privacy.html there).
+// Static pages of the site besides the app: webui/<name>.html, extra entries of the web build only
+// (no app script, the app's theme.css for colors and font). Cloudflare Pages serves privacy.html
+// at /privacy and redirects /privacy.html there.
 export const WEB_STATIC_PAGES = ['privacy'];
+
+/** The web dev server injects its client and inline styles: a static page goes without its policy there. */
+export function toWebDevStaticPageHtml(html: string): string {
+  return html.replace(/\s*<meta\s+http-equiv="Content-Security-Policy"\s+content="[^"]*"\s*\/?>/i, '');
+}
 
 /**
  * Cloudflare Pages reads this file from the output folder. Files with a hash in their name

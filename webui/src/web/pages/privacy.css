@@ -1,0 +1,193 @@
+/* Static privacy page of the web build (privacy.html). Same font and theme tokens as the app,
+   from theme.css: every color here is a var(--…), never a value of its own (webBuild.test.ts). */
+@import "../../theme.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  line-height: 1.65;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: var(--accent-text);
+  text-underline-offset: 2px;
+}
+
+a:hover {
+  color: var(--accent-bg-hover);
+}
+
+a:focus-visible {
+  outline: none;
+  border-radius: 4px;
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.site-header,
+main {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+.site-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 20px;
+  padding-bottom: 16px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-primary);
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: var(--tracking-display);
+  text-decoration: none;
+}
+
+.brand:hover {
+  color: var(--text-primary);
+}
+
+.brand img {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+/* The app's secondary button (.app-button-secondary in index.css), on the same tokens. */
+.back-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.25rem;
+  padding: 0.4rem 0.9rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: var(--shadow-xs);
+  transition:
+    transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    background 180ms ease,
+    border-color 180ms ease;
+}
+
+.back-button:hover {
+  color: var(--text-primary);
+  background: var(--accent-subtle);
+  border-color: var(--accent-bg);
+  transform: translateY(-1px);
+}
+
+.back-button:active {
+  transform: scale(0.98);
+}
+
+main {
+  padding-bottom: 40px;
+}
+
+article {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-sm);
+  padding: 28px 24px;
+}
+
+h1 {
+  margin: 0 0 4px;
+  font-size: 1.75rem;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: var(--tracking-display);
+}
+
+h2 {
+  margin: 32px 0 8px;
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: var(--tracking-display);
+}
+
+p,
+li {
+  overflow-wrap: anywhere;
+}
+
+ul {
+  padding-left: 1.25rem;
+}
+
+li + li {
+  margin-top: 4px;
+}
+
+li::marker {
+  color: var(--text-muted);
+}
+
+strong {
+  font-weight: 700;
+}
+
+code {
+  padding: 0.1em 0.35em;
+  border-radius: 6px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  font-size: 0.9em;
+}
+
+.updated {
+  margin: 0 0 20px;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.note {
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--warning-ring);
+  background: var(--warning-subtle);
+}
+
+footer {
+  margin-top: 24px;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  article {
+    padding: 22px 16px;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+  }
+}

@@ -71,5 +71,49 @@ test('the privacy page opens from the app under the site policy', async ({ page,
   expect(await privacy.evaluate(() => document.documentElement.dataset.theme)).toMatch(/^(light|dark)$/);
   const csp = await privacy.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content');
   expect(csp).toContain("script-src 'self'");
+  await expect(privacy.getByRole('link', { name: 'El Sbobinator', exact: true })).toBeVisible();
+
+  // Same look as the app in both themes: its tokens, its accent on links and its Manrope font.
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(value => localStorage.setItem('el-sbobinator.theme.v1', value), theme);
+    await page.reload();
+    await privacy.reload();
+    const appTokens = await page.evaluate(readTokens);
+    const pageLook = await privacy.evaluate(async names => {
+      await document.fonts.ready;
+      const root = getComputedStyle(document.documentElement);
+      const probe = (token: string, property: 'color' | 'backgroundColor') => {
+        const element = document.createElement('span');
+        element.style[property] = `var(${token})`;
+        document.body.append(element);
+        const value = getComputedStyle(element)[property];
+        element.remove();
+        return value;
+      };
+      const link = document.querySelector('article a')!;
+      return {
+        theme: document.documentElement.dataset.theme,
+        tokens: Object.fromEntries(names.map(name => [name, root.getPropertyValue(name).trim()])),
+        manrope: [...document.fonts].some(font => font.family.replace(/"/g, '') === 'Manrope' && font.status === 'loaded'),
+        bodyFont: getComputedStyle(document.body).fontFamily,
+        link: [getComputedStyle(link).color, probe('--accent-text', 'color')],
+        background: [getComputedStyle(document.body).backgroundColor, probe('--bg-base', 'backgroundColor')],
+        back: [getComputedStyle(document.querySelector('.back-button')!).backgroundColor, probe('--bg-surface', 'backgroundColor')],
+      };
+    }, Object.keys(appTokens));
+    expect(pageLook.theme).toBe(theme);
+    expect(pageLook.tokens).toEqual(appTokens);
+    expect(pageLook.manrope).toBe(true);
+    expect(pageLook.bodyFont).toMatch(/^"?Manrope/);
+    expect(pageLook.link[0]).toBe(pageLook.link[1]);
+    expect(pageLook.background[0]).toBe(pageLook.background[1]);
+    expect(pageLook.back[0]).toBe(pageLook.back[1]);
+  }
   expect([...app, ...violations]).toEqual([]);
 });
+
+function readTokens(): Record<string, string> {
+  const root = getComputedStyle(document.documentElement);
+  return Object.fromEntries(['--bg-base', '--bg-surface', '--text-primary', '--text-muted', '--accent-text', '--border-default', '--font-display']
+    .map(name => [name, root.getPropertyValue(name).trim()]));
+}

@@ -3,8 +3,9 @@
   BOZZA da far rivedere al titolare prima di pubblicarla: non è consulenza legale.
   Ogni affermazione è stata ricavata dal codice dell'app web il 27-10-2026;
   se l'app cambia (audio, Google Drive), aggiornare il testo e la data.
-  La pagina è statica: niente script tranne il tema, stessa Content-Security-Policy del sito
-  (scritta dalla build nel meta qui sotto e mandata come header da _headers).
+  Pagina statica, entry della build web (vite.config.ts): niente script tranne il tema, colori e
+  font dai token dell'app (src/theme.css), stessa Content-Security-Policy del sito (scritta dalla
+  build nel meta qui sotto e mandata come header da _headers).
 -->
 <html lang="it">
   <head>
@@ -14,81 +15,19 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'" />
     <title>Informativa sulla privacy · El Sbobinator</title>
     <meta name="description" content="Cosa resta nel tuo browser, cosa va a Google Gemini e come funziona la sincronizzazione facoltativa con Google Drive." />
-    <link rel="icon" type="image/png" href="/icon.png" />
-    <script src="/boot-theme.js"></script>
-    <style>
-      :root {
-        --bg: #f0ede6;
-        --card: #ffffff;
-        --text: #26251f;
-        --muted: #5f5d55;
-        --border: rgba(100, 116, 139, 0.22);
-        --accent: #8a5a12;
-        --note: #fff6e0;
-        color-scheme: light;
-      }
-      @media (prefers-color-scheme: dark) {
-        :root:not([data-theme="light"]) {
-          --bg: #191919;
-          --card: #202020;
-          --text: #f1f1ef;
-          --muted: #b4b2ab;
-          --border: rgba(255, 255, 255, 0.14);
-          --accent: #f0b65a;
-          --note: #2b2517;
-          color-scheme: dark;
-        }
-      }
-      :root[data-theme="dark"] {
-        --bg: #191919;
-        --card: #202020;
-        --text: #f1f1ef;
-        --muted: #b4b2ab;
-        --border: rgba(255, 255, 255, 0.14);
-        --accent: #f0b65a;
-        --note: #2b2517;
-        color-scheme: dark;
-      }
-      * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        background: var(--bg);
-        color: var(--text);
-        font-family: "Manrope", "Segoe UI", system-ui, -apple-system, sans-serif;
-        font-size: 16px;
-        line-height: 1.6;
-      }
-      main {
-        max-width: 720px;
-        margin: 0 auto;
-        padding: 32px 16px 48px;
-      }
-      article {
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 14px;
-        padding: 24px 20px;
-      }
-      h1 { font-size: 1.6rem; line-height: 1.25; margin: 0 0 4px; letter-spacing: -0.02em; }
-      h2 { font-size: 1.15rem; margin: 32px 0 8px; }
-      p, li { overflow-wrap: anywhere; }
-      ul { padding-left: 1.25rem; }
-      li + li { margin-top: 4px; }
-      a { color: var(--accent); }
-      .updated { color: var(--muted); margin: 0 0 20px; font-size: 0.9rem; }
-      .note {
-        background: var(--note);
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        padding: 12px 14px;
-      }
-      .back { display: inline-block; margin-bottom: 16px; }
-      footer { color: var(--muted); font-size: 0.85rem; margin-top: 24px; text-align: center; }
-    </style>
+    <link rel="icon" type="image/png" href="./icon.png" />
+    <script src="./boot-theme.js"></script>
+    <link rel="stylesheet" href="./src/web/pages/privacy.css" />
   </head>
   <body>
+    <header class="site-header">
+      <a class="brand" href="./">
+        <img src="./icon.png" alt="" width="32" height="32" />
+        <span>El Sbobinator</span>
+      </a>
+      <a class="back-button" href="./">← Torna a El Sbobinator</a>
+    </header>
     <main>
-      <a class="back" href="/">← Torna a El Sbobinator</a>
       <article>
         <h1>Informativa sulla privacy</h1>
         <p class="updated">Ultimo aggiornamento: 27 ottobre 2026</p>
@@ -168,7 +107,7 @@
         <h2 id="modifiche">Modifiche</h2>
         <p>Se l’app cambia, questa pagina viene aggiornata e cambia la data in alto.</p>
       </article>
-      <footer>El Sbobinator · <a href="/">elsbobinator.com</a></footer>
+      <footer>El Sbobinator · <a href="./">elsbobinator.com</a></footer>
     </main>
   </body>
 </html>

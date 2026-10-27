@@ -1,0 +1,252 @@
+/* Font and design tokens of the light and dark themes (data-theme on <html>, set by
+   public/boot-theme.js). Shared by the app (index.css) and the static pages of the web build
+   (privacy.html), so both look the same without copying values. */
+
+/* Optimized font imports to bundle ONLY the modern woff2 format (saving ~91kB of unused .woff assets) */
+
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url("@fontsource/manrope/files/manrope-latin-400-normal.woff2") format('woff2');
+}
+
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url("@fontsource/manrope/files/manrope-latin-500-normal.woff2") format('woff2');
+}
+
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url("@fontsource/manrope/files/manrope-latin-600-normal.woff2") format('woff2');
+}
+
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url("@fontsource/manrope/files/manrope-latin-700-normal.woff2") format('woff2');
+}
+
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 800;
+  src: url("@fontsource/manrope/files/manrope-latin-800-normal.woff2") format('woff2');
+}
+
+/* ═══ DESIGN TOKENS / CSS VARIABLES ═══ */
+
+/* Visible window height. In iPad/iPhone Safari 100vh also counts the area behind the browser
+   toolbars, which pushed the sidebar bottom and the footer links off screen; 100dvh follows the
+   visible area. In the desktop window both are the same. */
+:root {
+  --app-height: 100vh;
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --app-height: 100dvh;
+  }
+}
+
+:root {
+  --font-display: "Manrope", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+
+  --bg-base: #f0ede6;
+  --bg-surface: #ffffff;
+  --bg-panel: #faf8f5;
+  --bg-elevated: #ffffff;
+  --bg-input: #ffffff;
+  --bg-hover: rgba(0, 0, 0, 0.05);
+  --bg-overlay: rgba(28, 25, 23, 0.40);
+
+  --border-default: rgba(120, 113, 108, 0.24);
+  --border-subtle: rgba(120, 113, 108, 0.16);
+  --border-strong: rgba(120, 113, 108, 0.46);
+
+  --text-primary: #1c1917;
+  --text-secondary: #44403c;
+  --text-muted: #635d57;
+  --text-faint: #857e77;
+
+  --accent-bg: #3d6b3a;
+  --accent-bg-hover: #2d5529;
+  --accent-text: #2d5529;
+  --accent-subtle: rgba(61, 107, 58, 0.08);
+  --accent-ring: rgba(61, 107, 58, 0.18);
+  --accent-gradient-start: #5a8a48;
+  --accent-gradient-end: #3d6b3a;
+  --brand-warm: #c49a3c;
+  --brand-warm-subtle: rgba(196, 154, 60, 0.12);
+
+  --success-bg: #2f855a;
+  --success-text: #23744a;
+  --success-subtle: rgba(47, 133, 90, 0.10);
+  --success-ring: rgba(47, 133, 90, 0.22);
+  --error-bg: #b91c1c;
+  --error-text: #b91c1c;
+  --error-subtle: rgba(185, 28, 28, 0.08);
+  --error-ring: rgba(185, 28, 28, 0.20);
+  --warning-bg: #975a16;
+  --warning-text: #8f5410;
+  --warning-subtle: rgba(151, 90, 22, 0.09);
+  --warning-ring: rgba(151, 90, 22, 0.20);
+
+  --processing-bg: rgba(61, 107, 58, 0.08);
+  --processing-text: #3d6b3a;
+  --processing-ring: rgba(61, 107, 58, 0.22);
+  --processing-dot: #5a8a48;
+
+  --btn-primary-bg: #3d6b3a;
+  --btn-primary-text: #ffffff;
+  --btn-primary-hover: #2d5529;
+  --btn-primary-ring: rgba(61, 107, 58, 0.32);
+  --btn-danger-bg: #b91c1c;
+  --btn-danger-text: #ffffff;
+  --btn-danger-hover: #991b1b;
+  --btn-danger-ring: rgba(185, 28, 28, 0.32);
+  --btn-disabled-bg: rgba(168, 162, 158, 0.22);
+  --btn-disabled-text: rgba(120, 113, 108, 0.72);
+
+  --console-bg: #ffffff;
+  --console-header: #faf8f5;
+  --console-heading: #1c1917;
+  --console-text: #44403c;
+  --console-muted: #635d57;
+  --console-border: var(--border-subtle);
+  --console-shell-border: var(--border-default);
+  --console-error: #b91c1c;
+  --console-success: #23744a;
+  --console-warning: #8f5410;
+
+  --gradient-title-from: #1a2e18;
+  --gradient-title-to: #4a7c40;
+
+  --progress-bg: rgba(61, 107, 58, 0.12);
+  --scrubber-rest: rgba(120, 113, 108, 0.35);
+  --card-queued-bg: #ffffff;
+  --card-queued-border: rgba(120, 113, 108, 0.28);
+  --glass-bg: #ffffff;
+  --glass-border: rgba(120, 113, 108, 0.24);
+
+  --shadow-soft: none;
+  --shadow-strong: 0 8px 32px rgba(28, 25, 18, 0.08);
+  /* Surface elevation: a hairline border carries the shape, these add depth
+     quietly. Rest → hover only ever steps up one level. */
+  --shadow-xs: 0 1px 2px rgba(28, 25, 18, 0.04);
+  --shadow-sm: 0 1px 2px rgba(28, 25, 18, 0.04), 0 4px 12px -4px rgba(28, 25, 18, 0.08);
+  --shadow-md: 0 1px 3px rgba(28, 25, 18, 0.05), 0 10px 24px -8px rgba(28, 25, 18, 0.14);
+
+  --radius-card: 12px;
+  --radius-panel: 16px;
+
+  /* Matches EASE_OUT in motion.ts: decelerate, never overshoot. */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --tracking-display: -0.025em;
+
+  --glass-top-shimmer: rgba(255, 255, 255, 0.90);
+
+  --header-bg: #f0ede6;
+  --editor-chrome-bg: #f0ede6;
+}
+
+:root[data-theme="dark"] {
+    --bg-base: #191919;
+    --bg-surface: #202020;
+    --bg-panel: #252525;
+    --bg-elevated: #2b2b2b;
+    --bg-input: #1a1a1a;
+    --bg-hover: rgba(255, 255, 255, 0.08);
+    --bg-overlay: rgba(0, 0, 0, 0.72);
+
+    --border-default: rgba(255, 255, 255, 0.15);
+    --border-subtle: rgba(255, 255, 255, 0.09);
+    --border-strong: rgba(255, 255, 255, 0.28);
+
+    --text-primary: #f1f1ef;
+    --text-secondary: #d1d5db;
+    --text-muted: #9ca3af;
+    --text-faint: #6b7280;
+
+    --accent-bg: #5aa356;
+    --accent-bg-hover: #7ec97a;
+    --accent-text: #7ec97a;
+    --accent-subtle: rgba(90, 163, 86, 0.12);
+    --accent-ring: rgba(90, 163, 86, 0.20);
+    --accent-gradient-start: #7ec97a;
+    --accent-gradient-end: #3d6b3a;
+    --brand-warm: #c49a3c;
+    --brand-warm-subtle: rgba(196, 154, 60, 0.14);
+
+    --success-bg: #4ade80;
+    --success-text: #4ade80;
+    --success-subtle: rgba(74, 222, 128, 0.12);
+    --success-ring: rgba(74, 222, 128, 0.22);
+    --error-bg: #fca5a5;
+    --error-text: #fca5a5;
+    --error-subtle: rgba(252, 165, 165, 0.12);
+    --error-ring: rgba(252, 165, 165, 0.22);
+    --warning-bg: #fcd34d;
+    --warning-text: #fcd34d;
+    --warning-subtle: rgba(252, 211, 77, 0.12);
+    --warning-ring: rgba(252, 211, 77, 0.22);
+
+    --processing-bg: rgba(90, 163, 86, 0.10);
+    --processing-text: #7ec97a;
+    --processing-ring: rgba(90, 163, 86, 0.22);
+    --processing-dot: #7ec97a;
+
+    --btn-primary-bg: #5aa356;
+    --btn-primary-text: #ffffff;
+    --btn-primary-hover: #4a9247;
+    --btn-primary-ring: rgba(90, 163, 86, 0.32);
+    --btn-danger-bg: #dc2626;
+    --btn-danger-text: #ffffff;
+    --btn-danger-hover: #b91c1c;
+    --btn-danger-ring: rgba(220, 38, 38, 0.32);
+    --btn-disabled-bg: rgba(71, 85, 105, 0.4);
+    --btn-disabled-text: rgba(203, 213, 225, 0.42);
+
+    --console-bg: #0a0a0a;
+    --console-header: #141414;
+    --console-heading: #f5f5f5;
+    --console-text: #d1d5db;
+    --console-muted: #9ca3af;
+    --console-border: rgba(255, 255, 255, 0.08);
+    --console-shell-border: var(--border-default);
+    --console-error: #fca5a5;
+    --console-success: #4ade80;
+    --console-warning: #fcd34d;
+
+    --gradient-title-from: #d4f0d2;
+    --gradient-title-to: #5aa356;
+
+    --progress-bg: rgba(90, 163, 86, 0.16);
+    --scrubber-rest: rgba(255, 255, 255, 0.20);
+    --card-queued-bg: #202020;
+    --card-queued-border: rgba(255, 255, 255, 0.17);
+
+    --shadow-soft: none;
+    --shadow-strong: 0 8px 48px rgba(0, 0, 0, 0.50);
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.30);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.30), 0 4px 12px -4px rgba(0, 0, 0, 0.40);
+    --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.35), 0 12px 28px -8px rgba(0, 0, 0, 0.55);
+
+    --glass-bg: #202020;
+    --glass-border: rgba(255, 255, 255, 0.15);
+    --glass-top-shimmer: rgba(255, 255, 255, 0.04);
+
+    --header-bg: #191919;
+    --editor-chrome-bg: #191919;
+}
