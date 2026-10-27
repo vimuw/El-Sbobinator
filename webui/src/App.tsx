@@ -5,6 +5,7 @@ import { GithubIcon } from './components/icons/GithubIcon';
 import { fade } from './motion';
 import { ReportProblemLink } from './components/ReportProblemLink';
 import { MovedAddressBanner } from './components/MovedAddressBanner';
+import { PrivacyLink } from './components/PrivacyLink';
 import { hasMovedAddressNotice } from './movedAddress';
 import { GITHUB_URL } from './branding';
 import { type ElSbobinatorBridge, type PywebviewApi } from './bridge';
@@ -662,6 +663,7 @@ export default function App() {
                 <GithubIcon className="w-3.5 h-3.5" /> Progetto Open-Source — GitHub
               </a>
               <ReportProblemLink />
+              <PrivacyLink />
             </footer>
           </motion.main>
         )}

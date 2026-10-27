@@ -1,6 +1,10 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 import { MovedAddressBanner } from './MovedAddressBanner';
+import { PrivacyLink } from './PrivacyLink';
+
+afterEach(() => setHostCapabilities(DESKTOP_CAPABILITIES));
 
 describe('moved-address notice', () => {
   it('asks for a backup to import on elsbobinator.com and reminds that keys stay behind', () => {
@@ -25,5 +29,16 @@ describe('moved-address notice', () => {
     unmount();
     render(<MovedAddressBanner onOpenBackup={vi.fn()} />);
     expect(screen.getByTestId('moved-address-banner')).toBeTruthy();
+  });
+});
+
+describe('privacy link', () => {
+  it('points to the static page on the web only', () => {
+    const { rerender } = render(<PrivacyLink />);
+    expect(screen.queryByRole('link', { name: 'Privacy' })).toBeNull();
+
+    setHostCapabilities({ kind: 'web' });
+    rerender(<PrivacyLink />);
+    expect(screen.getByRole('link', { name: 'Privacy' }).getAttribute('href')).toBe('/privacy');
   });
 });

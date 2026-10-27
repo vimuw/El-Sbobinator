@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { WEB_CSP, toWebDevIndexHtml, toWebIndexHtml, webBuildVersion, webHeadersFile } from './webBuild';
+import { WEB_CSP, WEB_STATIC_PAGES, toWebDevIndexHtml, toWebIndexHtml, webBuildVersion, webHeadersFile } from './webBuild';
 
 function directive(csp: string, name: string): string {
   return csp.split(';').map(part => part.trim()).find(part => part.startsWith(`${name} `)) ?? '';
@@ -51,11 +51,52 @@ describe('web build page policy', () => {
       else rules.get(current)!.push(line.trim());
     }
     expect(rules.get('/assets/*')).toEqual(['Cache-Control: public, max-age=31536000, immutable']);
-    for (const path of ['/', '/index.html', '/version.json', '/boot-theme.js', '/icon.png']) {
+    for (const path of ['/', '/index.html', '/version.json', '/boot-theme.js', '/icon.png', '/privacy', '/privacy.html']) {
       expect(rules.get(path)).toEqual(['Cache-Control: no-cache']);
     }
     // Cloudflare merges every matching rule: a Cache-Control on '/*' would join the assets' one.
     expect(rules.get('/*')!.some(header => header.startsWith('Cache-Control'))).toBe(false);
+  });
+});
+
+describe('privacy page of the web site', () => {
+  const html = readFileSync(new URL('./pages/privacy.html', import.meta.url), 'utf8');
+
+  it('is a static page of the web build, served at /privacy under the site policy', () => {
+    expect(WEB_STATIC_PAGES).toContain('privacy');
+    // Only the '/*' rule sets headers on it: the same CSP and frame-ancestors as the app.
+    const rules = webHeadersFile().split('\n');
+    const privacyRule = rules.indexOf('/privacy');
+    expect(rules[privacyRule + 1]).toBe('  Cache-Control: no-cache');
+    expect(rules[1]).toBe(`  Content-Security-Policy: ${WEB_CSP}; frame-ancestors 'none'`);
+    // The build also writes it in the page, so a server without _headers (vite preview) applies it.
+    expect(/<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]+)"/i.exec(toWebIndexHtml(html))?.[1]).toBe(WEB_CSP);
+  });
+
+  it('runs under that policy: no inline scripts and nothing loaded from other sites', () => {
+    const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)];
+    expect(scripts.map(([, attributes, body]) => [attributes.trim(), body.trim()])).toEqual([['src="/boot-theme.js"', '']]);
+    expect(html).not.toMatch(/<(?:link|img|iframe|source)\b[^>]*\b(?:href|src)="(?:https?:)?\/\//i);
+    expect(html).not.toMatch(/\son[a-z]+="/i);
+    expect(html).not.toMatch(/style="/i);
+  });
+
+  it('leaves the contact for the owner to fill in and names no address found elsewhere', () => {
+    expect(html).toContain('[NOME E EMAIL DI CONTATTO]');
+    expect(html).toMatch(/BOZZA da far rivedere/);
+    expect(html).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.]+/);
+  });
+
+  it('links the official terms instead of paraphrasing them', () => {
+    for (const url of [
+      'https://ai.google.dev/gemini-api/terms',
+      'https://policies.google.com/privacy',
+      'https://developers.google.com/terms/api-services-user-data-policy',
+      'https://myaccount.google.com/permissions',
+      'https://www.cloudflare.com/privacypolicy/',
+    ]) expect(html).toContain(`href="${url}`);
+    expect(html).toContain('<code>drive.appdata</code>');
+    expect(html).toMatch(/Ultimo aggiornamento: \d{1,2} \w+ \d{4}/);
   });
 });
 

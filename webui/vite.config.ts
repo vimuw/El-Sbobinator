@@ -4,7 +4,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'path';
 import { defineConfig, type UserConfig } from 'vite';
-import { toWebDevIndexHtml, toWebIndexHtml, webBuildVersion, webHeadersFile } from './src/web/webBuild.ts';
+import { WEB_STATIC_PAGES, toWebDevIndexHtml, toWebIndexHtml, webBuildVersion, webHeadersFile } from './src/web/webBuild.ts';
 
 const packageInfo = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8')) as { version: string };
 const version = (process.env.EL_SBOBINATOR_BUILD_VERSION ?? packageInfo.version).replace(/^v/, '');
@@ -31,6 +31,10 @@ export function createViteConfig(target: 'desktop' | 'web'): UserConfig {
         const publicFiles = readdirSync(new URL('./public', import.meta.url));
         this.emitFile({ type: 'asset', fileName: '_headers', source: webHeadersFile(publicFiles) });
         this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify(web) });
+        for (const page of WEB_STATIC_PAGES) {
+          const source = toWebIndexHtml(readFileSync(new URL(`./src/web/pages/${page}.html`, import.meta.url), 'utf-8'));
+          this.emitFile({ type: 'asset', fileName: `${page}.html`, source });
+        }
       },
     } : {
       name: 'desktop-build-version',

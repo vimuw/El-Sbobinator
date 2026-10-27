@@ -5,6 +5,14 @@ import { expect, test, type Page } from '@playwright/test';
 const OLD_ADDRESS = 'https://www.elsbobinator.com';
 const DUMMY_KEY = 'AIzaSyE2EDUMMYKEY000000000000000000000';
 
+function trackCspViolations(page: Page): string[] {
+  const violations: string[] = [];
+  page.on('console', message => {
+    if (/Content Security Policy/i.test(message.text())) violations.push(message.text());
+  });
+  return violations;
+}
+
 async function serveOldAddress(page: Page, baseURL: string) {
   await page.route(`${OLD_ADDRESS}/**`, async route => {
     const url = new URL(route.request().url());
@@ -42,4 +50,26 @@ test('a browser with work on the old address stays and asks for a backup', async
   await banner.getByRole('button', { name: 'Apri il backup' }).click();
   await expect(page.getByRole('heading', { name: 'Archiviazione', level: 2 })).toBeVisible();
   await expect(page.getByText('Backup delle sbobine')).toBeVisible();
+});
+
+test('the privacy page opens from the app under the site policy', async ({ page, context }) => {
+  const app = trackCspViolations(page);
+  await page.goto('/');
+  // Not an old address: no notice.
+  await expect(page.getByTestId('moved-address-banner')).toHaveCount(0);
+
+  const popup = context.waitForEvent('page');
+  await page.getByRole('link', { name: 'Privacy' }).first().click();
+  const privacy = await popup;
+  const violations = trackCspViolations(privacy);
+  await privacy.waitForLoadState();
+
+  expect(new URL(privacy.url()).pathname).toBe('/privacy');
+  await expect(privacy.getByRole('heading', { name: 'Informativa sulla privacy', level: 1 })).toBeVisible();
+  await expect(privacy.getByRole('heading', { name: 'Google Drive (facoltativo, in arrivo)' })).toBeVisible();
+  // boot-theme.js ran: the only script, allowed by script-src 'self'.
+  expect(await privacy.evaluate(() => document.documentElement.dataset.theme)).toMatch(/^(light|dark)$/);
+  const csp = await privacy.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content');
+  expect(csp).toContain("script-src 'self'");
+  expect([...app, ...violations]).toEqual([]);
 });

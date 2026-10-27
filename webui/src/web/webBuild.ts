@@ -47,14 +47,23 @@ export function toWebDevIndexHtml(html: string): string {
   return html.replace(connectPattern, `$1 ${GEMINI_ORIGIN}`);
 }
 
+// Static pages of the site besides the app, from src/web/pages/<name>.html. Only the web build
+// emits them; Cloudflare Pages serves privacy.html at /privacy (and redirects /privacy.html there).
+export const WEB_STATIC_PAGES = ['privacy'];
+
 /**
  * Cloudflare Pages reads this file from the output folder. Files with a hash in their name
  * (assets/) never change and are cached for a year; the page and the files of public/ keep their
  * names across releases, so the browser revalidates them and a new release arrives on the next
- * load. Cloudflare merges every rule matching a path, so Cache-Control is never set by '/*'.
+ * load. Cloudflare merges every rule matching a path, so Cache-Control is never set by '/*', and
+ * the static pages get the app's policy from it.
  */
 export function webHeadersFile(publicFiles: string[] = []): string {
-  const revalidated = ['/', '/index.html', '/version.json', ...publicFiles.map(name => `/${name}`)];
+  const revalidated = [
+    '/', '/index.html', '/version.json',
+    ...WEB_STATIC_PAGES.flatMap(page => [`/${page}`, `/${page}.html`]),
+    ...publicFiles.map(name => `/${name}`),
+  ];
   return [
     '/*',
     `  Content-Security-Policy: ${WEB_CSP}; frame-ancestors 'none'`,

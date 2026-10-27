@@ -1275,6 +1275,14 @@ describe('SettingsModal on the web host', () => {
     expect(screen.queryByRole('button', { name: 'Verifica ambiente' })).toBeNull();
   });
 
+  it('links the privacy notice of the site from the version section', () => {
+    render(<SettingsModal {...makeProps()} />);
+
+    const link = within(screen.getByTestId('web-version')).getByRole('link', { name: 'informativa sulla privacy' });
+    expect(link.getAttribute('href')).toBe('/privacy');
+    expect(link.getAttribute('target')).toBe('_blank');
+  });
+
   it('opens on Archiviazione when asked, e.g. from the moved-address notice', () => {
     const props = makeProps({ isOpen: false });
     const { rerender } = render(<SettingsModal {...props} />);

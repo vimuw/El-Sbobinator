@@ -19,7 +19,7 @@ import { useSettingsStorage } from '../../hooks/useSettingsStorage';
 import { formatSize } from '../../utils';
 import { credentialStorageWarning } from '../../credentialStorage';
 import { getHostCapabilities } from '../../hostCapabilities';
-import { APP_VERSION, WEB_PREVIEW_BUILD } from '../../branding';
+import { APP_VERSION, WEB_PREVIEW_BUILD, WEB_PRIVACY_PATH } from '../../branding';
 import { STORAGE_KEYS } from '../../storageKeys';
 import { modalCard } from '../../motion';
 
@@ -706,6 +706,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             <SettingsSectionHeading>Versione</SettingsSectionHeading>
                             <p className="text-xs text-[var(--text-secondary)]">
                               {WEB_PREVIEW_BUILD ? `${APP_VERSION} (anteprima)` : APP_VERSION}. Gli aggiornamenti arrivano da soli alla prossima apertura del sito, senza toccare sbobine e chiavi salvate in questo browser.
+                            </p>
+                            <p className="text-xs text-[var(--text-secondary)]">
+                              Cosa resta nel browser e cosa va a Google:{' '}
+                              <a href={WEB_PRIVACY_PATH} target="_blank" rel="noopener" className="underline">informativa sulla privacy</a>.
                             </p>
                           </div>
                         </>
