@@ -29,6 +29,13 @@ describe('official web address', () => {
     }
   });
 
+  it('leaves the Drive return page on the official address alone, its answer included', async () => {
+    const location = fakeLocation('elsbobinator.com', '/drive-auth', '', '#state=abc&access_token=t');
+    await expect(applyCanonicalOrigin(location, new IDBFactory(), memoryStorage())).resolves.toBe(false);
+    expect(location.replace).not.toHaveBeenCalled();
+    expect(hasMovedAddressNotice()).toBe(false);
+  });
+
   it('redirects an empty browser, warns one with sbobine and does nothing when unsure', () => {
     expect(decideCanonicalOrigin('www.elsbobinator.com', 'empty')).toBe('redirect');
     expect(decideCanonicalOrigin('elsbobinator.pages.dev', 'has-data')).toBe('notice');

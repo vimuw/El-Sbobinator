@@ -34,13 +34,12 @@ export const WEB_CSP = webCsp();
 
 /**
  * OAuth client ID of the Drive sync (EL_SBOBINATOR_GOOGLE_CLIENT_ID), or null when the build
- * leaves Drive out. Until the trash, the export and the Google app review are done (B4–B6) only
- * branch previews may carry it: a tagged release with it fails.
+ * leaves Drive out. Previews and tagged releases alike: the release workflow passes it from the
+ * repository variable, and without it the site is built as before Drive.
  */
-export function driveClientId(value: string | undefined, preview: boolean): string | null {
+export function driveClientId(value: string | undefined): string | null {
   const clientId = value?.trim();
   if (!clientId) return null;
-  if (!preview) throw new Error('La sincronizzazione Drive (EL_SBOBINATOR_GOOGLE_CLIENT_ID) per ora si include solo nelle anteprime, non con un tag di versione.');
   if (!/^[0-9]+-[0-9a-z]+\.apps\.googleusercontent\.com$/.test(clientId)) {
     throw new Error(`Client ID OAuth non valido: ${clientId} (atteso 1234567890-abc123.apps.googleusercontent.com).`);
   }

@@ -31,6 +31,8 @@ describe('Drive OAuth', () => {
 
   it('builds the return address and a random state', () => {
     expect(redirectUriFor('https://anteprima.elsbobinator.pages.dev')).toBe('https://anteprima.elsbobinator.pages.dev/drive-auth');
+    // The redirect URI registered in the Google client for the released site.
+    expect(redirectUriFor('https://elsbobinator.com')).toBe('https://elsbobinator.com/drive-auth');
     expect(newState(bytes => bytes.fill(171))).toBe('ab'.repeat(16));
   });
 
@@ -51,7 +53,9 @@ describe('Drive OAuth', () => {
 
   it('explains blocked accounts and silent failures in Italian', () => {
     expect(oauthErrorMessage('admin_policy_enforced')).toContain('ateneo');
-    expect(oauthErrorMessage('access_denied')).toContain('utenti di prova');
+    // The app is published: no more talk of test users.
+    expect(oauthErrorMessage('access_denied')).toContain('ateneo');
+    expect(oauthErrorMessage('access_denied')).not.toMatch(/utenti di prova|in prova/);
     expect(oauthErrorMessage('popup_blocked')).toContain('pop-up');
     expect(oauthErrorMessage('strano', 'dettaglio')).toBe('Accesso a Google non riuscito: dettaglio');
     expect(oauthErrorMessage('strano')).toBe('Accesso a Google non riuscito (strano).');

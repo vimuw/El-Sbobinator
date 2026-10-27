@@ -94,6 +94,14 @@ describe('privacy page of the web site', () => {
     expect(drive).toContain('resta solo nella scheda aperta, al massimo un’ora');
   });
 
+  it('describes Drive as available and optional, not coming soon', () => {
+    const drive = html.slice(html.indexOf('id="google-drive"'), html.indexOf('id="diritti"'));
+    expect(drive).toMatch(/^id="google-drive">Google Drive \(facoltativo\)<\/h2>/);
+    expect(html).not.toMatch(/in arrivo|non è ancora disponibile|quando arriverà/i);
+    expect(drive).toContain('Impostazioni → Archiviazione → Google Drive');
+    expect(html.slice(html.indexOf('id="in-breve"'), html.indexOf('id="titolare"'))).toContain('Google Drive');
+  });
+
   it("looks like the app: its theme tokens and Manrope, no colors of its own", () => {
     // The page's only styles are its stylesheet, which starts from the app's theme.css.
     expect(html).not.toMatch(/<style\b/i);
@@ -154,8 +162,8 @@ describe('Drive sync in the web build', () => {
   });
 
   it('leaves the build as it was without a client ID', () => {
-    expect(driveClientId(undefined, true)).toBeNull();
-    expect(driveClientId('  ', false)).toBeNull();
+    expect(driveClientId(undefined)).toBeNull();
+    expect(driveClientId('  ')).toBeNull();
     expect(webCsp()).toBe(WEB_CSP);
     expect(webStaticPages()).toEqual(WEB_STATIC_PAGES);
     expect(webHeadersFile(['icon.png'])).toBe(webHeadersFile(['icon.png'], false));
@@ -163,10 +171,9 @@ describe('Drive sync in the web build', () => {
     expect(webHeadersFile()).not.toContain('googleapis.com https://www');
   });
 
-  it('builds the return page and the wider policy into previews only', () => {
-    expect(driveClientId(` ${clientId} `, true)).toBe(clientId);
-    expect(() => driveClientId(clientId, false)).toThrow(/solo nelle anteprime/);
-    expect(() => driveClientId('client-secret-or-typo', true)).toThrow(/non valido/);
+  it('builds the return page and the wider policy into any build with a client ID', () => {
+    expect(driveClientId(` ${clientId} `)).toBe(clientId);
+    expect(() => driveClientId('client-secret-or-typo')).toThrow(/non valido/);
     expect(webStaticPages(true)).toEqual(['privacy', 'drive-auth']);
     const rules = webHeadersFile([], true).split('\n');
     expect(rules[1]).toBe(`  Content-Security-Policy: ${webCsp(true)}; frame-ancestors 'none'`);
@@ -182,6 +189,11 @@ describe('Drive sync in the web build', () => {
     expect(scripts).toEqual([['src="./boot-theme.js"', ''], ['type="module" src="./src/web/drive/authReturn.ts"', '']]);
     expect(html).not.toMatch(/(?:href|src)="(?:https?:)?\/\//i);
     expect(/<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]+)"/i.exec(toWebIndexHtml(html, true))?.[1]).toBe(webCsp(true));
+    // Its script never reaches the app's move to the official address (canonicalOrigin.ts, from
+    // main.tsx): on elsbobinator.com/drive-auth nothing redirects and the fragment stays for the app.
+    const imports = (file: string) => [...readFileSync(new URL(file, import.meta.url), 'utf8').matchAll(/^import\s[^;]*from '([^']+)'/gm)].map(([, from]) => from);
+    expect(imports('./drive/authReturn.ts')).toEqual(['./oauth']);
+    expect(imports('./drive/oauth.ts')).toEqual([]);
   });
 });
 

@@ -118,7 +118,7 @@ export function oauthErrorMessage(error: string, description?: string): string {
     case 'admin_policy_enforced':
       return 'Il tuo ateneo o la tua organizzazione non permette ad app esterne di usare Google Drive. Usa un account personale o chiedi all’amministratore.';
     case 'access_denied':
-      return 'Accesso a Google Drive non concesso. Se hai annullato, riprova. Finché l’app è in prova, l’account deve essere tra gli utenti di prova; con un account universitario l’ateneo potrebbe bloccare le app esterne.';
+      return 'Accesso a Google Drive non concesso. Se hai annullato, riprova. Con un account universitario l’ateneo potrebbe bloccare le app esterne.';
     case 'interaction_required':
     case 'login_required':
     case 'consent_required':

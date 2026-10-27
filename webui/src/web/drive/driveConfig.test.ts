@@ -10,13 +10,13 @@ describe('Drive sync configuration', () => {
     expect(createDriveConnection()).toBeNull();
   });
 
-  it('is on only in previews with a client ID', () => {
-    expect(driveEnabled(CLIENT, true)).toBe(true);
-    expect(driveEnabled(CLIENT, false)).toBe(false);
-    expect(driveEnabled('', true)).toBe(false);
-    expect(createDriveConnection(CLIENT, false, 'https://elsbobinator.com')).toBeNull();
-    const connection = createDriveConnection(CLIENT, true, 'https://anteprima.elsbobinator.pages.dev');
-    expect(connection?.auth.token()).toBeNull();
-    expect(connection?.api.listChanged).toBeTypeOf('function');
+  it('is on in every build with a client ID, the released site included', () => {
+    expect(driveEnabled(CLIENT)).toBe(true);
+    expect(driveEnabled('')).toBe(false);
+    for (const origin of ['https://elsbobinator.com', 'https://anteprima.elsbobinator.pages.dev']) {
+      const connection = createDriveConnection(CLIENT, origin);
+      expect(connection?.auth.token()).toBeNull();
+      expect(connection?.api.listChanged).toBeTypeOf('function');
+    }
   });
 });

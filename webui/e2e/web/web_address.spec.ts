@@ -66,7 +66,9 @@ test('the privacy page opens from the app under the site policy', async ({ page,
 
   expect(new URL(privacy.url()).pathname).toBe('/privacy');
   await expect(privacy.getByRole('heading', { name: 'Informativa sulla privacy', level: 1 })).toBeVisible();
-  await expect(privacy.getByRole('heading', { name: 'Google Drive (facoltativo, in arrivo)' })).toBeVisible();
+  // Drive sync is available on the site: no "coming soon" left in the privacy page.
+  await expect(privacy.getByRole('heading', { name: 'Google Drive (facoltativo)', exact: true })).toBeVisible();
+  await expect(privacy.getByText(/in arrivo|non è ancora disponibile/i)).toHaveCount(0);
   // boot-theme.js ran: the only script, allowed by script-src 'self'.
   expect(await privacy.evaluate(() => document.documentElement.dataset.theme)).toMatch(/^(light|dark)$/);
   const csp = await privacy.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content');
