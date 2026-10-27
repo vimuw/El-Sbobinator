@@ -58,7 +58,7 @@ jobs:
 
       - name: Install Chromium for the web browser tests
         working-directory: webui
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
       - name: Run the web browser tests (fake Gemini, Chromium)
         working-directory: webui
