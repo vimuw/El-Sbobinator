@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { WEB_CSP, toWebIndexHtml, webBuildVersion, webHeadersFile } from './webBuild';
+import { WEB_CSP, toWebDevIndexHtml, toWebIndexHtml, webBuildVersion, webHeadersFile } from './webBuild';
 
 function directive(csp: string, name: string): string {
   return csp.split(';').map(part => part.trim()).find(part => part.startsWith(`${name} `)) ?? '';
@@ -25,6 +25,14 @@ describe('web build page policy', () => {
     expect(html).toContain('<script src="./boot-theme.js"></script>');
     expect(html).toContain('src="/src/main.tsx"');
     expect(html).toContain('<link rel="icon" type="image/png" href="./icon.png" />');
+  });
+
+  it('lets the web dev server reach Gemini while keeping the desktop policy for HMR', () => {
+    const desktopHtml = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+    const csp = /<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]+)"/i.exec(toWebDevIndexHtml(desktopHtml))?.[1] ?? '';
+    const connect = directive(csp.replace(/\s+/g, ' '), 'connect-src');
+    expect(connect).toContain('https://generativelanguage.googleapis.com');
+    expect(connect).toContain('ws://localhost:*');
   });
 
   it('sends the same policy as a header, without cross-origin isolation', () => {

@@ -4,7 +4,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'path';
 import { defineConfig, type UserConfig } from 'vite';
-import { toWebIndexHtml, webBuildVersion, webHeadersFile } from './src/web/webBuild.ts';
+import { toWebDevIndexHtml, toWebIndexHtml, webBuildVersion, webHeadersFile } from './src/web/webBuild.ts';
 
 const packageInfo = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8')) as { version: string };
 const version = (process.env.EL_SBOBINATOR_BUILD_VERSION ?? packageInfo.version).replace(/^v/, '');
@@ -18,7 +18,11 @@ export function createViteConfig(target: 'desktop' | 'web'): UserConfig {
   const web = isWeb ? webBuildVersion(process.env.EL_SBOBINATOR_WEB_VERSION, packageInfo.version) : null;
   return {
     ...(isWeb ? { mode: 'web' } : {}),
-    plugins: [react(), tailwindcss(), isWeb ? {
+    plugins: [react(), tailwindcss(), ...(isWeb ? [{
+      name: 'web-dev-gemini',
+      apply: 'serve' as const,
+      transformIndexHtml: (html: string) => toWebDevIndexHtml(html),
+    }] : []), isWeb ? {
       name: 'web-static-site',
       // The dev server keeps the permissive desktop policy: HMR needs inline scripts and websockets.
       apply: 'build',
