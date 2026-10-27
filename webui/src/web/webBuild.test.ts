@@ -81,10 +81,11 @@ describe('privacy page of the web site', () => {
     expect(html).not.toMatch(/style="/i);
   });
 
-  it('leaves the contact for the owner to fill in and names no address found elsewhere', () => {
-    expect(html).toContain('[NOME E EMAIL DI CONTATTO]');
+  it('names the contact with a mailto link and no other address', () => {
+    expect(html).not.toContain('[NOME E EMAIL DI CONTATTO]');
     expect(html).toMatch(/BOZZA da far rivedere/);
-    expect(html).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.]+/);
+    expect(html).toContain('<a href="mailto:vimuwijesinghe@gmail.com">vimuwijesinghe@gmail.com</a>');
+    expect(new Set(html.match(/[\w.+-]+@[\w-]+\.[\w.]+/g))).toEqual(new Set(['vimuwijesinghe@gmail.com']));
   });
 
   it('links the official terms instead of paraphrasing them', () => {
