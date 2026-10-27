@@ -230,6 +230,7 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
       for (const sessionDir of report.deferred) emit('documentChangedElsewhere', { session_dir: sessionDir });
     },
     onNeedsReconnect: () => emit('driveNeedsReconnect'),
+    archive: () => archive,
   }) : null;
   const archive = drive ? trackArchive(createWebArchive(database), database, () => drive.schedule()) : createWebArchive(database);
   drive?.start();
@@ -785,6 +786,9 @@ function driveMethods(drive: DriveService, closeEditor: () => void): Partial<Pyw
     connect_drive: () => drive.connect(),
     disconnect_drive: () => drive.disconnect(),
     sync_drive_now: () => drive.syncNow(),
+    erase_drive_data: () => drive.erase(),
+    // Not async: the Google window must open inside the tap that called it.
+    export_to_drive: onProgress => drive.exportAll(onProgress),
     release_html_content: async () => {
       closeEditor();
       // A change from Drive held back for the editor comes in now.

@@ -1,8 +1,11 @@
-import type { DriveStatus } from '../../bridge';
+import type { DriveExportResult, DriveStatus } from '../../bridge';
+import type { WebArchive } from '../webSessions';
 import { DriveAuthError, type DriveAuth } from './auth';
 import { DriveError, type DriveApi } from './driveApi';
+import { ExportError, exportToDrive } from './exportDrive';
+import { DRIVE_FILE_SCOPE } from './oauth';
 import { syncOnce, type SyncReport } from './sync';
-import { bindAccount, readMeta } from './syncState';
+import { bindAccount, readMeta, resetSyncState } from './syncState';
 
 // When the Drive sync runs: at startup, when the page comes back to the foreground or online, and a
 // few seconds after the last local change. One round at a time; never while a Gemini run works (the
@@ -22,6 +25,10 @@ export interface DriveServiceOptions {
   onNeedsReconnect?: () => void;
   delayMs?: number;
   now?: () => Date;
+  /** The archive the export reads (the sbobine out of the trash). */
+  archive?: () => WebArchive;
+  /** A REST client on the export's own token (drive.file). */
+  exportApi?: (token: string) => DriveApi;
 }
 
 export interface DriveService {
@@ -33,6 +40,10 @@ export interface DriveService {
   /** Opens the Google window synchronously: call it inside a tap. */
   connect(): Promise<DriveStatus>;
   disconnect(): Promise<DriveStatus>;
+  /** "Elimina tutti i miei dati da Drive": every file of the hidden folder, the local sync state, then disconnects. */
+  erase(): Promise<DriveStatus & { removed: number }>;
+  /** "Esporta tutte le sbobine nel mio Drive": opens the Google window synchronously (call it inside a tap). */
+  exportAll(onProgress?: (done: number, total: number) => void): Promise<DriveExportResult>;
   /** The Gemini run ended: a round it held back runs now. */
   runEnded(): void;
   /** Startup round plus the foreground and online triggers; returns their cleanup. */
@@ -67,6 +78,8 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
   let waitingForRun = false;
   // "Disconnetti" during a round: whatever that round ends with no longer concerns the status.
   let epoch = 0;
+  // While the Drive folder is being emptied no round may write to it.
+  let erasing = false;
 
   const status = (): DriveStatus => {
     const email = auth.account();
@@ -83,7 +96,7 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
   };
 
   const round = async () => {
-    if (!auth.token()) return;
+    if (!auth.token() || erasing) return;
     const started = epoch;
     syncing = true;
     try {
@@ -124,6 +137,19 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
     if (timer) clearTimeout(timer);
     timer = null;
   };
+
+  async function disconnect(): Promise<DriveStatus> {
+    epoch += 1;
+    cancelTimer();
+    pending = false;
+    waitingForRun = false;
+    syncing = false;
+    await auth.disconnect();
+    lastSyncAt = null;
+    error = null;
+    interactiveNext = false;
+    return status();
+  }
 
   return {
     status,
@@ -166,17 +192,66 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
       })();
     },
 
-    async disconnect() {
-      epoch += 1;
+    disconnect,
+
+    async erase() {
+      if (!auth.token()) {
+        error = describeDriveError(new DriveError(401, ''));
+        return { ...status(), removed: 0 };
+      }
+      erasing = true;
       cancelTimer();
-      pending = false;
-      waitingForRun = false;
-      syncing = false;
-      await auth.disconnect();
-      lastSyncAt = null;
-      error = null;
-      interactiveNext = false;
-      return status();
+      let removed = 0;
+      try {
+        // A round already writing finishes first: nothing it sends can be left behind.
+        await loop;
+        for (const file of await api.listChanged(null)) {
+          await api.remove(file.id).catch((caught: { status?: number }) => {
+            if (caught.status !== 404) throw caught;
+          });
+          removed += 1;
+        }
+        await resetSyncState(factory);
+      } catch (caught) {
+        error = describeDriveError(caught);
+        if (caught instanceof DriveError && caught.needsAuthorization) options.onNeedsReconnect?.();
+        return { ...status(), removed };
+      } finally {
+        erasing = false;
+      }
+      return { ...await disconnect(), removed };
+    },
+
+    exportAll(onProgress) {
+      // Before any await: the Google window must open inside the tap. The token stays with the export.
+      const login = auth.connect({ scope: DRIVE_FILE_SCOPE, keep: false });
+      return (async (): Promise<DriveExportResult> => {
+        let token: string;
+        try {
+          token = (await login).accessToken;
+        } catch (caught) {
+          return { ok: false, exported: 0, total: 0, error: describeDriveError(caught) };
+        }
+        if (!options.archive || !options.exportApi) return { ok: false, exported: 0, total: 0, error: 'Esportazione non disponibile.' };
+        try {
+          const outcome = await exportToDrive({
+            archive: options.archive(),
+            api: options.exportApi(token),
+            now: now(),
+            onProgress: progress => onProgress?.(progress.done, progress.total),
+          });
+          return { ok: true, exported: outcome.exported, total: outcome.total, folder_name: outcome.folderName, folder_url: outcome.folderUrl };
+        } catch (caught) {
+          const partial = caught instanceof ExportError ? caught.outcome : null;
+          return {
+            ok: false,
+            exported: partial?.exported ?? 0,
+            total: partial?.total ?? 0,
+            ...(partial?.exported ? { folder_name: partial.folderName, folder_url: partial.folderUrl } : {}),
+            error: describeDriveError(caught instanceof ExportError ? caught.reason : caught),
+          };
+        }
+      })();
     },
 
     runEnded() {

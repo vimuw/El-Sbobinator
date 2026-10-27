@@ -1,5 +1,6 @@
 import { STORAGE_KEYS } from '../../storageKeys';
 import {
+  DRIVE_APPDATA_SCOPE,
   OAUTH_CHANNEL,
   buildAuthUrl,
   fragmentState,
@@ -65,8 +66,10 @@ export interface DriveAuth {
   /**
    * Opens the Google window: call it synchronously inside a tap. Silent = the remembered account
    * without questions (prompt=none); it fails with needsInteractiveLogin when Google wants a choice.
+   * scope asks for one more permission (incremental: the ones granted before come along); keep:
+   * false leaves the tab's token as it was (the export's token serves the export only).
    */
-  connect(options?: { silent?: boolean }): Promise<OAuthToken>;
+  connect(options?: { silent?: boolean; scope?: string; keep?: boolean }): Promise<OAuthToken>;
   /** Drive answered 401: the token is gone, the account stays for a silent reconnect. */
   expire(): void;
   /** "Disconnetti": revokes the token at Google and forgets token and account. */
@@ -127,14 +130,17 @@ export function createDriveAuth(options: DriveAuthOptions): DriveAuth {
       if (email) safely(() => local?.setItem(STORAGE_KEYS.WEB_DRIVE_ACCOUNT_V1, email));
     },
 
-    connect({ silent = false } = {}) {
+    connect({ silent = false, scope, keep = true } = {}) {
       const state = newState();
       const hint = account();
+      const requiredScope = scope ?? DRIVE_APPDATA_SCOPE;
       const url = buildAuthUrl({
         clientId: options.clientId,
         redirectUri: options.redirectUri,
         state,
-        prompt: silent && hint ? 'none' : 'select_account',
+        scope: requiredScope,
+        // A new permission for the remembered account: Google asks only for that.
+        prompt: silent && hint ? 'none' : scope && hint ? undefined : 'select_account',
         loginHint: hint ?? undefined,
       });
       // Before any await: the window must open inside the tap.
@@ -152,10 +158,12 @@ export function createDriveAuth(options: DriveAuthOptions): DriveAuth {
         const onAnswer = (data: unknown) => {
           if (!isOAuthReturnMessage(data) || fragmentState(data.fragment) !== state) return;
           finish();
-          const result = parseOAuthFragment(data.fragment, state, now());
+          const result = parseOAuthFragment(data.fragment, state, now(), requiredScope);
           if (result.kind === 'token') {
-            current = result.token;
-            safely(() => session?.setItem(STORAGE_KEYS.WEB_DRIVE_TOKEN_V1, JSON.stringify(result.token)));
+            if (keep) {
+              current = result.token;
+              safely(() => session?.setItem(STORAGE_KEYS.WEB_DRIVE_TOKEN_V1, JSON.stringify(result.token)));
+            }
             resolve(result.token);
           } else if (result.kind === 'error') {
             reject(new DriveAuthError(result.error, result.description));

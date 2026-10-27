@@ -1,11 +1,13 @@
-// The Drive v3 REST calls of the sync, on the hidden app folder only (appDataFolder, scope
-// drive.appdata). Plain fetch with the bearer token: no Google script, so the page keeps
+// The Drive v3 REST calls of the sync, on the hidden app folder (appDataFolder, scope
+// drive.appdata), plus the few the one-way export needs to create a visible folder and its files
+// (scope drive.file: only files this app created). Plain fetch with the bearer token: no Google script, so the page keeps
 // script-src 'self'. Quota answers (429, 403 rate limits) and server errors are retried with a
 // growing wait, as Google asks.
 
 export const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 export const DRIVE_UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 const FILE_FIELDS = 'id,name,modifiedTime';
+export const FOLDER_MIME = 'application/vnd.google-apps.folder';
 const RATE_LIMIT_REASONS = new Set(['rateLimitExceeded', 'userRateLimitExceeded']);
 const MAX_WAIT_MS = 32_000;
 
@@ -14,6 +16,8 @@ export interface DriveFileMeta {
   name: string;
   /** RFC 3339, Drive's clock: the sync compares these, never the device's clock. */
   modifiedTime: string;
+  /** Drive's page of the file (asked for the export's folder only). */
+  webViewLink?: string;
 }
 
 export class DriveError extends Error {
@@ -71,6 +75,10 @@ export interface DriveApi {
   createJson(name: string, value: unknown): Promise<DriveFileMeta>;
   updateJson(id: string, value: unknown): Promise<DriveFileMeta>;
   remove(id: string): Promise<void>;
+  /** A visible folder in My Drive (export only); at the top without a parent. */
+  createFolder(name: string, parentId?: string): Promise<DriveFileMeta>;
+  /** A visible file in a folder of the export. */
+  createFile(name: string, mimeType: string, content: string, parentId: string): Promise<DriveFileMeta>;
 }
 
 export function createDriveApi(options: DriveApiOptions): DriveApi {
@@ -105,16 +113,27 @@ export function createDriveApi(options: DriveApiOptions): DriveApi {
 
   const json = async <T>(response: Response) => await response.json() as T;
 
-  function multipartBody(boundary: string, metadata: unknown, value: unknown): string {
+  // Never repeated on a server error: the file may exist already.
+  async function upload(metadata: Record<string, unknown>, content: string, contentType: string): Promise<DriveFileMeta> {
+    const boundary = `el-sbobinator-${Date.now().toString(36)}`;
+    const response = await call(`${DRIVE_UPLOAD}/files?uploadType=multipart&fields=${FILE_FIELDS}`, {
+      method: 'POST',
+      headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+      body: multipartBody(boundary, metadata, content, contentType),
+    }, false);
+    return json<DriveFileMeta>(response);
+  }
+
+  function multipartBody(boundary: string, metadata: unknown, content: string, contentType: string): string {
     return [
       `--${boundary}`,
       'Content-Type: application/json; charset=UTF-8',
       '',
       JSON.stringify(metadata),
       `--${boundary}`,
-      'Content-Type: application/json; charset=UTF-8',
+      `Content-Type: ${contentType}`,
       '',
-      JSON.stringify(value),
+      content,
       `--${boundary}--`,
       '',
     ].join('\r\n');
@@ -149,13 +168,7 @@ export function createDriveApi(options: DriveApiOptions): DriveApi {
     },
 
     async createJson(name, value) {
-      const boundary = `el-sbobinator-${Date.now().toString(36)}`;
-      const response = await call(`${DRIVE_UPLOAD}/files?uploadType=multipart&fields=${FILE_FIELDS}`, {
-        method: 'POST',
-        headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
-        body: multipartBody(boundary, { name, parents: ['appDataFolder'], mimeType: 'application/json' }, value),
-      }, false);
-      return json<DriveFileMeta>(response);
+      return upload({ name, parents: ['appDataFolder'], mimeType: 'application/json' }, JSON.stringify(value), 'application/json; charset=UTF-8');
     },
 
     async updateJson(id, value) {
@@ -169,6 +182,19 @@ export function createDriveApi(options: DriveApiOptions): DriveApi {
 
     async remove(id) {
       await call(`${DRIVE_API}/files/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    },
+
+    async createFolder(name, parentId) {
+      const response = await call(`${DRIVE_API}/files?fields=${FILE_FIELDS},webViewLink`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+        body: JSON.stringify({ name, mimeType: FOLDER_MIME, ...(parentId ? { parents: [parentId] } : {}) }),
+      }, false);
+      return json<DriveFileMeta>(response);
+    },
+
+    async createFile(name, mimeType, content, parentId) {
+      return upload({ name, mimeType, parents: [parentId] }, content, `${mimeType}; charset=UTF-8`);
     },
   };
 }

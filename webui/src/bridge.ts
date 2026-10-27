@@ -226,6 +226,16 @@ export interface DriveStatus {
   error: string | null;
 }
 
+/** Outcome of "Esporta tutte le sbobine nel mio Drive". */
+export interface DriveExportResult {
+  ok: boolean;
+  exported: number;
+  total: number;
+  folder_name?: string;
+  folder_url?: string;
+  error?: string;
+}
+
 export type ElSbobinatorBridge = BridgeCallbacks | null;
 
 export interface UpdateDownloadProgressPayload {
@@ -341,6 +351,10 @@ export interface PywebviewApi {
   sync_drive_now?: () => Promise<DriveStatus>;
   /** The editor closed this document: changes from Drive may now be applied to it. */
   release_html_content?: (path: string) => Promise<{ ok: boolean }>;
+  /** Removes every file of the hidden Drive folder and the local sync state, then disconnects. */
+  erase_drive_data?: () => Promise<DriveStatus & { removed?: number }>;
+  /** One-way copy of the sbobine as HTML in a visible Drive folder; opens the Google window: call it inside a tap. */
+  export_to_drive?: (onProgress?: (done: number, total: number) => void) => Promise<DriveExportResult>;
   // Web previews with the trash: delete_session moves a sbobina there for 30 days.
   list_trash?: () => Promise<{ ok: boolean; sessions?: ArchiveSession[]; error?: string }>;
   restore_session?: (sessionDir: string) => Promise<{ ok: boolean; error?: string }>;

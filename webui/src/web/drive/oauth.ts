@@ -4,6 +4,8 @@
 // token: after about an hour the page asks again, silently (prompt=none) for the remembered account.
 
 export const DRIVE_APPDATA_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
+/** Asked only by "Esporta tutte le sbobine nel mio Drive": files this app creates, nothing else. */
+export const DRIVE_FILE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 export const GOOGLE_AUTH_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
 /** Page of this site Google sends the answer to (webui/drive-auth.html, served without .html). */
 export const DRIVE_AUTH_RETURN_PATH = '/drive-auth';
@@ -89,7 +91,9 @@ export function parseOAuthFragment(hash: string, expectedState: string | null, n
   const scopes = (params.get('scope') ?? '').split(/\s+/).filter(Boolean);
   // Granular consent lets the user untick a scope: without it every Drive call would fail.
   if (!scopes.includes(requiredScope)) {
-    return { kind: 'error', error: 'scope_missing', description: 'Permesso per la cartella dell’app su Drive non concesso.' };
+    return requiredScope === DRIVE_FILE_SCOPE
+      ? { kind: 'error', error: 'file_scope_missing', description: 'Permesso per creare file nel tuo Drive non concesso.' }
+      : { kind: 'error', error: 'scope_missing', description: 'Permesso per la cartella dell’app su Drive non concesso.' };
   }
   return { kind: 'token', token: { accessToken, expiresAt: now + expiresIn * 1000, scopes } };
 }
@@ -122,6 +126,8 @@ export function oauthErrorMessage(error: string, description?: string): string {
       return 'Google chiede di confermare l’accesso: tocca “Collega Google Drive”.';
     case 'scope_missing':
       return 'Serve il permesso per la cartella dell’app su Drive: ricollega e lascia la casella spuntata.';
+    case 'file_scope_missing':
+      return 'Per esportare serve il permesso di creare file nel tuo Drive: riprova e lascia la casella spuntata.';
     case 'popup_blocked':
       return 'Il browser ha bloccato la finestra di Google: consenti le finestre pop-up per questo sito e riprova.';
     case 'timeout':

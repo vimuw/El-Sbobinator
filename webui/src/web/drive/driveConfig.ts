@@ -17,6 +17,8 @@ export function driveEnabled(clientId: string = GOOGLE_CLIENT_ID, preview: boole
 export interface DriveConnection {
   auth: DriveAuth;
   api: DriveApi;
+  /** REST client on the export's own token (drive.file), never kept by the tab. */
+  exportApi?: (token: string) => DriveApi;
 }
 
 /** The login and the REST client of this page; null when the build has no Drive sync. */
@@ -24,5 +26,5 @@ export function createDriveConnection(clientId: string = GOOGLE_CLIENT_ID, previ
   if (!driveEnabled(clientId, preview)) return null;
   const auth = createDriveAuth({ clientId, redirectUri: redirectUriFor(origin), origin });
   const api = createDriveApi({ getToken: () => auth.token(), onUnauthorized: () => auth.expire() });
-  return { auth, api };
+  return { auth, api, exportApi: token => createDriveApi({ getToken: () => token }) };
 }
