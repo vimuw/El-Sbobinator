@@ -7,6 +7,7 @@ import { useBridgeCallbacks } from './hooks/useBridgeCallbacks';
 import { useQueuePersistence } from './hooks/useQueuePersistence';
 import { useUpdateChecker } from './hooks/useUpdateChecker';
 import { STORAGE_KEYS } from './storageKeys';
+import { setMovedAddressNotice } from './movedAddress';
 import type { FileDonePayload, ProcessingAction } from './appState';
 import type { PywebviewApi } from './bridge';
 
@@ -203,6 +204,30 @@ describe('App', () => {
   it('renders footer with GitHub link', async () => {
     await act(async () => { render(<App />); });
     expect(screen.getByText(/GitHub/)).toBeTruthy();
+  });
+
+  it('shows no moved-address notice unless the web start-up asked for it', async () => {
+    await act(async () => { render(<App />); });
+    expect(screen.queryByTestId('moved-address-banner')).toBeNull();
+  });
+
+  it('opens the backup in Archiviazione from the moved-address notice, and only from there', async () => {
+    setMovedAddressNotice(true);
+    try {
+      await act(async () => { render(<App />); });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Apri il backup' }));
+      });
+      expect(await screen.findByRole('heading', { name: 'Archiviazione', level: 2 }, { timeout: 5000 })).toBeTruthy();
+
+      // Closing forgets the request: the settings button opens where the user left them.
+      await act(async () => { fireEvent.click(screen.getByText('Generale').closest('button')!); });
+      await act(async () => { fireEvent.click(screen.getByLabelText('Chiudi finestra')); });
+      await act(async () => { fireEvent.click(screen.getByLabelText('Apri impostazioni')); });
+      expect(await screen.findByRole('heading', { name: 'Generale', level: 2 }, { timeout: 5000 })).toBeTruthy();
+    } finally {
+      setMovedAddressNotice(false);
+    }
   });
 
   it('does not render Ko-fi link in footer', async () => {

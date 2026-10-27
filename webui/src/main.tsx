@@ -101,6 +101,9 @@ class RootErrorBoundary extends React.Component<React.PropsWithChildren, { hasEr
 async function mountApp() {
   // The static web build runs everything in the page; Vite drops the other branch from each bundle.
   if (import.meta.env.MODE === 'web') {
+    const { applyCanonicalOrigin } = await import('./web/canonicalOrigin');
+    // An old address with an empty browser moves to elsbobinator.com: nothing to mount here.
+    if (await applyCanonicalOrigin()) return;
     const { initWebHost } = await import('./web/webHost');
     initWebHost();
   } else {

@@ -19,7 +19,7 @@ import { useSettingsStorage } from '../../hooks/useSettingsStorage';
 import { formatSize } from '../../utils';
 import { credentialStorageWarning } from '../../credentialStorage';
 import { getHostCapabilities } from '../../hostCapabilities';
-import { APP_VERSION, WEB_PREVIEW_BUILD } from '../../branding';
+import { APP_VERSION, WEB_PREVIEW_BUILD, WEB_PRIVACY_PATH } from '../../branding';
 import { STORAGE_KEYS } from '../../storageKeys';
 import { modalCard } from '../../motion';
 
@@ -70,9 +70,12 @@ export interface SettingsModalProps {
   models: SettingsModelsProps;
   updater: SettingsUpdaterProps;
   storage?: SettingsStorageProps;
+  /** Section shown when the modal opens, e.g. the backup from the moved-address notice. */
+  initialTab?: SettingsTab;
 }
 
-type TabType = 'general' | 'storage' | 'diagnostics';
+export type SettingsTab = 'general' | 'storage' | 'diagnostics';
+type TabType = SettingsTab;
 
 const TAB_HEADERS: Record<TabType, { title: string; description: string }> = {
   general: {
@@ -151,6 +154,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   models,
   updater,
   storage,
+  initialTab,
 }) => {
   const {
     apiKey,
@@ -169,7 +173,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const { latestVersion, checkForUpdates, isCheckingUpdate, hasChecked, checkFailed, updateInstallState, onInstallUpdate } = updater;
   const onSessionRootMoved = storage?.onSessionRootMoved;
   const hostCapabilities = getHostCapabilities();
-  const [activeTab, setActiveTab] = useState<TabType>('general');
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab ?? 'general');
+  useEffect(() => {
+    if (isOpen && initialTab) setActiveTab(initialTab);
+  }, [isOpen, initialTab]);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(
@@ -699,6 +706,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             <SettingsSectionHeading>Versione</SettingsSectionHeading>
                             <p className="text-xs text-[var(--text-secondary)]">
                               {WEB_PREVIEW_BUILD ? `${APP_VERSION} (anteprima)` : APP_VERSION}. Gli aggiornamenti arrivano da soli alla prossima apertura del sito, senza toccare sbobine e chiavi salvate in questo browser.
+                            </p>
+                            <p className="text-xs text-[var(--text-secondary)]">
+                              Cosa resta nel browser e cosa va a Google:{' '}
+                              <a href={WEB_PRIVACY_PATH} target="_blank" rel="noopener" className="underline">informativa sulla privacy</a>.
                             </p>
                           </div>
                         </>

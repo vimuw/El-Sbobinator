@@ -6,6 +6,7 @@ import { AlertTriangle, Loader2, Settings } from 'lucide-react';
 import { GithubIcon } from './icons/GithubIcon';
 import { GITHUB_URL } from '../branding';
 import { ReportProblemLink } from './ReportProblemLink';
+import { PrivacyLink } from './PrivacyLink';
 import type { ArchiveFolder, ArchiveSession } from '../bridge';
 import { type AppStatus, type FileItem, type ProcessingWarning, getDoneFiles, getPendingFiles } from '../appState';
 import { GEMINI_KEY_PATTERN } from '../utils';
@@ -438,6 +439,7 @@ export function QueuePage({
           <GithubIcon className="w-3.5 h-3.5" /> Progetto Open-Source — GitHub
         </a>
         <ReportProblemLink />
+        <PrivacyLink />
       </footer>
     </motion.main>
   );

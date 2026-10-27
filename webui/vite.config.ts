@@ -4,11 +4,13 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'path';
 import { defineConfig, type UserConfig } from 'vite';
-import { toWebDevIndexHtml, toWebIndexHtml, webBuildVersion, webHeadersFile } from './src/web/webBuild.ts';
+import { WEB_STATIC_PAGES, toWebDevIndexHtml, toWebDevStaticPageHtml, toWebIndexHtml, webBuildVersion, webHeadersFile } from './src/web/webBuild.ts';
 
 const packageInfo = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8')) as { version: string };
 const version = (process.env.EL_SBOBINATOR_BUILD_VERSION ?? packageInfo.version).replace(/^v/, '');
 const backendPort = Number.parseInt(process.env.EL_SBOBINATOR_BACKEND_PORT ?? '8000', 10);
+
+const isStaticPagePath = (url: string) => WEB_STATIC_PAGES.some(page => url === `/${page}.html` || url === `/${page}`);
 
 // The desktop bundle (webui/dist) is the default; vite.web.config.ts builds the static web site
 // (webui/dist-web) from the same sources.
@@ -21,7 +23,9 @@ export function createViteConfig(target: 'desktop' | 'web'): UserConfig {
     plugins: [react(), tailwindcss(), ...(isWeb ? [{
       name: 'web-dev-gemini',
       apply: 'serve' as const,
-      transformIndexHtml: (html: string) => toWebDevIndexHtml(html),
+      transformIndexHtml: (html: string, ctx: { path: string }) => (
+        isStaticPagePath(ctx.path) ? toWebDevStaticPageHtml(html) : toWebDevIndexHtml(html)
+      ),
     }] : []), isWeb ? {
       name: 'web-static-site',
       // The dev server keeps the permissive desktop policy: HMR needs inline scripts and websockets.
@@ -60,6 +64,12 @@ export function createViteConfig(target: 'desktop' | 'web'): UserConfig {
     } as Record<string, unknown>,
     build: {
       outDir: isWeb ? 'dist-web' : 'dist',
+      // The web site also builds its static pages (privacy.html), with the app's theme and font.
+      ...(isWeb ? {
+        rolldownOptions: {
+          input: Object.fromEntries(['index', ...WEB_STATIC_PAGES].map(name => [name, path.resolve(import.meta.dirname, `${name}.html`)])),
+        },
+      } : {}),
       target: 'esnext',
       chunkSizeWarningLimit: 1000,
     },
