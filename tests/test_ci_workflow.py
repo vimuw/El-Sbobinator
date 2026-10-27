@@ -103,3 +103,15 @@ def test_web_release_publishes_nothing_on_github():
         "contents: write",
     ):
         assert public not in web
+
+
+def test_pull_requests_build_and_browser_test_the_web_site_before_the_gate():
+    # Without this, a dependency update that breaks the web site passes every PR check
+    # and fails only at the web-v* tag.
+    jobs = workflow_jobs()
+    assert jobs["web-checks"].needs == ["change-scope"]
+    assert "web-checks" in jobs["dependency-gate"].needs
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "check_jobs = ['checks', 'web-checks'," in text
+    web_job = text.split("\n  web-checks:\n", 1)[1].split("\n  checks-windows:\n", 1)[0]
+    assert "npm run build:web" in web_job and "npm run test:e2e:web" in web_job
