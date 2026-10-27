@@ -147,7 +147,9 @@ describe('Drive sync service', () => {
 
   it('shows the last sync of an earlier page after a reload', async () => {
     const drive = createFakeDrive();
-    const pc = device(drive, 'pc', { token: true, email: 'studente@example.com' });
+    // Every reading of the clock is a millisecond later: the shown and the stored time must be one reading.
+    let tick = Date.parse('2026-10-27T18:00:00.000Z');
+    const pc = device(drive, 'pc', { token: true, email: 'studente@example.com', now: () => new Date(tick++) });
     await pc.service.syncNow();
     const reloaded = createDriveService({ factory: pc.factory, auth: pc.login.auth, api: createDriveApi({ getToken: () => null }), isBusy: () => false });
     drive.setOffline(true);

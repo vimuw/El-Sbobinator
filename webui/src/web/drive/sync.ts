@@ -58,6 +58,8 @@ export interface SyncReport {
   deferred: string[];
   /** Files left alone: unreadable, or written by a newer version of the app. */
   skipped: string[];
+  /** When the round ended, as stored: the time a reloaded page shows too. */
+  syncedAt: string;
 }
 
 type LocalCopy = { session: ArchiveSession; document: StoredDocument };
@@ -256,7 +258,7 @@ async function syncFolders(deps: SyncDeps, meta: SyncMeta, remoteFiles: DriveFil
 export async function syncOnce(deps: SyncDeps): Promise<SyncReport> {
   const { factory, api } = deps;
   const now = deps.now ?? (() => new Date());
-  const report: SyncReport = { downloaded: 0, uploaded: 0, conflicts: 0, removed: 0, foldersChanged: false, deferred: [], skipped: [] };
+  const report: SyncReport = { downloaded: 0, uploaded: 0, conflicts: 0, removed: 0, foldersChanged: false, deferred: [], skipped: [], syncedAt: '' };
   const meta = await readMeta(factory);
 
   // Sbobine made before Drive was connected (or imported from a backup) have no record yet.
@@ -301,6 +303,7 @@ export async function syncOnce(deps: SyncDeps): Promise<SyncReport> {
   await syncFolders(deps, meta, changed.filter(file => file.name === FOLDERS_FILE), report);
 
   const watermark = listed.reduce<string | undefined>((latest, file) => (!latest || file.modifiedTime > latest ? file.modifiedTime : latest), meta.watermark);
-  await writeMeta(factory, current => ({ ...current, watermark, last_sync_at: now().toISOString(), deferred }));
+  report.syncedAt = now().toISOString();
+  await writeMeta(factory, current => ({ ...current, watermark, last_sync_at: report.syncedAt, deferred }));
   return report;
 }

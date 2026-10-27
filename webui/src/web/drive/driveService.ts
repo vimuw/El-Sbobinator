@@ -89,7 +89,7 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
     try {
       const report = await syncOnce({ factory, api, now, isOpenInEditor: options.isOpenInEditor });
       if (started !== epoch) return;
-      lastSyncAt = now().toISOString();
+      lastSyncAt = report.syncedAt;
       error = null;
       options.onReport?.(report);
     } catch (caught) {
