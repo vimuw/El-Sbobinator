@@ -22,6 +22,8 @@ export type PreviewState = {
   initAudio: { time?: number; playbackRate?: number; volume?: number };
   initScrollTop?: number;
   initialSearchTerm?: string;
+  /** Web with Drive sync: the open sbobina changed on another device (applied once closed). */
+  changedElsewhere: boolean;
 };
 
 export const initialPreviewState: PreviewState = {
@@ -39,6 +41,7 @@ export const initialPreviewState: PreviewState = {
   audioSize: 0,
   initAudio: {},
   initScrollTop: undefined,
+  changedElsewhere: false,
 };
 
 type UsePreviewOptions = {
@@ -55,6 +58,8 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
   const currentPreviewSessionKeyRef = useRef<string | null>(null);
   const audioRequestRef = useRef(0);
   const previewRequestRef = useRef(0);
+  // The document the host handed to the editor: released on close (web Drive sync).
+  const openPathRef = useRef<string | null>(null);
 
   useEffect(() => {
     const handleBeforeUnload = () => {
@@ -133,6 +138,7 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
         const safeContent = normalizePreviewHtmlContent(extractedContent);
         const sessionKey = fileId ?? htmlPath;
         currentPreviewSessionKeyRef.current = sessionKey;
+        openPathRef.current = htmlPath;
         ++audioRequestRef.current;
         touchEditorSession(sessionKey);
         if (sessionDir && window.pywebview?.api?.touch_session_opened) {
@@ -156,6 +162,7 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
           initAudio: { time: savedSession.audioTime, playbackRate: savedSession.playbackRate, volume: savedSession.volume },
           initScrollTop: savedSession.scrollTop,
           initialSearchTerm: searchTerm || undefined,
+          changedElsewhere: false,
         });
         opened = true;
         await loadPreviewAudio(sourcePath, sessionDir);
@@ -184,7 +191,14 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
     }
     currentEditorSessionRef.current = {};
     currentPreviewSessionKeyRef.current = null;
+    const openPath = openPathRef.current;
+    openPathRef.current = null;
+    if (openPath) void window.pywebview?.api?.release_html_content?.(openPath)?.catch(() => {});
     setPreview(initialPreviewState);
+  }, []);
+
+  const markChangedElsewhere = useCallback((sessionDir: string) => {
+    setPreview(prev => (prev.content !== null && prev.sessionDir === sessionDir && !prev.changedElsewhere ? { ...prev, changedElsewhere: true } : prev));
   }, []);
 
   const relinkPreviewAudio = useCallback(async () => {
@@ -351,6 +365,7 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
     preview,
     openPreview,
     closePreview,
+    markChangedElsewhere,
     relinkPreviewAudio,
     removePreviewAudio,
     setPreviewAudioKept,

@@ -6,6 +6,9 @@ import { STORAGE_KEYS } from '../storageKeys';
 import { GEMINI_KEY_PATTERN, formatSize } from '../utils';
 import { createWorkerAudioSource } from './audioPort';
 import { createCheckpointStore } from './checkpointStore';
+import { createDriveConnection, type DriveConnection } from './drive/driveConfig';
+import { createDriveService, type DriveService } from './drive/driveService';
+import { trackArchive } from './drive/syncState';
 import { type BridgeEventName, type EmitBridgeEvent, runFakePipeline } from './fakePipeline';
 import { createPageState } from './pageLifecycle';
 import { measureWebStorage, type WebStorageUsage } from './webDatabase';
@@ -154,6 +157,10 @@ export interface WebHostOptions {
   geminiBase?: string;
   /** Per-key availability for the settings (tests pass one over a fake storage). */
   usage?: ApiUsageStore;
+  /** Drive sync: login and REST client (tests pass fakes); null or absent in builds without it. */
+  drive?: DriveConnection | null;
+  /** Quiet period before a sync after local changes (tests shorten it). */
+  driveDelayMs?: number;
 }
 
 type AnswerSlot<T> = { current: ((value: T) => void) | null };
@@ -190,7 +197,10 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
   const setActiveRun = (run: AbortController | null) => {
     activeRun = run;
     if (run) window.addEventListener('beforeunload', confirmLeave);
-    else window.removeEventListener('beforeunload', confirmLeave);
+    else {
+      window.removeEventListener('beforeunload', confirmLeave);
+      drive?.runEnded();
+    }
   };
   const endRun = (run: AbortController) => {
     if (activeRun === run) setActiveRun(null);
@@ -202,7 +212,25 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
   const database = options.database ?? globalThis.indexedDB;
   const checkpointStore = createCheckpointStore(database);
   const checkpoints = () => checkpointStore;
-  const archive = createWebArchive(database);
+  // Drive sync (previews with a client ID only): every write of the user leaves a mark for it.
+  // Without it the archive is the plain one, as in the released site.
+  const driveConnection = options.drive === undefined ? createDriveConnection() : options.drive;
+  // The sbobina open in the editor: Drive's changes to it wait until the editor closes.
+  let openInEditor: string | null = null;
+  const drive: DriveService | null = driveConnection ? createDriveService({
+    factory: database,
+    ...driveConnection,
+    isBusy: () => activeRun !== null,
+    isOpenInEditor: sessionDir => sessionDir === openInEditor,
+    delayMs: options.driveDelayMs,
+    onReport: report => {
+      if (report.downloaded || report.removed || report.conflicts || report.foldersChanged) emit('archiveChangedRemotely');
+      for (const sessionDir of report.deferred) emit('documentChangedElsewhere', { session_dir: sessionDir });
+    },
+    onNeedsReconnect: () => emit('driveNeedsReconnect'),
+  }) : null;
+  const archive = drive ? trackArchive(createWebArchive(database), database, () => drive.schedule()) : createWebArchive(database);
+  drive?.start();
   const storage = options.storage ?? navigator.storage;
   const media = options.media ?? createWebMediaStore(database);
   // Copies of picked files still being written to IndexedDB, by file id: true once stored.
@@ -510,6 +538,7 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
     },
 
     read_html_content: async path => {
+      if (drive) openInEditor = path.replace(/\/sbobina\.html$/, '');
       const content = await archive.readHtml(path).catch(() => null);
       return content === null ? { ok: false, error: 'Sbobina non trovata in questo browser.' } : { ok: true, content };
     },
@@ -672,6 +701,7 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
       if (activeRun) return { ok: false, error: 'Elaborazione in corso: importa il backup al termine.' };
       try {
         const summary = await importBackup(database, file);
+        drive?.schedule();
         return { ok: true, summary: describeImport(summary) };
       } catch (error) {
         return { ok: false, error: error instanceof DOMException && error.name === 'QuotaExceededError' ? storageErrorMessage(error) : error instanceof Error ? error.message : String(error) };
@@ -698,6 +728,24 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
     record_frontend_event: async (kind, message) => {
       frontendEvents.push(`${new Date().toISOString()} ${kind}: ${String(message ?? '').slice(0, 300)}`);
       if (frontendEvents.length > 100) frontendEvents.shift();
+      return { ok: true };
+    },
+    ...(drive ? driveMethods(drive, () => { openInEditor = null; }) : {}),
+  };
+}
+
+// The settings panel "Google Drive" and the editor's release, in builds with the Drive sync only.
+function driveMethods(drive: DriveService, closeEditor: () => void): Partial<PywebviewApi> {
+  return {
+    get_drive_status: async () => drive.status(),
+    // Not async: the Google window must open inside the tap that called it.
+    connect_drive: () => drive.connect(),
+    disconnect_drive: () => drive.disconnect(),
+    sync_drive_now: () => drive.syncNow(),
+    release_html_content: async () => {
+      closeEditor();
+      // A change from Drive held back for the editor comes in now.
+      drive.schedule();
       return { ok: true };
     },
   };
