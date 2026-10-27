@@ -8,3 +8,5 @@ coverage/
 !.env.example
 test-results*/
 playwright-report/
+# Dev HTTPS CA and server keys (scripts/dev_https_cert.py)
+.certs/
