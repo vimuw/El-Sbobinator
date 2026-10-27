@@ -287,7 +287,7 @@ export default function App() {
     refreshArchiveSessions,
   });
 
-  const { preview, openPreview, closePreview, relinkPreviewAudio, removePreviewAudio, handleAudioStateChange, handleScrollTopChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed, onArchiveRefresh: refreshArchiveSessions });
+  const { preview, openPreview, closePreview, relinkPreviewAudio, removePreviewAudio, setPreviewAudioKept, handleAudioStateChange, handleScrollTopChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed, onArchiveRefresh: refreshArchiveSessions });
 
   // Web: the screen lives in the URL, so Back/Forward and a reload keep it (editor included).
   const openEditorForSession = useCallback(async (sessionDir: string) => {
@@ -745,6 +745,9 @@ export default function App() {
               warning: preview.audioWarning,
               onRelink: relinkPreviewAudio,
               onRemoveAudio: removePreviewAudio,
+              kept: preview.audioKept,
+              size: preview.audioSize,
+              onKeepChange: setPreviewAudioKept,
               init: preview.initAudio,
               onStateChange: handleAudioStateChange,
             }}

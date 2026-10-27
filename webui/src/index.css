@@ -883,6 +883,14 @@ button {
   transform: translateX(12px);
 }
 
+.audio-keep-switch[aria-checked="true"] .queue-switch-track {
+  background: var(--accent-bg);
+}
+
+.audio-keep-switch[aria-checked="true"] .queue-switch-thumb {
+  transform: translateX(12px);
+}
+
 .premium-button-secondary {
   background: transparent;
   color: var(--text-secondary);

@@ -4,6 +4,14 @@ import { createPortal } from 'react-dom';
 import { ChevronDown, ChevronUp, Link, Minus, Pause, Play, Plus, RefreshCw, RotateCcw, RotateCw, Unlink, Volume2 } from 'lucide-react';
 import { ConfirmActionModal } from './modals/ConfirmActionModal';
 import { usePhoneLayout } from '../hooks/usePhoneLayout';
+import { formatSize } from '../utils';
+
+/** Web: whether this browser keeps a copy of the lecture for the sbobina (otherwise it is picked each time). */
+export interface AudioKeepControl {
+  kept: boolean;
+  size: number;
+  onChange: (keep: boolean) => Promise<boolean | undefined>;
+}
 
 interface AudioPlayerProps {
   src: string;
@@ -13,6 +21,7 @@ interface AudioPlayerProps {
   onStateChange?: (state: { currentTime: number; playbackRate: number; volume: number }) => void;
   onRelink?: () => Promise<boolean | undefined>;
   onRemoveAudio?: () => Promise<boolean | undefined> | void;
+  keep?: AudioKeepControl;
 }
 
 const PLAYBACK_RATES = [1, 1.25, 1.5, 1.75, 2, 2.5, 3];
@@ -44,7 +53,7 @@ const isEditableTarget = (target: EventTarget | null): boolean => {
   return role !== null && INTERACTIVE_ARIA_ROLES.has(role);
 };
 
-export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolume, onStateChange, onRelink, onRemoveAudio }: AudioPlayerProps) {
+export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolume, onStateChange, onRelink, onRemoveAudio, keep }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -326,6 +335,19 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
   };
 
   const [isRemovingAudio, setIsRemovingAudio] = useState(false);
+  const [isSavingKeep, setIsSavingKeep] = useState(false);
+
+  const handleKeepChange = async () => {
+    if (!keep || isSavingKeep) return;
+    setIsSavingKeep(true);
+    try {
+      await keep.onChange(!keep.kept);
+    } catch (e) {
+      reportClientError('Failed to change the kept audio:', e);
+    } finally {
+      setIsSavingKeep(false);
+    }
+  };
 
   const handleRemoveAudio = async () => {
     if (isRemovingAudio) return;
@@ -542,7 +564,7 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
           />
         </div>
         )}
-        {(onRelink || onRemoveAudio) && (
+        {(onRelink || onRemoveAudio || keep) && (
           <div className="relative" ref={audioMenuRef}>
             <button
               type="button"
@@ -569,7 +591,27 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
                     style={{ padding: '6px 10px', fontSize: '13px' }}
                   >
                     <RefreshCw className="w-3.5 h-3.5 shrink-0" />
-                    <span>Sostituisci file audio...</span>
+                    <span>{keep ? 'Scegli un altro file audio...' : 'Sostituisci file audio...'}</span>
+                  </button>
+                )}
+                {keep && (
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={keep.kept}
+                    onClick={() => void handleKeepChange()}
+                    disabled={isSavingKeep}
+                    className="kebab-item audio-keep-switch text-xs"
+                    style={{ padding: '6px 10px', fontSize: '13px' }}
+                    title={keep.kept
+                      ? 'La copia resta in questo browser finché non la togli o elimini la sbobina.'
+                      : 'Senza copia, dopo aver ricaricato la pagina dovrai scegliere di nuovo il file.'}
+                  >
+                    <span className="queue-switch-track shrink-0" aria-hidden="true"><span className="queue-switch-thumb" /></span>
+                    <span>
+                      {isSavingKeep && !keep.kept ? 'Salvataggio...' : 'Tieni l’audio in questo browser'}
+                      {keep.size > 0 && ` · ${formatSize(keep.size)}`}
+                    </span>
                   </button>
                 )}
                 {onRemoveAudio && (

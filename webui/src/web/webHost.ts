@@ -518,12 +518,13 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
     // The editor's player: the copy the user kept, else the file behind its path in this page; without
     // either the editor asks for the file. One URL at a time.
     stream_media_file: async (path, sessionDir) => {
-      const file = (sessionDir ? await media.forSession(sessionDir).catch(() => null) : null) ?? (path ? await resolveFile(path) : undefined);
+      const kept = sessionDir ? await media.forSession(sessionDir).catch(() => null) : null;
+      const file = kept ?? (path ? await resolveFile(path) : undefined);
       if (!file) return { ok: false, has_audio: Boolean(path), error: 'Audio non salvato in questo browser.' };
       revokeMediaUrl();
       const type = mediaType(file.name, file.type);
       mediaUrl = URL.createObjectURL(type === file.type ? file : new Blob([file], { type }));
-      return { ok: true, url: mediaUrl };
+      return { ok: true, url: mediaUrl, audio_kept: kept !== null, audio_size: file.size };
     },
     // "Scegli il file audio": the file picked in this page becomes the sbobina's audio. A file that is
     // not the lecture is still used, with a warning; a copy the user kept is replaced by the new file.
@@ -542,6 +543,29 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
         const expected = session.input_identity;
         const different = expected !== undefined && !sameContent(await fileIdentity(file, file.name), expected);
         return different ? { ok: true, warning: DIFFERENT_LECTURE_WARNING } : { ok: true };
+      } catch (error) {
+        return { ok: false, error: storageErrorMessage(error) };
+      }
+    },
+    // "Tieni l'audio in questo browser": a copy of the file in this page under a new id (the queue's
+    // id may still name a copy kept by an older sbobina). Turning it off keeps the lecture's name and
+    // identity, so the next file picked is still checked. Copies linked by web-v1.0.0 count as kept.
+    set_session_audio_kept: async (sessionDir, keep) => {
+      try {
+        const session = await archive.get(sessionDir);
+        if (!session) return { ok: false, error: 'Sbobina non trovata.' };
+        if (!keep) {
+          await media.unlinkSession(sessionDir);
+          return { ok: true, audio_kept: false };
+        }
+        if (await media.forSession(sessionDir)) return { ok: true, audio_kept: true };
+        const file = session.input_path ? getWebFile(session.input_path) : undefined;
+        if (!file) return { ok: false, error: 'Scegli prima il file audio della lezione.' };
+        const copyId = crypto.randomUUID();
+        await media.save(copyId, file);
+        await media.link(copyId, sessionDir);
+        void requestPersistentStorage(storage);
+        return { ok: true, audio_kept: true };
       } catch (error) {
         return { ok: false, error: storageErrorMessage(error) };
       }

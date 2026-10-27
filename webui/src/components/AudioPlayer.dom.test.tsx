@@ -70,6 +70,36 @@ describe('AudioPlayer', () => {
     }
   });
 
+  it('offers to keep the audio in the browser, with its size, instead of removing it (web)', async () => {
+    const onChange = vi.fn().mockResolvedValue(true);
+    const { rerender } = render(<AudioPlayer src="blob:test/1" onRelink={vi.fn()} keep={{ kept: false, size: 245 * 1024 * 1024, onChange }} />);
+    fireEvent.click(screen.getByLabelText('Opzioni audio collegato'));
+
+    expect(screen.queryByText('Rimuovi audio collegato')).toBeNull();
+    expect(screen.getByText('Scegli un altro file audio...')).toBeTruthy();
+    const toggle = screen.getByRole('switch', { name: 'Tieni l’audio in questo browser · 245,0 MB' });
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+    await act(async () => {
+      fireEvent.click(toggle);
+    });
+    expect(onChange).toHaveBeenCalledWith(true);
+
+    rerender(<AudioPlayer src="blob:test/1" onRelink={vi.fn()} keep={{ kept: true, size: 245 * 1024 * 1024, onChange }} />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('switch'));
+    });
+    expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('true');
+    expect(onChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it('keeps the desktop audio menu: replace or remove the linked audio', () => {
+    render(<AudioPlayer src="/audio/test.mp3" onRelink={vi.fn()} onRemoveAudio={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText('Opzioni audio collegato'));
+    expect(screen.getByText('Sostituisci file audio...')).toBeTruthy();
+    expect(screen.getByText('Rimuovi audio collegato')).toBeTruthy();
+    expect(screen.queryByRole('switch')).toBeNull();
+  });
+
   it('shows time display 00:00:00 / 00:00:00 initially', () => {
     render(<AudioPlayer src="/audio/test.mp3" />);
     expect(screen.getByText('00:00:00 / 00:00:00')).toBeTruthy();

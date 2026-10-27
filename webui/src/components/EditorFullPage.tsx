@@ -37,6 +37,10 @@ export interface EditorAudioProps {
   warning?: string;
   onRelink: () => Promise<boolean | undefined>;
   onRemoveAudio?: () => Promise<boolean | undefined> | void;
+  /** Web: a copy of the playing file is kept in this browser (size in bytes). */
+  kept?: boolean;
+  size?: number;
+  onKeepChange?: (keep: boolean) => Promise<boolean | undefined>;
   init: { time?: number; playbackRate?: number; volume?: number };
   onStateChange: (state: { currentTime: number; playbackRate: number; volume: number }) => void;
 }
@@ -102,6 +106,7 @@ export function EditorFullPage({
   const audioLoading = audioProp?.loading ?? false;
   const onRelink = audioProp?.onRelink ?? flatOnRelink ?? (() => Promise.resolve(undefined));
   const onRemoveAudio = audioProp?.onRemoveAudio ?? flatOnRemoveAudio;
+  const onKeepChange = audioProp?.onKeepChange;
   const previewInitAudio = audioProp?.init ?? flatPreviewInitAudio ?? {};
   const onAudioStateChange = audioProp?.onStateChange ?? flatOnAudioStateChange ?? (() => {});
 
@@ -385,7 +390,9 @@ export function EditorFullPage({
                     initialVolume={previewInitAudio.volume}
                     onStateChange={onAudioStateChange}
                     onRelink={onRelink}
-                    onRemoveAudio={onRemoveAudio}
+                    // Web: nothing to unlink, the user decides whether this browser keeps a copy.
+                    onRemoveAudio={audioPicked ? undefined : onRemoveAudio}
+                    keep={audioPicked && onKeepChange ? { kept: Boolean(audioProp?.kept), size: audioProp?.size ?? 0, onChange: onKeepChange } : undefined}
                   />
                 ) : audioRelinkNeeded ? (
                   <div className="flex items-center justify-between gap-3 py-3.5">

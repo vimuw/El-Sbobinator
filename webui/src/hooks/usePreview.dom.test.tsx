@@ -340,6 +340,38 @@ describe('usePreview', () => {
     expect(appendConsole).toHaveBeenCalledWith(`⚠️ ${warning}`);
   });
 
+  it('reports whether the browser keeps the audio and switches it on request', async () => {
+    const appendConsole = vi.fn();
+    const onArchiveRefresh = vi.fn();
+    const set_session_audio_kept = vi.fn()
+      .mockResolvedValueOnce({ ok: true, audio_kept: true })
+      .mockResolvedValueOnce({ ok: false, error: 'Spazio del browser esaurito.' });
+    setPywebview({
+      read_html_content: vi.fn().mockResolvedValue({ ok: true, content: '<body>text</body>' }),
+      stream_media_file: vi.fn().mockResolvedValue({ ok: true, url: 'blob:test/1', audio_kept: false, audio_size: 4096 }),
+      set_session_audio_kept,
+    });
+    const { result } = renderHook(() => usePreview(makeOptions({ appendConsole, onArchiveRefresh })));
+    await act(async () => {
+      await result.current.openPreview('web-session://a/sbobina.html', 'Lezione', 'local://o/Lezione.mp3', undefined, 'web-session://a');
+    });
+    expect(result.current.preview).toMatchObject({ audioKept: false, audioSize: 4096 });
+
+    await act(async () => {
+      expect(await result.current.setPreviewAudioKept(true)).toBe(true);
+    });
+    expect(set_session_audio_kept).toHaveBeenCalledWith('web-session://a', true);
+    expect(result.current.preview.audioKept).toBe(true);
+    expect(onArchiveRefresh).toHaveBeenCalledTimes(1);
+    expect(appendConsole).toHaveBeenCalledWith('Audio tenuto in questo browser.');
+
+    await act(async () => {
+      expect(await result.current.setPreviewAudioKept(false)).toBe(false);
+    });
+    expect(result.current.preview).toMatchObject({ audioKept: true, audioSrc: 'blob:test/1' });
+    expect(appendConsole).toHaveBeenCalledWith('❌ Spazio del browser esaurito.');
+  });
+
   it('relinkPreviewAudio aborts when sessionDir is set but update_session_input_path is absent', async () => {
     // Regression test: previously persistOk stayed true when the endpoint was
     // missing, causing in-memory queue state to be updated without a disk write.
