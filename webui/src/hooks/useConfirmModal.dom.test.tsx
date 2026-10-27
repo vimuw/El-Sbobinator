@@ -166,6 +166,21 @@ describe('useConfirmModal', () => {
     } finally {
       setHostCapabilities(DESKTOP_CAPABILITIES);
     }
+
+    // Web previews with the trash: nothing is deleted for good, the sbobine go to the trash.
+    setHostCapabilities({ kind: 'web', permanentDelete: false });
+    try {
+      const trash = render();
+      act(() => trash.current.setConfirmAction({ type: 'delete-archive-session', sessionDir: 'web-session://a', name: 'Uno' }));
+      expect(trash.current.confirmModalCopy).toMatchObject({ confirmLabel: 'Sposta nel cestino' });
+      expect(trash.current.confirmModalCopy?.description).toBe('"Uno" va nel cestino: puoi ripristinarla per 30 giorni da Impostazioni → Archiviazione.');
+      act(() => trash.current.setConfirmAction({ type: 'delete-multiple-archive-sessions', sessions: [{ sessionDir: 'web-session://a', name: 'Uno' }] }));
+      expect(trash.current.confirmModalCopy?.description).toBe('La sbobina selezionata va nel cestino: puoi ripristinarla per 30 giorni da Impostazioni → Archiviazione.');
+      act(() => trash.current.setConfirmAction({ type: 'delete-multiple-archive-sessions', sessions: [{ sessionDir: 'web-session://a', name: 'Uno' }, { sessionDir: 'web-session://b', name: 'Due' }] }));
+      expect(trash.current.confirmModalCopy).toMatchObject({ confirmLabel: 'Sposta nel cestino', description: expect.stringContaining('Le 2 sbobine selezionate vanno nel cestino') });
+    } finally {
+      setHostCapabilities(DESKTOP_CAPABILITIES);
+    }
   });
 
   it('drops a deleted archive session from Recenti too', async () => {

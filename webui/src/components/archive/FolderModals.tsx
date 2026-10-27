@@ -5,7 +5,7 @@ import type { ArchiveFolder } from '../../bridge';
 import { DEFAULT_FOLDER_COLOR, FOLDER_COLORS, type FolderModalState } from './types';
 import { getFolderColor, NEUTRAL_FOLDER_COLOR } from '../../archiveFolders';
 import { modalCard } from '../../motion';
-import { deletedFrom } from '../../hostCapabilities';
+import { deletedFrom, getHostCapabilities } from '../../hostCapabilities';
 
 interface FolderModalProps {
   state: FolderModalState;
@@ -332,10 +332,16 @@ export function DeleteMultipleSessionsConfirmModal({
             )}
           </div>
 
-          <p style={{ color: 'var(--text-muted)' }}>
-            Tutti i file e i dati di sessione relativi verranno eliminati definitivamente {deletedFrom()}.{' '}
-            <strong style={{ color: 'var(--error-text)' }}>L&apos;operazione è irreversibile.</strong>
-          </p>
+          {!getHostCapabilities().permanentDelete ? (
+            <p style={{ color: 'var(--text-muted)' }}>
+              Vanno nel cestino: puoi ripristinarle per 30 giorni da Impostazioni → Archiviazione.
+            </p>
+          ) : (
+            <p style={{ color: 'var(--text-muted)' }}>
+              Tutti i file e i dati di sessione relativi verranno eliminati definitivamente {deletedFrom()}.{' '}
+              <strong style={{ color: 'var(--error-text)' }}>L&apos;operazione è irreversibile.</strong>
+            </p>
+          )}
         </div>
 
         <div className="modal-footer">
