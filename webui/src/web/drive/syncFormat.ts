@@ -26,8 +26,18 @@ export interface SyncSessionFile {
   /** When the sbobina last changed on the device that wrote it: the newer side wins a conflict. */
   updated_at: string;
   device_id: string;
-  /** Deleted in the app: other devices remove it too. */
+  /** Moved to the trash in the app: other devices move it there too (text kept, restorable). */
   deleted_at?: string;
+  /** Deleted for good (trash emptied or expired): a mark without text, so no device brings it back. */
+  purged_at?: string;
+}
+
+/**
+ * A mark of a sbobina deleted for good. B1–B3 previews wrote deleted_at with an empty body and no
+ * purged_at for a deletion: those count as gone for good too.
+ */
+export function isPurged(file: Pick<SyncSessionFile, 'deleted_at' | 'purged_at' | 'body'>): boolean {
+  return Boolean(file.purged_at) || (Boolean(file.deleted_at) && file.body === '');
 }
 
 export type SyncedFolder = ArchiveFolder & { updated_at: string };
@@ -86,13 +96,27 @@ export function toSessionFile(
   session: ArchiveSession,
   body: string,
   generation: number,
-  meta: { updated_at: string; device_id: string; deleted_at?: string },
+  meta: { updated_at: string; device_id: string; deleted_at?: string; purged_at?: string },
 ): SyncSessionFile {
+  if (meta.purged_at) {
+    // Nothing of the sbobina stays on Drive: not its text, not its name.
+    return {
+      format: SYNC_FORMAT,
+      version: SYNC_VERSION,
+      session: { session_dir: session.session_dir, name: '', completed_at_iso: '', effective_model: '' },
+      body: '',
+      generation: 0,
+      updated_at: meta.updated_at,
+      device_id: meta.device_id,
+      deleted_at: meta.deleted_at ?? meta.purged_at,
+      purged_at: meta.purged_at,
+    };
+  }
   return {
     format: SYNC_FORMAT,
     version: SYNC_VERSION,
     session: toSyncedSession(session),
-    body: meta.deleted_at ? '' : body,
+    body,
     generation,
     updated_at: meta.updated_at,
     device_id: meta.device_id,
@@ -111,6 +135,7 @@ export function parseSessionFile(value: unknown, fileName: string): ParseResult<
   if (!session || session.session_dir !== sessionDirFromFileName(fileName)) return { ok: false, reason: 'invalid' };
   if (!isString(raw.body) || !isDate(raw.updated_at) || !isString(raw.device_id)) return { ok: false, reason: 'invalid' };
   if (raw.deleted_at !== undefined && !isDate(raw.deleted_at)) return { ok: false, reason: 'invalid' };
+  if (raw.purged_at !== undefined && !isDate(raw.purged_at)) return { ok: false, reason: 'invalid' };
   return {
     ok: true,
     file: {
@@ -122,6 +147,7 @@ export function parseSessionFile(value: unknown, fileName: string): ParseResult<
       updated_at: raw.updated_at,
       device_id: raw.device_id,
       ...(isString(raw.deleted_at) ? { deleted_at: raw.deleted_at } : {}),
+      ...(isString(raw.purged_at) ? { purged_at: raw.purged_at } : {}),
     },
   };
 }

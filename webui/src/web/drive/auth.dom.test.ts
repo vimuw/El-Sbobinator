@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { STORAGE_KEYS } from '../../storageKeys';
 import { DriveAuthError, createDriveAuth, type DriveAuthOptions } from './auth';
-import { DRIVE_APPDATA_SCOPE } from './oauth';
+import { DRIVE_APPDATA_SCOPE, DRIVE_FILE_SCOPE } from './oauth';
 
 type Listener = (event: MessageEvent) => void;
 
@@ -129,5 +129,29 @@ describe('Drive auth', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+  it('asks for drive.file on its own for the export, without replacing the tab’s token', async () => {
+    const { auth, reply, opened } = setup();
+    const connecting = auth.connect();
+    reply(tokenFields);
+    await connecting;
+    auth.setAccount('studente@example.com');
+
+    const exporting = auth.connect({ scope: DRIVE_FILE_SCOPE, keep: false });
+    const url = new URL(opened.at(-1)!);
+    expect(url.searchParams.get('scope')).toBe(DRIVE_FILE_SCOPE);
+    expect(url.searchParams.get('include_granted_scopes')).toBe('true');
+    expect(url.searchParams.get('login_hint')).toBe('studente@example.com');
+    // Google asks only for the new permission: no account choice forced.
+    expect(url.searchParams.has('prompt')).toBe(false);
+    reply({ ...tokenFields, access_token: 'tok-export', scope: `${DRIVE_APPDATA_SCOPE} ${DRIVE_FILE_SCOPE}` });
+    await expect(exporting).resolves.toMatchObject({ accessToken: 'tok-export' });
+    expect(auth.token()).toBe('tok-1');
+    expect(sessionStorage.getItem(STORAGE_KEYS.WEB_DRIVE_TOKEN_V1)).not.toContain('tok-export');
+
+    // The box left unticked: no token, a clear reason.
+    const refused = auth.connect({ scope: DRIVE_FILE_SCOPE, keep: false });
+    reply({ ...tokenFields, access_token: 'tok-x', scope: DRIVE_APPDATA_SCOPE });
+    await expect(refused).rejects.toMatchObject({ code: 'file_scope_missing', message: expect.stringContaining('permesso di creare file') });
   });
 });

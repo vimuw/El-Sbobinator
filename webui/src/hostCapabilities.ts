@@ -22,6 +22,9 @@ export interface HostCapabilities {
   sbobinaPackages: boolean;
   // "Verifica ambiente" (FFmpeg, disk, session folder).
   environmentCheck: boolean;
+  // Deleting a sbobina removes it at once; without this (web previews with Drive sync) it goes to a
+  // trash kept 30 days.
+  permanentDelete: boolean;
 }
 
 export const DESKTOP_CAPABILITIES: HostCapabilities = {
@@ -40,6 +43,7 @@ export const DESKTOP_CAPABILITIES: HostCapabilities = {
   sessionKeepsAudio: true,
   sbobinaPackages: true,
   environmentCheck: true,
+  permanentDelete: true,
 };
 
 let hostCapabilities: HostCapabilities = DESKTOP_CAPABILITIES;

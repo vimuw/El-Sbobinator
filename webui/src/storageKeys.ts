@@ -29,6 +29,7 @@ export const STORAGE_KEYS = {
   // and the connected account's email in localStorage for a silent reconnect.
   WEB_DRIVE_TOKEN_V1: 'el-sbobinator.web.drive-token.v1',
   WEB_DRIVE_ACCOUNT_V1: 'el-sbobinator.web.drive-account.v1',
+  WEB_STORAGE_CHOICE_V1: 'el-sbobinator.web.storage-choice.v1',
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

@@ -19,6 +19,7 @@ export interface SessionSyncRecord {
   dirty: boolean;
   /** When the sbobina last changed here (or, once synced, on the device that wrote it). */
   updated_at: string;
+  /** Deleted for good here (out of the trash): Drive keeps only a mark without text. */
   deleted_at?: string;
 }
 
@@ -93,6 +94,16 @@ export async function bindAccount(factory: IDBFactory | undefined, account: stri
     store.clear();
     store.put({ ...newMeta(), device_id: meta.device_id, account });
     return true;
+  });
+}
+
+/** "Elimina tutti i miei dati da Drive": this browser forgets every sync record (its id stays). */
+export async function resetSyncState(factory: IDBFactory | undefined): Promise<void> {
+  await inTransaction(factory, SYNC, 'readwrite', async transaction => {
+    const store = transaction.objectStore(SYNC);
+    const meta = await requestValue(store.get(META_KEY) as IDBRequest<SyncMeta | undefined>);
+    store.clear();
+    store.put({ ...newMeta(), device_id: meta?.device_id ?? crypto.randomUUID() });
   });
 }
 
@@ -206,6 +217,17 @@ export function trackArchive(archive: WebArchive, factory: IDBFactory | undefine
       const deleted = await archive.delete(sessionDir);
       if (deleted) await mark(sessionDir.replace(/\/sbobina\.html$/, ''), true);
       return deleted;
+    },
+    // Trash and restore travel as the file's deleted_at: the other devices follow.
+    async trash(sessionDir, at) {
+      const trashed = await archive.trash(sessionDir, at);
+      if (trashed) await mark(sessionDir.replace(/\/sbobina\.html$/, ''));
+      return trashed;
+    },
+    async restore(sessionDir) {
+      const session = await archive.restore(sessionDir);
+      if (session) await mark(session.session_dir);
+      return session;
     },
     async saveFolders(folders) {
       const before = await archive.loadFolders().catch(() => [] as ArchiveFolder[]);

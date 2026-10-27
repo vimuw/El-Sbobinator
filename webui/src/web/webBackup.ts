@@ -61,6 +61,10 @@ export interface ImportSummary {
   replaced: number;
   /** Already here and not newer in the backup: left as they are. */
   skipped: number;
+  /** In the trash here: the backup brings them back to the archive. */
+  restored: number;
+  /** Sbobine written by the import: the Drive sync sends them. */
+  changed: string[];
   audioFiles: number;
   folders: number;
 }
@@ -80,8 +84,9 @@ async function readArchive(factory: IDBFactory | undefined): Promise<ArchiveSnap
     ]);
     const linked = new Map<string, StoredMedia>();
     for (const record of media) if (record.sessionDir) linked.set(record.sessionDir, record);
+    // The trash is not part of a backup: it holds what the user deleted.
     return {
-      sessions: sessions.sort((a, b) => (b.completed_at_iso || '').localeCompare(a.completed_at_iso || '')),
+      sessions: sessions.filter(session => !session.trashed_at).sort((a, b) => (b.completed_at_iso || '').localeCompare(a.completed_at_iso || '')),
       documents: new Map(documents.map(document => [document.session_dir, document])),
       folders,
       media: linked,
@@ -199,27 +204,33 @@ export async function importBackup(
   if (!manifestEntry) throw new Error(NOT_A_BACKUP);
   const manifest = parseManifest(await (await manifestEntry.blob()).text());
   const items = manifest.sessions.filter(isWebSession);
-  const summary: ImportSummary = { added: 0, replaced: 0, skipped: 0, audioFiles: 0, folders: 0 };
+  const summary: ImportSummary = { added: 0, replaced: 0, skipped: 0, restored: 0, audioFiles: 0, folders: 0, changed: [] };
 
   for (const [index, item] of items.entries()) {
     const dir = item.session.session_dir;
     const audioEntry = item.audio?.file ? entries.get(item.audio.file) : undefined;
     const audioBlob = audioEntry ? await audioEntry.blob() : null;
-    const session: ArchiveSession = { ...item.session, html_path: webSessionHtmlPath(dir) };
+    const { trashed_at: _trashedAt, ...fields } = item.session;
+    const session: ArchiveSession = { ...fields, html_path: webSessionHtmlPath(dir) };
     const generation = Number.isFinite(item.generation) ? Number(item.generation) : 0;
     const outcome = await inTransaction(factory, [SESSIONS, DOCUMENTS, MEDIA], 'readwrite', async transaction => {
       const sessions = transaction.objectStore(SESSIONS);
       const documents = transaction.objectStore(DOCUMENTS);
       const media = transaction.objectStore(MEDIA);
       const [local, document, localAudio] = await Promise.all([
-        requestValue(sessions.getKey(dir)),
+        requestValue(sessions.get(dir) as IDBRequest<ArchiveSession | undefined>),
         requestValue(documents.get(dir) as IDBRequest<StoredDocument | undefined>),
         requestValue(media.index(MEDIA_BY_SESSION).getAllKeys(dir)),
       ]);
       const replace = local === undefined || generation > (document?.generation ?? 0);
+      // A sbobina in the trash here comes back: importing a backup is asking for its sbobine.
+      const restore = !replace && Boolean(local?.trashed_at);
       if (replace) {
         sessions.put(session);
         documents.put({ session_dir: dir, body: typeof item.body === 'string' ? item.body : '', generation } satisfies StoredDocument);
+      } else if (restore && local) {
+        const { trashed_at: _localTrashedAt, ...kept } = local;
+        sessions.put(kept satisfies ArchiveSession);
       }
       const addAudio = audioBlob !== null && (replace || localAudio.length === 0);
       if (addAudio && item.audio) {
@@ -235,9 +246,10 @@ export async function importBackup(
           sessionDir: dir,
         } satisfies StoredMedia);
       }
-      return { kind: local === undefined ? 'added' as const : replace ? 'replaced' as const : 'skipped' as const, audio: addAudio };
+      return { kind: local === undefined ? 'added' as const : replace ? 'replaced' as const : restore ? 'restored' as const : 'skipped' as const, audio: addAudio };
     });
     summary[outcome.kind] += 1;
+    if (outcome.kind !== 'skipped') summary.changed.push(dir);
     if (outcome.audio) summary.audioFiles += 1;
     options.onProgress?.(index + 1, items.length);
   }
@@ -280,6 +292,7 @@ export function describeImport(summary: ImportSummary): string {
   const parts: string[] = [];
   if (summary.added) parts.push(`${plural(summary.added, 'sbobina aggiunta', 'sbobine aggiunte')}`);
   if (summary.replaced) parts.push(`${plural(summary.replaced, 'sostituita con la versione più recente del backup', 'sostituite con la versione più recente del backup')}`);
+  if (summary.restored) parts.push(`${plural(summary.restored, 'ripresa dal cestino', 'riprese dal cestino')}`);
   if (summary.skipped) parts.push(`${plural(summary.skipped, 'già presente e lasciata com’era', 'già presenti e lasciate com’erano')}`);
   if (summary.audioFiles) parts.push(`${plural(summary.audioFiles, 'audio importato', 'audio importati')}`);
   if (summary.folders) parts.push(`${plural(summary.folders, 'raccolta nuova', 'raccolte nuove')}`);

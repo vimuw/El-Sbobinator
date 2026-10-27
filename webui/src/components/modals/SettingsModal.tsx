@@ -10,6 +10,7 @@ import { NotificationSection } from './settings/NotificationSection';
 import { StorageSection } from './settings/StorageSection';
 import { WebBackupSection } from './settings/WebBackupSection';
 import { WebDriveSection } from './settings/WebDriveSection';
+import { WebTrashSection } from './settings/WebTrashSection';
 import { DiagnosticsSection } from './settings/DiagnosticsSection';
 import { ApiStatusSection } from './settings/ApiStatusSection';
 import { WebRemoveKeysButton, WebSharedDeviceNotice } from './settings/WebSharedDeviceNotice';
@@ -749,6 +750,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             <>
                               <SettingsDivider />
                               <WebDriveSection />
+                            </>
+                          )}
+                          {window.pywebview?.api?.list_trash && (
+                            <>
+                              <SettingsDivider />
+                              <WebTrashSection
+                                onArchiveChanged={() => {
+                                  storage?.onArchiveImported?.();
+                                  fetchSessionStorageInfo();
+                                }}
+                              />
                             </>
                           )}
                         </>

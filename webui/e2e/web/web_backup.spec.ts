@@ -106,8 +106,10 @@ test('downloads a backup and restores sbobina, edit and audio in an empty browse
   await empty.close();
 });
 
-test('without a Google client ID the settings have no Drive panel', async ({ page }) => {
+test('without a Google client ID the settings have no Drive panel and no trash', async ({ page }) => {
   await startWithKey(page);
   await openStorageSettings(page);
   await expect(page.getByTestId('web-drive')).toHaveCount(0);
+  // Deleting stays permanent in the released site.
+  await expect(page.getByTestId('web-trash')).toHaveCount(0);
 });

@@ -104,7 +104,7 @@ describe('web backup', () => {
     const target = new IDBFactory();
     const progress: number[] = [];
     const summary = await importBackup(target, new File([backup.blob], backup.filename), { onProgress: done => progress.push(done) });
-    expect(summary).toEqual({ added: 2, replaced: 0, skipped: 0, audioFiles: 1, folders: 1 });
+    expect(summary).toEqual({ added: 2, replaced: 0, skipped: 0, restored: 0, audioFiles: 1, folders: 1, changed: [second.session_dir, first.session_dir] });
     expect(progress).toEqual([1, 2]);
 
     const archive = createWebArchive(target);
@@ -129,7 +129,7 @@ describe('web backup', () => {
     const extra = await archive.create(sessionInput('Solo qui', '2026-10-22T10:00:00.000Z'), '<p>Locale</p>');
 
     const summary = await importBackup(factory, older.blob);
-    expect(summary).toEqual({ added: 0, replaced: 0, skipped: 2, audioFiles: 0, folders: 0 });
+    expect(summary).toEqual({ added: 0, replaced: 0, skipped: 2, restored: 0, audioFiles: 0, folders: 0, changed: [] });
     expect(await archive.readHtml(first.html_path)).toContain('Modifica più recente qui');
     expect(await archive.readHtml(extra.html_path)).toContain('Locale');
 
@@ -181,9 +181,9 @@ describe('web backup', () => {
   });
 
   it('describes the import in Italian', () => {
-    expect(describeImport({ added: 2, replaced: 1, skipped: 1, audioFiles: 1, folders: 0 }))
-      .toBe('2 sbobine aggiunte, 1 sostituita con la versione più recente del backup, 1 già presente e lasciata com’era, 1 audio importato.');
-    expect(describeImport({ added: 0, replaced: 0, skipped: 0, audioFiles: 0, folders: 0 })).toBe('Il backup non contiene sbobine.');
+    expect(describeImport({ added: 2, replaced: 1, skipped: 1, restored: 1, audioFiles: 1, folders: 0, changed: [] }))
+      .toBe('2 sbobine aggiunte, 1 sostituita con la versione più recente del backup, 1 ripresa dal cestino, 1 già presente e lasciata com’era, 1 audio importato.');
+    expect(describeImport({ added: 0, replaced: 0, skipped: 0, restored: 0, audioFiles: 0, folders: 0, changed: [] })).toBe('Il backup non contiene sbobine.');
   });
 
   it('remembers the last download in this browser', () => {

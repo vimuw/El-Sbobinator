@@ -83,6 +83,17 @@ describe('privacy page of the web site', () => {
     expect(html).not.toMatch(/style="/i);
   });
 
+  it('explains the Drive scopes: drive.appdata for the sync, drive.file only for the export', () => {
+    const drive = html.slice(html.indexOf('id="google-drive"'), html.indexOf('id="diritti"'));
+    expect(drive).toContain('<code>drive.appdata</code>');
+    expect(drive).toMatch(/Esportazione nel tuo Drive \(solo se la chiedi\)[\s\S]*<code>drive\.file<\/code>, che vale solo per i file creati da lei/);
+    expect(drive).toContain('l’app non la rilegge e non la modifica');
+    expect(drive).toContain('cestino per 30 giorni');
+    expect(drive).toContain('Gestisci app → El Sbobinator → Opzioni → Elimina dati app nascosti');
+    // The token is kept by the tab (sessionStorage) for at most an hour, not "never saved".
+    expect(drive).toContain('resta solo nella scheda aperta, al massimo un’ora');
+  });
+
   it("looks like the app: its theme tokens and Manrope, no colors of its own", () => {
     // The page's only styles are its stylesheet, which starts from the app's theme.css.
     expect(html).not.toMatch(/<style\b/i);

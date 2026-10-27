@@ -38,6 +38,7 @@ import { RegenerateModal } from './components/modals/RegenerateModal';
 import { NewKeyModal } from './components/modals/NewKeyModal';
 import { ConfirmActionModal } from './components/modals/ConfirmActionModal';
 import { DuplicateFileModal } from './components/modals/DuplicateFileModal';
+import { WebStorageChoicePrompt } from './components/modals/WebStorageChoiceModal';
 import { NavSidebar, type ActivePage } from './components/NavSidebar';
 import { NotificationDropdown } from './components/NotificationDropdown';
 import { usePhoneLayout } from './hooks/usePhoneLayout';
@@ -709,6 +710,15 @@ export default function App() {
         cancelLabel="Annulla"
         onClose={() => void handleRegenDirtyCancel()}
         onConfirm={() => void handleRegenDirtyConfirm()}
+      />
+      <WebStorageChoicePrompt
+        sessionCount={archiveTotal}
+        blocked={appState === 'processing' || appState === 'canceling' || isSettingsOpen || preview.content !== null}
+        onConnectResult={status => {
+          if (status.error) {
+            addNotification('Google Drive non collegato', `${status.error} Riprova da Impostazioni → Archiviazione.`, 'warning', 'system', { actionType: 'open_settings' });
+          }
+        }}
       />
       {shouldRenderSettings && (
         <React.Suspense fallback={null}>

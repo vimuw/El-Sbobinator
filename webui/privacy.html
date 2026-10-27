@@ -87,15 +87,17 @@
         <p>Non è ancora disponibile. Quando arriverà sarà facoltativo: potrai sempre tenere le sbobine solo nel browser.</p>
         <ul>
           <li>Se lo attivi, l’app salva una copia in una cartella nascosta dell’app nel tuo Google Drive.</li>
-          <li>Chiede solo il permesso <code>drive.appdata</code>: vede soltanto i file che crea lei in quella cartella, non gli altri file del tuo Drive.</li>
+          <li>Per la sincronizzazione chiede solo il permesso <code>drive.appdata</code>: vede soltanto i file che crea lei in quella cartella, non gli altri file del tuo Drive.</li>
           <li>Si sincronizzano i testi e i dati delle sbobine (titolo, date, raccolte). Non si sincronizzano l’audio, le chiavi API e l’avanzamento delle elaborazioni.</li>
+          <li>Una sbobina eliminata va nel cestino per 30 giorni, anche sugli altri dispositivi. Dopo, su Drive resta solo un segno senza testo né titolo, perché un dispositivo rimasto spento non la faccia ricomparire.</li>
           <li>I dati vanno direttamente dal tuo browser a Google, senza server di El Sbobinator. Lo sviluppatore non li riceve e non può leggerli.</li>
-          <li>Il permesso di accesso (token) resta solo nella memoria della pagina aperta e non viene salvato.</li>
+          <li>Il permesso di accesso (token) resta solo nella scheda aperta, al massimo un’ora. Nel browser resta l’indirizzo email dell’account, per ricollegarti con un tocco; “Disconnetti” lo cancella.</li>
         </ul>
+        <p><strong>Esportazione nel tuo Drive (solo se la chiedi):</strong> con “Esporta tutte le sbobine nel mio Drive” l’app chiede in quel momento anche il permesso <code>drive.file</code>, che vale solo per i file creati da lei. Crea nel tuo Drive una cartella visibile “El Sbobinator – esportazione” con la data, un file HTML per ogni sbobina e una sottocartella per ogni raccolta. Quella cartella è tua: l’app non la rilegge e non la modifica; se non ti serve più la cancelli da Drive.</p>
         <p><strong>Come cancellare i dati da Drive:</strong></p>
         <ul>
-          <li>dall’app, con “Elimina tutti i miei dati da Drive” e poi “Disconnetti”;</li>
-          <li>da Google Drive → Impostazioni → Gestisci app → El Sbobinator → Elimina dati app nascosti;</li>
+          <li>dall’app, con “Elimina tutti i miei dati da Drive”: cancella la cartella nascosta e scollega il browser, le sbobine nel browser restano;</li>
+          <li>da Google Drive sul computer → Impostazioni → Gestisci app → El Sbobinator → Opzioni → Elimina dati app nascosti;</li>
           <li>togliendo l’accesso all’app da <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</li>
         </ul>
         <p>L’uso e il trasferimento ad altre app delle informazioni ricevute dalle API di Google rispettano le <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, compresi i requisiti di Uso limitato (Limited Use). I dati non vengono venduti, non servono per pubblicità e nessuna persona li legge.</p>

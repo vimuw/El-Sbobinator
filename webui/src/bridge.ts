@@ -164,6 +164,8 @@ export interface ArchiveSession {
   revision_failed_blocks?: number[];
   /** Web: the lecture the sbobina was made from, to check a file picked later for its player. */
   input_identity?: FileIdentity;
+  /** Web previews with the trash: when the sbobina was moved to the trash (gone for good 30 days later). */
+  trashed_at?: string;
 }
 
 export interface SearchSnippet {
@@ -222,6 +224,16 @@ export interface DriveStatus {
   syncing: boolean;
   last_sync_at: string | null;
   error: string | null;
+}
+
+/** Outcome of "Esporta tutte le sbobine nel mio Drive". */
+export interface DriveExportResult {
+  ok: boolean;
+  exported: number;
+  total: number;
+  folder_name?: string;
+  folder_url?: string;
+  error?: string;
 }
 
 export type ElSbobinatorBridge = BridgeCallbacks | null;
@@ -339,6 +351,14 @@ export interface PywebviewApi {
   sync_drive_now?: () => Promise<DriveStatus>;
   /** The editor closed this document: changes from Drive may now be applied to it. */
   release_html_content?: (path: string) => Promise<{ ok: boolean }>;
+  /** Removes every file of the hidden Drive folder and the local sync state, then disconnects. */
+  erase_drive_data?: () => Promise<DriveStatus & { removed?: number }>;
+  /** One-way copy of the sbobine as HTML in a visible Drive folder; opens the Google window: call it inside a tap. */
+  export_to_drive?: (onProgress?: (done: number, total: number) => void) => Promise<DriveExportResult>;
+  // Web previews with the trash: delete_session moves a sbobina there for 30 days.
+  list_trash?: () => Promise<{ ok: boolean; sessions?: ArchiveSession[]; error?: string }>;
+  restore_session?: (sessionDir: string) => Promise<{ ok: boolean; error?: string }>;
+  empty_trash?: () => Promise<{ ok: boolean; removed?: number; error?: string }>;
   cleanup_old_sessions?: (maxAgeDays?: number, dryRun?: boolean) => Promise<{ ok: boolean; removed?: number; freed_bytes?: number; errors?: number; candidates?: number; preserved_completed?: number; missing_completed_html?: number; error?: string }>;
   get_completed_sessions?: (limit?: number) => Promise<{ ok: boolean; sessions?: ArchiveSession[]; total?: number; error?: string }>;
   delete_session?: (sessionDir: string) => Promise<{ ok: boolean; error?: string }>;

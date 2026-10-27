@@ -7,6 +7,7 @@ import {
   FOLDERS_FILE,
   FOLDERS_FORMAT,
   SYNC_VERSION,
+  isPurged,
   mergeFolders,
   parseFoldersFile,
   parseSessionFile,
@@ -34,6 +35,8 @@ import {
 // modifiedTime, downloads only of files changed since the last round, uploads only of sbobine
 // marked locally. A sbobina changed on one side only takes that side; changed on both, the newer
 // updated_at wins and the other version becomes a new sbobina "… (conflitto)", so no text is lost.
+// The trash travels too: deleted_at moves a sbobina to the trash of every device (text kept), and
+// once it is deleted for good the file becomes a mark without text (purged_at).
 
 // Drive's listing can show a write a moment late: each round looks back this far, and files
 // already seen are skipped by their modifiedTime.
@@ -72,10 +75,10 @@ async function readLocal(factory: IDBFactory | undefined, sessionDir: string): P
   return session ? { session, document: document ?? { session_dir: sessionDir, body: '', generation: 0 } } : null;
 }
 
-/** Writes Drive's version of a sbobina here, keeping what only this device knows. */
+/** Writes Drive's version of a sbobina here (in the trash or not), keeping what only this device knows. */
 async function applyRemote(factory: IDBFactory | undefined, file: SyncSessionFile): Promise<'written' | 'removed' | 'none'> {
   const dir = file.session.session_dir;
-  if (file.deleted_at) return (await createWebArchive(factory).delete(dir)) ? 'removed' : 'none';
+  if (isPurged(file)) return (await createWebArchive(factory).delete(dir)) ? 'removed' : 'none';
   const body = sanitizeBodyHtml(file.body);
   await inTransaction(factory, [SESSIONS, DOCUMENTS], 'readwrite', async transaction => {
     const sessions = transaction.objectStore(SESSIONS);
@@ -90,6 +93,7 @@ async function applyRemote(factory: IDBFactory | undefined, file: SyncSessionFil
       html_path: webSessionHtmlPath(dir),
       input_path: local?.input_path ?? '',
       ...(local?.last_opened_at_iso ? { last_opened_at_iso: local.last_opened_at_iso } : {}),
+      ...(file.deleted_at ? { trashed_at: file.deleted_at } : {}),
     } satisfies ArchiveSession);
     // The local generation stays: other devices' generations come from other clocks.
     documents.put({ session_dir: dir, body, generation: document?.generation ?? 0 } satisfies StoredDocument);
@@ -97,7 +101,10 @@ async function applyRemote(factory: IDBFactory | undefined, file: SyncSessionFil
   return 'written';
 }
 
-/** The losing side of a conflict, kept as a new sbobina that the next upload sends to Drive. */
+/**
+ * The losing side of a conflict, kept as a new sbobina that the next upload sends to Drive. A side
+ * that was in the trash stays in the trash.
+ */
 async function saveConflictCopy(factory: IDBFactory | undefined, session: ArchiveSession, body: string, at: string): Promise<void> {
   const dir = `${WEB_SESSION_PREFIX}${crypto.randomUUID()}`;
   await inTransaction(factory, [SESSIONS, DOCUMENTS], 'readwrite', transaction => {
@@ -115,18 +122,22 @@ async function saveConflictCopy(factory: IDBFactory | undefined, session: Archiv
 
 function asSession(file: SyncSessionFile): ArchiveSession {
   const dir = file.session.session_dir;
-  return { ...file.session, html_path: webSessionHtmlPath(dir), input_path: '' };
+  return { ...file.session, html_path: webSessionHtmlPath(dir), input_path: '', ...(file.deleted_at ? { trashed_at: file.deleted_at } : {}) };
 }
 
 function sameContent(local: LocalCopy | null, remote: SyncSessionFile): boolean {
-  if (!local) return Boolean(remote.deleted_at);
-  return !remote.deleted_at && local.session.name === remote.session.name && local.document.body === sanitizeBodyHtml(remote.body);
+  if (!local) return isPurged(remote);
+  return !isPurged(remote)
+    && Boolean(local.session.trashed_at) === Boolean(remote.deleted_at)
+    && local.session.name === remote.session.name
+    && local.document.body === sanitizeBodyHtml(remote.body);
 }
 
 async function mergeSession(deps: SyncDeps, record: SessionSyncRecord | null, remote: SyncSessionFile, meta: DriveFileMeta, report: SyncReport): Promise<void> {
   const { factory } = deps;
   const dir = remote.session.session_dir;
-  const synced = { session_dir: dir, file_id: meta.id, remote_modified: meta.modifiedTime, dirty: false, updated_at: remote.updated_at, ...(remote.deleted_at ? { deleted_at: remote.deleted_at } : {}) };
+  const purgedAt = isPurged(remote) ? remote.purged_at ?? remote.deleted_at : undefined;
+  const synced = { session_dir: dir, file_id: meta.id, remote_modified: meta.modifiedTime, dirty: false, updated_at: remote.updated_at, ...(purgedAt ? { deleted_at: purgedAt } : {}) };
   const local = await readLocal(factory, dir);
   const count = (outcome: 'written' | 'removed' | 'none') => {
     if (outcome === 'written') report.downloaded += 1;
@@ -146,7 +157,7 @@ async function mergeSession(deps: SyncDeps, record: SessionSyncRecord | null, re
     count(await applyRemote(factory, remote));
     await writeRecord(factory, synced);
   } else {
-    if (!remote.deleted_at) await saveConflictCopy(factory, asSession(remote), sanitizeBodyHtml(remote.body), at);
+    if (!isPurged(remote)) await saveConflictCopy(factory, asSession(remote), sanitizeBodyHtml(remote.body), at);
     // The local version stays marked: the upload below writes it over Drive's.
     await writeRecord(factory, { ...record, file_id: meta.id, remote_modified: meta.modifiedTime });
   }
@@ -160,7 +171,8 @@ async function uploadSession(deps: SyncDeps, meta: SyncMeta, record: SessionSync
   const file = toSessionFile(session, local?.document.body ?? '', local?.document.generation ?? 0, {
     updated_at: record.updated_at,
     device_id: meta.device_id,
-    ...(record.deleted_at ? { deleted_at: record.deleted_at } : {}),
+    ...(local?.session.trashed_at ? { deleted_at: local.session.trashed_at } : {}),
+    ...(record.deleted_at ? { purged_at: record.deleted_at } : {}),
   });
   let written: DriveFileMeta;
   try {
@@ -263,7 +275,8 @@ export async function syncOnce(deps: SyncDeps): Promise<SyncReport> {
 
   // Sbobine made before Drive was connected (or imported from a backup) have no record yet.
   const records = await readRecords(factory);
-  const sessions = await createWebArchive(factory).list();
+  const archive = createWebArchive(factory);
+  const sessions = [...await archive.list(), ...await archive.listTrash()];
   for (const session of sessions) {
     if (!records.has(session.session_dir)) {
       const record = { session_dir: session.session_dir, dirty: true, updated_at: session.completed_at_iso || now().toISOString() };

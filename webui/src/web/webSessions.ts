@@ -8,10 +8,13 @@ export const WEB_SESSION_PREFIX = 'web-session://';
 const HTML_FILE = 'sbobina.html';
 
 export type NewArchiveSession = Omit<ArchiveSession, 'session_dir' | 'html_path'>;
+/** Days a sbobina stays in the trash before it is deleted for good. */
+export const TRASH_DAYS = 30;
 export type SaveHtmlResult = { ok: boolean; saved?: boolean; error?: string };
 
 export interface WebArchive {
   create(input: NewArchiveSession, body: string): Promise<ArchiveSession>;
+  /** The archive, without the sbobine in the trash. */
   list(): Promise<ArchiveSession[]>;
   get(sessionDir: string): Promise<ArchiveSession | null>;
   /** Full HTML document with its shell, like the desktop's read_html_content. */
@@ -20,11 +23,28 @@ export interface WebArchive {
   /** Autosave generation of a stored document: 0 until the editor saves it, null when it is gone. */
   generation(path: string): Promise<number | null>;
   update(sessionDir: string, patch: Partial<ArchiveSession>): Promise<ArchiveSession | null>;
-  /** Removes the sbobina, its document, its audio and its pipeline checkpoint. */
+  /** Removes the sbobina, its document, its audio and its pipeline checkpoint, for good. */
   delete(sessionDir: string): Promise<boolean>;
+  /** Moves the sbobina to the trash: out of the archive and the search, everything else kept. */
+  trash(sessionDir: string, at: string): Promise<boolean>;
+  /** Brings a sbobina back from the trash. */
+  restore(sessionDir: string): Promise<ArchiveSession | null>;
+  /** The sbobine in the trash, most recently trashed first. */
+  listTrash(): Promise<ArchiveSession[]>;
   loadFolders(): Promise<ArchiveFolder[]>;
   saveFolders(folders: ArchiveFolder[]): Promise<void>;
   search(query: string, limit?: number): Promise<SearchSessionResult[]>;
+}
+
+/** Deletes for good the sbobine trashed more than TRASH_DAYS ago; returns how many. */
+export async function purgeExpiredTrash(archive: WebArchive, now: Date): Promise<number> {
+  const limit = now.getTime() - TRASH_DAYS * 24 * 60 * 60 * 1000;
+  let purged = 0;
+  for (const session of await archive.listTrash()) {
+    const at = Date.parse(session.trashed_at ?? '');
+    if (Number.isFinite(at) && at <= limit && await archive.delete(session.session_dir)) purged += 1;
+  }
+  return purged;
 }
 
 export function webSessionHtmlPath(sessionDir: string): string {
@@ -62,6 +82,8 @@ export function createWebArchive(factory: IDBFactory | undefined = globalThis.in
     requestValue(transaction.objectStore(SESSIONS).get(sessionDir) as IDBRequest<ArchiveSession | undefined>);
   const getDocument = (transaction: IDBTransaction, sessionDir: string) =>
     requestValue(transaction.objectStore(DOCUMENTS).get(sessionDir) as IDBRequest<StoredDocument | undefined>);
+  const allSessions = () => inTransaction(factory, SESSIONS, 'readonly', transaction =>
+    requestValue(transaction.objectStore(SESSIONS).getAll() as IDBRequest<ArchiveSession[]>));
 
   return {
     async create(input, body) {
@@ -75,9 +97,33 @@ export function createWebArchive(factory: IDBFactory | undefined = globalThis.in
     },
 
     async list() {
-      const sessions = await inTransaction(factory, SESSIONS, 'readonly', transaction =>
-        requestValue(transaction.objectStore(SESSIONS).getAll() as IDBRequest<ArchiveSession[]>));
-      return sessions.sort(byCompletedDesc);
+      return (await allSessions()).filter(session => !session.trashed_at).sort(byCompletedDesc);
+    },
+
+    async listTrash() {
+      return (await allSessions()).filter(session => session.trashed_at)
+        .sort((a, b) => (b.trashed_at ?? '').localeCompare(a.trashed_at ?? ''));
+    },
+
+    async trash(sessionDir, at) {
+      const dir = sessionDirOf(sessionDir);
+      return inTransaction(factory, SESSIONS, 'readwrite', async transaction => {
+        const session = await getSession(transaction, dir);
+        if (!session) return false;
+        if (!session.trashed_at) transaction.objectStore(SESSIONS).put({ ...session, trashed_at: at } satisfies ArchiveSession);
+        return true;
+      });
+    },
+
+    async restore(sessionDir) {
+      const dir = sessionDirOf(sessionDir);
+      return inTransaction(factory, SESSIONS, 'readwrite', async transaction => {
+        const session = await getSession(transaction, dir);
+        if (!session) return null;
+        const { trashed_at: _trashedAt, ...restored } = session;
+        transaction.objectStore(SESSIONS).put(restored satisfies ArchiveSession);
+        return restored;
+      });
     },
 
     async get(sessionDir) {
@@ -176,7 +222,7 @@ export function createWebArchive(factory: IDBFactory | undefined = globalThis.in
       ]));
       const bodies = new Map(documents.map(document => [document.session_dir, document.body]));
       const results: SearchSessionResult[] = [];
-      for (const session of sessions.sort(byCompletedDesc)) {
+      for (const session of sessions.filter(item => !item.trashed_at).sort(byCompletedDesc)) {
         const text = plainText(bodies.get(session.session_dir) ?? '');
         const lower = text.toLowerCase();
         const snippets: SearchSessionResult['snippets'] = [];
