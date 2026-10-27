@@ -164,6 +164,8 @@ export interface ArchiveSession {
   revision_failed_blocks?: number[];
   /** Web: the lecture the sbobina was made from, to check a file picked later for its player. */
   input_identity?: FileIdentity;
+  /** Web previews with the trash: when the sbobina was moved to the trash (gone for good 30 days later). */
+  trashed_at?: string;
 }
 
 export interface SearchSnippet {
@@ -339,6 +341,10 @@ export interface PywebviewApi {
   sync_drive_now?: () => Promise<DriveStatus>;
   /** The editor closed this document: changes from Drive may now be applied to it. */
   release_html_content?: (path: string) => Promise<{ ok: boolean }>;
+  // Web previews with the trash: delete_session moves a sbobina there for 30 days.
+  list_trash?: () => Promise<{ ok: boolean; sessions?: ArchiveSession[]; error?: string }>;
+  restore_session?: (sessionDir: string) => Promise<{ ok: boolean; error?: string }>;
+  empty_trash?: () => Promise<{ ok: boolean; removed?: number; error?: string }>;
   cleanup_old_sessions?: (maxAgeDays?: number, dryRun?: boolean) => Promise<{ ok: boolean; removed?: number; freed_bytes?: number; errors?: number; candidates?: number; preserved_completed?: number; missing_completed_html?: number; error?: string }>;
   get_completed_sessions?: (limit?: number) => Promise<{ ok: boolean; sessions?: ArchiveSession[]; total?: number; error?: string }>;
   delete_session?: (sessionDir: string) => Promise<{ ok: boolean; error?: string }>;

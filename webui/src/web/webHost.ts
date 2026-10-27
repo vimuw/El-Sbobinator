@@ -6,9 +6,9 @@ import { STORAGE_KEYS } from '../storageKeys';
 import { GEMINI_KEY_PATTERN, formatSize } from '../utils';
 import { createWorkerAudioSource } from './audioPort';
 import { createCheckpointStore } from './checkpointStore';
-import { createDriveConnection, type DriveConnection } from './drive/driveConfig';
+import { createDriveConnection, driveEnabled, type DriveConnection } from './drive/driveConfig';
 import { createDriveService, type DriveService } from './drive/driveService';
-import { trackArchive } from './drive/syncState';
+import { markSessionChanged, trackArchive } from './drive/syncState';
 import { type BridgeEventName, type EmitBridgeEvent, runFakePipeline } from './fakePipeline';
 import { createPageState } from './pageLifecycle';
 import { measureWebStorage, type WebStorageUsage } from './webDatabase';
@@ -21,7 +21,7 @@ import { getWebFile, hasWebFile, isWebSupportedMedia, promptWebFiles, registerWe
 import { createWebMediaStore, mediaType, type WebMediaStore } from './webMedia';
 import { createBackup, describeBackup, describeImport, importBackup, loadLastBackupAt, saveLastBackupAt } from './webBackup';
 import { NEW_KEY_TIMEOUT_MS, REGENERATE_TIMEOUT_MS, bridgeReporter, runWebFile, sleepWithSignal, type RegenerateAnswer } from './webRun';
-import { createWebArchive, requestPersistentStorage, storageErrorMessage, webSessionHtmlPath, type NewArchiveSession, type WebArchive } from './webSessions';
+import { createWebArchive, purgeExpiredTrash, requestPersistentStorage, storageErrorMessage, webSessionHtmlPath, type NewArchiveSession, type WebArchive } from './webSessions';
 import { WEB_MODEL_OPTIONS, adoptSpikeKeys, loadWebKeys, loadWebModel, saveWebKeys, saveWebModel } from './webSettings';
 
 // Third host: the whole app runs in this page (static site, no backend). It implements the same
@@ -161,6 +161,8 @@ export interface WebHostOptions {
   drive?: DriveConnection | null;
   /** Quiet period before a sync after local changes (tests shorten it). */
   driveDelayMs?: number;
+  /** Deleting moves a sbobina to the trash (default: the builds with the Drive sync, connected or not). */
+  trash?: boolean;
 }
 
 type AnswerSlot<T> = { current: ((value: T) => void) | null };
@@ -231,6 +233,10 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
   }) : null;
   const archive = drive ? trackArchive(createWebArchive(database), database, () => drive.schedule()) : createWebArchive(database);
   drive?.start();
+  const trashEnabled = options.trash ?? driveConnection !== null;
+  // Sbobine in the trash for more than 30 days go for good (on Drive too: a mark without text).
+  const purgeTrash = () => (trashEnabled ? purgeExpiredTrash(archive, new Date()).catch(() => 0) : Promise.resolve(0));
+  void purgeTrash();
   const storage = options.storage ?? navigator.storage;
   const media = options.media ?? createWebMediaStore(database);
   // Copies of picked files still being written to IndexedDB, by file id: true once stored.
@@ -428,7 +434,11 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
           },
           askNewKey: () => askNewKey(run.signal),
           saveArchive,
-          archiveExists: async sessionDir => (await archive.generation(sessionDir)) !== null,
+          // A sbobina in the trash no longer counts as done: the run makes a new one.
+          archiveExists: async sessionDir => {
+            const session = await archive.get(sessionDir);
+            return session !== null && !session.trashed_at;
+          },
         }).catch(error => {
           emit('fileFailed', { index: 0, id: file.id, error: error instanceof Error ? error.message : String(error) });
           emit('processDone', { cancelled: false, completed: 0, failed: 1, total: 1 });
@@ -621,7 +631,8 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
     },
     delete_session: async sessionDir => {
       try {
-        if (!await archive.delete(sessionDir)) return { ok: false, error: 'Sbobina non trovata.' };
+        const removed = trashEnabled ? await archive.trash(sessionDir, new Date().toISOString()) : await archive.delete(sessionDir);
+        if (!removed) return { ok: false, error: 'Sbobina non trovata.' };
         revokeMediaUrl();
         return { ok: true };
       } catch (error) {
@@ -701,7 +712,12 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
       if (activeRun) return { ok: false, error: 'Elaborazione in corso: importa il backup al termine.' };
       try {
         const summary = await importBackup(database, file);
-        drive?.schedule();
+        if (drive) {
+          // Written straight to IndexedDB: the marks tell the sync to send them.
+          const at = new Date().toISOString();
+          for (const sessionDir of summary.changed) await markSessionChanged(database, sessionDir, at).catch(() => undefined);
+          drive.schedule();
+        }
         return { ok: true, summary: describeImport(summary) };
       } catch (error) {
         return { ok: false, error: error instanceof DOMException && error.name === 'QuotaExceededError' ? storageErrorMessage(error) : error instanceof Error ? error.message : String(error) };
@@ -731,6 +747,33 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
       return { ok: true };
     },
     ...(drive ? driveMethods(drive, () => { openInEditor = null; }) : {}),
+    ...(trashEnabled ? {
+      list_trash: async () => {
+        try {
+          await purgeTrash();
+          return { ok: true, sessions: await archive.listTrash() };
+        } catch (error) {
+          return { ok: false, error: storageErrorMessage(error) };
+        }
+      },
+      restore_session: async (sessionDir: string) => {
+        try {
+          return (await archive.restore(sessionDir)) ? { ok: true } : { ok: false, error: 'Sbobina non trovata.' };
+        } catch (error) {
+          return { ok: false, error: storageErrorMessage(error) };
+        }
+      },
+      empty_trash: async () => {
+        try {
+          let removed = 0;
+          for (const session of await archive.listTrash()) if (await archive.delete(session.session_dir)) removed += 1;
+          revokeMediaUrl();
+          return { ok: true, removed };
+        } catch (error) {
+          return { ok: false, error: storageErrorMessage(error) };
+        }
+      },
+    } satisfies Partial<PywebviewApi> : {}),
   };
 }
 
@@ -754,7 +797,8 @@ function driveMethods(drive: DriveService, closeEditor: () => void): Partial<Pyw
 export function initWebHost(): void {
   // ?simulazione=1 keeps the M0 simulated run (no Gemini calls) for demos and the smoke test.
   const simulation = new URLSearchParams(window.location.search).get('simulazione') === '1';
-  setHostCapabilities(WEB_CAPABILITIES);
+  // The trash comes with the Drive sync: hidden, like it, in the released site.
+  setHostCapabilities({ ...WEB_CAPABILITIES, permanentDelete: !driveEnabled() });
   adoptSpikeKeys();
   // Lets index.css size controls for touch on tablets without touching the desktop app.
   document.documentElement.dataset.host = 'web';

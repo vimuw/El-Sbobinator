@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ArchiveSession } from '../../bridge';
 import {
   FOLDERS_FORMAT,
+  isPurged,
   mergeFolders,
   parseFoldersFile,
   parseSessionFile,
@@ -56,8 +57,18 @@ describe('Drive sync format', () => {
       device_id: 'pc',
     });
     expect(JSON.stringify(file)).not.toContain('web-file://');
-    // A deletion mark carries no text.
-    expect(toSessionFile(session, '<p>testo</p>', 7, { ...meta, deleted_at: meta.updated_at })).toMatchObject({ body: '', deleted_at: meta.updated_at });
+    // In the trash the text stays, so the other devices can restore it.
+    expect(toSessionFile(session, '<p>testo</p>', 7, { ...meta, deleted_at: meta.updated_at })).toMatchObject({ body: '<p>testo</p>', deleted_at: meta.updated_at });
+    // Deleted for good: a mark without text and without the name.
+    const purged = toSessionFile(session, '<p>testo</p>', 7, { ...meta, deleted_at: '2026-09-01T10:00:00.000Z', purged_at: meta.updated_at });
+    expect(purged).toMatchObject({ body: '', deleted_at: '2026-09-01T10:00:00.000Z', purged_at: meta.updated_at, session: { session_dir: session.session_dir, name: '' } });
+    expect(JSON.stringify(purged)).not.toContain(session.name);
+    expect(isPurged(purged)).toBe(true);
+    expect(isPurged(toSessionFile(session, '<p>testo</p>', 7, { ...meta, deleted_at: meta.updated_at }))).toBe(false);
+    // B1–B3 previews marked a deletion with deleted_at and an empty body.
+    expect(isPurged({ deleted_at: meta.updated_at, body: '' })).toBe(true);
+    expect(parseSessionFile({ ...purged, purged_at: 'mai' }, sessionFileName(session.session_dir))).toEqual({ ok: false, reason: 'invalid' });
+    expect(parseSessionFile(purged, sessionFileName(session.session_dir))).toMatchObject({ ok: true, file: { purged_at: meta.updated_at } });
   });
 
   it('reads back only well-formed files that match their name', () => {
