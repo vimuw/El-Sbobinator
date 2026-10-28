@@ -100,7 +100,7 @@ describe('UpdaterSection component', () => {
 
     expect(screen.queryByText(/È disponibile la versione/)).toBeNull();
     expect(screen.queryByRole('button', { name: /Aggiorna a/ })).toBeNull();
-    expect(screen.queryByRole('link', { name: 'Note di rilascio ↗' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Note di rilascio' })).toBeNull();
     expect(screen.queryByText('→')).toBeNull();
   });
 
@@ -124,7 +124,7 @@ describe('UpdaterSection component', () => {
     expect(screen.getAllByRole('button')).toHaveLength(1);
     expect(screen.queryByRole('button', { name: 'Cerca aggiornamenti' })).toBeNull();
     expect(screen.getByText(/Installata:/).textContent).toMatch(/v\d+\.\d+\.\d+→disponibile v9\.9\.9/);
-    expect(screen.getByRole('link', { name: 'Note di rilascio ↗' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Note di rilascio' })).toBeTruthy();
     expect(screen.getByRole('status').textContent).toBe('È disponibile la versione v9.9.9.');
 
     fireEvent.click(installButton);

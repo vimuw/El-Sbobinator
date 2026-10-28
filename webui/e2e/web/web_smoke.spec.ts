@@ -55,7 +55,7 @@ test('settings keep keys in the browser and hide desktop-only sections @web-smok
   await page.getByRole('button', { name: 'Apri impostazioni' }).click();
 
   // The desktop key list: the saved key as a masked row, an add field and the quota matrix.
-  await expect(page.getByText('Chiave Principale')).toBeVisible();
+  await expect(page.getByText('Principale', { exact: true })).toBeVisible();
   await expect(page.getByText(`...${DUMMY_KEY.slice(-4)}`)).toBeVisible();
   await expect(page.getByLabel('Nuova chiave di riserva')).toBeVisible();
   await expect(page.getByText('Quote per modello')).toBeVisible();
@@ -63,7 +63,8 @@ test('settings keep keys in the browser and hide desktop-only sections @web-smok
   await expect(page.getByText('Versione e aggiornamenti')).toHaveCount(0);
   await expect(page.getByText('Notifiche di sistema')).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Rimuovi la chiave' }).click();
+  await page.getByRole('button', { name: 'Rimuovi la chiave', exact: true }).click();
+  await page.getByRole('button', { name: 'Rimuovi', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Configura la tua API Key' })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('el-sbobinator.web.gemini-keys.v1'))).toBeNull();
 });

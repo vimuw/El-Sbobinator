@@ -25,7 +25,7 @@ describe('ApiKeySection component', () => {
   it('renders primary API key in the card table and shows count', () => {
     render(<ApiKeySection {...defaultProps} />);
 
-    expect(screen.getByText('Chiave Principale')).toBeTruthy();
+    expect(screen.getByText('Principale')).toBeTruthy();
     expect(screen.getByText('...2345')).toBeTruthy();
     // The key count is not repeated as a pill beside the heading
     expect(screen.queryByText('1 chiave')).toBeNull();
@@ -41,19 +41,20 @@ describe('ApiKeySection component', () => {
 
     expect(screen.getByText('...ABCD')).toBeTruthy();
     expect(screen.getByText('...WXYZ')).toBeTruthy();
-    expect(screen.getByText('Chiave Riserva 1')).toBeTruthy();
-    expect(screen.getByText('Chiave Riserva 2')).toBeTruthy();
+    expect(screen.getByText('Riserva 1')).toBeTruthy();
+    expect(screen.getByText('Riserva 2')).toBeTruthy();
     expect(screen.queryByText('3 chiavi')).toBeNull();
     // Masked suffixes are plain monospace text, not pills
     expect(screen.getByText('...ABCD').className).not.toContain('rounded-full');
   });
 
-  it('titles the section in plain sentence case and offers Aggiungi as the settings pill', () => {
+  it('titles the section with an icon and tracked caps and offers Aggiungi as the settings pill', () => {
     render(<ApiKeySection {...defaultProps} />);
 
     const heading = screen.getByRole('heading', { name: 'Chiavi API' });
-    expect(heading.className).not.toContain('uppercase');
-    expect(heading.parentElement?.querySelector('svg')).toBeNull();
+    // Titled as on the desktop settings: accent icon and tracked caps.
+    expect(heading.className).toContain('uppercase');
+    expect(heading.parentElement?.querySelector('svg')).not.toBeNull();
     const addButton = screen.getByRole('button', { name: 'Aggiungi chiave di riserva' });
     expect(addButton.className).toBe('settings-pill-button');
   });
@@ -451,15 +452,15 @@ describe('ApiKeySection component', () => {
       />
     );
 
-    const primaryRow = screen.getByText('Chiave Principale').closest('.justify-between');
-    const fallbackRow = screen.getByText('Chiave Riserva 1').closest('.justify-between');
+    const primaryRow = screen.getByText('Principale').closest('.justify-between');
+    const fallbackRow = screen.getByText('Riserva 1').closest('.justify-between');
     expect(primaryRow).not.toBeNull();
     expect(fallbackRow).not.toBeNull();
     expect(within(primaryRow as HTMLElement).getByText('Attiva')).toBeTruthy();
     expect(within(fallbackRow as HTMLElement).getByText('Esaurita oggi')).toBeTruthy();
   });
 
-  it('renders footer caption and handles external link click', () => {
+  it('explains the rotation above the key list and keeps the AI Studio link below the add field', () => {
     const openUrlMock = vi.fn();
     (window as unknown as { pywebview: { api: { open_url: typeof openUrlMock } } }).pywebview = {
       api: { open_url: openUrlMock },
@@ -467,10 +468,13 @@ describe('ApiKeySection component', () => {
 
     render(<ApiKeySection {...defaultProps} />);
 
-    expect(screen.getByText(/Le chiavi di riserva subentrano in ordine/i)).toBeTruthy();
+    const rotationNote = screen.getByText(/Le chiavi di riserva subentrano in ordine/i);
+    const primaryRow = screen.getByText('Principale');
+    const addField = screen.getByLabelText('Nuova chiave di riserva');
+    expect(rotationNote.compareDocumentPosition(primaryRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     const link = screen.getByRole('link', { name: /Ottieni gratis su aistudio\.google\.com/i });
-    expect(link).toBeTruthy();
+    expect(addField.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     fireEvent.click(link);
     expect(openUrlMock).toHaveBeenCalledWith('https://aistudio.google.com/apikey');
@@ -555,7 +559,7 @@ describe('ApiKeySection component', () => {
     expect(screen.queryByText('Attiva')).toBeNull();
     expect(screen.getAllByText('Esaurita oggi')).toHaveLength(2);
     expect(screen.getByTestId('api-key-availability').textContent).toContain(
-      'Gemini 3.6 Flash: 0 di 2 chiavi disponibili oggi'
+      '0 di 2 disponibili oggi'
     );
   });
 
@@ -596,7 +600,7 @@ describe('ApiKeySection component', () => {
     );
 
     // Second reserve (WXYZ) should be in use, not first (ABCD)
-    const secondReserveRow = screen.getByText('Chiave Riserva 2').closest('.justify-between');
+    const secondReserveRow = screen.getByText('Riserva 2').closest('.justify-between');
     expect(within(secondReserveRow as HTMLElement).getByText('Attiva')).toBeTruthy();
     expect(screen.getAllByText('Esaurita oggi')).toHaveLength(2);
   });
@@ -638,16 +642,16 @@ describe('ApiKeySection component', () => {
     );
 
     const rowOf = (name: string) => screen.getByText(name).closest('.justify-between') as HTMLElement;
-    expect(within(rowOf('Chiave Principale')).getByText('Attiva')).toBeTruthy();
+    expect(within(rowOf('Principale')).getByText('Attiva')).toBeTruthy();
     // Fallback 1 is not exhausted for the selected model, so it is next in line
-    expect(within(rowOf('Chiave Riserva 1')).getByText('Prossima')).toBeTruthy();
+    expect(within(rowOf('Riserva 1')).getByText('Prossima')).toBeTruthy();
     // The row name already says "Riserva": no extra badge for the rest of the queue
-    expect(within(rowOf('Chiave Riserva 2')).queryByText('In riserva')).toBeNull();
+    expect(within(rowOf('Riserva 2')).queryByText('In riserva')).toBeNull();
     // Exhaustion on the other model is a quiet note, not a competing badge
     expect(screen.getAllByText('Esaurita su Gemini 2.5 Flash')).toHaveLength(2);
     expect(screen.queryByText('Esaurita oggi')).toBeNull();
     expect(screen.getByTestId('api-key-availability').textContent).toContain(
-      'Gemini 3.6 Flash: 3 di 3 chiavi disponibili oggi'
+      '3 di 3 disponibili oggi'
     );
   });
 
@@ -661,12 +665,12 @@ describe('ApiKeySection component', () => {
     );
 
     const rowOf = (name: string) => screen.getByText(name).closest('.justify-between') as HTMLElement;
-    expect(within(rowOf('Chiave Principale')).getByText('Attiva')).toBeTruthy();
-    const next = within(rowOf('Chiave Riserva 1')).getByText('Prossima');
+    expect(within(rowOf('Principale')).getByText('Attiva')).toBeTruthy();
+    const next = within(rowOf('Riserva 1')).getByText('Prossima');
     expect(next.className).not.toContain('rounded-full');
-    expect(within(rowOf('Chiave Riserva 2')).queryByText('In riserva')).toBeNull();
+    expect(within(rowOf('Riserva 2')).queryByText('In riserva')).toBeNull();
     expect(screen.getByTestId('api-key-availability').textContent).toBe(
-      'Gemini 3.6 Flash: stato non ancora verificato'
+      'Stato non ancora verificato'
     );
   });
 
@@ -674,7 +678,7 @@ describe('ApiKeySection component', () => {
     render(<ApiKeySection {...defaultProps} />);
 
     const input = screen.getByLabelText('Nuova chiave di riserva');
-    const primaryLabel = screen.getByText('Chiave Principale');
+    const primaryLabel = screen.getByText('Principale');
     expect(primaryLabel.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

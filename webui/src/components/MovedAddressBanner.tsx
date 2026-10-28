@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { CANONICAL_WEB_HOST, CANONICAL_WEB_URL } from '../movedAddress';
+import { ExternalLinkIcon } from './ExternalLinkIcon';
 
 /**
  * Web build on an old address that still holds sbobine: they cannot move by themselves, so the
@@ -29,6 +30,7 @@ export function MovedAddressBanner({ onOpenBackup }: { onOpenBackup: () => void 
         </button>
         <a href={CANONICAL_WEB_URL} target="_blank" rel="noopener noreferrer" className="footer-link">
           Vai a {CANONICAL_WEB_HOST}
+          <ExternalLinkIcon />
         </a>
       </div>
       <button

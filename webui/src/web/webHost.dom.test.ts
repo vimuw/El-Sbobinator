@@ -146,6 +146,12 @@ describe('web host', () => {
     expect(await api.get_session_storage_info!()).toEqual({
       ok: true, total_bytes: 0, total_sessions: 0, session_root: expect.stringContaining('il browser può svuotarla'),
       usage_detail: 'Testi delle sbobine 0 KB · audio delle sbobine 0 KB · avanzamento elaborazioni 0 KB · stima del browser 4 KB', persisted: false,
+      usage_breakdown: [
+        { label: 'Testi delle sbobine', bytes: 0 },
+        { label: 'Audio delle sbobine', bytes: 0 },
+        { label: 'Avanzamento elaborazioni', bytes: 0 },
+      ],
+      browser_estimate_bytes: 4096,
     });
     const [file] = await api.upload_browser_files!([new File(['a'], 'Anatomia.m4a')]);
 

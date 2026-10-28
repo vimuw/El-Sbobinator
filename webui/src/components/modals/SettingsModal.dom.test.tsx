@@ -238,14 +238,14 @@ describe('SettingsModal — save behavior', () => {
     const input = screen.getByLabelText('Nuova chiave di riserva');
     fireEvent.change(input, { target: { value: addedFallback } });
     fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
-    expect(screen.getByText('Chiave Riserva 2')).toBeTruthy();
+    expect(screen.getByText('Riserva 2')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: /Gemini Primary/i }));
     fireEvent.click(screen.getByRole('option', { name: /Gemini Alternate/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Annulla' }));
     fireEvent.click(screen.getByRole('button', { name: 'Riapri' }));
 
-    expect(screen.queryByText('Chiave Riserva 2')).toBeNull();
+    expect(screen.queryByText('Riserva 2')).toBeNull();
     expect(screen.queryByText('...CCCC')).toBeNull();
     expect(screen.getByRole('button', { name: /Gemini Primary/i })).toBeTruthy();
   });
@@ -947,7 +947,7 @@ describe('SettingsModal — version status display', () => {
     expect(within(notice).getByRole('button', { name: 'Installa aggiornamento' })).toBeTruthy();
     // The check button became the section's only install action, beside the release notes
     expect(within(section).getAllByRole('button')).toHaveLength(1);
-    expect(within(section).getByRole('link', { name: 'Note di rilascio ↗' })).toBeTruthy();
+    expect(within(section).getByRole('link', { name: 'Note di rilascio' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Mostra aggiornamento' })).toBeNull();
 
     const scrollIntoView = vi.fn();
@@ -1257,14 +1257,15 @@ describe('SettingsModal on the web host', () => {
 
     // Same key section as the desktop: rows with a menu and the add field, not a free text box.
     expect(screen.queryByLabelText('Chiavi API Gemini, una per riga')).toBeNull();
-    expect(screen.getByText('Chiave Principale')).toBeTruthy();
+    expect(screen.getByText('Principale')).toBeTruthy();
     expect(screen.getByText('...0123')).toBeTruthy();
-    expect(screen.getByText('Chiave Riserva 1')).toBeTruthy();
+    expect(screen.getByText('Riserva 1')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Opzioni chiave principale' })).toBeTruthy();
     expect(screen.getByLabelText('Nuova chiave di riserva')).toBeTruthy();
     expect(screen.queryByText('Protetta')).toBeNull();
     expect(screen.getByTestId('shared-device-warning').textContent).toContain('solo in questo browser');
-    expect(screen.getByRole('button', { name: 'Rimuovi tutte le chiavi' })).toBeTruthy();
+    // The one-go removal sits in the shared-device notice that explains it, not in the section header.
+    expect(within(screen.getByTestId('shared-device-warning')).getByRole('button', { name: 'Rimuovi tutte le chiavi' })).toBeTruthy();
     expect(screen.queryByText('Notifiche di sistema')).toBeNull();
     expect(screen.queryByText('Versione e aggiornamenti')).toBeNull();
     // No updater on the web: the version is shown, updates arrive with the next load.
@@ -1325,14 +1326,14 @@ describe('SettingsModal on the web host', () => {
 
     expect(await screen.findByText('Esaurita oggi')).toBeTruthy();
     expect(screen.getByText('Attiva')).toBeTruthy();
-    expect(screen.getByTestId('api-key-availability').textContent).toContain('1 di 2 chiavi disponibili oggi');
-    expect(screen.getByText('Reset quote: ore 09:00 (ora italiana / 00:00 PT)')).toBeTruthy();
+    expect(screen.getByTestId('api-key-availability').textContent).toContain('1 di 2 disponibili oggi · si ricaricano alle 09:00');
+    expect(screen.getByTestId('api-key-availability').getAttribute('title')).toContain('Reset quote: ore 09:00 (ora italiana / 00:00 PT)');
     expect(screen.getByRole('table', { name: 'Disponibilità delle chiavi per modello' })).toBeTruthy();
     expect(screen.getByRole('cell', { name: 'Chiave Principale: non disponibile per Gemini 2.5 Flash' })).toBeTruthy();
     expect(screen.getByRole('cell', { name: 'Chiave Principale: disponibile per Gemini 3.6 Flash' })).toBeTruthy();
   });
 
-  it('removes all the keys from the browser right away', async () => {
+  it('removes all the keys from the browser right away, after asking', async () => {
     const saveSettings = vi.fn().mockResolvedValue({ ok: true });
     const setApiKey = vi.fn();
     const setFallbackKeys = vi.fn();
@@ -1340,8 +1341,16 @@ describe('SettingsModal on the web host', () => {
     setPywebview({ save_settings: saveSettings });
     render(<SettingsModal {...makeProps({ apiKey: 'AIzaSyPrimary1234567890123', setApiKey, setFallbackKeys, onSettingsSaved, preferredModel: 'gemini-3.6-flash' })} />);
 
+    // The trash only asks: "Annulla" keeps the key.
+    fireEvent.click(screen.getByRole('button', { name: 'Rimuovi la chiave' }));
+    expect(screen.getByRole('group', { name: 'Rimuovi la chiave' }).textContent).toContain('Rimuovere la chiave da questo browser?');
+    fireEvent.click(within(screen.getByRole('group', { name: 'Rimuovi la chiave' })).getByRole('button', { name: 'Annulla' }));
+    expect(saveSettings).not.toHaveBeenCalled();
+    expect(screen.queryByRole('group', { name: 'Rimuovi la chiave' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rimuovi la chiave' }));
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Rimuovi la chiave' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Rimuovi' }));
     });
 
     expect(saveSettings).toHaveBeenCalledWith('', [], 'gemini-3.6-flash');

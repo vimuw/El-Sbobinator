@@ -1,4 +1,5 @@
 import React from 'react';
+import { Bell } from 'lucide-react';
 import { SettingsSectionHeading } from './SettingsLayout';
 
 interface NotificationSectionProps {
@@ -15,8 +16,8 @@ export const NotificationSection: React.FC<NotificationSectionProps> = React.mem
 
   return (
     <div className="flex items-center justify-between gap-4">
-      <div className="space-y-1 min-w-0">
-        <SettingsSectionHeading>Notifiche di sistema</SettingsSectionHeading>
+      <div className="space-y-2 min-w-0">
+        <SettingsSectionHeading icon={Bell}>Notifiche di sistema</SettingsSectionHeading>
         <p className="text-xs text-[var(--text-secondary)]">
           Avvisami al completamento dell&apos;elaborazione di ciascuna sbobina.
         </p>

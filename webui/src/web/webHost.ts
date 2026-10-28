@@ -1,5 +1,5 @@
 import type { FileDescriptor } from '../appState';
-import type { PywebviewApi, ValidationResult } from '../bridge';
+import type { PywebviewApi, StorageUsagePart, ValidationResult } from '../bridge';
 import { APP_VERSION, WEB_PREVIEW_BUILD } from '../branding';
 import { type HostCapabilities, setHostCapabilities } from '../hostCapabilities';
 import { STORAGE_KEYS } from '../storageKeys';
@@ -89,14 +89,18 @@ function audioSupport(): string {
 // is counted from what this app stored; the browser's figure stays as a secondary reading. Texts and
 // lecture audio are the backup's figures; queue copies and run progress are named apart, since the
 // backup leaves them out.
+function usageBreakdown(usage: WebStorageUsage): StorageUsagePart[] {
+  return [
+    { label: 'Testi delle sbobine', bytes: usage.documents },
+    { label: 'Audio delle sbobine', bytes: usage.audio },
+    ...(usage.queueAudio > 0 ? [{ label: 'Audio in coda', bytes: usage.queueAudio }] : []),
+    { label: 'Avanzamento elaborazioni', bytes: usage.checkpoints },
+  ];
+}
+
 function describeUsage(usage: WebStorageUsage | null, browserEstimate: number | undefined): string {
   const parts = usage
-    ? [
-        `testi delle sbobine ${formatSize(usage.documents)}`,
-        `audio delle sbobine ${formatSize(usage.audio)}`,
-        ...(usage.queueAudio > 0 ? [`audio in coda ${formatSize(usage.queueAudio)}`] : []),
-        `avanzamento elaborazioni ${formatSize(usage.checkpoints)}`,
-      ]
+    ? usageBreakdown(usage).map(part => `${part.label.toLowerCase()} ${formatSize(part.bytes)}`)
     : ['spazio delle sbobine non calcolabile'];
   if (browserEstimate !== undefined) parts.push(`stima del browser ${formatSize(browserEstimate)}`);
   const text = parts.join(' · ');
@@ -247,7 +251,7 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
       measureWebStorage(database).catch(() => null),
       storage?.estimate?.().catch(() => undefined),
     ]);
-    return { usage, detail: describeUsage(usage, estimate?.usage) };
+    return { usage, estimate: estimate?.usage, detail: describeUsage(usage, estimate?.usage) };
   };
   let mediaUrl: string | null = null;
   const revokeMediaUrl = () => {
@@ -680,6 +684,8 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
         total_bytes: space.usage?.total ?? 0,
         total_sessions: sessions.length,
         usage_detail: space.detail,
+        ...(space.usage ? { usage_breakdown: usageBreakdown(space.usage) } : {}),
+        ...(space.estimate !== undefined ? { browser_estimate_bytes: space.estimate } : {}),
         persisted: Boolean(persisted),
         session_root: persisted
           ? 'Memoria di questo browser (protetta dalla pulizia automatica)'

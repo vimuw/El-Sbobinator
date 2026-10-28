@@ -55,13 +55,16 @@ describe('WebTrashSection', () => {
     await archive.trash(second.session_dir, new Date().toISOString());
     render(<WebTrashSection />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Svuota cestino' }));
-    expect(screen.getByRole('group', { name: 'Svuota cestino' }).textContent).toContain('Le 2 sbobine nel cestino verranno eliminate per sempre');
+    const empty = await screen.findByRole('button', { name: 'Svuota cestino' });
+    // On the description's line, like "Elimina i dati da Drive", not alone under the list.
+    expect(empty.previousElementSibling?.textContent).toContain('restano qui 30 giorni');
+    fireEvent.click(empty);
+    expect(screen.getByRole('group', { name: 'Svuota cestino' }).textContent).toBe('Svuotare il cestino?Le 2 sbobine nel cestino verranno eliminate subito, insieme al loro audio. Non potrai più recuperarle.AnnullaElimina');
     fireEvent.click(screen.getByRole('button', { name: 'Annulla' }));
     expect(await archive.listTrash()).toHaveLength(2);
 
     fireEvent.click(screen.getByRole('button', { name: 'Svuota cestino' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Elimina per sempre' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Elimina' }));
     await waitFor(() => expect(screen.getByText('Il cestino è vuoto.')).toBeTruthy());
     expect(await archive.get(first.session_dir)).toBeNull();
   });

@@ -16,7 +16,7 @@ import {
   Loader2,
   Trash2,
   RefreshCw,
-  Clock,
+  KeyRound,
 } from 'lucide-react';
 import { ConfirmActionModal } from '../ConfirmActionModal';
 import { QuotasSection } from './QuotasSection';
@@ -44,8 +44,6 @@ export interface ApiKeySectionProps {
   preferredModel?: string;
   onAskDeleteKey?: (target: DeleteKeyTarget) => void;
   statusSummary?: React.ReactNode;
-  /** Extra actions beside "Verifica connessione" (the web build's "Rimuovi tutte le chiavi"). */
-  headerActions?: React.ReactNode;
 }
 
 export interface DeleteKeyTarget {
@@ -71,7 +69,6 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
   preferredModel,
   onAskDeleteKey,
   statusSummary,
-  headerActions,
 }) => {
   const storageWarning = credentialStorageWarning(credentialStorage, credentialStorage ? apiKeyInsecure : false) || (apiKeyInsecure ? (apiKeyInsecureReason || 'Credenziali presenti in chiaro nel file di configurazione.') : '');
   const [newKeyInput, setNewKeyInput] = useState('');
@@ -438,29 +435,27 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
     );
   };
 
+  // Two quiet lines above the list: today's availability, then how the rotation reads.
   const renderAvailabilitySummary = () => {
-    if (totalKeysCount === 0 || isLoadingUsage) return null;
+    if (totalKeysCount === 0) return null;
     const usableCount = usableIds.length;
     const noneUsable = hasTelemetry && usableCount === 0;
+    // The model is picked in its own section; the full reset wording stays in the tooltip.
+    const resetTime = resetInfo.match(/\b\d{1,2}:\d{2}\b/)?.[0];
     return (
-      <div
-        className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs ${
-          noneUsable ? 'text-[var(--warning-text)]' : 'text-[var(--text-secondary)]'
-        }`}
-        data-testid="api-key-availability"
-      >
-        <span>
-          <span className="font-semibold text-[var(--text-primary)]">{preferredModelName}</span>
-          {hasTelemetry
-            ? `: ${usableCount} di ${totalKeysCount} ${totalKeysCount === 1 ? 'chiave disponibile' : 'chiavi disponibili'} oggi`
-            : ': stato non ancora verificato'}
-        </span>
-        {hasTelemetry && (
-          <span className="inline-flex items-center gap-1 text-[var(--text-secondary)]">
-            <Clock className="w-3.5 h-3.5 shrink-0" />
-            {resetInfo}
-          </span>
+      <div className="text-xs text-[var(--text-secondary)] leading-relaxed">
+        {!isLoadingUsage && (
+          <p
+            className={noneUsable ? 'text-[var(--warning-text)]' : undefined}
+            title={hasTelemetry ? `${preferredModelName}. ${resetInfo}` : preferredModelName}
+            data-testid="api-key-availability"
+          >
+            {hasTelemetry
+              ? `${usableCount} di ${totalKeysCount} ${totalKeysCount === 1 ? 'disponibile' : 'disponibili'} oggi${resetTime ? ` · si ricaricano alle ${resetTime}` : ''}`
+              : 'Stato non ancora verificato'}
+          </p>
         )}
+        <p>Le chiavi di riserva subentrano in ordine quando la principale esaurisce la quota giornaliera.</p>
       </div>
     );
   };
@@ -497,26 +492,25 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
 
   return (
     <div className="space-y-3">
-      {/* 1. Header with count & global actions */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <SettingsSectionHeading>Chiavi API</SettingsSectionHeading>
+      {/* 1. Header: title and a quiet icon-only refresh, with the summary tucked right under it */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <SettingsSectionHeading icon={KeyRound}>Chiavi API</SettingsSectionHeading>
 
-        <div className="flex flex-wrap items-center gap-1.5">
-          {headerActions}
+          {/* Negative margin: the button must not make the title row taller than the title. */}
           {onRefreshUsage && (
             <button type="button" onClick={onRefreshUsage} disabled={isLoadingUsage}
-              className="app-button-secondary is-settings-action min-w-[166px]"
+              className="icon-button compact-icon-button -my-2.5"
               title={isLoadingUsage ? 'Verifica in corso…' : 'Verifica connessione'} aria-label="Verifica connessione">
               <RefreshCw className={`w-4 h-4 ${isLoadingUsage ? 'animate-spin' : ''}`} />
-              <span>{isLoadingUsage ? 'Verifica in corso…' : 'Verifica connessione'}</span>
             </button>
           )}
         </div>
+
+        {renderAvailabilitySummary()}
       </div>
 
       {statusSummary}
-
-      {renderAvailabilitySummary()}
 
       {/* Storage / Security notice */}
       {storageWarning && (
@@ -538,7 +532,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
           <div className="py-2 px-3.5 flex items-center justify-between gap-2.5 text-xs">
             <div className="min-w-0">
               <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                <span className="font-bold text-[var(--text-primary)]">Chiave Principale</span>
+                <span className="font-bold text-[var(--text-primary)]">Principale</span>
 
                 <span
                   className="font-mono text-[11px] text-[var(--text-secondary)] select-all"
@@ -627,7 +621,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
             >
               <div className="min-w-0">
                 <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                  <span className="font-bold text-[var(--text-primary)]">{label}</span>
+                  <span className="font-bold text-[var(--text-primary)]">{`Riserva ${idx + 1}`}</span>
 
                   <span
                     className="font-mono text-[11px] text-[var(--text-secondary)] select-all"
@@ -730,9 +724,8 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
         </div>
       )}
 
-      {/* 5. Quiet Footer Caption with AI Studio link */}
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-secondary)] leading-relaxed">
-        <span>Le chiavi di riserva subentrano in ordine quando la principale esaurisce la quota giornaliera.</span>
+      {/* 5. AI Studio link beside the field it helps fill; the rotation note sits above the list */}
+      <div className="text-xs leading-relaxed">
         <a
           href="https://aistudio.google.com/apikey"
           target="_blank"

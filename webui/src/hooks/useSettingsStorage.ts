@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { StorageUsagePart } from '../bridge';
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -10,16 +11,21 @@ export interface SessionStorageInfo {
   session_root: string;
   /** Host's breakdown of the space, shown under the total (web: audio, texts, browser estimate). */
   usage_detail?: string;
+  /** Web: the same space, part by part, and the browser's own (often lower) estimate. */
+  usage_breakdown?: StorageUsagePart[];
+  browser_estimate_bytes?: number;
   /** Web: whether the browser promised to keep the data (navigator.storage.persisted()). */
   persisted?: boolean;
 }
 
-function toSessionInfo(res: { total_bytes?: number; total_sessions?: number; session_root?: string; usage_detail?: string; persisted?: boolean }): SessionStorageInfo {
+function toSessionInfo(res: Omit<SessionStorageInfo, 'total_bytes' | 'total_sessions' | 'session_root'> & { total_bytes?: number; total_sessions?: number; session_root?: string }): SessionStorageInfo {
   return {
     total_bytes: res.total_bytes ?? 0,
     total_sessions: res.total_sessions ?? 0,
     session_root: res.session_root ?? '',
     ...(res.usage_detail ? { usage_detail: res.usage_detail } : {}),
+    ...(res.usage_breakdown?.length ? { usage_breakdown: res.usage_breakdown } : {}),
+    ...(typeof res.browser_estimate_bytes === 'number' ? { browser_estimate_bytes: res.browser_estimate_bytes } : {}),
     ...(typeof res.persisted === 'boolean' ? { persisted: res.persisted } : {}),
   };
 }
