@@ -127,13 +127,14 @@ Se qualcosa non funziona come previsto, puoi segnalarlo tramite il modulo qui so
 ## Privacy e Architettura dei Dati
 
 - **Client Desktop Locale**: L'applicazione viene eseguita sul computer dell'utente e conserva file e bozze localmente. I contenuti necessari all'elaborazione AI vengono trasmessi direttamente e in forma cifrata agli endpoint ufficiali di Google Gemini (`generativelanguage.googleapis.com`) tramite la credenziale dell'utente. File audio, trascrizioni e API key non vengono inviati a infrastrutture gestite dallo sviluppatore.
-- **Dati inviati a Google**: Il trattamento di audio e testi trasmessi a Gemini dipende dal piano e dalle policy Google. Consulta i [Termini Aggiuntivi Gemini API](https://ai.google.dev/gemini-api/terms).
+- **Dati inviati a Google**: Il trattamento di audio e testi trasmessi a Gemini dipende dai termini Google. Nello Spazio Economico Europeo (Italia compresa), in Svizzera e nel Regno Unito Google applica anche alle chiavi gratuite le regole del livello a pagamento: non usa i contenuti per migliorare i suoi prodotti. Consulta i [Termini Aggiuntivi Gemini API](https://ai.google.dev/gemini-api/terms).
+- **Segnalazioni**: Allo sviluppatore arriva solo quello che scrivi nel modulo "Segnala un problema" o per email.
 
 ---
 
 ## Note Legali e Responsabilità d'Uso
 
-El Sbobinator è pensato per l'utilizzo personale a fini di studio. L'utente è responsabile del rispetto della normativa applicabile, dei regolamenti del proprio ateneo e della tutela dei dati personali.
+El Sbobinator è pensato per l'utilizzo personale a fini di studio da parte di utenti maggiorenni, come richiesto dai termini dell'API Gemini. L'utente è responsabile del rispetto della normativa applicabile, dei regolamenti del proprio ateneo e della tutela dei dati personali.
 
 Per i termini completi, le condizioni vincolanti e l'esclusione di responsabilità, consultare il documento [**DISCLAIMER.md**](DISCLAIMER.md).
 
