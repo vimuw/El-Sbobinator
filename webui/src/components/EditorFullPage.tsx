@@ -1,6 +1,6 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Check, Copy, FileText, Headphones, Loader2, Moon, Plus, Sun } from 'lucide-react';
+import { ArrowLeft, Check, Copy, FileText, Headphones, Loader2, Moon, Plus, Sun, TriangleAlert, X } from 'lucide-react';
 import type { Heading } from './RichTextEditor';
 import { prepareHtmlForClipboardSync } from '../utils';
 import { createNativeClipboardFormats, writeEditorClipboard } from '../editorClipboard';
@@ -121,6 +121,8 @@ export function EditorFullPage({
   const themeMode = propThemeMode ?? fallbackTheme.themeMode;
   const setThemeMode = propSetThemeMode ?? fallbackTheme.setThemeMode;
   const [isTocOpen, setIsTocOpen] = useState(false);
+  // The audio warning is closed per message: a new warning (another relink) shows again.
+  const [dismissedAudioWarning, setDismissedAudioWarning] = useState('');
   const [headings, setHeadings] = useState<Heading[]>([]);
   const [isCopied, setIsCopied] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
@@ -362,6 +364,27 @@ export function EditorFullPage({
             </p>
           )}
 
+          {/* Under the header like the notice above, so the player row never carries text over its controls. */}
+          {showAudioDock && audioProp?.warning && audioProp.warning !== dismissedAudioWarning && (
+            <div
+              role="status"
+              data-testid="editor-audio-warning"
+              className="editor-audio-warning"
+            >
+              <TriangleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <p className="min-w-0 flex-1">{audioProp.warning}</p>
+              <button
+                type="button"
+                className="editor-audio-warning-close"
+                aria-label="Chiudi avviso audio"
+                title="Chiudi avviso"
+                onClick={() => setDismissedAudioWarning(audioProp.warning ?? '')}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+
           <div className="editor-fullpage-body">
             {/* The fallback fills the body so the footer player stays at the bottom while the editor chunk loads. */}
             <Suspense fallback={<div className="editor-fullpage-loading flex-1 min-h-0 p-6 text-sm" style={{ color: 'var(--text-muted)' }}>Caricamento editor...</div>}>
@@ -389,9 +412,6 @@ export function EditorFullPage({
             {showAudioDock && (
             <div ref={footerRef} className="editor-fullpage-footer">
               <div className="editor-player-dock">
-                {audioProp?.warning && (
-                  <p role="status" className="pt-2 text-xs" style={{ color: 'var(--text-secondary)' }}>{audioProp.warning}</p>
-                )}
                 {audioLoading ? (
                   <div role="status" className="flex items-center gap-2 py-3.5 text-sm" style={{ color: 'var(--text-muted)' }}>
                     <Loader2 className="w-4 h-4 animate-spin" />

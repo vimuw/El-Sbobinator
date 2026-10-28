@@ -67,13 +67,18 @@ it('shows preparation instead of offering to add or relink audio during conversi
   expect(screen.queryByRole('button', { name: /Aggiungi audio|Ricollega audio/ })).toBeNull();
 });
 
-it('keeps an original-file dependency warning visible above the player', async () => {
-  render(<EditorFullPage {...baseProps} audio={{
+it('shows an original-file dependency warning under the header, outside the player, until closed', async () => {
+  const { container } = render(<EditorFullPage {...baseProps} audio={{
     src: '/original.wav', relinkNeeded: false, warning: 'Conserva il file originale.',
     onRelink: vi.fn(), init: {}, onStateChange: vi.fn(),
   }} />);
   expect(await screen.findByTestId('audio-player')).toBeTruthy();
-  expect(screen.getByText('Conserva il file originale.')).toBeTruthy();
+  const warning = screen.getByTestId('editor-audio-warning');
+  expect(warning.textContent).toContain('Conserva il file originale.');
+  expect(container.querySelector('.editor-fullpage-footer')!.contains(warning)).toBe(false);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Chiudi avviso audio' }));
+  expect(screen.queryByText('Conserva il file originale.')).toBeNull();
 });
 
 function setPywebview(api: Record<string, unknown> | undefined) {

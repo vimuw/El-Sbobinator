@@ -4836,6 +4836,41 @@ input::-webkit-contacts-auto-fill-button {
   background: transparent;
 }
 
+/* Audio warning: a line under the header, like the changed-elsewhere notice, closable. */
+.editor-audio-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+.editor-audio-warning > svg {
+  color: var(--warning-text);
+}
+
+.editor-audio-warning-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.editor-audio-warning-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
 .editor-fullpage-body {
   position: relative;
   flex: 1;
