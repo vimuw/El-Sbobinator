@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useLayoutEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   BellOff,
@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { NotificationItem } from './notifications/NotificationItem';
 import { DURATION, enterTransition, popoverItemVariants, popoverVariants } from '../motion';
+import { PopoverCaret, caretCenterFromBottom } from './sidebarParts';
 
 export interface NotificationAction {
   label: string;
@@ -50,9 +51,10 @@ export interface NotificationDropdownProps {
   showCaret?: boolean;
 }
 
-// The caret sits 48px above the panel's bottom and is 18px tall; the open animation scales from its tip.
-const CARET_BOTTOM = 48;
-const CARET_CENTER_FROM_BOTTOM = CARET_BOTTOM + 9;
+// The caret points at the sidebar bell (data-sidebar-anchor="notifications"), measured on open since
+// the buttons below it vary by build; the open animation scales from its tip.
+const CARET_FALLBACK_CENTER = 57;
+const CARET_ANCHOR = '[data-sidebar-anchor="notifications"]';
 
 // The content lands in three beats after the frame: header, filters, then rows.
 const HEADER_VARIANTS = popoverItemVariants({ y: -4, blur: 4 });
@@ -95,6 +97,15 @@ export function NotificationDropdown({
       : 'clamp(320px, 52vh, min(480px, calc(var(--app-height) - 88px)))';
 
   const hasCaret = showCaret && align === 'left' && valign === 'bottom';
+  const [caretCenter, setCaretCenter] = useState(CARET_FALLBACK_CENTER);
+
+  useLayoutEffect(() => {
+    if (!isOpen || !hasCaret) return;
+    const measure = () => setCaretCenter(caretCenterFromBottom(document.querySelector(CARET_ANCHOR), bottomOffset, CARET_FALLBACK_CENTER));
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [isOpen, hasCaret, bottomOffset]);
 
   return (
     <>
@@ -132,7 +143,7 @@ export function NotificationDropdown({
         }`}
         style={{
           transformOrigin: hasCaret
-            ? `left calc(100% - ${CARET_CENTER_FROM_BOTTOM}px)`
+            ? `left calc(100% - ${caretCenter}px)`
             : `${valign === 'bottom' ? 'bottom' : 'top'} ${align === 'left' ? 'left' : 'right'}`,
           // A phone is narrower than the panel: it fills the room beside the sidebar instead.
           width: `min(380px, calc(100vw - ${(align === 'left' ? leftOffset : 72) + 8}px))`,
@@ -145,35 +156,7 @@ export function NotificationDropdown({
         }}
       >
         {/* Left pointer triangle pointing towards the sidebar trigger */}
-        {hasCaret && (
-          <motion.div
-            variants={CARET_VARIANTS}
-            className="absolute -left-[8px] pointer-events-none z-30 flex items-center"
-            style={{ bottom: CARET_BOTTOM, transformOrigin: 'right center' }}
-            aria-hidden="true"
-          >
-            <svg
-              width="12"
-              height="18"
-              viewBox="0 0 12 18"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              {/* Extend the opaque fill into the neutral frame to cover its border. */}
-              <polygon
-                points="12,0.5 8.5,0.5 0.5,9 8.5,17.5 12,17.5"
-                fill="var(--bg-elevated)"
-              />
-              <path
-                d="M 8.5 0.5 L 0.5 9 L 8.5 17.5"
-                stroke="var(--border-subtle)"
-                strokeWidth="1"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </motion.div>
-        )}
+        {hasCaret && <PopoverCaret centerFromBottom={caretCenter} variants={CARET_VARIANTS} />}
 
         {/* Inner bordered panel matching design system .notification-dropdown-panel */}
         <div

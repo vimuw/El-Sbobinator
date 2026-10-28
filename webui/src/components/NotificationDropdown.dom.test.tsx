@@ -385,4 +385,21 @@ describe('NotificationDropdown component', () => {
     expect(panel.style.width).toContain('16px');
     expect(panel.style.bottom).toBe('64px');
   });
+
+  it('points the caret at the sidebar bell wherever the buttons below it put it', () => {
+    // The buttons below the bell vary by build (the Drive account sits at the foot).
+    const bell = document.createElement('button');
+    bell.setAttribute('data-sidebar-anchor', 'notifications');
+    bell.getBoundingClientRect = () => ({ top: window.innerHeight - 140, height: 36, bottom: window.innerHeight - 104, left: 9, right: 45, width: 36, x: 9, y: 0, toJSON: () => ({}) });
+    document.body.appendChild(bell);
+    try {
+      render(
+        <NotificationDropdown isOpen onClose={vi.fn()} notifications={mockNotifications} onMarkAsRead={vi.fn()} onMarkAllAsRead={vi.fn()} onDelete={vi.fn()} align="left" valign="bottom" bottomOffset={16} />
+      );
+      // Bell middle 122px above the viewport bottom, panel bottom at 16px: tip 106px up, caret 18px tall.
+      expect(screen.getByTestId('popover-caret').style.bottom).toBe('97px');
+    } finally {
+      bell.remove();
+    }
+  });
 });

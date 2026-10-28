@@ -1,9 +1,11 @@
-import { memo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { memo, type Dispatch, type ReactNode, type SetStateAction } from 'react';
+import { motion } from 'motion/react';
 import { Archive, Bell, Layers, Moon, Settings, Sun, Terminal } from 'lucide-react';
 import type { AppStatus } from '../appState';
 import { STORAGE_KEYS } from '../storageKeys';
 import { BrandLogo } from './BrandLogo';
+import { SidebarAccount } from './SidebarAccount';
+import { SidebarBadge, SidebarTooltip } from './sidebarParts';
 export type ActivePage = 'queue' | 'archive';
 
 const SIDEBAR_COLLAPSED_W = 54;
@@ -28,6 +30,8 @@ interface NavSidebarProps {
   setIsNotificationsOpen: Dispatch<SetStateAction<boolean>>;
   shakeBell: boolean;
   completionFlash?: boolean;
+  /** Web builds with Drive sync: "Gestisci in Impostazioni" of the account menu. */
+  onOpenStorageSettings?: () => void;
 }
 
 const bellVariants = {
@@ -51,6 +55,7 @@ export const NavSidebar = memo(function NavSidebar({
   setIsNotificationsOpen,
   shakeBell,
   completionFlash = false,
+  onOpenStorageSettings,
 }: NavSidebarProps) {
   const apiStatusColor = !apiReady
     ? (bridgeDelayed ? 'var(--error-text)' : 'var(--warning-text)')
@@ -155,6 +160,7 @@ export const NavSidebar = memo(function NavSidebar({
           }
           label={unreadNotificationsCount > 0 ? `Notifiche (${unreadNotificationsCount})` : 'Notifiche'}
           ariaLabel="Apri notifiche"
+          anchorId="notifications"
           active={isNotificationsOpen}
           onClick={() => setIsNotificationsOpen(prev => !prev)}
         />
@@ -171,61 +177,12 @@ export const NavSidebar = memo(function NavSidebar({
           onClick={() => setIsSettingsOpen(true)}
           placement="top"
         />
+        {/* Who you are, apart from the tools: at the foot like an account avatar. */}
+        <SidebarAccount onOpenStorageSettings={onOpenStorageSettings ?? (() => setIsSettingsOpen(true))} />
       </div>
     </nav>
   );
 });
-
-// A status dot on a sidebar icon. Its halo runs on the banner's beat (--processing-beat),
-// so a live run never shows dots pulsing at different speeds.
-function SidebarBadge({ tone }: { tone: 'processing' | 'alert' | 'accent' }) {
-  return (
-    <span className={`sidebar-badge tone-${tone}`} aria-hidden="true" data-testid={`sidebar-badge-${tone}`}>
-      <span className="sidebar-badge-halo" />
-      <span className="sidebar-badge-dot" />
-    </span>
-  );
-}
-
-function SidebarTooltip({
-  label,
-  children,
-  disabled,
-  placement = 'right',
-}: {
-  label: string;
-  children: ReactNode;
-  disabled?: boolean;
-  placement?: 'right' | 'top';
-}) {
-  const [visible, setVisible] = useState(false);
-  return (
-    <span
-      className="sidebar-tooltip-anchor"
-      onMouseEnter={() => {
-        if (!disabled) setVisible(true);
-      }}
-      onMouseLeave={() => setVisible(false)}
-      onClick={() => setVisible(false)}
-      style={{ position: 'relative', display: 'block' }}
-    >
-      {children}
-      <AnimatePresence>
-        {visible && !disabled && (
-          <motion.span
-            className={`sidebar-tooltip ${placement === 'top' ? 'placement-top' : ''}`.trim()}
-            initial={{ opacity: 0, x: -4 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -4 }}
-            transition={{ duration: 0.12 }}
-          >
-            {label}
-          </motion.span>
-        )}
-      </AnimatePresence>
-    </span>
-  );
-}
 
 function NavItem({
   icon, label, active, onClick, isProcessing, ariaLabel,
@@ -261,7 +218,7 @@ function NavItem({
 }
 
 function UtilityButton({
-  icon, label, ariaLabel, active, onClick, disabled, placement = 'right',
+  icon, label, ariaLabel, active, onClick, disabled, placement = 'right', anchorId,
 }: {
   icon: ReactNode;
   label: string;
@@ -270,10 +227,13 @@ function UtilityButton({
   onClick: () => void;
   disabled?: boolean;
   placement?: 'right' | 'top';
+  /** Lets the panel this button opens point its caret at it. */
+  anchorId?: string;
 }) {
   return (
     <SidebarTooltip label={disabled ? 'Console non disponibile' : label} disabled={active} placement={placement}>
       <button
+        data-sidebar-anchor={anchorId}
         onClick={onClick}
         aria-label={ariaLabel || label}
         disabled={disabled}

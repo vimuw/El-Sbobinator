@@ -539,6 +539,11 @@ export default function App() {
     setIsSettingsOpen(true);
   }, [setIsSettingsOpen]);
 
+  const handleOpenDriveSettings = useCallback(() => {
+    setSettingsInitialTab('drive');
+    setIsSettingsOpen(true);
+  }, [setIsSettingsOpen]);
+
   const handleRemoveDoneFile = useCallback((id: string) => {
     const f = filesRef.current.find(item => item.id === id);
     if (!f) return;
@@ -563,6 +568,7 @@ export default function App() {
         showConsole={showConsole}
         setShowConsole={setShowConsole}
         setIsSettingsOpen={setIsSettingsOpen}
+        onOpenStorageSettings={handleOpenDriveSettings}
         hasPendingUpdate={updateAvailable !== null}
         consoleDisabled={isConsoleDisabled}
         unreadNotificationsCount={unreadNotificationsCount}

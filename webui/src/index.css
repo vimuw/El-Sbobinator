@@ -3888,6 +3888,91 @@ input::-webkit-contacts-auto-fill-button {
 .sidebar-badge.tone-processing { --badge-color: var(--processing-dot); }
 .sidebar-badge.tone-alert { --badge-color: var(--error-bg); }
 .sidebar-badge.tone-accent { --badge-color: var(--accent-text); }
+.sidebar-badge.tone-success { --badge-color: var(--success-text); }
+.sidebar-badge.tone-warning { --badge-color: var(--warning-text); }
+.sidebar-badge.tone-neutral { --badge-color: var(--text-muted); }
+
+/* Only the live states pulse: a linked account at rest or waiting for a tap stays still. */
+.sidebar-badge.tone-success .sidebar-badge-halo,
+.sidebar-badge.tone-warning .sidebar-badge-halo,
+.sidebar-badge.tone-neutral .sidebar-badge-halo {
+  animation: none;
+}
+
+/* On the round avatar the state dot sits on the rim at the bottom right, as on account pictures. */
+.sidebar-account-avatar .sidebar-badge {
+  top: auto;
+  bottom: -1px;
+  right: -1px;
+  width: 8px;
+  height: 8px;
+}
+
+/* Not linked: a soft solid disc with the figure, the same size as the linked initial. */
+.sidebar-account-empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-muted) 28%, transparent);
+  color: var(--text-secondary);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.group\/util:hover .sidebar-account-empty {
+  color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-muted) 45%, transparent);
+}
+
+/* The Google account at the foot of the sidebar, set apart from the tools above it. */
+.sidebar-account-divider {
+  display: block;
+  width: 20px;
+  height: 1px;
+  margin: 2px 0;
+  background: var(--border-subtle);
+}
+
+/* The account menu of the sidebar (SidebarAccount): framed like the notifications panel. */
+.sidebar-account-menu {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14);
+}
+
+.sidebar-account-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.sidebar-account-link:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.sidebar-account-link:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.sidebar-account-link:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+}
 
 .sidebar-badge-dot {
   position: relative;
@@ -5975,6 +6060,12 @@ input::-webkit-contacts-auto-fill-button {
 
   .app-sidebar .sidebar-tooltip {
     display: none;
+  }
+
+  .app-sidebar .sidebar-account-divider {
+    width: 1px;
+    height: 20px;
+    margin: 0 2px;
   }
 }
 
