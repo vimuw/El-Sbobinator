@@ -821,6 +821,7 @@ export default function App() {
         valign="bottom"
         bottomOffset={isPhone ? 64 : 16}
         showCaret={!isPhone}
+        fitContent={isPhone}
       />
     </div>
     </MotionConfig>

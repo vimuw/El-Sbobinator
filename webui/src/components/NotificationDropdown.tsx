@@ -49,6 +49,8 @@ export interface NotificationDropdownProps {
   bottomOffset?: number;
   /** The pointer towards the sidebar bell; off when the panel is not beside it. */
   showCaret?: boolean;
+  /** Phone: as tall as its rows, up to 60% of the screen, instead of a fixed half-screen frame. */
+  fitContent?: boolean;
 }
 
 // The caret points at the sidebar bell (data-sidebar-anchor="notifications"), measured on open since
@@ -80,6 +82,7 @@ export function NotificationDropdown({
   valign = 'top',
   bottomOffset = 16,
   showCaret = true,
+  fitContent = false,
 }: NotificationDropdownProps) {
   const [activeTab, setActiveTab] = useState<'all' | 'unread'>('all');
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -91,10 +94,9 @@ export function NotificationDropdown({
       return true;
     });
 
-  const dynamicHeightStyle =
-    valign === 'bottom'
-      ? `clamp(320px, 52vh, min(480px, calc(var(--app-height) - ${bottomOffset + 16}px)))`
-      : 'clamp(320px, 52vh, min(480px, calc(var(--app-height) - 88px)))';
+  // The room left above (or below) the panel; a desktop panel keeps a steady frame within it.
+  const roomStyle = `calc(var(--app-height) - ${valign === 'bottom' ? bottomOffset + 16 : 88}px)`;
+  const dynamicHeightStyle = fitContent ? undefined : `clamp(320px, 52vh, min(480px, ${roomStyle}))`;
 
   const hasCaret = showCaret && align === 'left' && valign === 'bottom';
   const [caretCenter, setCaretCenter] = useState(CARET_FALLBACK_CENTER);
@@ -148,7 +150,7 @@ export function NotificationDropdown({
           // A phone is narrower than the panel: it fills the room beside the sidebar instead.
           width: `min(380px, calc(100vw - ${(align === 'left' ? leftOffset : 72) + 8}px))`,
           height: dynamicHeightStyle,
-          maxHeight: `calc(var(--app-height) - ${valign === 'bottom' ? bottomOffset + 16 : 88}px)`,
+          maxHeight: fitContent ? `min(60vh, ${roomStyle})` : roomStyle,
           top: valign === 'bottom' ? undefined : 64,
           bottom: valign === 'bottom' ? bottomOffset : undefined,
           left: align === 'left' ? leftOffset : undefined,

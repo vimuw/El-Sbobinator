@@ -386,6 +386,27 @@ describe('NotificationDropdown component', () => {
     expect(panel.style.bottom).toBe('64px');
   });
 
+  it('on a phone grows with its rows up to 60% of the screen, instead of a fixed frame', () => {
+    const props = {
+      isOpen: true,
+      onClose: vi.fn(),
+      notifications: mockNotifications.slice(0, 1),
+      onMarkAsRead: vi.fn(),
+      onMarkAllAsRead: vi.fn(),
+      onDelete: vi.fn(),
+      align: 'left' as const,
+      valign: 'bottom' as const,
+    };
+    const { rerender } = render(<NotificationDropdown {...props} />);
+    const panel = screen.getByRole('dialog', { name: 'Notifiche' });
+    expect(panel.style.height.startsWith('clamp(320px, 52vh')).toBe(true);
+
+    rerender(<NotificationDropdown {...props} leftOffset={8} bottomOffset={64} showCaret={false} fitContent />);
+    expect(panel.style.height).toBe('');
+    expect(panel.style.maxHeight.startsWith('min(60vh, ')).toBe(true);
+    expect(panel.style.maxHeight).toContain('80px');
+  });
+
   it('points the caret at the sidebar bell wherever the buttons below it put it', () => {
     // The buttons below the bell vary by build (the Drive account sits at the foot).
     const bell = document.createElement('button');
