@@ -14,43 +14,63 @@ test('changing playback speed keeps the scrubber and controls in place', async (
   await completed.getByRole('heading').click();
 
   const footer = page.locator('.editor-fullpage-footer');
-  const menu = page.getByTitle('Velocità di riproduzione', { exact: true });
+  const panel = page.getByRole('dialog', { name: 'Velocità di riproduzione' });
+  const chip = page.locator('.player-speed-btn');
+  const slider = page.getByRole('slider', { name: 'Velocità di riproduzione' });
   const faster = page.getByRole('button', { name: 'Aumenta velocità di riproduzione' });
   const slower = page.getByRole('button', { name: 'Diminuisci velocità di riproduzione' });
-  const geometry = () => footer.evaluate(root => {
-    const selectors = ['.custom-scrubber', '.player-speed-wrap', '.player-speed-btn', '.custom-volume'];
-    return selectors.map(selector => {
-      const { x, y, width, height } = root.querySelector(selector)!.getBoundingClientRect();
-      return { x, y, width, height };
-    });
-  });
+  const preset = (label: string) => page.getByRole('group', { name: 'Velocità rapide' }).getByRole('button', { name: label, exact: true });
+  const geometry = (selectors: string[]) => footer.evaluate((root, selectors) => selectors.map(selector => {
+    const { x, y, width, height } = root.querySelector(selector)!.getBoundingClientRect();
+    return { x, y, width, height };
+  }), selectors);
 
-  for (const width of [1680, 1280, 480]) {
+  // Desktop: the value in the bar opens the panel above it; the bar keeps its geometry at every speed.
+  for (const width of [1680, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     for (const theme of ['light', 'dark']) {
       await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
-      await menu.click();
-      await page.getByRole('option', { name: '1x', exact: true }).click();
-      const baseline = await geometry();
+      const selectors = ['.custom-scrubber', '.player-speed-wrap', '.player-speed-btn', '.custom-volume'];
+      await chip.click();
+      await expect(panel).toBeVisible();
+      await preset('1x').click();
+      const baseline = await geometry(selectors);
+      const dock = (await page.locator('.editor-player-dock').boundingBox())!;
+      const box = (await panel.boundingBox())!;
+      expect(dock.y - (box.y + box.height)).toBeGreaterThanOrEqual(12);
 
-      for (const rate of [1.25, 1.5, 1.75, 2, 2.5, 3]) {
-        await faster.click();
-        await expect(menu).toHaveText(`${rate}x`);
-        expect(await geometry()).toEqual(baseline);
+      for (const [label, shown] of [['1,25x', '1,25x'], ['1,5x', '1,5x'], ['2x', '2x'], ['3x', '3x']]) {
+        await preset(label).click();
+        await expect(chip).toHaveText(shown);
+        expect(await geometry(selectors)).toEqual(baseline);
       }
       await expect(faster).toBeDisabled();
-
-      for (const rate of [2.5, 2, 1.75, 1.5, 1.25, 1]) {
-        await slower.click();
-        await expect(menu).toHaveText(`${rate}x`);
-        expect(await geometry()).toEqual(baseline);
-      }
+      await slower.click();
+      await expect(chip).toHaveText('2,95x');
+      await slider.fill('0.5');
+      await expect(chip).toHaveText('0,5x');
       await expect(slower).toBeDisabled();
-      await menu.click();
-      await page.getByRole('option', { name: '1.75x', exact: true }).click();
-      expect(await geometry()).toEqual(baseline);
+      await slider.fill('1.15');
+      await expect(chip).toHaveText('1,15x');
+      expect(await geometry(selectors)).toEqual(baseline);
       expect(await footer.evaluate(root => root.scrollWidth <= root.clientWidth)).toBe(true);
-      await footer.screenshot({ path: info.outputPath(`speed-stable-${width}-${theme}.png`) });
+      await page.screenshot({ path: info.outputPath(`speed-panel-${width}-${theme}.png`) });
+      await page.keyboard.press('Escape');
+      await expect(panel).toBeHidden();
     }
   }
+
+  // Phone: the speed lives in the ⋮ menu and opens the same panel there, with a way back.
+  await page.setViewportSize({ width: 480, height: 900 });
+  await page.getByRole('button', { name: 'Altri controlli audio' }).click();
+  await page.getByRole('button', { name: /^Velocità di riproduzione: / }).click();
+  const baseline = await geometry(['.custom-scrubber']);
+  await preset('2x').click();
+  await faster.click();
+  await expect(page.locator('.player-speed-value')).toHaveText('2,05x');
+  expect(await geometry(['.custom-scrubber'])).toEqual(baseline);
+  await page.getByRole('button', { name: 'Torna al menu audio' }).click();
+  await expect(page.getByRole('button', { name: 'Velocità di riproduzione: 2,05x' })).toBeVisible();
+  expect(await footer.evaluate(root => root.scrollWidth <= root.clientWidth)).toBe(true);
+  await page.screenshot({ path: info.outputPath('speed-phone-480.png') });
 });
