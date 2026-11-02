@@ -133,6 +133,31 @@ async function bytesOf(blob: Blob, start: number, end: number): Promise<DataView
   return new DataView(await blob.slice(start, end).arrayBuffer());
 }
 
+// A zip bomb (a few MB that inflate to GBs) would fill the tab's memory. Audio barely deflates and
+// text by a few times, so an entry that grows past both limits is not a backup.
+const MAX_INFLATE_RATIO = 100;
+const INFLATE_RATIO_FROM_BYTES = 16 * 1024 * 1024;
+
+/** A deflated entry, never larger than its declared size, which must itself be plausible. */
+async function inflate(data: Blob, size: number, name: string): Promise<Blob> {
+  const tooLarge = () => new ZipFormatError(`Voce ${name} troppo grande una volta decompressa: il file non è un backup valido.`);
+  if (size > INFLATE_RATIO_FROM_BYTES && size > data.size * MAX_INFLATE_RATIO) throw tooLarge();
+  const reader = data.stream().pipeThrough(new DecompressionStream('deflate-raw')).getReader();
+  const parts: Uint8Array<ArrayBuffer>[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > size) {
+      await reader.cancel().catch(() => undefined);
+      throw tooLarge();
+    }
+    parts.push(value as Uint8Array<ArrayBuffer>);
+  }
+  return new Blob(parts);
+}
+
 /** Entries of a ZIP file, by name. Throws ZipFormatError for a file that is not a readable ZIP. */
 export async function readZip(file: Blob): Promise<Map<string, ZipEntry>> {
   // The end record sits in the last 22 bytes plus an optional comment of up to 64 KB.
@@ -180,9 +205,7 @@ export async function readZip(file: Blob): Promise<Map<string, ZipEntry>> {
         const data = file.slice(start, start + compressedSize);
         if (data.size !== compressedSize) throw new ZipFormatError(`Voce ${name} incompleta nel file ZIP.`);
         if (method === 0) return data;
-        if (method === 8 && typeof DecompressionStream === 'function') {
-          return new Response(data.stream().pipeThrough(new DecompressionStream('deflate-raw'))).blob();
-        }
+        if (method === 8 && typeof DecompressionStream === 'function') return inflate(data, size, name);
         throw new ZipFormatError(`Voce ${name} compressa in un formato non supportato.`);
       },
     });
