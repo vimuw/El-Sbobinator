@@ -41,6 +41,17 @@ describe('web build page policy', () => {
     expect(headers).not.toMatch(/Cross-Origin-(Opener|Embedder)-Policy/);
   });
 
+  it('keeps browsers on HTTPS without binding the subdomains', () => {
+    const rules = webHeadersFile().split('\n');
+    expect(rules.slice(0, rules.indexOf('/assets/*'))).toContain('  Strict-Transport-Security: max-age=31536000');
+  });
+
+  it('drops the Access-Control-Allow-Origin: * that Cloudflare Pages adds by default', () => {
+    const rules = webHeadersFile().split('\n');
+    expect(rules.slice(0, rules.indexOf('/assets/*'))).toContain('  ! Access-Control-Allow-Origin');
+    expect(webHeadersFile([], true)).not.toMatch(/^\s*Access-Control-Allow-Origin:/m);
+  });
+
   it('caches hashed assets for a year and revalidates the page and the unhashed files', () => {
     const headers = webHeadersFile(['boot-theme.js', 'icon.png']);
     const rules = new Map<string, string[]>();

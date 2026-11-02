@@ -103,6 +103,12 @@ export function webHeadersFile(publicFiles: string[] = [], drive = false): strin
     '  X-Content-Type-Options: nosniff',
     '  Referrer-Policy: strict-origin-when-cross-origin',
     '  Permissions-Policy: camera=(), microphone=(), geolocation=()',
+    // HTTPS only from the second visit on, even on a network that rewrites http://. No
+    // includeSubDomains or preload: they bind every subdomain and are slow to undo.
+    '  Strict-Transport-Security: max-age=31536000',
+    // Cloudflare Pages adds "Access-Control-Allow-Origin: *" by default: no other site needs to
+    // read these files, so '!' drops it.
+    '  ! Access-Control-Allow-Origin',
     '/assets/*',
     '  Cache-Control: public, max-age=31536000, immutable',
     ...revalidated.flatMap(path => [path, '  Cache-Control: no-cache']),
