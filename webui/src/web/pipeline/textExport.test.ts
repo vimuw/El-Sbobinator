@@ -65,6 +65,12 @@ describe('Markdown export', () => {
     expect(html).toContain('testo');
   });
 
+  it('checks the link scheme the browser will follow, not the raw text', () => {
+    const html = markdownToHtmlBody('[tab](<java\tscript:alert(1)>) [ok](<ht\ttps://example.org>)');
+    expect(html).not.toContain('script:');
+    expect(html).toContain('<a href="ht\ttps://example.org">ok</a>');
+  });
+
   it('adds the revision warning after the title like build_final_markdown', () => {
     const body = buildBody('# Titolo\n\nTesto.', true);
     expect(body.indexOf('revision-warning-banner')).toBeGreaterThan(body.indexOf('</h1>'));
