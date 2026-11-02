@@ -1,6 +1,8 @@
 import type { ArchiveFolder, ArchiveSession } from '../bridge';
 import { STORAGE_KEYS } from '../storageKeys';
-import { DOCUMENTS, FOLDERS, MEDIA, MEDIA_BY_SESSION, SESSIONS, inTransaction, requestValue, type StoredDocument } from './webDatabase';
+import { syncedSession } from './drive/syncFormat';
+import { sanitizeBodyHtml } from './pipeline/export';
+import { DOCUMENTS, FOLDERS, MEDIA, MEDIA_BY_SESSION, SESSIONS, inTransaction, requestValue, textGeneration, type StoredDocument } from './webDatabase';
 import type { StoredMedia } from './webMedia';
 import { WEB_SESSION_PREFIX, webSessionHtmlPath } from './webSessions';
 import { ZipFormatError, createZip, readZip } from './zipArchive';
@@ -27,7 +29,10 @@ export interface BackupAudio {
 export interface BackupSession {
   session: ArchiveSession;
   body: string;
-  /** Last autosave (milliseconds, from the editor) or 0 when the sbobina was never edited. */
+  /**
+   * Last autosave (milliseconds, from the editor), here or on the device a text from Drive came
+   * from; 0 when the sbobina was never edited.
+   */
   generation: number;
   audio?: BackupAudio;
 }
@@ -103,7 +108,7 @@ function manifestOf(snapshot: ArchiveSnapshot, appVersion: string, now: Date, au
     sessions: snapshot.sessions.map(session => {
       const document = snapshot.documents.get(session.session_dir);
       const audio = audioFiles?.get(session.session_dir);
-      return { session, body: document?.body ?? '', generation: document?.generation ?? 0, ...(audio ? { audio } : {}) };
+      return { session, body: document?.body ?? '', generation: textGeneration(document), ...(audio ? { audio } : {}) };
     }),
     folders: snapshot.folders,
   };
@@ -183,10 +188,29 @@ function isWebSession(entry: BackupSession | null | undefined): entry is BackupS
 }
 
 /**
+ * The sbobina of a backup entry with only the known fields and their types, or null: a field of the
+ * wrong type (a number for a date) would break the archive's list on every load.
+ */
+function backupSession(entry: BackupSession): ArchiveSession | null {
+  const fields = syncedSession(entry.session);
+  if (!fields) return null;
+  const raw = entry.session as Partial<Record<keyof ArchiveSession, unknown>>;
+  return {
+    ...fields,
+    html_path: webSessionHtmlPath(fields.session_dir),
+    input_path: typeof raw.input_path === 'string' ? raw.input_path : '',
+    ...(typeof raw.last_opened_at_iso === 'string' ? { last_opened_at_iso: raw.last_opened_at_iso } : {}),
+  };
+}
+
+/**
  * Merges a backup into this browser's archive, one sbobina per transaction. Merge rule: a sbobina
  * not here is added; one already here (same id, e.g. a backup made on this device) is replaced
  * only when the backup holds a later edit of its text, otherwise it stays as it is. Nothing here
  * is ever deleted. A sbobina left as it is still gets the backup's audio if it has none.
+ * Text that came from Drive or from a backup keeps this device's generation: its `text_at` says
+ * how recent it is.
+ * A rename or a move to the trash does not count: it leaves the text as it was.
  */
 export async function importBackup(
   factory: IDBFactory | undefined,
@@ -203,15 +227,17 @@ export async function importBackup(
   const manifestEntry = entries.get(BACKUP_MANIFEST);
   if (!manifestEntry) throw new Error(NOT_A_BACKUP);
   const manifest = parseManifest(await (await manifestEntry.blob()).text());
-  const items = manifest.sessions.filter(isWebSession);
+  // A backup can come from anyone: entries it cannot describe properly are left out.
+  const items = manifest.sessions.filter(isWebSession).flatMap(item => {
+    const session = backupSession(item);
+    return session ? [{ item, session }] : [];
+  });
   const summary: ImportSummary = { added: 0, replaced: 0, skipped: 0, restored: 0, audioFiles: 0, folders: 0, changed: [] };
 
-  for (const [index, item] of items.entries()) {
-    const dir = item.session.session_dir;
-    const audioEntry = item.audio?.file ? entries.get(item.audio.file) : undefined;
+  for (const [index, { item, session }] of items.entries()) {
+    const dir = session.session_dir;
+    const audioEntry = typeof item.audio?.file === 'string' ? entries.get(item.audio.file) : undefined;
     const audioBlob = audioEntry ? await audioEntry.blob() : null;
-    const { trashed_at: _trashedAt, ...fields } = item.session;
-    const session: ArchiveSession = { ...fields, html_path: webSessionHtmlPath(dir) };
     const generation = Number.isFinite(item.generation) ? Number(item.generation) : 0;
     const outcome = await inTransaction(factory, [SESSIONS, DOCUMENTS, MEDIA], 'readwrite', async transaction => {
       const sessions = transaction.objectStore(SESSIONS);
@@ -222,12 +248,20 @@ export async function importBackup(
         requestValue(documents.get(dir) as IDBRequest<StoredDocument | undefined>),
         requestValue(media.index(MEDIA_BY_SESSION).getAllKeys(dir)),
       ]);
-      const replace = local === undefined || generation > (document?.generation ?? 0);
+      const replace = local === undefined || generation > textGeneration(document);
       // A sbobina in the trash here comes back: importing a backup is asking for its sbobine.
       const restore = !replace && Boolean(local?.trashed_at);
       if (replace) {
         sessions.put(session);
-        documents.put({ session_dir: dir, body: typeof item.body === 'string' ? item.body : '', generation } satisfies StoredDocument);
+        // A backup can come from anyone: its text is cleaned like a body the Drive sync downloads.
+        // Its generation comes from another clock: it says how recent the text is (text_at), while
+        // the local one stays for the editor's saves, which an ahead clock would otherwise refuse.
+        documents.put({
+          session_dir: dir,
+          body: typeof item.body === 'string' ? sanitizeBodyHtml(item.body) : '',
+          generation: document?.generation ?? 0,
+          text_at: generation,
+        } satisfies StoredDocument);
       } else if (restore && local) {
         const { trashed_at: _localTrashedAt, ...kept } = local;
         sessions.put(kept satisfies ArchiveSession);
@@ -237,10 +271,10 @@ export async function importBackup(
         for (const id of localAudio) media.delete(id);
         media.put({
           id: crypto.randomUUID(),
-          name: item.audio.name || 'audio',
-          type: item.audio.type || '',
+          name: typeof item.audio.name === 'string' && item.audio.name ? item.audio.name : 'audio',
+          type: typeof item.audio.type === 'string' ? item.audio.type : '',
           size: audioBlob.size,
-          lastModified: item.audio.lastModified || Date.now(),
+          lastModified: Number.isFinite(item.audio.lastModified) && item.audio.lastModified > 0 ? item.audio.lastModified : Date.now(),
           blob: audioBlob,
           addedAt: Date.now(),
           sessionDir: dir,
@@ -270,7 +304,7 @@ export async function importBackup(
       if (typeof folder?.id !== 'string' || !folder.id) continue;
       let target = byId.get(folder.id);
       if (!target) {
-        target = { id: folder.id, name: String(folder.name ?? 'Raccolta'), color: String(folder.color ?? ''), parent_id: folder.parent_id ?? null, session_dirs: [] };
+        target = { id: folder.id, name: String(folder.name ?? 'Raccolta'), color: String(folder.color ?? ''), parent_id: typeof folder.parent_id === 'string' ? folder.parent_id : null, session_dirs: [] };
         byId.set(folder.id, target);
         added += 1;
       }

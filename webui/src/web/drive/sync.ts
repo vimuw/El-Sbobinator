@@ -1,6 +1,6 @@
 import type { ArchiveFolder, ArchiveSession } from '../../bridge';
 import { sanitizeBodyHtml } from '../pipeline/export';
-import { DOCUMENTS, FOLDERS, SESSIONS, inTransaction, requestValue, type StoredDocument } from '../webDatabase';
+import { DOCUMENTS, FOLDERS, SESSIONS, SYNC, inTransaction, requestValue, textGeneration, type StoredDocument } from '../webDatabase';
 import { WEB_SESSION_PREFIX, createWebArchive, webSessionHtmlPath } from '../webSessions';
 import type { DriveApi, DriveFileMeta } from './driveApi';
 import {
@@ -20,9 +20,14 @@ import {
   type SyncSessionFile,
 } from './syncFormat';
 import {
+  META_KEY,
   readMeta,
   readRecord,
   readRecords,
+  recordLocalWin,
+  recordUpload,
+  sameMark,
+  sessionKey,
   writeMeta,
   writeRecord,
   writeRecordIfUnchanged,
@@ -47,8 +52,8 @@ export interface SyncDeps {
   factory: IDBFactory | undefined;
   api: DriveApi;
   now?: () => Date;
-  /** The editor has this sbobina open: a remote change waits instead of overwriting it. */
-  isOpenInEditor?: (sessionDir: string) => boolean;
+  /** The editor (of this tab or another) has this sbobina open: a remote change waits instead of overwriting it. */
+  isOpenInEditor?: (sessionDir: string) => boolean | Promise<boolean>;
 }
 
 export interface SyncReport {
@@ -75,18 +80,32 @@ async function readLocal(factory: IDBFactory | undefined, sessionDir: string): P
   return session ? { session, document: document ?? { session_dir: sessionDir, body: '', generation: 0 } } : null;
 }
 
-/** Writes Drive's version of a sbobina here (in the trash or not), keeping what only this device knows. */
-async function applyRemote(factory: IDBFactory | undefined, file: SyncSessionFile): Promise<'written' | 'removed' | 'none'> {
+type ApplyOutcome = 'written' | 'removed' | 'none' | 'changed';
+
+/**
+ * Writes Drive's version of a sbobina here (in the trash or not), keeping what only this device
+ * knows, together with its synced record. 'changed': a local write came in after `expected` was
+ * read, nothing is written and the file is merged again next round.
+ */
+async function applyRemote(factory: IDBFactory | undefined, file: SyncSessionFile, expected: SessionSyncRecord | null, synced: Omit<SessionSyncRecord, 'key'>): Promise<ApplyOutcome> {
   const dir = file.session.session_dir;
-  if (isPurged(file)) return (await createWebArchive(factory).delete(dir)) ? 'removed' : 'none';
+  if (isPurged(file)) {
+    if (!sameMark(await readRecord(factory, dir), expected)) return 'changed';
+    const removed = await createWebArchive(factory).delete(dir);
+    await writeRecord(factory, synced);
+    return removed ? 'removed' : 'none';
+  }
   const body = sanitizeBodyHtml(file.body);
-  await inTransaction(factory, [SESSIONS, DOCUMENTS], 'readwrite', async transaction => {
+  return inTransaction(factory, [SESSIONS, DOCUMENTS, SYNC], 'readwrite', async transaction => {
     const sessions = transaction.objectStore(SESSIONS);
     const documents = transaction.objectStore(DOCUMENTS);
-    const [local, document] = await Promise.all([
+    const records = transaction.objectStore(SYNC);
+    const [local, document, current] = await Promise.all([
       requestValue(sessions.get(dir) as IDBRequest<ArchiveSession | undefined>),
       requestValue(documents.get(dir) as IDBRequest<StoredDocument | undefined>),
+      requestValue(records.get(sessionKey(dir)) as IDBRequest<SessionSyncRecord | undefined>),
     ]);
+    if (!sameMark(current, expected)) return 'changed';
     sessions.put({
       ...file.session,
       session_dir: dir,
@@ -95,10 +114,12 @@ async function applyRemote(factory: IDBFactory | undefined, file: SyncSessionFil
       ...(local?.last_opened_at_iso ? { last_opened_at_iso: local.last_opened_at_iso } : {}),
       ...(file.deleted_at ? { trashed_at: file.deleted_at } : {}),
     } satisfies ArchiveSession);
-    // The local generation stays: other devices' generations come from other clocks.
-    documents.put({ session_dir: dir, body, generation: document?.generation ?? 0 } satisfies StoredDocument);
+    // The local generation stays: other devices' generations come from other clocks. The writer's
+    // generation tells a backup import how recent this text is.
+    documents.put({ session_dir: dir, body, generation: document?.generation ?? 0, text_at: file.generation } satisfies StoredDocument);
+    records.put({ ...synced, key: sessionKey(dir) } satisfies SessionSyncRecord);
+    return 'written';
   });
-  return 'written';
 }
 
 /**
@@ -125,42 +146,48 @@ function asSession(file: SyncSessionFile): ArchiveSession {
   return { ...file.session, html_path: webSessionHtmlPath(dir), input_path: '', ...(file.deleted_at ? { trashed_at: file.deleted_at } : {}) };
 }
 
+// Both bodies cleaned alike: the editor's own text keeps markup the cleanup drops (KaTeX's MathML and
+// SVG inside a formula), and the same text must not look like a change on both sides.
 function sameContent(local: LocalCopy | null, remote: SyncSessionFile): boolean {
   if (!local) return isPurged(remote);
   return !isPurged(remote)
     && Boolean(local.session.trashed_at) === Boolean(remote.deleted_at)
     && local.session.name === remote.session.name
-    && local.document.body === sanitizeBodyHtml(remote.body);
+    && sanitizeBodyHtml(local.document.body) === sanitizeBodyHtml(remote.body);
 }
 
-async function mergeSession(deps: SyncDeps, record: SessionSyncRecord | null, remote: SyncSessionFile, meta: DriveFileMeta, report: SyncReport): Promise<void> {
+/**
+ * Merges Drive's version with the local one. `record` must be read after the download, so a local
+ * write made meanwhile counts as a change on this side. False: a local write came in during the
+ * merge itself, the file waits for the next round.
+ */
+async function mergeSession(deps: SyncDeps, record: SessionSyncRecord | null, remote: SyncSessionFile, meta: DriveFileMeta, report: SyncReport, account: string | undefined): Promise<boolean> {
   const { factory } = deps;
   const dir = remote.session.session_dir;
   const purgedAt = isPurged(remote) ? remote.purged_at ?? remote.deleted_at : undefined;
   const synced = { session_dir: dir, file_id: meta.id, remote_modified: meta.modifiedTime, dirty: false, updated_at: remote.updated_at, ...(purgedAt ? { deleted_at: purgedAt } : {}) };
   const local = await readLocal(factory, dir);
-  const count = (outcome: 'written' | 'removed' | 'none') => {
+  const apply = async () => {
+    const outcome = await applyRemote(factory, remote, record, synced);
     if (outcome === 'written') report.downloaded += 1;
     if (outcome === 'removed') report.removed += 1;
+    return outcome !== 'changed';
   };
 
-  if (!record?.dirty || sameContent(local, remote)) {
-    if (!record?.dirty || !sameContent(local, remote)) count(await applyRemote(factory, remote));
-    await writeRecord(factory, synced);
-    return;
-  }
+  if (!record?.dirty) return apply();
+  if (sameContent(local, remote)) return writeRecordIfUnchanged(factory, record, synced);
   // Changed on both sides.
   report.conflicts += 1;
   const at = (deps.now ?? (() => new Date()))().toISOString();
   if (remote.updated_at > record.updated_at) {
     if (local) await saveConflictCopy(factory, local.session, local.document.body, at);
-    count(await applyRemote(factory, remote));
-    await writeRecord(factory, synced);
-  } else {
-    if (!isPurged(remote)) await saveConflictCopy(factory, asSession(remote), sanitizeBodyHtml(remote.body), at);
-    // The local version stays marked: the upload below writes it over Drive's.
-    await writeRecord(factory, { ...record, file_id: meta.id, remote_modified: meta.modifiedTime });
+    return apply();
   }
+  if (!isPurged(remote)) await saveConflictCopy(factory, asSession(remote), sanitizeBodyHtml(remote.body), at);
+  // The local version stays marked: the upload below writes it over Drive's. A deletion for good
+  // made during the copy keeps its mark, or the text would stay on Drive.
+  await recordLocalWin(factory, record, meta, account);
+  return true;
 }
 
 async function uploadSession(deps: SyncDeps, meta: SyncMeta, record: SessionSyncRecord, report: SyncReport): Promise<void> {
@@ -168,7 +195,8 @@ async function uploadSession(deps: SyncDeps, meta: SyncMeta, record: SessionSync
   const local = record.deleted_at ? null : await readLocal(factory, record.session_dir);
   if (!record.deleted_at && !local) return;
   const session = local?.session ?? { session_dir: record.session_dir, html_path: webSessionHtmlPath(record.session_dir), name: '', completed_at_iso: record.updated_at, effective_model: '', input_path: '' };
-  const file = toSessionFile(session, local?.document.body ?? '', local?.document.generation ?? 0, {
+  // A text downloaded and sent on unedited (a rename here) keeps the time it was written.
+  const file = toSessionFile(session, local?.document.body ?? '', textGeneration(local?.document), {
     updated_at: record.updated_at,
     device_id: meta.device_id,
     ...(local?.session.trashed_at ? { deleted_at: local.session.trashed_at } : {}),
@@ -183,22 +211,51 @@ async function uploadSession(deps: SyncDeps, meta: SyncMeta, record: SessionSync
     written = await api.createJson(sessionFileName(record.session_dir), file);
   }
   report.uploaded += 1;
-  await writeRecordIfUnchanged(factory, record, { ...record, file_id: written.id, remote_modified: written.modifiedTime, dirty: false });
+  await recordUpload(factory, record, written, meta.account);
 }
 
-async function readFolderState(factory: IDBFactory | undefined, meta: SyncMeta): Promise<FolderState> {
-  const folders = await inTransaction(factory, FOLDERS, 'readonly', transaction =>
-    requestValue(transaction.objectStore(FOLDERS).getAll() as IDBRequest<ArchiveFolder[]>));
+/**
+ * The folder tree with its sync state, read together (a folder saved in the app writes both at
+ * once): a folder saved during this round's downloads carries the time it was saved, not an older one.
+ */
+async function readFolderState(factory: IDBFactory | undefined, roundMeta: SyncMeta): Promise<{ meta: SyncMeta; local: FolderState }> {
+  const [folders, stored] = await inTransaction(factory, [FOLDERS, SYNC], 'readonly', transaction => Promise.all([
+    requestValue(transaction.objectStore(FOLDERS).getAll() as IDBRequest<ArchiveFolder[]>),
+    requestValue(transaction.objectStore(SYNC).get(META_KEY) as IDBRequest<SyncMeta | undefined>),
+  ]));
+  const meta = stored ?? roundMeta;
   const epoch = new Date(0).toISOString();
-  return { folders: folders.map(folder => ({ ...folder, updated_at: meta.folders.times[folder.id] ?? epoch })), deleted: meta.folders.deleted };
+  return { meta, local: { folders: folders.map(folder => ({ ...folder, updated_at: meta.folders.times[folder.id] ?? epoch })), deleted: meta.folders.deleted } };
 }
 
-async function syncFolders(deps: SyncDeps, meta: SyncMeta, remoteFiles: DriveFileMeta[], report: SyncReport): Promise<void> {
+/** Whether the folders' marks are still the ones read: no folder saved since. */
+const sameFolderMarks = (current: SyncMeta | undefined, before: SyncMeta) =>
+  JSON.stringify([current?.folders.times ?? {}, current?.folders.deleted ?? {}]) === JSON.stringify([before.folders.times, before.folders.deleted]);
+
+/** The account was switched during the round (bindAccount reset the state): its results are stale. */
+const accountChanged = (current: SyncMeta, before: SyncMeta) => before.account !== undefined && current.account !== before.account;
+
+/** A Drive file not merged this round (written by a newer version of the app, or held back): looked at again next round. */
+const held = (file: DriveFileMeta): DeferredFile => ({ id: file.id, name: file.name, modifiedTime: file.modifiedTime });
+
+/** The folder tree as stored, whatever the order, for telling whether it changed. */
+const storedTree = (folders: Array<ArchiveFolder & { updated_at?: string }>) =>
+  JSON.stringify(folders.map(({ updated_at: _time, ...folder }) => folder).sort((a, b) => a.id.localeCompare(b.id)));
+
+/**
+ * Merges the folder tree; returns the Drive files held back for the next round: written by a newer
+ * version of the app, or merged while the tree here changed (a folder saved in the app or imported
+ * from a backup during the download), which the merge would otherwise overwrite.
+ */
+async function syncFolders(deps: SyncDeps, roundMeta: SyncMeta, remoteFiles: DriveFileMeta[], report: SyncReport): Promise<DeferredFile[]> {
   const { factory, api } = deps;
+  // Read again, not the state of the round's start: folders saved while it downloaded the sbobine
+  // are newer than Drive's changes made before them.
+  const { meta, local } = await readFolderState(factory, roundMeta);
+  if (accountChanged(meta, roundMeta)) return [];
   const changed = remoteFiles.filter(file => file.id !== meta.folders.file_id || file.modifiedTime !== meta.folders.remote_modified);
-  const local = await readFolderState(factory, meta);
   const nothingLocal = !local.folders.length && !Object.keys(local.deleted).length;
-  if (!changed.length && !meta.folders.dirty && (meta.folders.file_id || nothingLocal)) return;
+  if (!changed.length && !meta.folders.dirty && (meta.folders.file_id || nothingLocal)) return [];
 
   let merged = local;
   const remoteStates: Array<{ file: DriveFileMeta; state: FolderState }> = [];
@@ -206,20 +263,30 @@ async function syncFolders(deps: SyncDeps, meta: SyncMeta, remoteFiles: DriveFil
     const parsed = parseFoldersFile(await api.readJson(file.id));
     if (!parsed.ok) {
       report.skipped.push(file.name);
-      // Written by a newer version of the app: never overwritten by this one.
-      if ('reason' in parsed && parsed.reason === 'newer') return;
+      // Written by a newer version of the app: never overwritten by this one, even with local
+      // changes, until it reads that format.
+      if ('reason' in parsed && parsed.reason === 'newer') return [held(file)];
       continue;
     }
     remoteStates.push({ file, state: parsed.file });
     merged = mergeFolders(merged, parsed.file);
   }
   if (!sameFolderState(merged, local)) {
-    report.foldersChanged = true;
-    await inTransaction(factory, FOLDERS, 'readwrite', transaction => {
+    const written = await inTransaction(factory, [FOLDERS, SYNC], 'readwrite', async transaction => {
       const store = transaction.objectStore(FOLDERS);
+      const [tree, current] = await Promise.all([
+        requestValue(store.getAll() as IDBRequest<ArchiveFolder[]>),
+        requestValue(transaction.objectStore(SYNC).get(META_KEY) as IDBRequest<SyncMeta | undefined>),
+      ]);
+      // Saved here during the download: not in `merged`, it would be lost. Nothing is written or
+      // sent; the next round merges Drive's files again, with that change and its mark.
+      if (storedTree(tree) !== storedTree(local.folders) || !sameFolderMarks(current, meta)) return false;
       store.clear();
       for (const { updated_at: _time, ...folder } of merged.folders) store.put(folder satisfies ArchiveFolder);
+      return true;
     });
+    if (!written) return changed.map(held);
+    report.foldersChanged = true;
   }
 
   const fileId = meta.folders.file_id ?? changed[0]?.id;
@@ -245,6 +312,7 @@ async function syncFolders(deps: SyncDeps, meta: SyncMeta, remoteFiles: DriveFil
   }
   const ours = remoteFiles.find(file => file.id === fileId);
   await writeMeta(factory, current => {
+    if (accountChanged(current, meta)) return current;
     // Folders saved in the app during this round keep their newer times and stay marked.
     const later = (mine: Record<string, string>, base: Record<string, string>) => Object.fromEntries(Object.entries(mine).filter(([id, at]) => at > (base[id] ?? '')));
     const newerTimes = later(current.folders.times, meta.folders.times);
@@ -264,6 +332,7 @@ async function syncFolders(deps: SyncDeps, meta: SyncMeta, remoteFiles: DriveFil
       },
     };
   });
+  return [];
 }
 
 /** Runs one round. Throws DriveError (offline, 401, quota) for the caller to report and retry. */
@@ -291,32 +360,57 @@ export async function syncOnce(deps: SyncDeps): Promise<SyncReport> {
   for (const file of listed) byId.set(file.id, file);
   const changed = [...byId.values()].sort((a, b) => a.modifiedTime.localeCompare(b.modifiedTime));
   const deferred: DeferredFile[] = [];
+  // Sbobine with a Drive change not merged yet: their upload waits too, or it would overwrite that
+  // change on Drive without leaving a conflict copy.
+  const waiting = new Set<string>();
+  const wait = (file: DeferredFile, dir: string, inEditor: boolean) => {
+    deferred.push(file);
+    waiting.add(dir);
+    if (inEditor) report.deferred.push(dir);
+  };
 
   for (const file of changed) {
     const dir = sessionDirFromFileName(file.name);
     if (!dir) continue;
     const record = await readRecord(factory, dir);
     if (record?.file_id === file.id && record.remote_modified === file.modifiedTime) continue;
-    if (deps.isOpenInEditor?.(dir)) {
-      deferred.push(file);
-      report.deferred.push(dir);
+    if (await deps.isOpenInEditor?.(dir)) {
+      wait(file, dir, true);
       continue;
     }
-    const parsed = parseSessionFile(await api.readJson(file.id), file.name);
+    let content: unknown;
+    try {
+      content = await api.readJson(file.id);
+    } catch (error) {
+      // Removed from Drive since it was listed or held back ("Elimina tutti i miei dati" from another
+      // device): nothing to merge, and a local change goes up as a new file.
+      if ((error as { status?: number }).status === 404) continue;
+      throw error;
+    }
+    const parsed = parseSessionFile(content, file.name);
+    // The editor may have opened it during the download.
+    if (await deps.isOpenInEditor?.(dir)) {
+      wait(file, dir, true);
+      continue;
+    }
     if (!parsed.ok) {
       report.skipped.push(file.name);
+      // Written by a newer version of the app: a local change stays here until this one reads it.
+      if ('reason' in parsed && parsed.reason === 'newer') wait(held(file), dir, false);
       continue;
     }
-    await mergeSession(deps, record, parsed.file, file, report);
+    // Read again: a rename or a trashing made during the download is a local change.
+    if (!await mergeSession(deps, await readRecord(factory, dir), parsed.file, file, report, meta.account)) wait(file, dir, false);
   }
 
   for (const record of (await readRecords(factory)).values()) {
-    if (record.dirty) await uploadSession(deps, meta, record, report);
+    if (record.dirty && !waiting.has(record.session_dir)) await uploadSession(deps, meta, record, report);
   }
-  await syncFolders(deps, meta, changed.filter(file => file.name === FOLDERS_FILE), report);
+  deferred.push(...await syncFolders(deps, meta, changed.filter(file => file.name === FOLDERS_FILE), report));
 
   const watermark = listed.reduce<string | undefined>((latest, file) => (!latest || file.modifiedTime > latest ? file.modifiedTime : latest), meta.watermark);
   report.syncedAt = now().toISOString();
-  await writeMeta(factory, current => ({ ...current, watermark, last_sync_at: report.syncedAt, deferred }));
+  // After an account switch the new state lists from scratch: this round's watermark is the old Drive's.
+  await writeMeta(factory, current => (accountChanged(current, meta) ? current : { ...current, watermark, last_sync_at: report.syncedAt, deferred }));
   return report;
 }

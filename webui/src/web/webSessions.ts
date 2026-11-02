@@ -1,5 +1,5 @@
 import type { ArchiveFolder, ArchiveSession, SearchSessionResult } from '../bridge';
-import { CHECKPOINTS, DOCUMENTS, FOLDERS, MEDIA, MEDIA_BY_SESSION, SESSIONS, inTransaction, requestValue, type StoredDocument } from './webDatabase';
+import { CHECKPOINTS, DOCUMENTS, FOLDERS, MEDIA, MEDIA_BY_SESSION, SESSIONS, inTransaction, requestValue, textGeneration, type StoredDocument } from './webDatabase';
 
 // The web archive in IndexedDB: session metadata (the desktop's session.json), the editor document
 // (HTML body + autosave generation) and the folders. Paths are synthetic: web-session://<id> is the
@@ -10,7 +10,8 @@ const HTML_FILE = 'sbobina.html';
 export type NewArchiveSession = Omit<ArchiveSession, 'session_dir' | 'html_path'>;
 /** Days a sbobina stays in the trash before it is deleted for good. */
 export const TRASH_DAYS = 30;
-export type SaveHtmlResult = { ok: boolean; saved?: boolean; error?: string };
+/** changed: the stored text is not one `accept` knows, nothing was written. */
+export type SaveHtmlResult = { ok: boolean; saved?: boolean; changed?: boolean; error?: string };
 
 export interface WebArchive {
   create(input: NewArchiveSession, body: string): Promise<ArchiveSession>;
@@ -19,12 +20,22 @@ export interface WebArchive {
   get(sessionDir: string): Promise<ArchiveSession | null>;
   /** Full HTML document with its shell, like the desktop's read_html_content. */
   readHtml(path: string): Promise<string | null>;
-  saveHtml(path: string, body: string, generation?: number): Promise<SaveHtmlResult>;
-  /** Autosave generation of a stored document: 0 until the editor saves it, null when it is gone. */
+  /**
+   * `accept`: checked against the stored text in the same transaction; false leaves it as it is
+   * (written by someone else since the editor read it).
+   */
+  saveHtml(path: string, body: string, generation?: number, accept?: (stored: string) => boolean): Promise<SaveHtmlResult>;
+  /**
+   * How recent the stored text is (textGeneration): 0 until the editor saves it, here or on the
+   * device a text from Drive came from; null when it is gone.
+   */
   generation(path: string): Promise<number | null>;
   update(sessionDir: string, patch: Partial<ArchiveSession>): Promise<ArchiveSession | null>;
-  /** Removes the sbobina, its document, its audio and its pipeline checkpoint, for good. */
-  delete(sessionDir: string): Promise<boolean>;
+  /**
+   * Removes the sbobina, its document, its audio and its pipeline checkpoint, for good. `changedAt`:
+   * when the deletion counts as made for the Drive sync (default: now).
+   */
+  delete(sessionDir: string, changedAt?: string): Promise<boolean>;
   /** Moves the sbobina to the trash: out of the archive and the search, everything else kept. */
   trash(sessionDir: string, at: string): Promise<boolean>;
   /** Brings a sbobina back from the trash. */
@@ -36,13 +47,19 @@ export interface WebArchive {
   search(query: string, limit?: number): Promise<SearchSessionResult[]>;
 }
 
-/** Deletes for good the sbobine trashed more than TRASH_DAYS ago; returns how many. */
-export async function purgeExpiredTrash(archive: WebArchive, now: Date): Promise<number> {
+/**
+ * Deletes for good the sbobine trashed more than TRASH_DAYS ago; returns how many. `wait` keeps a
+ * sbobina in the trash for now (one on Drive, until the sync has merged the other devices' changes).
+ * The expiry counts as made when the sbobina went to the trash: a restore or an edit made after that
+ * on another device, even one this browser has not seen yet, stays newer and wins on Drive.
+ */
+export async function purgeExpiredTrash(archive: WebArchive, now: Date, wait?: (sessionDir: string) => Promise<boolean>): Promise<number> {
   const limit = now.getTime() - TRASH_DAYS * 24 * 60 * 60 * 1000;
   let purged = 0;
   for (const session of await archive.listTrash()) {
     const at = Date.parse(session.trashed_at ?? '');
-    if (Number.isFinite(at) && at <= limit && await archive.delete(session.session_dir)) purged += 1;
+    if (!Number.isFinite(at) || at > limit || await wait?.(session.session_dir)) continue;
+    if (await archive.delete(session.session_dir, new Date(at).toISOString())) purged += 1;
   }
   return purged;
 }
@@ -51,7 +68,15 @@ export function webSessionHtmlPath(sessionDir: string): string {
   return `${sessionDir}/${HTML_FILE}`;
 }
 
-function sessionDirOf(path: string): string {
+const HTML_TAIL = '</body></html>';
+
+/** The stored body inside a document readHtml returned. */
+export function storedBodyOf(html: string): string {
+  const start = html.indexOf('<body>') + '<body>'.length;
+  return html.endsWith(HTML_TAIL) ? html.slice(start, -HTML_TAIL.length) : html.slice(start);
+}
+
+export function sessionDirOf(path: string): string {
   return path.endsWith(`/${HTML_FILE}`) ? path.slice(0, -HTML_FILE.length - 1) : path;
 }
 
@@ -136,17 +161,18 @@ export function createWebArchive(factory: IDBFactory | undefined = globalThis.in
       const [session, document] = await inTransaction(factory, [SESSIONS, DOCUMENTS], 'readonly', transaction =>
         Promise.all([getSession(transaction, dir), getDocument(transaction, dir)]));
       if (!session || !document) return null;
-      return `<!doctype html><html lang="it"><head><meta charset="utf-8"><title>${escapeHtml(session.name)}</title></head><body>${document.body}</body></html>`;
+      return `<!doctype html><html lang="it"><head><meta charset="utf-8"><title>${escapeHtml(session.name)}</title></head><body>${document.body}${HTML_TAIL}`;
     },
 
     // Autosave sends the body with a growing generation; an older generation arriving late is ignored.
-    async saveHtml(path, body, generation) {
+    async saveHtml(path, body, generation, accept) {
       const dir = sessionDirOf(path);
       try {
         return await inTransaction(factory, DOCUMENTS, 'readwrite', async transaction => {
           const document = await getDocument(transaction, dir);
           if (!document) return { ok: false, error: 'Sbobina non trovata in questo browser.' };
           if (typeof generation === 'number' && generation < document.generation) return { ok: true, saved: false };
+          if (accept && !accept(document.body)) return { ok: true, saved: false, changed: true };
           transaction.objectStore(DOCUMENTS).put({
             ...document,
             body,
@@ -162,7 +188,7 @@ export function createWebArchive(factory: IDBFactory | undefined = globalThis.in
     async generation(path) {
       const dir = sessionDirOf(path);
       const document = await inTransaction(factory, DOCUMENTS, 'readonly', transaction => getDocument(transaction, dir));
-      return document?.generation ?? null;
+      return document ? textGeneration(document) : null;
     },
 
     async update(sessionDir, patch) {

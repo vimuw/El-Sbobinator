@@ -19,7 +19,10 @@ export interface DriveServiceOptions {
   api: DriveApi;
   /** A Gemini run is active: the round waits for runEnded(). */
   isBusy: () => boolean;
-  isOpenInEditor?: (sessionDir: string) => boolean;
+  /** The editor of this tab or another one has this sbobina open: a remote change waits. */
+  isOpenInEditor?: (sessionDir: string) => boolean | Promise<boolean>;
+  /** Runs a round, or the emptying of the Drive folder, while no other tab of the site runs one. */
+  exclusive?: <T>(run: () => Promise<T>) => Promise<T>;
   onReport?: (report: SyncReport) => void;
   /** A round found the login expired (401). */
   onNeedsReconnect?: () => void;
@@ -46,6 +49,12 @@ export interface DriveService {
   exportAll(onProgress?: (done: number, total: number) => void): Promise<DriveExportResult>;
   /** The Gemini run ended: a round it held back runs now. */
   runEnded(): void;
+  /**
+   * Runs `work` while no round runs, in this tab or another: the round in progress ends first, one
+   * asked for meanwhile runs after. For writes that leave their sync marks only at the end (a backup
+   * import): a round in between would take them for Drive's version and overwrite them.
+   */
+  hold<T>(work: () => Promise<T>): Promise<T>;
   /** Startup round plus the foreground and online triggers; returns their cleanup. */
   start(target?: { window: Window; document: Document }): () => void;
 }
@@ -65,6 +74,7 @@ export function describeDriveError(error: unknown): string {
 
 export function createDriveService(options: DriveServiceOptions): DriveService {
   const { factory, auth, api } = options;
+  const exclusive = options.exclusive ?? (<T,>(run: () => Promise<T>) => run());
   const now = options.now ?? (() => new Date());
   const delayMs = options.delayMs ?? SYNC_DELAY_MS;
   let syncing = false;
@@ -80,6 +90,11 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
   let epoch = 0;
   // While the Drive folder is being emptied no round may write to it.
   let erasing = false;
+  // From the login until its account is bound no round may start: the token may already be another
+  // account's, and a round would carry this browser's state for the previous one into its Drive.
+  let binding = false;
+  // Writes running under hold(): a round asked for meanwhile waits for them, as for a Gemini run.
+  let holds = 0;
 
   const status = (): DriveStatus => {
     const email = auth.account();
@@ -95,13 +110,46 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
     };
   };
 
+  // Another tab connected a different account: this tab's token still belongs to the previous one,
+  // and a round would send the shared archive to that Drive and write its file ids into the state of
+  // the new one. The token goes; a tap reconnects the tab to the account now remembered. Another tab
+  // that forgot the account ("Disconnetti", the Drive data erased) disconnects this one too: a round
+  // would send every sbobina back to the Drive just emptied.
+  // `bound`: the account the database names, read inside the lock. The remembered account reaches the
+  // other tabs late (localStorage), the binding in the database does not: a round that waited for
+  // the login of another tab would otherwise still see the previous account here.
+  const ownsToken = (bound?: string) => {
+    const owner = auth.tokenAccount();
+    if (!owner) return true;
+    const remembered = auth.account();
+    if (owner === remembered && (bound === undefined || bound === owner)) return true;
+    auth.expire();
+    if (remembered || bound) options.onNeedsReconnect?.();
+    return false;
+  };
+
+  // Checked inside the lock. The account forgotten by an erase reaches the other tabs late
+  // (localStorage), the erase's mark in the database does not: a round that waited for the erase of
+  // another tab would otherwise still see the account and fill the emptied Drive again.
+  // A round that waited for the lock of another tab may get it after a login of this tab: it waits
+  // for that login's account to be bound, like a round that had not started yet.
+  const mayRound = async () => {
+    if (binding || erasing) return false;
+    const meta = await readMeta(factory);
+    if (!ownsToken(meta.account)) return false;
+    if (!meta.erased) return true;
+    auth.expire();
+    return false;
+  };
+
   const round = async () => {
-    if (!auth.token() || erasing) return;
+    if (!auth.token() || erasing || binding) return;
     const started = epoch;
     syncing = true;
     try {
-      const report = await syncOnce({ factory, api, now, isOpenInEditor: options.isOpenInEditor });
-      if (started !== epoch) return;
+      // Checked once the other tabs' rounds are over: one of them may have switched the account.
+      const report = await exclusive(async () => (await mayRound() ? syncOnce({ factory, api, now, isOpenInEditor: options.isOpenInEditor }) : null));
+      if (started !== epoch || !report) return;
       lastSyncAt = report.syncedAt;
       error = null;
       options.onReport?.(report);
@@ -119,7 +167,7 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
     loop ??= (async () => {
       while (pending) {
         pending = false;
-        if (options.isBusy()) {
+        if (options.isBusy() || holds > 0) {
           waitingForRun = true;
           return;
         }
@@ -173,19 +221,32 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
       // Before any await: the Google window must open inside the tap.
       const login = auth.connect({ silent });
       return (async () => {
+        let loggedIn = false;
         try {
           await login;
+          loggedIn = true;
+          binding = true;
           interactiveNext = false;
+          // A round already running ends first: whatever it wrote goes if the account changed.
+          await loop;
           const email = await api.accountEmail();
-          if (email) {
+          if (!email) throw new Error('Google Drive non ha indicato l’account collegato.');
+          // Once the other tabs' rounds are over too: one still downloading would write the previous
+          // account's file ids into the state just reset for this one.
+          await exclusive(async () => {
             auth.setAccount(email);
             await bindAccount(factory, email);
-          }
+          });
           error = null;
         } catch (caught) {
+          // A token whose account is not bound would sync this browser's state with any account's
+          // Drive: it goes, and the remembered account (if any) stays for the next tap.
+          if (loggedIn) auth.expire();
           if (caught instanceof DriveAuthError && caught.needsInteractiveLogin) interactiveNext = true;
           error = describeDriveError(caught);
           return status();
+        } finally {
+          binding = false;
         }
         await run();
         return status();
@@ -195,7 +256,8 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
     disconnect,
 
     async erase() {
-      if (!auth.token()) {
+      // With another account's token it would empty that account's Drive.
+      if (!auth.token() || !ownsToken()) {
         error = describeDriveError(new DriveError(401, ''));
         return { ...status(), removed: 0 };
       }
@@ -205,13 +267,22 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
       try {
         // A round already writing finishes first: nothing it sends can be left behind.
         await loop;
-        for (const file of await api.listChanged(null)) {
-          await api.remove(file.id).catch((caught: { status?: number }) => {
-            if (caught.status !== 404) throw caught;
-          });
-          removed += 1;
+        const owned = await exclusive(async () => {
+          // Checked again inside the lock: another tab may have bound another account meanwhile.
+          if (!ownsToken((await readMeta(factory)).account)) return false;
+          for (const file of await api.listChanged(null)) {
+            await api.remove(file.id).catch((caught: { status?: number }) => {
+              if (caught.status !== 404) throw caught;
+            });
+            removed += 1;
+          }
+          await resetSyncState(factory);
+          return true;
+        });
+        if (!owned) {
+          error = describeDriveError(new DriveError(401, ''));
+          return { ...status(), removed: 0 };
         }
-        await resetSyncState(factory);
       } catch (caught) {
         error = describeDriveError(caught);
         if (caught instanceof DriveError && caught.needsAuthorization) options.onNeedsReconnect?.();
@@ -255,9 +326,24 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
     },
 
     runEnded() {
-      if (!waitingForRun) return;
+      if (!waitingForRun || holds > 0) return;
       waitingForRun = false;
       void run();
+    },
+
+    async hold(work) {
+      holds += 1;
+      try {
+        await loop;
+        return await exclusive(work);
+      } finally {
+        holds -= 1;
+        // The round held back runs now, unless a Gemini run still holds it.
+        if (holds === 0 && waitingForRun && !options.isBusy()) {
+          waitingForRun = false;
+          void run();
+        }
+      }
     },
 
     start(target = { window, document }) {

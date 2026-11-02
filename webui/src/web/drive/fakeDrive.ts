@@ -4,6 +4,7 @@
 import type { DriveAuth, DriveAuthError } from './auth';
 import { DRIVE_API, DRIVE_UPLOAD, FOLDER_MIME } from './driveApi';
 import { DRIVE_APPDATA_SCOPE, DRIVE_FILE_SCOPE } from './oauth';
+import type { TabChannel } from './tabLocks';
 
 export interface FakeDriveRequest {
   url: string;
@@ -30,6 +31,8 @@ interface StoredFile {
 export interface FakeDriveOptions {
   /** Tokens granted drive.file, which may create visible files (the export). */
   canWriteVisible?: (token: string) => boolean;
+  /** The account this Drive belongs to (about.user.emailAddress). */
+  email?: string;
 }
 
 /** A token of the fakes that carries drive.file. */
@@ -96,7 +99,7 @@ export function createFakeDrive(options: FakeDriveOptions = {}): FakeDrive {
     if (failure) return { ...error(failure.status, failure.reason), headers: failure.retryAfter ? { 'retry-after': String(failure.retryAfter) } : {} };
 
     const path = `${url.origin}${url.pathname}`;
-    if (path === `${DRIVE_API}/about`) return json(200, { user: { emailAddress: 'studente@example.com' } });
+    if (path === `${DRIVE_API}/about`) return json(200, { user: { emailAddress: options.email ?? 'studente@example.com' } });
     if (path === `${DRIVE_API}/files` && method === 'GET') {
       if (url.searchParams.get('spaces') !== 'appDataFolder') return error(400);
       const since = /modifiedTime > '([^']+)'/.exec(url.searchParams.get('q') ?? '')?.[1];
@@ -166,32 +169,99 @@ export function createFakeDrive(options: FakeDriveOptions = {}): FakeDrive {
   };
 }
 
-/** A Google login that answers at once, for the tests of what sits above auth.ts. */
-export function createFakeAuth(device: string, initial: { token?: boolean; email?: string | null } = {}) {
+/**
+ * A Google login that answers at once, for the tests of what sits above auth.ts. Tabs of one browser
+ * pass the same `shared` object: the account is remembered for all of them, each keeps its token.
+ */
+export function createFakeAuth(device: string, initial: { token?: boolean; email?: string | null; shared?: { email: string | null } } = {}) {
   let count = 0;
   let token: string | null = initial.token ? `${device}-0` : null;
-  let email = initial.email ?? null;
+  const remembered = initial.shared ?? { email: null };
+  if (initial.email !== undefined || !initial.shared) remembered.email = initial.email ?? null;
+  let owner = token ? remembered.email : null;
   const calls: Array<{ silent: boolean; scope?: string }> = [];
   const failures: DriveAuthError[] = [];
   const disconnects: string[] = [];
   const auth: DriveAuth = {
     token: () => token,
-    account: () => email,
-    setAccount: value => { email = value; },
+    account: () => remembered.email,
+    setAccount: value => {
+      remembered.email = value;
+      if (token) owner = value;
+    },
+    tokenAccount: () => (token ? owner : null),
     connect: ({ silent = false, scope, keep = true } = {}) => {
       calls.push({ silent, ...(scope ? { scope } : {}) });
       const failure = failures.shift();
       if (failure) return Promise.reject(failure);
       const issued = scope === DRIVE_FILE_SCOPE ? `${device}-${FAKE_FILE_TOKEN_MARK}-${++count}` : `${device}-${++count}`;
-      if (keep) token = issued;
-      return Promise.resolve({ accessToken: issued, expiresAt: Date.now() + 3_600_000, scopes: scope ? [DRIVE_APPDATA_SCOPE, scope] : [DRIVE_APPDATA_SCOPE] });
+      if (keep) {
+        token = issued;
+        owner = null;
+      }
+      // Only the scope asked for: the login does not carry the ones granted before (oauth.ts).
+      return Promise.resolve({ accessToken: issued, expiresAt: Date.now() + 3_600_000, scopes: [scope ?? DRIVE_APPDATA_SCOPE] });
     },
     expire: () => { token = null; },
     disconnect: async () => {
       disconnects.push(token ?? '');
       token = null;
-      email = null;
+      remembered.email = null;
     },
   };
   return { auth, calls, failures, disconnects };
+}
+
+/**
+ * The Web Locks of one origin, shared by the "tabs" of a test (tabLocks.ts): exclusive locks wait
+ * for each other by name, shared ones are granted at once, query() lists what is held.
+ */
+export function createFakeLocks(): LockManager {
+  const held: LockInfo[] = [];
+  const queues = new Map<string, Promise<void>>();
+  const hold = async <T,>(info: LockInfo, callback: LockGrantedCallback<T>) => {
+    held.push(info);
+    try {
+      return await callback({ name: info.name!, mode: info.mode! } as Lock);
+    } finally {
+      held.splice(held.indexOf(info), 1);
+    }
+  };
+  const request = async <T,>(name: string, options: LockOptions | LockGrantedCallback<T>, maybeCallback?: LockGrantedCallback<T>) => {
+    const callback = (typeof options === 'function' ? options : maybeCallback)!;
+    const mode = typeof options === 'function' ? 'exclusive' : options.mode ?? 'exclusive';
+    if (mode === 'shared') return hold({ name, mode }, callback);
+    const before = queues.get(name) ?? Promise.resolve();
+    let done = () => {};
+    const mine = new Promise<void>(resolve => { done = resolve; });
+    queues.set(name, before.then(() => mine));
+    await before;
+    try {
+      return await hold({ name, mode }, callback);
+    } finally {
+      done();
+    }
+  };
+  return { request, query: async () => ({ held: [...held], pending: [] }) } as unknown as LockManager;
+}
+
+/**
+ * The BroadcastChannel of one origin for the "tabs" of a test (tabLocks.ts): each call opens one
+ * tab's end; a message reaches the other ends, not the sender's, a moment later.
+ */
+export function createFakeChannels(): () => TabChannel {
+  const ends = new Set<EventTarget>();
+  return () => {
+    const end = new EventTarget();
+    ends.add(end);
+    return {
+      postMessage: (message: unknown) => {
+        for (const other of ends) {
+          if (other !== end) queueMicrotask(() => other.dispatchEvent(new MessageEvent('message', { data: message })));
+        }
+      },
+      addEventListener: end.addEventListener.bind(end),
+      removeEventListener: end.removeEventListener.bind(end),
+    } as TabChannel;
+  };
 }

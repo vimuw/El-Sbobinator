@@ -92,6 +92,24 @@ describe('Drive auth', () => {
     expect(auth.account()).toBe('a@b.it');
   });
 
+  it('remembers which account the tab\'s token belongs to, apart from the account shared by the tabs', async () => {
+    const { auth, reply } = setup();
+    const connecting = auth.connect();
+    reply(tokenFields);
+    await connecting;
+    expect(auth.tokenAccount()).toBeNull();
+    auth.setAccount('studente@uniupo.it');
+    expect(auth.tokenAccount()).toBe('studente@uniupo.it');
+    // A reloaded page finds it with the token.
+    expect(setup().auth.tokenAccount()).toBe('studente@uniupo.it');
+
+    // Another tab (same localStorage, its own sessionStorage) connects a different account.
+    const otherTab = setup({ session: null });
+    otherTab.auth.setAccount('altro@uniupo.it');
+    expect(auth.account()).toBe('altro@uniupo.it');
+    expect(auth.tokenAccount()).toBe('studente@uniupo.it');
+  });
+
   it('ignores answers to another login and reports Google errors and blocked windows', async () => {
     const { auth, reply, channel } = setup();
     const connecting = auth.connect();
@@ -140,11 +158,12 @@ describe('Drive auth', () => {
     const exporting = auth.connect({ scope: DRIVE_FILE_SCOPE, keep: false });
     const url = new URL(opened.at(-1)!);
     expect(url.searchParams.get('scope')).toBe(DRIVE_FILE_SCOPE);
-    expect(url.searchParams.get('include_granted_scopes')).toBe('true');
+    // Its token carries drive.file only: the sync's token never gains it.
+    expect(url.searchParams.get('include_granted_scopes')).toBe('false');
     expect(url.searchParams.get('login_hint')).toBe('studente@example.com');
     // Google asks only for the new permission: no account choice forced.
     expect(url.searchParams.has('prompt')).toBe(false);
-    reply({ ...tokenFields, access_token: 'tok-export', scope: `${DRIVE_APPDATA_SCOPE} ${DRIVE_FILE_SCOPE}` });
+    reply({ ...tokenFields, access_token: 'tok-export', scope: DRIVE_FILE_SCOPE });
     await expect(exporting).resolves.toMatchObject({ accessToken: 'tok-export' });
     expect(auth.token()).toBe('tok-1');
     expect(sessionStorage.getItem(STORAGE_KEYS.WEB_DRIVE_TOKEN_V1)).not.toContain('tok-export');
@@ -153,5 +172,30 @@ describe('Drive auth', () => {
     const refused = auth.connect({ scope: DRIVE_FILE_SCOPE, keep: false });
     reply({ ...tokenFields, access_token: 'tok-x', scope: DRIVE_APPDATA_SCOPE });
     await expect(refused).rejects.toMatchObject({ code: 'file_scope_missing', message: expect.stringContaining('permesso di creare file') });
+  });
+
+  it('keeps the account for this page when localStorage is blocked, so its token still counts as its own', async () => {
+    const blocked = () => { throw new DOMException('blocked', 'SecurityError'); };
+    const local = { getItem: blocked, setItem: blocked, removeItem: blocked } as unknown as Storage;
+    const { auth, reply } = setup({ local });
+    const connecting = auth.connect();
+    reply(tokenFields);
+    await connecting;
+    auth.setAccount('studente@example.com');
+    expect(auth.account()).toBe('studente@example.com');
+    expect(auth.tokenAccount()).toBe('studente@example.com');
+
+    await auth.disconnect();
+    expect(auth.account()).toBeNull();
+  });
+
+  it('keeps the account for this page when localStorage refuses the write', async () => {
+    const local = { getItem: () => null, setItem: () => { throw new DOMException('full', 'QuotaExceededError'); }, removeItem: () => {} } as unknown as Storage;
+    const { auth, reply } = setup({ local });
+    const connecting = auth.connect();
+    reply(tokenFields);
+    await connecting;
+    auth.setAccount('studente@example.com');
+    expect(auth.account()).toBe('studente@example.com');
   });
 });

@@ -62,12 +62,18 @@ export interface DriveAuth {
   token(): string | null;
   /** Email of the connected account, remembered across reloads (not a secret). */
   account(): string | null;
+  /** Remembers the account, which this tab's token belongs to as well. */
   setAccount(email: string): void;
+  /**
+   * The account this tab's token was issued for, null when unknown. It differs from account() once
+   * another tab of the site connects a different account: the account is shared, the token is not.
+   */
+  tokenAccount(): string | null;
   /**
    * Opens the Google window: call it synchronously inside a tap. Silent = the remembered account
    * without questions (prompt=none); it fails with needsInteractiveLogin when Google wants a choice.
-   * scope asks for one more permission (incremental: the ones granted before come along); keep:
-   * false leaves the tab's token as it was (the export's token serves the export only).
+   * scope asks for another permission, and the token carries only that one; keep: false leaves the
+   * tab's token as it was (the export's token serves the export only).
    */
   connect(options?: { silent?: boolean; scope?: string; keep?: boolean }): Promise<OAuthToken>;
   /** Drive answered 401: the token is gone, the account stays for a silent reconnect. */
@@ -76,9 +82,12 @@ export interface DriveAuth {
   disconnect(): Promise<void>;
 }
 
-function readToken(storage: Storage | null, now: number): OAuthToken | null {
+/** The token kept by the tab, with the account it was issued for once known. */
+type StoredToken = OAuthToken & { account?: string };
+
+function readToken(storage: Storage | null, now: number): StoredToken | null {
   try {
-    const value = JSON.parse(storage?.getItem(STORAGE_KEYS.WEB_DRIVE_TOKEN_V1) ?? 'null') as OAuthToken | null;
+    const value = JSON.parse(storage?.getItem(STORAGE_KEYS.WEB_DRIVE_TOKEN_V1) ?? 'null') as StoredToken | null;
     if (!value || typeof value.accessToken !== 'string' || typeof value.expiresAt !== 'number') return null;
     return value.expiresAt - EXPIRY_MARGIN_MS > now ? value : null;
   } catch {
@@ -104,7 +113,7 @@ export function createDriveAuth(options: DriveAuthOptions): DriveAuth {
   const windowEvents = options.windowEvents === undefined ? globalThis.window ?? null : options.windowEvents;
   const origin = options.origin ?? globalThis.location?.origin ?? '';
   // Also in memory: sessionStorage may be blocked, and a write must not be lost then.
-  let current: OAuthToken | null = null;
+  let current: StoredToken | null = null;
 
   const storedToken = () => {
     if (current && current.expiresAt - EXPIRY_MARGIN_MS > now()) return current;
@@ -115,7 +124,11 @@ export function createDriveAuth(options: DriveAuthOptions): DriveAuth {
     current = null;
     safely(() => session?.removeItem(STORAGE_KEYS.WEB_DRIVE_TOKEN_V1));
   };
+  // Also in memory when localStorage refuses it: the token would otherwise belong to an account this
+  // tab does not know, and the sync would drop it as another account's.
+  let unsavedAccount: string | null = null;
   const account = () => {
+    if (unsavedAccount) return unsavedAccount;
     try {
       return local?.getItem(STORAGE_KEYS.WEB_DRIVE_ACCOUNT_V1) || null;
     } catch {
@@ -127,8 +140,19 @@ export function createDriveAuth(options: DriveAuthOptions): DriveAuth {
     token: () => storedToken()?.accessToken ?? null,
     account,
     setAccount(email) {
-      if (email) safely(() => local?.setItem(STORAGE_KEYS.WEB_DRIVE_ACCOUNT_V1, email));
+      if (!email) return;
+      unsavedAccount = null;
+      try {
+        local?.setItem(STORAGE_KEYS.WEB_DRIVE_ACCOUNT_V1, email);
+      } catch {
+        unsavedAccount = email;
+      }
+      const token = storedToken();
+      if (!token) return;
+      current = { ...token, account: email };
+      safely(() => session?.setItem(STORAGE_KEYS.WEB_DRIVE_TOKEN_V1, JSON.stringify(current)));
     },
+    tokenAccount: () => storedToken()?.account ?? null,
 
     connect({ silent = false, scope, keep = true } = {}) {
       const state = newState();
@@ -187,6 +211,7 @@ export function createDriveAuth(options: DriveAuthOptions): DriveAuth {
     async disconnect() {
       const token = storedToken()?.accessToken ?? readTokenIgnoringExpiry(session);
       clearToken();
+      unsavedAccount = null;
       safely(() => local?.removeItem(STORAGE_KEYS.WEB_DRIVE_ACCOUNT_V1));
       if (!token) return;
       // Best effort: an expired token is already useless, and the user is offline sometimes.

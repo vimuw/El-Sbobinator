@@ -307,7 +307,7 @@ function WebSpacePanel({ sessionInfo, isLoadingSessionInfo, drive = 'unavailable
 type WebSessionInfo = NonNullable<StorageSectionProps['sessionInfo']>;
 
 // --processing-text equals the accent in the dark theme, so the second colour is the plain text one.
-const PART_COLORS = ['var(--accent-text)', 'var(--text-primary)', 'var(--warning-text)', 'var(--text-muted)'];
+const PART_COLORS = ['var(--accent-text)', 'var(--text-primary)', 'var(--warning-text)', 'var(--text-muted)', 'var(--success-text)'];
 const partColor = (index: number) => PART_COLORS[index % PART_COLORS.length];
 
 function WebUsageSummary({ info }: { info: WebSessionInfo }) {

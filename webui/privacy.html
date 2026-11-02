@@ -88,7 +88,7 @@
         </ul>
         <p>Questi dati non arrivano a El Sbobinator. Ogni indirizzo del sito ha una memoria separata.</p>
         <p>Il backup (Impostazioni → Archiviazione) è un file che scarichi tu e resta dove lo salvi. Contiene le sbobine e, se lo scegli, l’audio delle lezioni che hai tenuto. Non contiene le chiavi API.</p>
-        <p><strong>Come cancellarli.</strong> Elimina le sbobine dall’archivio dell’app: con loro vanno via anche il loro audio e l’avanzamento. Togli le chiavi da Impostazioni → Generale. Oppure cancella i dati del sito dalle impostazioni del browser: si cancella tutto, sbobine comprese, quindi fai prima un backup. Il browser stesso può cancellarli se manca spazio o se non apri il sito per un po’ (Safari dopo circa 7 giorni).</p>
+        <p><strong>Come cancellarli.</strong> Elimina le sbobine dall’archivio dell’app: finiscono nel cestino, dove restano 30 giorni con il loro audio e l’avanzamento. Svuotando il cestino, o passati i 30 giorni, vanno via del tutto. Togli le chiavi da Impostazioni → Generale. Oppure cancella i dati del sito dalle impostazioni del browser: si cancella tutto, sbobine comprese, quindi fai prima un backup. Il browser stesso può cancellarli se manca spazio o se non apri il sito per un po’ (Safari dopo circa 7 giorni).</p>
 
         <h2 id="gemini">Cosa va a Google Gemini</h2>
         <p>Quando avvii una sbobina, il tuo browser manda direttamente a Google, con la tua chiave API:</p>
@@ -112,7 +112,7 @@
           <li>Se lo attivi, l’app salva una copia in una cartella nascosta dell’app nel tuo Google Drive.</li>
           <li>Per la sincronizzazione chiede solo il permesso <code>drive.appdata</code>: vede soltanto i file che crea lei in quella cartella, non gli altri file del tuo Drive.</li>
           <li>Si sincronizzano i testi e i dati delle sbobine (titolo, date, raccolte). Non si sincronizzano l’audio, le chiavi API e l’avanzamento delle elaborazioni.</li>
-          <li>Una sbobina eliminata va nel cestino per 30 giorni, anche sugli altri dispositivi. Dopo, su Drive resta solo un segno senza testo né titolo, perché un dispositivo rimasto spento non la faccia ricomparire.</li>
+          <li>Una sbobina eliminata va nel cestino per 30 giorni, anche sugli altri dispositivi. Quando svuoti il cestino, o passati i 30 giorni, alla prima sincronizzazione di un dispositivo collegato su Drive resta solo un segno senza testo né titolo, perché un dispositivo rimasto spento non la faccia ricomparire. Fino ad allora testo e titolo restano nella cartella nascosta.</li>
           <li>I dati vanno direttamente dal tuo browser a Google, senza server di El Sbobinator. Lo sviluppatore non li riceve e non può leggerli.</li>
           <li>Il permesso di accesso (token) resta solo nella scheda aperta, al massimo un’ora. Nel browser resta l’indirizzo email dell’account, per ricollegarti con un tocco; “Disconnetti” lo cancella.</li>
         </ul>

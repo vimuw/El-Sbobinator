@@ -1,5 +1,5 @@
 import type { FileDescriptor } from '../appState';
-import type { PywebviewApi, StorageUsagePart, ValidationResult } from '../bridge';
+import type { ArchiveFolder, ArchiveSession, PywebviewApi, StorageUsagePart, ValidationResult } from '../bridge';
 import { APP_VERSION, WEB_PREVIEW_BUILD } from '../branding';
 import { type HostCapabilities, setHostCapabilities } from '../hostCapabilities';
 import { STORAGE_KEYS } from '../storageKeys';
@@ -8,7 +8,9 @@ import { createWorkerAudioSource } from './audioPort';
 import { createCheckpointStore } from './checkpointStore';
 import { createDriveConnection, driveEnabled, type DriveConnection } from './drive/driveConfig';
 import { createDriveService, type DriveService } from './drive/driveService';
-import { markSessionChanged, trackArchive } from './drive/syncState';
+import { CONFLICT_SUFFIX } from './drive/sync';
+import { markFoldersChanged, markSessionChanged, readRecord, trackArchive } from './drive/syncState';
+import { createTabLocks, type TabChannel } from './drive/tabLocks';
 import { type BridgeEventName, type EmitBridgeEvent, runFakePipeline } from './fakePipeline';
 import { createPageState } from './pageLifecycle';
 import { measureWebStorage, type WebStorageUsage } from './webDatabase';
@@ -21,7 +23,18 @@ import { getWebFile, hasWebFile, isWebSupportedMedia, promptWebFiles, registerWe
 import { createWebMediaStore, mediaType, type WebMediaStore } from './webMedia';
 import { createBackup, describeBackup, describeImport, importBackup, loadLastBackupAt, saveLastBackupAt } from './webBackup';
 import { NEW_KEY_TIMEOUT_MS, REGENERATE_TIMEOUT_MS, bridgeReporter, runWebFile, sleepWithSignal, type RegenerateAnswer } from './webRun';
-import { createWebArchive, purgeExpiredTrash, requestPersistentStorage, storageErrorMessage, webSessionHtmlPath, type NewArchiveSession, type WebArchive } from './webSessions';
+import {
+  createWebArchive,
+  purgeExpiredTrash,
+  requestPersistentStorage,
+  sessionDirOf,
+  storageErrorMessage,
+  storedBodyOf,
+  webSessionHtmlPath,
+  type NewArchiveSession,
+  type SaveHtmlResult,
+  type WebArchive,
+} from './webSessions';
 import { WEB_MODEL_OPTIONS, adoptSpikeKeys, loadWebKeys, loadWebModel, saveWebKeys, saveWebModel } from './webSettings';
 
 // Third host: the whole app runs in this page (static site, no backend). It implements the same
@@ -87,13 +100,14 @@ function audioSupport(): string {
 
 // Safari's estimate() leaves out the audio Blobs (27 MB of audio showed as 1.1 MB): the space shown
 // is counted from what this app stored; the browser's figure stays as a secondary reading. Texts and
-// lecture audio are the backup's figures; queue copies and run progress are named apart, since the
-// backup leaves them out.
+// lecture audio are the backup's figures; queue copies, the trash and run progress are named apart,
+// since the backup leaves them out.
 function usageBreakdown(usage: WebStorageUsage): StorageUsagePart[] {
   return [
     { label: 'Testi delle sbobine', bytes: usage.documents },
     { label: 'Audio delle sbobine', bytes: usage.audio },
     ...(usage.queueAudio > 0 ? [{ label: 'Audio in coda', bytes: usage.queueAudio }] : []),
+    ...(usage.trash > 0 ? [{ label: 'Sbobine nel cestino', bytes: usage.trash }] : []),
     { label: 'Avanzamento elaborazioni', bytes: usage.checkpoints },
   ];
 }
@@ -165,6 +179,10 @@ export interface WebHostOptions {
   drive?: DriveConnection | null;
   /** Quiet period before a sync after local changes (tests shorten it). */
   driveDelayMs?: number;
+  /** navigator.locks, shared with the other tabs of the site (tests pass a fake one shared by two hosts). */
+  locks?: LockManager | null;
+  /** Opens this tab's end of the channel to the other tabs (tests pass fake ones shared by two hosts). */
+  openTabChannel?: () => TabChannel | null;
   /** Deleting moves a sbobina to the trash (default: the builds with the Drive sync, connected or not). */
   trash?: boolean;
 }
@@ -221,26 +239,63 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
   // Drive sync (previews with a client ID only): every write of the user leaves a mark for it.
   // Without it the archive is the plain one, as in the released site.
   const driveConnection = options.drive === undefined ? createDriveConnection() : options.drive;
-  // The sbobina open in the editor: Drive's changes to it wait until the editor closes.
+  // The sbobina open in the editor: Drive's changes to it wait until the editor closes, in this tab
+  // and in the other tabs of the site, which see it through its lock.
+  const tabLocks = createTabLocks(options.locks === undefined ? globalThis.navigator?.locks : options.locks, options.openTabChannel);
   let openInEditor: string | null = null;
+  let releaseEditor: (() => void) | null = null;
+  const setOpenInEditor = (sessionDir: string | null) => {
+    if (sessionDir === openInEditor) return;
+    releaseEditor?.();
+    releaseEditor = sessionDir ? tabLocks.holdEditor(sessionDir) : null;
+    openInEditor = sessionDir;
+  };
+  // A round of this page has merged Drive's changes: the trash may expire what is on Drive too.
+  let driveMerged = false;
   const drive: DriveService | null = driveConnection ? createDriveService({
     factory: database,
     ...driveConnection,
     isBusy: () => activeRun !== null,
-    isOpenInEditor: sessionDir => sessionDir === openInEditor,
+    isOpenInEditor: sessionDir => sessionDir === openInEditor || tabLocks.editorOpen(sessionDir),
+    exclusive: run => tabLocks.exclusive(run),
     delayMs: options.driveDelayMs,
     onReport: report => {
+      if (!driveMerged) {
+        driveMerged = true;
+        void purgeTrash();
+      }
       if (report.downloaded || report.removed || report.conflicts || report.foldersChanged) emit('archiveChangedRemotely');
-      for (const sessionDir of report.deferred) emit('documentChangedElsewhere', { session_dir: sessionDir });
+      // Held back for this tab's editor or another tab's: the editor that has it open shows the notice.
+      for (const sessionDir of report.deferred) {
+        if (sessionDir === openInEditor) emit('documentChangedElsewhere', { session_dir: sessionDir });
+        tabLocks.tellEditors(sessionDir);
+      }
     },
     onNeedsReconnect: () => emit('driveNeedsReconnect'),
     archive: () => archive,
   }) : null;
+  // Another tab's round held a change back for the sbobina open here; or another tab, without a
+  // token, closed the editor that held one back: this tab's round brings it in, if it has a token.
+  if (drive) {
+    tabLocks.onEditorsTold(sessionDir => {
+      if (sessionDir === openInEditor) emit('documentChangedElsewhere', { session_dir: sessionDir });
+    });
+    tabLocks.onEditorClosed(() => drive.schedule());
+  }
   const archive = drive ? trackArchive(createWebArchive(database), database, () => drive.schedule()) : createWebArchive(database);
   drive?.start();
   const trashEnabled = options.trash ?? driveConnection !== null;
-  // Sbobine in the trash for more than 30 days go for good (on Drive too: a mark without text).
-  const purgeTrash = () => (trashEnabled ? purgeExpiredTrash(archive, new Date()).catch(() => 0) : Promise.resolve(0));
+  // Sbobine in the trash for more than 30 days go for good (on Drive too: a mark without text, dated
+  // when they went to the trash, so a restore made since on another device wins over it). One already
+  // on Drive waits for a round of this page while one can run, to merge such a restore first and keep
+  // the sbobina here with its audio; without a token (a new visit) it goes now, not at the next login.
+  const purgeTrash = () => {
+    if (!trashEnabled) return Promise.resolve(0);
+    const linked = drive?.status();
+    const waitForDrive = Boolean(linked?.connected && !linked.needs_reconnect) && !driveMerged;
+    const onDrive = async (sessionDir: string) => Boolean((await readRecord(database, sessionDir).catch(() => null))?.file_id);
+    return purgeExpiredTrash(archive, new Date(), waitForDrive ? onDrive : undefined).catch(() => 0);
+  };
   void purgeTrash();
   const storage = options.storage ?? navigator.storage;
   const media = options.media ?? createWebMediaStore(database);
@@ -326,6 +381,55 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
       } else emit('appendConsole', `⚠ Formato non supportato nella versione web: ${file.name}. Usa un file MP3, M4A o MP4.`);
     }
     return descriptors;
+  };
+
+  // The text the editor started from: the stored text it read, then each of its saves, plus its saves
+  // still on their way. A stored text that is none of these was written by someone else after the
+  // editor read it (a change from Drive applied just as it opened, a backup import): the editor's
+  // save must not overwrite it. Its text goes to a new sbobina "… (conflitto)", and so do its next
+  // saves, until the sbobina is opened again.
+  type EditorText = { base: string; inFlight: string[]; copy?: Promise<ArchiveSession | null> };
+  const editorTexts = new Map<string, EditorText>();
+  let lastRead: string | null = null;
+  const editorRead = (sessionDir: string, html: string) => {
+    // This sbobina and the one opened before it: its last save may arrive after the switch.
+    for (const key of editorTexts.keys()) if (key !== lastRead) editorTexts.delete(key);
+    editorTexts.set(sessionDir, { base: storedBodyOf(html), inFlight: [] });
+    lastRead = sessionDir;
+  };
+  const editorCopy = async (sessionDir: string, body: string): Promise<ArchiveSession | null> => {
+    const session = await archive.get(sessionDir);
+    if (!session) return null;
+    const { session_dir: _dir, html_path: _html, trashed_at: _trashed, last_opened_at_iso: _opened, ...fields } = session;
+    const name = session.name.endsWith(CONFLICT_SUFFIX) ? session.name : `${session.name}${CONFLICT_SUFFIX}`;
+    const copy = await archive.create({ ...fields, name, input_path: '' }, body);
+    emit('appendConsole', `⚠ “${session.name}” è cambiata mentre era aperta nell’editor: le modifiche fatte qui sono salvate in “${name}”.`);
+    emit('documentChangedElsewhere', { session_dir: sessionDir });
+    emit('archiveChangedRemotely');
+    return copy;
+  };
+  const saveEditorText = async (path: string, body: string, generation?: number): Promise<SaveHtmlResult> => {
+    const text = editorTexts.get(sessionDirOf(path));
+    if (!text) return archive.saveHtml(path, body, generation);
+    if (!text.copy) {
+      text.inFlight.push(body);
+      let result: SaveHtmlResult;
+      try {
+        result = await archive.saveHtml(path, body, generation, stored => stored === text.base || text.inFlight.includes(stored));
+      } finally {
+        text.inFlight.splice(text.inFlight.indexOf(body), 1);
+      }
+      if (result.saved) text.base = body;
+      if (!result.changed) return result;
+      text.copy ??= editorCopy(sessionDirOf(path), body);
+    }
+    const copy = await text.copy.catch(() => null);
+    if (!copy) {
+      // Tried again at the next save.
+      text.copy = undefined;
+      return { ok: false, error: 'Salvataggio non riuscito: la sbobina è cambiata mentre era aperta.' };
+    }
+    return archive.saveHtml(copy.html_path, body, generation);
   };
 
   return {
@@ -553,11 +657,13 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
     },
 
     read_html_content: async path => {
-      if (drive) openInEditor = path.replace(/\/sbobina\.html$/, '');
+      if (drive) setOpenInEditor(path.replace(/\/sbobina\.html$/, ''));
       const content = await archive.readHtml(path).catch(() => null);
-      return content === null ? { ok: false, error: 'Sbobina non trovata in questo browser.' } : { ok: true, content };
+      if (content === null) return { ok: false, error: 'Sbobina non trovata in questo browser.' };
+      editorRead(sessionDirOf(path), content);
+      return { ok: true, content };
     },
-    save_html_content: async (path, content, generation) => archive.saveHtml(path, content, generation),
+    save_html_content: async (path, content, generation) => saveEditorText(path, content, generation),
 
     // The editor's player: the copy the user kept, else the file behind its path in this page; without
     // either the editor asks for the file. One URL at a time.
@@ -718,13 +824,19 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
     import_web_backup: async file => {
       if (activeRun) return { ok: false, error: 'Elaborazione in corso: importa il backup al termine.' };
       try {
-        const summary = await importBackup(database, file);
-        if (drive) {
-          // Written straight to IndexedDB: the marks tell the sync to send them.
+        if (!drive) return { ok: true, summary: describeImport(await importBackup(database, file)) };
+        // Written straight to IndexedDB: the marks tell the sync to send them, collections too. No
+        // round runs in between: it would find the imported texts unmarked and write Drive's over them.
+        const summary = await drive.hold(async () => {
+          const foldersBefore = await archive.loadFolders().catch(() => [] as ArchiveFolder[]);
+          const imported = await importBackup(database, file);
           const at = new Date().toISOString();
-          for (const sessionDir of summary.changed) await markSessionChanged(database, sessionDir, at).catch(() => undefined);
-          drive.schedule();
-        }
+          for (const sessionDir of imported.changed) await markSessionChanged(database, sessionDir, at).catch(() => undefined);
+          const foldersAfter = await archive.loadFolders().catch(() => foldersBefore);
+          await markFoldersChanged(database, foldersBefore, foldersAfter, at).catch(() => undefined);
+          return imported;
+        });
+        drive.schedule();
         return { ok: true, summary: describeImport(summary) };
       } catch (error) {
         return { ok: false, error: error instanceof DOMException && error.name === 'QuotaExceededError' ? storageErrorMessage(error) : error instanceof Error ? error.message : String(error) };
@@ -753,7 +865,11 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
       if (frontendEvents.length > 100) frontendEvents.shift();
       return { ok: true };
     },
-    ...(drive ? driveMethods(drive, () => { openInEditor = null; }) : {}),
+    ...(drive ? driveMethods(drive, () => {
+      setOpenInEditor(null);
+      // This tab runs no round without a token of its own: another tab with one brings the change in.
+      if (drive.status().needs_reconnect) tabLocks.tellEditorClosed();
+    }) : {}),
     ...(trashEnabled ? {
       list_trash: async () => {
         try {
