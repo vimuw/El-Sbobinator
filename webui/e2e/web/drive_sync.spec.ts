@@ -30,7 +30,7 @@ async function fakeGemini(page: Page) {
 
 /**
  * Google for one browser: the login page sends straight back with a token, Drive is the shared fake.
- * Asked for drive.file (the export), the token also covers it, as with include_granted_scopes.
+ * Asked for drive.file (the export), the token carries that scope only, as with include_granted_scopes=false.
  */
 async function fakeGoogle(context: BrowserContext, drive: FakeDrive, device: string) {
   let tokens = 0;
@@ -42,7 +42,7 @@ async function fakeGoogle(context: BrowserContext, drive: FakeDrive, device: str
       access_token: `${device}-${file ? `${FAKE_FILE_TOKEN_MARK}-` : ''}${++tokens}`,
       token_type: 'Bearer',
       expires_in: '3600',
-      scope: file ? `${DRIVE_SCOPE} ${FILE_SCOPE}` : DRIVE_SCOPE,
+      scope: file ? FILE_SCOPE : DRIVE_SCOPE,
     });
     return route.fulfill({ status: 302, headers: { location: `${url.searchParams.get('redirect_uri')}#${fragment.toString()}` } });
   });

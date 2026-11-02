@@ -29,7 +29,9 @@ export function buildAuthUrl(options: AuthUrlOptions): string {
     response_type: 'token',
     scope: options.scope ?? DRIVE_APPDATA_SCOPE,
     state: options.state,
-    include_granted_scopes: 'true',
+    // Each token carries only the scope asked for: after an export the sync's token, kept by the
+    // tab, would otherwise also carry drive.file.
+    include_granted_scopes: 'false',
   });
   if (options.prompt) params.set('prompt', options.prompt);
   if (options.loginHint) params.set('login_hint', options.loginHint);

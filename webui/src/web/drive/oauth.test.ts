@@ -23,7 +23,7 @@ describe('Drive OAuth', () => {
       response_type: 'token',
       scope: DRIVE_APPDATA_SCOPE,
       state: 's1',
-      include_granted_scopes: 'true',
+      include_granted_scopes: 'false',
       prompt: 'none',
       login_hint: 'a@b.it',
     });
