@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import { ChevronDown } from 'lucide-react';
 import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
+import { useAnchoredPanel } from './anchoredPanel';
 
 const COLOR_PALETTE: string[][] = [
   ['#000000', '#434343', '#666666', '#999999', '#b7b7b7', '#cccccc', '#d9d9d9', '#ffffff'],
@@ -16,17 +17,14 @@ const COLOR_PALETTE: string[][] = [
 
 export const ColorPickerButton = ({ editor }: { editor: TiptapEditor }) => {
   const [isOpen, setIsOpen] = React.useState(false);
-  const [panelPos, setPanelPos] = React.useState({ top: 0, left: 0 });
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   const panelRef = React.useRef<HTMLDivElement>(null);
+  const { panelPos, placeUnder } = useAnchoredPanel(isOpen, panelRef);
   const currentColor: string | undefined = editor.getAttributes('textStyle').color
     ?? editor.getAttributes(editor.isActive('heading') ? 'heading' : 'paragraph').documentStyle?.color;
 
   const toggleOpen = () => {
-    if (!isOpen && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      setPanelPos({ top: rect.bottom + 6, left: rect.left });
-    }
+    if (!isOpen && buttonRef.current) placeUnder(buttonRef.current);
     setIsOpen(prev => !prev);
   };
 

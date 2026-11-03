@@ -6523,6 +6523,12 @@ input::-webkit-contacts-auto-fill-button {
     min-width: 0;
   }
 
+  /* Toolbar popovers move left to stay on screen (anchoredPanel.ts); none is wider than the window. */
+  .color-picker-panel,
+  .editor-dropdown-panel {
+    max-width: calc(100vw - 16px);
+  }
+
   .dashboard-section-header {
     flex-wrap: wrap;
     row-gap: 8px;

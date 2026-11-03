@@ -4,6 +4,7 @@ import { type Editor as TiptapEditor } from '@tiptap/core';
 import { ChevronDown } from 'lucide-react';
 import { DOCUMENT_FORMATTING, pointSize } from '../../../documentFormatting';
 import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
+import { useAnchoredPanel } from './anchoredPanel';
 
 const FONT_FAMILIES = [
   { label: DOCUMENT_FORMATTING.fontFamily, value: '', cssFamily: `${DOCUMENT_FORMATTING.fontFamily}, sans-serif` },
@@ -28,9 +29,9 @@ const HEADING_OPTIONS = [
 
 export const FontFamilySelect = ({ editor }: { editor: TiptapEditor }) => {
   const [isOpen, setIsOpen] = React.useState(false);
-  const [panelPos, setPanelPos] = React.useState({ top: 0, left: 0 });
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   const panelRef = React.useRef<HTMLDivElement>(null);
+  const { panelPos, placeUnder } = useAnchoredPanel(isOpen, panelRef);
 
   const blockStyle = editor.getAttributes(editor.isActive('heading') ? 'heading' : 'paragraph').documentStyle;
   const rawFamily = editor.getAttributes('textStyle').fontFamily ?? blockStyle?.['font-family'] ?? '';
@@ -38,10 +39,7 @@ export const FontFamilySelect = ({ editor }: { editor: TiptapEditor }) => {
   const currentLabel = FONT_FAMILIES.find(f => f.value === currentFamily)?.label || (currentFamily ? currentFamily.replace(/['"]/g, '') : DOCUMENT_FORMATTING.fontFamily);
 
   const toggleOpen = () => {
-    if (!isOpen && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      setPanelPos({ top: rect.bottom + 6, left: rect.left });
-    }
+    if (!isOpen && buttonRef.current) placeUnder(buttonRef.current);
     setIsOpen(prev => !prev);
   };
 
@@ -120,9 +118,9 @@ export const FontFamilySelect = ({ editor }: { editor: TiptapEditor }) => {
 
 export const FontSizeSelect = ({ editor }: { editor: TiptapEditor }) => {
   const [isOpen, setIsOpen] = React.useState(false);
-  const [panelPos, setPanelPos] = React.useState({ top: 0, left: 0 });
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   const panelRef = React.useRef<HTMLDivElement>(null);
+  const { panelPos, placeUnder } = useAnchoredPanel(isOpen, panelRef);
 
   const getCurrentSize = (): string => {
     if (!editor) return String(DOCUMENT_FORMATTING.fontSizePt);
@@ -146,10 +144,7 @@ export const FontSizeSelect = ({ editor }: { editor: TiptapEditor }) => {
   const currentSize = getCurrentSize();
 
   const toggleOpen = () => {
-    if (!isOpen && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      setPanelPos({ top: rect.bottom + 6, left: rect.left });
-    }
+    if (!isOpen && buttonRef.current) placeUnder(buttonRef.current);
     setIsOpen(prev => !prev);
   };
 
@@ -226,9 +221,9 @@ export const FontSizeSelect = ({ editor }: { editor: TiptapEditor }) => {
 
 export const HeadingSelect = ({ editor }: { editor: TiptapEditor }) => {
   const [isOpen, setIsOpen] = React.useState(false);
-  const [panelPos, setPanelPos] = React.useState({ top: 0, left: 0 });
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   const panelRef = React.useRef<HTMLDivElement>(null);
+  const { panelPos, placeUnder } = useAnchoredPanel(isOpen, panelRef);
 
   const getCurrentHeading = () => {
     for (let i = 1; i <= 5; i++) {
@@ -240,10 +235,7 @@ export const HeadingSelect = ({ editor }: { editor: TiptapEditor }) => {
   const current = getCurrentHeading();
 
   const toggleOpen = () => {
-    if (!isOpen && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      setPanelPos({ top: rect.bottom + 6, left: rect.left });
-    }
+    if (!isOpen && buttonRef.current) placeUnder(buttonRef.current);
     setIsOpen(prev => !prev);
   };
 
@@ -338,15 +330,12 @@ export const ZoomSelect = ({
   onZoomChange?: (level: number) => void;
 }) => {
   const [isOpen, setIsOpen] = React.useState(false);
-  const [panelPos, setPanelPos] = React.useState({ top: 0, left: 0 });
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   const panelRef = React.useRef<HTMLDivElement>(null);
+  const { panelPos, placeUnder } = useAnchoredPanel(isOpen, panelRef);
 
   const toggleOpen = () => {
-    if (!isOpen && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      setPanelPos({ top: rect.bottom + 6, left: rect.left });
-    }
+    if (!isOpen && buttonRef.current) placeUnder(buttonRef.current);
     setIsOpen(prev => !prev);
   };
 

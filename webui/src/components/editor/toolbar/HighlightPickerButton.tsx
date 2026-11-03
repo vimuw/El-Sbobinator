@@ -5,6 +5,7 @@ import { ChevronDown } from 'lucide-react';
 import { getLastHighlightColor, setLastHighlightColor } from '../../../editorUtils';
 import { HighlightIcon } from '../../HighlightIcon';
 import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
+import { useAnchoredPanel } from './anchoredPanel';
 
 const HIGHLIGHT_COLORS = [
   { label: 'Giallo', color: '#fef08a' },
@@ -18,17 +19,14 @@ const HIGHLIGHT_COLORS = [
 
 export const HighlightPickerButton = ({ editor }: { editor: TiptapEditor }) => {
   const [isOpen, setIsOpen] = React.useState(false);
-  const [panelPos, setPanelPos] = React.useState({ top: 0, left: 0 });
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   const panelRef = React.useRef<HTMLDivElement>(null);
+  const { panelPos, placeUnder } = useAnchoredPanel(isOpen, panelRef);
   const currentColor: string | undefined = editor.getAttributes('highlight').color;
   const activeColor = currentColor ?? getLastHighlightColor();
 
   const toggleOpen = () => {
-    if (!isOpen && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      setPanelPos({ top: rect.bottom + 6, left: rect.left });
-    }
+    if (!isOpen && buttonRef.current) placeUnder(buttonRef.current);
     setIsOpen(prev => !prev);
   };
 
