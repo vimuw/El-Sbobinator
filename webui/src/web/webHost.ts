@@ -1,5 +1,5 @@
 import type { FileDescriptor } from '../appState';
-import type { ArchiveFolder, ArchiveSession, PywebviewApi, StorageUsagePart, ValidationResult } from '../bridge';
+import type { ArchiveSession, PywebviewApi, StorageUsagePart, ValidationResult } from '../bridge';
 import { APP_VERSION, WEB_PREVIEW_BUILD } from '../branding';
 import { type HostCapabilities, setHostCapabilities } from '../hostCapabilities';
 import { STORAGE_KEYS } from '../storageKeys';
@@ -9,7 +9,7 @@ import { createCheckpointStore } from './checkpointStore';
 import { createDriveConnection, driveEnabled, type DriveConnection } from './drive/driveConfig';
 import { createDriveService, type DriveService } from './drive/driveService';
 import { CONFLICT_SUFFIX } from './drive/sync';
-import { markFoldersChanged, markSessionChanged, readRecord, trackArchive } from './drive/syncState';
+import { readRecord, syncMarks, trackArchive } from './drive/syncState';
 import { createTabLocks, type TabChannel } from './drive/tabLocks';
 import { type BridgeEventName, type EmitBridgeEvent, runFakePipeline } from './fakePipeline';
 import { createPageState } from './pageLifecycle';
@@ -282,7 +282,7 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
     });
     tabLocks.onEditorClosed(() => drive.schedule());
   }
-  const archive = drive ? trackArchive(createWebArchive(database), database, () => drive.schedule()) : createWebArchive(database);
+  const archive = drive ? trackArchive(database, () => drive.schedule()) : createWebArchive(database);
   drive?.start();
   const trashEnabled = options.trash ?? driveConnection !== null;
   // Sbobine in the trash for more than 30 days go for good (on Drive too: a mark without text, dated
@@ -830,19 +830,10 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
     import_web_backup: async file => {
       if (activeRun) return { ok: false, error: 'Elaborazione in corso: importa il backup al termine.' };
       try {
-        if (!drive) return { ok: true, summary: describeImport(await importBackup(database, file)) };
-        // Written straight to IndexedDB: the marks tell the sync to send them, collections too. No
-        // round runs in between: it would find the imported texts unmarked and write Drive's over them.
-        const summary = await drive.hold(async () => {
-          const foldersBefore = await archive.loadFolders().catch(() => [] as ArchiveFolder[]);
-          const imported = await importBackup(database, file);
-          const at = new Date().toISOString();
-          for (const sessionDir of imported.changed) await markSessionChanged(database, sessionDir, at).catch(() => undefined);
-          const foldersAfter = await archive.loadFolders().catch(() => foldersBefore);
-          await markFoldersChanged(database, foldersBefore, foldersAfter, at).catch(() => undefined);
-          return imported;
-        });
-        drive.schedule();
+        // With the sync, each sbobina and the collections are marked as they are written: a round
+        // running meanwhile finds the imported text marked and keeps both versions.
+        const summary = await importBackup(database, file, drive ? { marks: syncMarks() } : {});
+        drive?.schedule();
         return { ok: true, summary: describeImport(summary) };
       } catch (error) {
         return { ok: false, error: error instanceof DOMException && error.name === 'QuotaExceededError' ? storageErrorMessage(error) : error instanceof Error ? error.message : String(error) };

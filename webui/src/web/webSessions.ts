@@ -48,6 +48,50 @@ export interface WebArchive {
 }
 
 /**
+ * Marks for the Drive sync, written in the same transaction as the change they describe: a round
+ * that reads the archive never finds a change without its mark, which it would take for an old text
+ * and overwrite with Drive's.
+ */
+export interface ArchiveMarks {
+  /** The object store the marks live in: every write's transaction covers it too. */
+  store: string;
+  /**
+   * A sbobina changed. `deleted`: deleted for good, the deletion counting as made at `at`.
+   * `fields`: the metadata fields an update changed (some never leave this device).
+   */
+  session(transaction: IDBTransaction, sessionDir: string, change?: { deleted?: boolean; at?: string; fields?: string[] }): Promise<void>;
+  /** The folder tree changed from `before` to `after`. */
+  folders(transaction: IDBTransaction, before: ArchiveFolder[], after: ArchiveFolder[]): Promise<void>;
+}
+
+/** The stores a deletion for good touches: deleteInTransaction needs them all. */
+export const DELETE_STORES = [SESSIONS, DOCUMENTS, CHECKPOINTS, FOLDERS, MEDIA];
+
+/**
+ * Removes the sbobina, its document, its audio, its checkpoint and its place in the folders, inside
+ * a transaction over DELETE_STORES. False when it is not here.
+ */
+export async function deleteInTransaction(transaction: IDBTransaction, sessionDir: string): Promise<boolean> {
+  const session = await requestValue(transaction.objectStore(SESSIONS).get(sessionDir) as IDBRequest<ArchiveSession | undefined>);
+  if (!session) return false;
+  transaction.objectStore(SESSIONS).delete(sessionDir);
+  transaction.objectStore(DOCUMENTS).delete(sessionDir);
+  // The checkpoint would offer "already done" for a sbobina that no longer exists.
+  const checkpoints = transaction.objectStore(CHECKPOINTS);
+  const states = await requestValue(checkpoints.getAll() as IDBRequest<Array<{ id: string; archiveSessionDir?: string }>>);
+  for (const state of states) {
+    if (state.archiveSessionDir === sessionDir) checkpoints.delete(state.id);
+  }
+  const media = transaction.objectStore(MEDIA);
+  for (const id of await requestValue(media.index(MEDIA_BY_SESSION).getAllKeys(sessionDir))) media.delete(id);
+  const folders = transaction.objectStore(FOLDERS);
+  for (const folder of await requestValue(folders.getAll() as IDBRequest<ArchiveFolder[]>)) {
+    if (folder.session_dirs?.includes(sessionDir)) folders.put({ ...folder, session_dirs: folder.session_dirs.filter(item => item !== sessionDir) });
+  }
+  return true;
+}
+
+/**
  * Deletes for good the sbobine trashed more than TRASH_DAYS ago; returns how many. `wait` keeps a
  * sbobina in the trash for now (one on Drive, until the sync has merged the other devices' changes).
  * The expiry counts as made when the sbobina went to the trash: a restore or an edit made after that
@@ -102,7 +146,9 @@ export function storageErrorMessage(error: unknown): string {
   return `Salvataggio nel browser non riuscito${error instanceof Error && error.message ? `: ${error.message}` : '.'}`;
 }
 
-export function createWebArchive(factory: IDBFactory | undefined = globalThis.indexedDB): WebArchive {
+/** `marks`: each write leaves its Drive sync mark in its own transaction (builds with the sync). */
+export function createWebArchive(factory: IDBFactory | undefined = globalThis.indexedDB, marks?: ArchiveMarks): WebArchive {
+  const writing = (stores: string[]) => (marks ? [...stores, marks.store] : stores);
   const getSession = (transaction: IDBTransaction, sessionDir: string) =>
     requestValue(transaction.objectStore(SESSIONS).get(sessionDir) as IDBRequest<ArchiveSession | undefined>);
   const getDocument = (transaction: IDBTransaction, sessionDir: string) =>
@@ -114,9 +160,10 @@ export function createWebArchive(factory: IDBFactory | undefined = globalThis.in
     async create(input, body) {
       const sessionDir = `${WEB_SESSION_PREFIX}${crypto.randomUUID()}`;
       const session: ArchiveSession = { ...input, session_dir: sessionDir, html_path: webSessionHtmlPath(sessionDir) };
-      await inTransaction(factory, [SESSIONS, DOCUMENTS], 'readwrite', transaction => {
+      await inTransaction(factory, writing([SESSIONS, DOCUMENTS]), 'readwrite', async transaction => {
         transaction.objectStore(SESSIONS).put(session);
         transaction.objectStore(DOCUMENTS).put({ session_dir: sessionDir, body, generation: 0 } satisfies StoredDocument);
+        await marks?.session(transaction, sessionDir);
       });
       return session;
     },
@@ -132,21 +179,24 @@ export function createWebArchive(factory: IDBFactory | undefined = globalThis.in
 
     async trash(sessionDir, at) {
       const dir = sessionDirOf(sessionDir);
-      return inTransaction(factory, SESSIONS, 'readwrite', async transaction => {
+      return inTransaction(factory, writing([SESSIONS]), 'readwrite', async transaction => {
         const session = await getSession(transaction, dir);
         if (!session) return false;
         if (!session.trashed_at) transaction.objectStore(SESSIONS).put({ ...session, trashed_at: at } satisfies ArchiveSession);
+        // Trash and restore travel as the file's deleted_at: the other devices follow.
+        await marks?.session(transaction, dir);
         return true;
       });
     },
 
     async restore(sessionDir) {
       const dir = sessionDirOf(sessionDir);
-      return inTransaction(factory, SESSIONS, 'readwrite', async transaction => {
+      return inTransaction(factory, writing([SESSIONS]), 'readwrite', async transaction => {
         const session = await getSession(transaction, dir);
         if (!session) return null;
         const { trashed_at: _trashedAt, ...restored } = session;
         transaction.objectStore(SESSIONS).put(restored satisfies ArchiveSession);
+        await marks?.session(transaction, dir);
         return restored;
       });
     },
@@ -168,7 +218,7 @@ export function createWebArchive(factory: IDBFactory | undefined = globalThis.in
     async saveHtml(path, body, generation, accept) {
       const dir = sessionDirOf(path);
       try {
-        return await inTransaction(factory, DOCUMENTS, 'readwrite', async transaction => {
+        return await inTransaction(factory, writing([DOCUMENTS]), 'readwrite', async (transaction): Promise<SaveHtmlResult> => {
           const document = await getDocument(transaction, dir);
           if (!document) return { ok: false, error: 'Sbobina non trovata in questo browser.' };
           if (typeof generation === 'number' && generation < document.generation) return { ok: true, saved: false };
@@ -178,6 +228,7 @@ export function createWebArchive(factory: IDBFactory | undefined = globalThis.in
             body,
             generation: typeof generation === 'number' ? generation : document.generation,
           } satisfies StoredDocument);
+          await marks?.session(transaction, dir);
           return { ok: true, saved: true };
         });
       } catch (error) {
@@ -193,34 +244,21 @@ export function createWebArchive(factory: IDBFactory | undefined = globalThis.in
 
     async update(sessionDir, patch) {
       const dir = sessionDirOf(sessionDir);
-      return inTransaction(factory, SESSIONS, 'readwrite', async transaction => {
+      return inTransaction(factory, writing([SESSIONS]), 'readwrite', async transaction => {
         const session = await getSession(transaction, dir);
         if (!session) return null;
         const next: ArchiveSession = { ...session, ...patch, session_dir: session.session_dir, html_path: session.html_path };
         transaction.objectStore(SESSIONS).put(next);
+        await marks?.session(transaction, dir, { fields: Object.keys(patch) });
         return next;
       });
     },
 
-    async delete(sessionDir) {
+    async delete(sessionDir, changedAt) {
       const dir = sessionDirOf(sessionDir);
-      return inTransaction(factory, [SESSIONS, DOCUMENTS, CHECKPOINTS, FOLDERS, MEDIA], 'readwrite', async transaction => {
-        const session = await getSession(transaction, dir);
-        if (!session) return false;
-        transaction.objectStore(SESSIONS).delete(dir);
-        transaction.objectStore(DOCUMENTS).delete(dir);
-        // The checkpoint would offer "already done" for a sbobina that no longer exists.
-        const checkpoints = transaction.objectStore(CHECKPOINTS);
-        const states = await requestValue(checkpoints.getAll() as IDBRequest<Array<{ id: string; archiveSessionDir?: string }>>);
-        for (const state of states) {
-          if (state.archiveSessionDir === dir) checkpoints.delete(state.id);
-        }
-        const media = transaction.objectStore(MEDIA);
-        for (const id of await requestValue(media.index(MEDIA_BY_SESSION).getAllKeys(dir))) media.delete(id);
-        const folders = transaction.objectStore(FOLDERS);
-        for (const folder of await requestValue(folders.getAll() as IDBRequest<ArchiveFolder[]>)) {
-          if (folder.session_dirs?.includes(dir)) folders.put({ ...folder, session_dirs: folder.session_dirs.filter(item => item !== dir) });
-        }
+      return inTransaction(factory, writing(DELETE_STORES), 'readwrite', async transaction => {
+        if (!await deleteInTransaction(transaction, dir)) return false;
+        await marks?.session(transaction, dir, { deleted: true, at: changedAt });
         return true;
       });
     },
@@ -232,10 +270,12 @@ export function createWebArchive(factory: IDBFactory | undefined = globalThis.in
 
     // The UI always sends the whole folder tree.
     async saveFolders(folders) {
-      await inTransaction(factory, FOLDERS, 'readwrite', transaction => {
+      await inTransaction(factory, writing([FOLDERS]), 'readwrite', async transaction => {
         const store = transaction.objectStore(FOLDERS);
+        const before = marks ? await requestValue(store.getAll() as IDBRequest<ArchiveFolder[]>) : [];
         store.clear();
         for (const folder of folders) store.put(folder);
+        await marks?.folders(transaction, before, folders);
       });
     },
 

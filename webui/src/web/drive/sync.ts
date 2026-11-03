@@ -1,7 +1,7 @@
 import type { ArchiveFolder, ArchiveSession } from '../../bridge';
 import { sanitizeBodyHtml } from '../pipeline/export';
 import { DOCUMENTS, FOLDERS, SESSIONS, SYNC, inTransaction, requestValue, textGeneration, type StoredDocument } from '../webDatabase';
-import { WEB_SESSION_PREFIX, createWebArchive, webSessionHtmlPath } from '../webSessions';
+import { DELETE_STORES, WEB_SESSION_PREFIX, createWebArchive, deleteInTransaction, webSessionHtmlPath } from '../webSessions';
 import type { DriveApi, DriveFileMeta } from './driveApi';
 import {
   FOLDERS_FILE,
@@ -90,10 +90,13 @@ type ApplyOutcome = 'written' | 'removed' | 'none' | 'changed';
 async function applyRemote(factory: IDBFactory | undefined, file: SyncSessionFile, expected: SessionSyncRecord | null, synced: Omit<SessionSyncRecord, 'key'>): Promise<ApplyOutcome> {
   const dir = file.session.session_dir;
   if (isPurged(file)) {
-    if (!sameMark(await readRecord(factory, dir), expected)) return 'changed';
-    const removed = await createWebArchive(factory).delete(dir);
-    await writeRecord(factory, synced);
-    return removed ? 'removed' : 'none';
+    return inTransaction(factory, [...DELETE_STORES, SYNC], 'readwrite', async transaction => {
+      const records = transaction.objectStore(SYNC);
+      if (!sameMark(await requestValue(records.get(sessionKey(dir)) as IDBRequest<SessionSyncRecord | undefined>), expected)) return 'changed';
+      const removed = await deleteInTransaction(transaction, dir);
+      records.put({ ...synced, key: sessionKey(dir) } satisfies SessionSyncRecord);
+      return removed ? 'removed' : 'none';
+    });
   }
   const body = sanitizeBodyHtml(file.body);
   return inTransaction(factory, [SESSIONS, DOCUMENTS, SYNC], 'readwrite', async transaction => {
@@ -128,7 +131,7 @@ async function applyRemote(factory: IDBFactory | undefined, file: SyncSessionFil
  */
 async function saveConflictCopy(factory: IDBFactory | undefined, session: ArchiveSession, body: string, at: string): Promise<void> {
   const dir = `${WEB_SESSION_PREFIX}${crypto.randomUUID()}`;
-  await inTransaction(factory, [SESSIONS, DOCUMENTS], 'readwrite', transaction => {
+  await inTransaction(factory, [SESSIONS, DOCUMENTS, SYNC], 'readwrite', transaction => {
     transaction.objectStore(SESSIONS).put({
       ...session,
       name: session.name.endsWith(CONFLICT_SUFFIX) ? session.name : `${session.name}${CONFLICT_SUFFIX}`,
@@ -137,8 +140,8 @@ async function saveConflictCopy(factory: IDBFactory | undefined, session: Archiv
       input_path: '',
     } satisfies ArchiveSession);
     transaction.objectStore(DOCUMENTS).put({ session_dir: dir, body, generation: 0 } satisfies StoredDocument);
+    transaction.objectStore(SYNC).put({ key: sessionKey(dir), session_dir: dir, dirty: true, updated_at: at } satisfies SessionSyncRecord);
   });
-  await writeRecord(factory, { session_dir: dir, dirty: true, updated_at: at });
 }
 
 function asSession(file: SyncSessionFile): ArchiveSession {

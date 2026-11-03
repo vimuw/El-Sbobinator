@@ -17,7 +17,7 @@ const now = () => new Date((clock += 60_000));
 function device(drive: FakeDrive, token: string, openInEditor: Set<string> = new Set(), fetchImpl: typeof fetch = drive.fetch) {
   const factory = new IDBFactory();
   const raw = createWebArchive(factory);
-  const archive = trackArchive(raw, factory, () => {}, now);
+  const archive = trackArchive(factory, () => {}, now);
   const api = createDriveApi({ getToken: () => token, fetchImpl, sleep: async () => {}, random: () => 0 });
   const sync = () => syncOnce({ factory, api, now, isOpenInEditor: dir => openInEditor.has(dir) });
   const body = async (dir: string) => (await raw.readHtml(webSessionHtmlPath(dir)))?.match(/<body>([\s\S]*)<\/body>/)?.[1] ?? null;

@@ -75,10 +75,10 @@ describe('web host trash', () => {
     // restore) removed on the iPad the sbobina restored there, with its audio.
     const fake = createFakeDrive();
     const pcFactory = new IDBFactory();
-    const pc = trackArchive(createWebArchive(pcFactory), pcFactory, () => {});
+    const pc = trackArchive(pcFactory, () => {});
     const syncPc = () => syncOnce({ factory: pcFactory, api: driveApiFor(fake, 'pc') });
     const ipadFactory = new IDBFactory();
-    const ipad = trackArchive(createWebArchive(ipadFactory), ipadFactory, () => {});
+    const ipad = trackArchive(ipadFactory, () => {});
     const syncIpad = () => syncOnce({ factory: ipadFactory, api: driveApiFor(fake, 'ipad') });
     const restored = await pc.create(input, '<p>uno</p>');
     await syncPc();
@@ -118,10 +118,10 @@ describe('web host trash', () => {
     const trashedAt = Date.now() - 31 * DAY_MS;
     let clock = trashedAt;
     const pcFactory = new IDBFactory();
-    const pc = trackArchive(createWebArchive(pcFactory), pcFactory, () => {}, () => new Date(clock));
+    const pc = trackArchive(pcFactory, () => {}, () => new Date(clock));
     const syncPc = () => syncOnce({ factory: pcFactory, api: driveApiFor(fake, 'pc') });
     const ipadFactory = new IDBFactory();
-    const ipad = trackArchive(createWebArchive(ipadFactory), ipadFactory, () => {}, () => new Date(clock));
+    const ipad = trackArchive(ipadFactory, () => {}, () => new Date(clock));
     const syncIpad = () => syncOnce({ factory: ipadFactory, api: driveApiFor(fake, 'ipad') });
     const restored = await pc.create(input, '<p>uno</p>');
     const expired = await pc.create({ ...input, name: 'Scaduta' }, '<p>due</p>');
@@ -249,19 +249,32 @@ describe('web host trash', () => {
     expect((await web.archive.list()).map(session => session.session_dir).sort()).toEqual([renamed.session_dir, trashed.session_dir].sort());
   });
 
-  it('runs no Drive round during an import, so the imported text and Drive\'s both survive', async () => {
-    // Regression: a round between the import's writes and its marks took the imported text for an
-    // unchanged copy and wrote Drive's over it, with no conflict copy; the summary said "sostituita".
+  it('keeps the imported text and Drive\'s when a round downloads during the import', async () => {
+    // Regression: a round that merged Drive's version while the import wrote took the imported text
+    // for an unchanged copy and wrote Drive's over it, with no conflict copy; the summary said
+    // "sostituita". The import now marks each text as it writes it.
     const fake = createFakeDrive();
     const pcFactory = new IDBFactory();
-    const pc = trackArchive(createWebArchive(pcFactory), pcFactory, () => {});
+    const pc = trackArchive(pcFactory, () => {});
     const syncPc = () => syncOnce({ factory: pcFactory, api: driveApiFor(fake, 'pc') });
     const session = await pc.create(input, '<p>uno</p>');
     await syncPc();
+    // The iPad's downloads can be held, to run the import in the middle of a round.
+    let holding = false;
+    let downloading = false;
+    let release = () => {};
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const ipadFetch: typeof fake.fetch = async (url, init) => {
+      if (holding && String(url).includes('alt=media')) {
+        downloading = true;
+        await gate;
+      }
+      return fake.fetch(url, init);
+    };
     const login = createFakeAuth('ipad', { token: true, email: 'studente@example.com' });
     const api = createWebPywebviewApi(() => {}, {
       database: new IDBFactory(),
-      drive: { auth: login.auth, api: createDriveApi({ getToken: () => login.auth.token(), fetchImpl: fake.fetch, sleep: async () => {} }) },
+      drive: { auth: login.auth, api: createDriveApi({ getToken: () => login.auth.token(), fetchImpl: ipadFetch, sleep: async () => {} }) },
       driveDelayMs: 60_000,
     });
     await api.sync_drive_now!();
@@ -271,29 +284,12 @@ describe('web host trash', () => {
     await pc.saveHtml(session.html_path, '<p>dopo</p>', 200);
     await syncPc();
 
-    // The import is held while reading the file; a round asked for meanwhile must wait for it.
-    const file = new File([backup.blob], backup.filename);
-    const slice = file.slice.bind(file);
-    let release = () => {};
-    const gate = new Promise<void>(resolve => { release = resolve; });
-    let reading = false;
-    file.slice = ((...args: Parameters<Blob['slice']>) => {
-      const part = slice(...args);
-      if (reading) return part;
-      reading = true;
-      const read = part.arrayBuffer.bind(part);
-      part.arrayBuffer = async () => { await gate; return read(); };
-      return part;
-    }) as Blob['slice'];
-    const lists = () => fake.requests.filter(request => request.method === 'GET' && /\/files\?/.test(request.url)).length;
-    const importing = api.import_web_backup!(file);
-    await vi.waitFor(() => expect(reading).toBe(true));
-    const listed = lists();
-    void api.sync_drive_now!();
-    await new Promise(resolve => setTimeout(resolve, 50));
-    expect(lists()).toBe(listed);
+    holding = true;
+    const round = api.sync_drive_now!();
+    await vi.waitFor(() => expect(downloading).toBe(true));
+    expect(await api.import_web_backup!(new File([backup.blob], backup.filename))).toMatchObject({ ok: true, summary: '1 sostituita con la versione più recente del backup.' });
     release();
-    expect(await importing).toMatchObject({ ok: true, summary: '1 sostituita con la versione più recente del backup.' });
+    await round;
 
     await api.sync_drive_now!();
     const sessions = (await api.get_completed_sessions!()).sessions ?? [];

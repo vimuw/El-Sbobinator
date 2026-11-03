@@ -33,7 +33,7 @@ function device(drive: FakeDrive, name: string, overrides: Partial<DriveServiceO
     delayMs: 20,
     ...overrides,
   });
-  const archive = trackArchive(createWebArchive(factory), factory, () => service.schedule());
+  const archive = trackArchive(factory, () => service.schedule());
   return { factory, service, archive, login, reports, setBusy: (value: boolean) => { busy = value; } };
 }
 
@@ -222,7 +222,7 @@ describe('Drive sync service', () => {
     const other = createDriveApi({ getToken: () => pc.login.auth.token(), fetchImpl: second.fetch, sleep: async () => {} });
     vi.spyOn(other, 'accountEmail').mockRejectedValueOnce(new DriveError(0, 'offline')).mockResolvedValueOnce('');
     const service = createDriveService({ factory: pc.factory, auth: pc.login.auth, api: other, isBusy: () => false });
-    const archive = trackArchive(createWebArchive(pc.factory), pc.factory, () => {});
+    const archive = trackArchive(pc.factory, () => {});
     const [session] = await archive.list();
     for (const attempt of ['offline', 'empty']) {
       const status = await service.connect();
@@ -257,7 +257,7 @@ describe('Drive sync service', () => {
     const syncing = tab(first, 'scheda-b');
     const erasing = tab(first, 'scheda-c');
     await bindAccount(factory, 'studente@example.com');
-    const archive = trackArchive(createWebArchive(factory), factory, () => {});
+    const archive = trackArchive(factory, () => {});
     const session = await archive.create(input('Patologia'), '<p>uno</p>');
     await syncing.service.syncNow();
     expect(first.files()).toHaveLength(1);
@@ -298,7 +298,7 @@ describe('Drive sync service', () => {
     const syncing = tab(first, 'scheda-b');
     const erasing = tab(first, 'scheda-c');
     await bindAccount(factory, 'studente@example.com');
-    const archive = trackArchive(createWebArchive(factory), factory, () => {});
+    const archive = trackArchive(factory, () => {});
     await archive.create(input('Patologia'), '<p>uno</p>');
     await syncing.service.syncNow();
     expect(first.files()).toHaveLength(1);
@@ -406,7 +406,7 @@ describe('Drive sync service', () => {
     const shared = { email: 'studente@example.com' as string | null };
     const locks = createTabLocks(createFakeLocks());
     await bindAccount(factory, 'studente@example.com');
-    await trackArchive(createWebArchive(factory), factory, () => {}).create(input('Anatomia'), '<p>ossa</p>');
+    await trackArchive(factory, () => {}).create(input('Anatomia'), '<p>ossa</p>');
     const dir = 'web-session://11111111-2222-4333-8444-555555555555';
     const old = { session_dir: dir, html_path: `${dir}/sbobina.html`, name: 'Dal tablet', completed_at_iso: '2026-10-27T08:00:00.000Z', effective_model: '', input_path: '' };
     first.put(sessionFileName(dir), toSessionFile(old, '<p>tablet</p>', 0, { updated_at: '2026-10-27T08:00:01.000Z', device_id: 'tablet' }));
@@ -457,7 +457,7 @@ describe('Drive sync service', () => {
       return { service, reconnects };
     };
     await bindAccount(factory, 'studente@example.com');
-    await trackArchive(createWebArchive(factory), factory, () => {}).create(input('Anatomia'), '<p>ossa</p>');
+    await trackArchive(factory, () => {}).create(input('Anatomia'), '<p>ossa</p>');
     const erasing = tab('scheda-a');
     const other = tab('scheda-b');
     await erasing.service.syncNow();
@@ -486,7 +486,7 @@ describe('Drive sync service', () => {
       return { service, reconnects };
     };
     await bindAccount(factory, 'studente@example.com');
-    await trackArchive(createWebArchive(factory), factory, () => {}).create(input('Anatomia'), '<p>ossa</p>');
+    await trackArchive(factory, () => {}).create(input('Anatomia'), '<p>ossa</p>');
     const erasing = tab('scheda-a', remembered);
     const other = tab('scheda-b', seenByOther);
     await erasing.service.syncNow();

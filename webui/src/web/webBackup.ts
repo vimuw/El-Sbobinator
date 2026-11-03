@@ -4,7 +4,7 @@ import { syncedSession } from './drive/syncFormat';
 import { sanitizeBodyHtml } from './pipeline/export';
 import { DOCUMENTS, FOLDERS, MEDIA, MEDIA_BY_SESSION, SESSIONS, inTransaction, requestValue, textGeneration, type StoredDocument } from './webDatabase';
 import type { StoredMedia } from './webMedia';
-import { WEB_SESSION_PREFIX, webSessionHtmlPath } from './webSessions';
+import { WEB_SESSION_PREFIX, webSessionHtmlPath, type ArchiveMarks } from './webSessions';
 import { ZipFormatError, createZip, readZip } from './zipArchive';
 
 // Backup of the web archive: one .zip with a JSON manifest (sbobine metadata, editor documents,
@@ -211,12 +211,15 @@ function backupSession(entry: BackupSession): ArchiveSession | null {
  * Text that came from Drive or from a backup keeps this device's generation: its `text_at` says
  * how recent it is.
  * A rename or a move to the trash does not count: it leaves the text as it was.
+ * `marks`: what the import changes is marked for the Drive sync in the transaction that writes it.
  */
 export async function importBackup(
   factory: IDBFactory | undefined,
   file: Blob,
-  options: { onProgress?: (done: number, total: number) => void } = {},
+  options: { onProgress?: (done: number, total: number) => void; marks?: ArchiveMarks } = {},
 ): Promise<ImportSummary> {
+  const { marks } = options;
+  const writing = (stores: string[]) => (marks ? [...stores, marks.store] : stores);
   let entries;
   try {
     entries = await readZip(file);
@@ -239,7 +242,7 @@ export async function importBackup(
     const audioEntry = typeof item.audio?.file === 'string' ? entries.get(item.audio.file) : undefined;
     const audioBlob = audioEntry ? await audioEntry.blob() : null;
     const generation = Number.isFinite(item.generation) ? Number(item.generation) : 0;
-    const outcome = await inTransaction(factory, [SESSIONS, DOCUMENTS, MEDIA], 'readwrite', async transaction => {
+    const outcome = await inTransaction(factory, writing([SESSIONS, DOCUMENTS, MEDIA]), 'readwrite', async transaction => {
       const sessions = transaction.objectStore(SESSIONS);
       const documents = transaction.objectStore(DOCUMENTS);
       const media = transaction.objectStore(MEDIA);
@@ -280,7 +283,9 @@ export async function importBackup(
           sessionDir: dir,
         } satisfies StoredMedia);
       }
-      return { kind: local === undefined ? 'added' as const : replace ? 'replaced' as const : restore ? 'restored' as const : 'skipped' as const, audio: addAudio };
+      const kind = local === undefined ? 'added' as const : replace ? 'replaced' as const : restore ? 'restored' as const : 'skipped' as const;
+      if (kind !== 'skipped') await marks?.session(transaction, dir);
+      return { kind, audio: addAudio };
     });
     summary[outcome.kind] += 1;
     if (outcome.kind !== 'skipped') summary.changed.push(dir);
@@ -290,7 +295,7 @@ export async function importBackup(
 
   // Collections: new ones are added, existing ones (same id) gain the sbobine of the backup. A
   // sbobina stays in one collection: where it already is here wins.
-  summary.folders = await inTransaction(factory, [FOLDERS, SESSIONS], 'readwrite', async transaction => {
+  summary.folders = await inTransaction(factory, writing([FOLDERS, SESSIONS]), 'readwrite', async transaction => {
     const store = transaction.objectStore(FOLDERS);
     const [localFolders, sessionKeys] = await Promise.all([
       requestValue(store.getAll() as IDBRequest<ArchiveFolder[]>),
@@ -315,6 +320,7 @@ export async function importBackup(
       }
     }
     for (const folder of byId.values()) store.put(folder);
+    await marks?.folders(transaction, localFolders, [...byId.values()]);
     return added;
   });
   return summary;
