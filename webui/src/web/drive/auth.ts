@@ -23,6 +23,7 @@ const WINDOW_FEATURES = 'popup,width=500,height=650';
 // A token this close to expiry is treated as gone: a sync round must not die halfway.
 const EXPIRY_MARGIN_MS = 60_000;
 const ANSWER_TIMEOUT_MS = 180_000;
+const REVOKE_TIMEOUT_MS = 10_000;
 
 export class DriveAuthError extends Error {
   constructor(readonly code: string, description?: string) {
@@ -214,12 +215,16 @@ export function createDriveAuth(options: DriveAuthOptions): DriveAuth {
       unsavedAccount = null;
       safely(() => local?.removeItem(STORAGE_KEYS.WEB_DRIVE_ACCOUNT_V1));
       if (!token) return;
-      // Best effort: an expired token is already useless, and the user is offline sometimes.
+      // Best effort: an expired token is already useless, and the user is offline sometimes. A revoke
+      // left hanging must not hold the disconnect, nor the erase that ends with it.
+      const abort = new AbortController();
+      const timer = setTimeout(() => abort.abort(), REVOKE_TIMEOUT_MS);
       await fetchImpl(REVOKE_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ token }).toString(),
-      }).catch(() => undefined);
+        signal: abort.signal,
+      }).catch(() => undefined).finally(() => clearTimeout(timer));
     },
   };
 }

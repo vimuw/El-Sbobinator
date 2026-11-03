@@ -110,6 +110,29 @@ describe('Drive auth', () => {
     expect(auth.tokenAccount()).toBe('studente@uniupo.it');
   });
 
+  it('disconnects even when the revoke never answers', async () => {
+    vi.useFakeTimers();
+    try {
+      const hanging = vi.fn((_url: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+      }));
+      const { auth, reply } = setup({ fetchImpl: hanging as unknown as typeof fetch });
+      const connecting = auth.connect();
+      reply(tokenFields);
+      await connecting;
+      auth.setAccount('studente@example.com');
+      let done = false;
+      const disconnecting = auth.disconnect().then(() => { done = true; });
+      expect(auth.token()).toBeNull();
+      await vi.advanceTimersByTimeAsync(10_000);
+      await disconnecting;
+      expect(done).toBe(true);
+      expect(auth.account()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('ignores answers to another login and reports Google errors and blocked windows', async () => {
     const { auth, reply, channel } = setup();
     const connecting = auth.connect();

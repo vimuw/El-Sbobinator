@@ -10,6 +10,12 @@ const FILE_FIELDS = 'id,name,modifiedTime';
 export const FOLDER_MIME = 'application/vnd.google-apps.folder';
 const RATE_LIMIT_REASONS = new Set(['rateLimitExceeded', 'userRateLimitExceeded']);
 const MAX_WAIT_MS = 32_000;
+// A request that makes no progress for this long (no answer, or a body that stops arriving) has
+// stalled. An upload gets more time to be answered, by its size: it goes out before any answer.
+export const REQUEST_TIMEOUT_MS = 60_000;
+const SLOWEST_UPLOAD_BYTES_PER_SECOND = 16_000;
+// Answers that carry no body (a Response with one would not even build).
+const NULL_BODY_STATUSES = new Set([101, 204, 205, 304]);
 
 export interface DriveFileMeta {
   id: string;
@@ -50,6 +56,36 @@ async function driveError(response: Response): Promise<DriveError> {
   return new DriveError(response.status, message, reason);
 }
 
+/** The whole body of an answer; `progress` is called for each part that arrives. */
+async function readBody(response: Response, signal: AbortSignal, progress: () => void): Promise<Uint8Array<ArrayBuffer> | null> {
+  if (!response.body) return null;
+  const reader = response.body.getReader();
+  // Not every body stops on the request's abort: this one does.
+  const stop = () => void reader.cancel().catch(() => undefined);
+  signal.addEventListener('abort', stop, { once: true });
+  const parts: Uint8Array[] = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      progress();
+      parts.push(value);
+      size += value.byteLength;
+    }
+  } finally {
+    signal.removeEventListener('abort', stop);
+  }
+  if (signal.aborted) throw new DOMException('Stalled', 'AbortError');
+  const body = new Uint8Array(size);
+  let offset = 0;
+  for (const part of parts) {
+    body.set(part, offset);
+    offset += part.byteLength;
+  }
+  return body;
+}
+
 /** Whether Google asks to try again later; a create is retried only when it surely did not happen. */
 function retryable(error: DriveError, idempotent: boolean): boolean {
   if (error.status === 429) return true;
@@ -65,6 +101,8 @@ export interface DriveApiOptions {
   sleep?: (ms: number) => Promise<void>;
   random?: () => number;
   maxAttempts?: number;
+  /** A request stalled this long fails like one without a network (default REQUEST_TIMEOUT_MS). */
+  timeoutMs?: number;
 }
 
 export interface DriveApi {
@@ -86,6 +124,7 @@ export function createDriveApi(options: DriveApiOptions): DriveApi {
   const sleep = options.sleep ?? (ms => new Promise<void>(resolve => setTimeout(resolve, ms)));
   const random = options.random ?? Math.random;
   const maxAttempts = options.maxAttempts ?? 5;
+  const timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS;
 
   async function call(url: string, init: RequestInit = {}, idempotent = true): Promise<Response> {
     for (let attempt = 1; ; attempt += 1) {
@@ -94,10 +133,25 @@ export function createDriveApi(options: DriveApiOptions): DriveApi {
       const headers = new Headers(init.headers);
       headers.set('Authorization', `Bearer ${token}`);
       let response: Response;
+      // A stalled request would hold every round queued after it (driveService.ts).
+      const abort = new AbortController();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const stallAfter = (ms: number) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => abort.abort(), ms);
+      };
+      const sent = typeof init.body === 'string' ? init.body.length : 0;
+      stallAfter(timeoutMs + Math.ceil(sent / SLOWEST_UPLOAD_BYTES_PER_SECOND) * 1000);
       try {
-        response = await fetchImpl(url, { ...init, headers });
+        const answer = await fetchImpl(url, { ...init, headers, signal: abort.signal });
+        // Read here, each part of the body restarting the wait: a body that stops arriving stalls too.
+        const body = NULL_BODY_STATUSES.has(answer.status) ? null : await readBody(answer, abort.signal, () => stallAfter(timeoutMs));
+        response = new Response(body, { status: answer.status, statusText: answer.statusText, headers: answer.headers });
       } catch (error) {
+        if (abort.signal.aborted) throw new DriveError(0, 'Google Drive non risponde.');
         throw new DriveError(0, `Google Drive non raggiungibile${error instanceof Error && error.message ? `: ${error.message}` : '.'}`);
+      } finally {
+        clearTimeout(timer);
       }
       if (response.ok) return response;
       const error = await driveError(response);
