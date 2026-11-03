@@ -362,6 +362,29 @@ describe('web host with the real pipeline', () => {
       expect((await api.read_html_content!(done.html_path)).content).toContain('<p>Appunti presi sul telefono</p>');
     });
 
+    it('keeps a correction saved while the retry runs', async () => {
+      // Regression: the retry checked for edits only before calling Gemini and then wrote its text
+      // over a correction saved during the call, with no "(conflitto)" copy.
+      const { api, done } = await finishedWithWarnings();
+      let answer: () => void = () => {};
+      const answered = new Promise<void>(resolve => { answer = resolve; });
+      let calls = 0;
+      vi.stubGlobal('fetch', vi.fn(async () => {
+        calls += 1;
+        await answered;
+        return new Response(JSON.stringify(okText('## Rivisto\n\nOra rivisto.').json));
+      }));
+      const pending = api.retry_failed_revision_blocks!(done.session_dir);
+      await vi.waitFor(() => expect(calls).toBe(1));
+      await api.save_html_content!(done.html_path, '<p>Correzione</p>', Date.now());
+      answer();
+      expect(await pending).toMatchObject({ ok: false, conflict: true });
+      const content = (await api.read_html_content!(done.html_path)).content!;
+      expect(content).toContain('<p>Correzione</p>');
+      expect(content).not.toContain('Ora rivisto.');
+      expect((await api.get_completed_sessions!()).sessions![0]).toMatchObject({ revision_failed_blocks: [1] });
+    });
+
     it('stops without touching the document when the quota runs out and no key is given', async () => {
       const { api, done, named } = await finishedWithWarnings();
       const before = (await api.read_html_content!(done.html_path)).content;

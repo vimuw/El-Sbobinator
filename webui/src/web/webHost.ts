@@ -595,6 +595,9 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
         return { ok: false, error: "HTML modificato dall'utente: retry annullato per evitare sovrascritture.", conflict: true, session_dir: sessionDir };
       }
       const htmlPath = webSessionHtmlPath(sessionDir);
+      // The text the retry replaces: one saved meanwhile (the editor, a change from Drive) stays.
+      const stored = await archive.readHtml(htmlPath);
+      const startBody = stored === null ? null : storedBodyOf(stored);
       if (!state.failedBlocks?.length && !(state.revised ?? []).includes(null)) {
         return { ok: true, retried_blocks: [], remaining_failed_blocks: [], html_path: htmlPath, session_dir: sessionDir };
       }
@@ -635,8 +638,11 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
           return { ok: false, error, retried_blocks: [], remaining_failed_blocks: remaining, session_dir: sessionDir, ...flags };
         }
         const completionStatus = remaining.length ? 'completed_with_warnings' as const : 'completed' as const;
-        const saved = await archive.saveHtml(htmlPath, state.body ?? '');
+        const saved = await archive.saveHtml(htmlPath, state.body ?? '', undefined, body => body === startBody);
         if (!saved.ok) return { ok: false, error: saved.error ?? 'Salvataggio non riuscito.' };
+        if (saved.changed) {
+          return { ok: false, error: "HTML modificato durante il retry: il testo salvato resta com'è.", conflict: true, session_dir: sessionDir };
+        }
         await archive.update(sessionDir, { completion_status: completionStatus, revision_failed_blocks: remaining, effective_model: state.settings.model });
         return {
           ok: true,
