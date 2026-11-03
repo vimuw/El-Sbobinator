@@ -22,6 +22,10 @@ interface KebabMenuProps {
   buttonClassName?: string;
   ariaLabel?: string;
   title?: string;
+  /** Replaces the three dots, e.g. "+" for an insert menu. */
+  icon?: React.ReactNode;
+  /** A line of plain text above the items, such as a title the header had to cut. */
+  heading?: string;
 }
 
 interface DropdownPos {
@@ -45,7 +49,7 @@ interface SubmenuPos {
 // Submenus open on hover, so their items appear with the frame.
 const MENU_ITEM_VARIANTS = popoverItemVariants({ step: 0.015 });
 
-export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, title }: KebabMenuProps) {
+export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, title, icon, heading }: KebabMenuProps) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<DropdownPos | null>(null);
   const [activeSubmenuIndex, setActiveSubmenuIndex] = useState<number | null>(null);
@@ -282,7 +286,7 @@ export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, 
         aria-label={ariaLabel || 'Altre opzioni'}
         title={title || ariaLabel || 'Altre opzioni'}
       >
-        <MoreVertical className="w-4 h-4" />
+        {icon ?? <MoreVertical className="w-4 h-4" />}
       </button>
 
       {createPortal(
@@ -308,6 +312,7 @@ export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, 
               }}
               onClick={e => e.stopPropagation()}
             >
+              {heading && <div className="kebab-heading">{heading}</div>}
               {items.map((item, i) => {
                 if ('separator' in item) {
                   return <div key={`sep-${i}`} className="kebab-separator" />;

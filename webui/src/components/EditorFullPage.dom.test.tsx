@@ -25,15 +25,25 @@ vi.mock('./RichTextEditor', () => ({
     onEditorReady,
     onChange,
     bottomInset,
+    isTocOpen,
+    findRequest,
   }: {
     onEditorReady?: (getHtml: () => string) => void;
     onChange?: () => void;
     bottomInset?: number;
+    isTocOpen?: boolean;
+    findRequest?: number;
   }) => {
     React.useEffect(() => {
       onEditorReady?.(() => editorMockState.html);
     }, [onEditorReady]);
-    return React.createElement('div', { 'data-testid': 'rich-text-editor', 'data-bottom-inset': bottomInset, onClick: () => onChange?.() }, 'Editor');
+    return React.createElement('div', {
+      'data-testid': 'rich-text-editor',
+      'data-bottom-inset': bottomInset,
+      'data-toc-open': String(Boolean(isTocOpen)),
+      'data-find-request': findRequest ?? 0,
+      onClick: () => onChange?.(),
+    }, 'Editor');
   },
 }));
 
@@ -335,6 +345,58 @@ describe('EditorFullPage autosave', () => {
       else Reflect.deleteProperty(navigator, 'clipboard');
       if (clipboardItemDescriptor) Object.defineProperty(globalThis, 'ClipboardItem', clipboardItemDescriptor);
       else Reflect.deleteProperty(globalThis, 'ClipboardItem');
+    }
+  });
+
+  it('phone: keeps copy in the header and lists index, search, .docx and theme by name under "…"', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === '(max-width: 640px)',
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+    }));
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:docx');
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    setHostCapabilities({ kind: 'web' });
+    const setThemeMode = vi.fn();
+    try {
+      const title = 'PATOLOGIA GENERALE 1, LEZIONE 7';
+      render(<EditorFullPage {...baseProps} previewTitle={title} themeMode="dark" setThemeMode={setThemeMode} />);
+      await screen.findByTestId('rich-text-editor');
+      // The mocked motion remounts the page on each render: read the editor afresh.
+      const editor = () => screen.getByTestId('rich-text-editor');
+
+      // Copy, the point of the app, stays out; the rest left the header.
+      expect(screen.getByRole('button', { name: 'Copia documento' })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Scarica .docx' })).toBeNull();
+      expect(screen.queryByTitle('Tema chiaro')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Scorciatoie da tastiera' })).toBeNull();
+
+      const openMenu = () => fireEvent.click(screen.getByRole('button', { name: 'Altre opzioni' }));
+      openMenu();
+      // The whole title the header cuts heads the menu.
+      expect(document.querySelector('.kebab-heading')?.textContent).toBe(title);
+      fireEvent.click(screen.getByRole('button', { name: 'Indice' }));
+      expect(editor().getAttribute('data-toc-open')).toBe('true');
+
+      openMenu();
+      fireEvent.click(screen.getByRole('button', { name: 'Trova e sostituisci' }));
+      expect(editor().getAttribute('data-find-request')).toBe('1');
+
+      openMenu();
+      fireEvent.click(screen.getByRole('button', { name: 'Scarica .docx' }));
+      expect(click).toHaveBeenCalledTimes(1);
+      expect((click.mock.contexts[0] as HTMLAnchorElement).download).toBe(`${title}.docx`);
+
+      openMenu();
+      fireEvent.click(screen.getByRole('button', { name: 'Tema chiaro' }));
+      expect(setThemeMode).toHaveBeenCalledTimes(1);
+    } finally {
+      setHostCapabilities(DESKTOP_CAPABILITIES);
+      createObjectURL.mockRestore();
+      click.mockRestore();
+      vi.unstubAllGlobals();
     }
   });
 

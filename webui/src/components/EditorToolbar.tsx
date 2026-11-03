@@ -1,8 +1,8 @@
 import React, { useRef } from 'react';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import {
-  Bold, ChevronDown, Italic, List, ListOrdered, ListTree, Quote, Redo,
-  RemoveFormatting, Search, Strikethrough, Superscript, Subscript,
+  Bold, ChevronDown, ImagePlus, Italic, Link2, List, ListOrdered, Plus, Quote, Radical, Redo,
+  RemoveFormatting, Search, SquarePlay, Strikethrough, Superscript, Subscript,
   Underline as UnderlineIcon, Undo,
 } from 'lucide-react';
 import {
@@ -15,6 +15,7 @@ import { editorIsBold } from '../editorBold';
 import { shortcutLabel } from '../keyboardLabels';
 import { usePhoneLayout } from '../hooks/usePhoneLayout';
 import { useToolbarOverflow } from '../hooks/useToolbarOverflow';
+import { KebabMenu } from './KebabMenu';
 
 const menuBarStateKey = (editor: TiptapEditor): string => [
   editorIsBold(editor),
@@ -54,7 +55,23 @@ const keepEditorFocus = (event: React.MouseEvent) => {
   if (target.closest('button')) event.preventDefault();
 };
 
-// The same button opens the second row on a phone and the wrapped lines on a tablet.
+// Marks which edges of the phone's scrolling row hide more tools, for the CSS fades.
+const markRowEdges = (row: HTMLElement) => {
+  row.toggleAttribute('data-more-left', row.scrollLeft > 1);
+  row.toggleAttribute('data-more-right', row.scrollLeft + row.clientWidth < row.scrollWidth - 1);
+};
+
+// Also on mount and whenever the row's width changes (rotation, a resized window).
+const trackRowEdges = (row: HTMLElement | null) => {
+  if (!row) return;
+  markRowEdges(row);
+  if (typeof ResizeObserver === 'undefined') return;
+  const observer = new ResizeObserver(() => markRowEdges(row));
+  observer.observe(row);
+  return () => observer.disconnect();
+};
+
+// Opens the wrapped lines of the tablet toolbar.
 const MoreToolsButton = ({ open, onToggle }: { open: boolean; onToggle: () => void }) => (
   <button
     type="button"
@@ -78,8 +95,6 @@ export const MenuBar = ({
   onToggleFindReplace,
   zoomLevel,
   onZoomChange,
-  isTocOpen,
-  onTocToggle,
 }: {
   editor: TiptapEditor | null;
   onOpenImagePicker: () => void;
@@ -90,16 +105,15 @@ export const MenuBar = ({
   onToggleFindReplace: () => void;
   zoomLevel?: number;
   onZoomChange?: (level: number) => void;
-  isTocOpen?: boolean;
-  onTocToggle?: () => void;
 }) => {
   const [, forceUpdate] = React.useState({});
   const compact = usePhoneLayout();
   const [moreOpen, setMoreOpen] = React.useState(false);
   const prevMenuKeyRef = useRef('');
   const [groupsRef, overflowing] = useToolbarOverflow();
+  const insertAnchorRef = useRef<HTMLSpanElement>(null);
   // Once everything fits again the lines close, so the next overflow starts folded.
-  if (!compact && moreOpen && !overflowing) setMoreOpen(false);
+  if (moreOpen && !overflowing) setMoreOpen(false);
 
   React.useEffect(() => {
     if (!editor) return;
@@ -196,10 +210,10 @@ export const MenuBar = ({
   );
   const insertButtons = (
     <>
-      <InsertImageButton onOpenImagePicker={onOpenImagePicker} />
-      <InsertYoutubeButton onOpenLink={onOpenLink} />
-      <InsertMathButton onOpenMath={onOpenMath} />
       <LinkButton editor={editor} openRequest={linkRequest} />
+      <InsertImageButton onOpenImagePicker={onOpenImagePicker} />
+      <InsertMathButton onOpenMath={onOpenMath} />
+      <InsertYoutubeButton onOpenLink={onOpenLink} />
     </>
   );
   const bulletListButton = (
@@ -228,60 +242,65 @@ export const MenuBar = ({
     </button>
   );
 
-  // Phone: one row with what a student uses while reading and fixing a sbobina, like Google Docs
-  // on a phone; the arrow opens the rest below it. Redo sits by undo, so the numbered list waits
-  // below to keep the row within a 390px iPhone; narrower phones scroll it sideways.
+  // Phone: like Google Docs on a phone, every formatting tool sits on one row that scrolls
+  // sideways, in the desktop order (most used first), instead of a second row behind an arrow.
+  // "+" stays fixed beside it and lists what can be inserted by name; the index and search are
+  // in the header's "…" menu. The edge fades while there is more to scroll to.
   if (compact) {
+    const separator = <div className="editor-separator" />;
     return (
       <div className="editor-toolbar-compact" onMouseDown={keepEditorFocus}>
         <div className="editor-toolbar is-compact">
-          <div className="editor-toolbar-row">
+          <div className="editor-toolbar-row" ref={trackRowEdges} onScroll={event => markRowEdges(event.currentTarget)}>
             {undoButton}
             {redoButton}
+            {separator}
             <HeadingSelect editor={editor} />
+            {separator}
             {boldButton}
             {italicButton}
-            <HighlightPickerButton editor={editor} />
-            {bulletListButton}
-          </div>
-          {onTocToggle && (
-            <button
-              type="button"
-              onClick={onTocToggle}
-              className={btn(Boolean(isTocOpen))}
-              title="Indice"
-              aria-label="Indice"
-              aria-pressed={Boolean(isTocOpen)}
-            >
-              <ListTree className="h-4 w-4" />
-            </button>
-          )}
-          <MoreToolsButton open={moreOpen} onToggle={() => setMoreOpen(open => !open)} />
-        </div>
-        {moreOpen && (
-          <div className="editor-toolbar editor-toolbar-more" role="group" aria-label="Altri strumenti">
-            {orderedListButton}
             {underlineButton}
-            {zoomSelect}
-            <FontFamilySelect editor={editor} />
-            <FontSizeSelect editor={editor} />
+            <HighlightPickerButton editor={editor} />
+            <ColorPickerButton editor={editor} />
+            {separator}
+            {bulletListButton}
+            {orderedListButton}
+            {separator}
+            <AlignDropdownButton editor={editor} />
+            {quoteButton}
+            {separator}
             {strikeButton}
             {scriptControls}
-            <ColorPickerButton editor={editor} />
             {clearFormattingButton}
-            {quoteButton}
-            <AlignDropdownButton editor={editor} />
-            {insertButtons}
-            {findButton}
+            {separator}
+            <FontFamilySelect editor={editor} />
+            <FontSizeSelect editor={editor} />
+            {zoomSelect}
           </div>
-        )}
+          <span ref={insertAnchorRef} className="editor-insert-menu">
+            <KebabMenu
+              icon={<Plus className="h-4 w-4" />}
+              ariaLabel="Inserisci"
+              buttonClassName="editor-insert-menu-button"
+              items={[
+                { label: 'Link', icon: <Link2 className="h-4 w-4" />, onClick: onOpenLink },
+                { label: 'Immagine', icon: <ImagePlus className="h-4 w-4" />, onClick: onOpenImagePicker },
+                { label: 'Formula', icon: <Radical className="h-4 w-4" />, onClick: onOpenMath },
+                { label: 'Video YouTube', icon: <SquarePlay className="h-4 w-4" />, onClick: onOpenLink },
+              ]}
+            />
+          </span>
+          <LinkButton editor={editor} openRequest={linkRequest} hideButton anchorRef={insertAnchorRef} />
+        </div>
       </div>
     );
   }
 
   // Tablets and narrow windows: the groups that do not fit on the first line fold behind the
   // arrow, like Google Docs, instead of pushing the page down with a second and third line.
-  // Each group carries its leading separator, so a group wraps whole.
+  // Each group carries its leading separator, so a group wraps whole. The groups run from the
+  // tools a student uses most while fixing a sbobina to the least used, so a narrow window
+  // folds away font, size and zoom first; the phone keeps the same order.
   return (
     <div
       className={`editor-toolbar editor-toolbar-full${moreOpen ? ' is-expanded' : ''}`}
@@ -292,34 +311,30 @@ export const MenuBar = ({
           {undoButton}
           {redoButton}
         </div>
-        {zoomSelect && (
-          <div className="editor-toolbar-group">
-            <div className="editor-separator" />
-            {zoomSelect}
-          </div>
-        )}
         <div className="editor-toolbar-group">
           <div className="editor-separator" />
           <HeadingSelect editor={editor} />
-          <FontFamilySelect editor={editor} />
-          <FontSizeSelect editor={editor} />
         </div>
         <div className="editor-toolbar-group">
           <div className="editor-separator" />
           {boldButton}
           {italicButton}
           {underlineButton}
-          {strikeButton}
         </div>
-        {/* Split without separators (the script pair has its own borders): on a portrait iPad
-            bold and italic stay out even when the colours fold. */}
+        {/* Split without a separator: on a portrait iPad bold and italic stay out even when
+            the colours fold. */}
         <div className="editor-toolbar-group">
-          {scriptControls}
-        </div>
-        <div className="editor-toolbar-group">
-          <ColorPickerButton editor={editor} />
           <HighlightPickerButton editor={editor} />
-          {clearFormattingButton}
+          <ColorPickerButton editor={editor} />
+        </div>
+        <div className="editor-toolbar-group">
+          <div className="editor-separator" />
+          {bulletListButton}
+          {orderedListButton}
+        </div>
+        <div className="editor-toolbar-group">
+          <div className="editor-separator" />
+          {findButton}
         </div>
         <div className="editor-toolbar-group">
           <div className="editor-separator" />
@@ -328,17 +343,25 @@ export const MenuBar = ({
         <div className="editor-toolbar-group">
           <div className="editor-separator" />
           <AlignDropdownButton editor={editor} />
-        </div>
-        <div className="editor-toolbar-group">
-          <div className="editor-separator" />
-          {bulletListButton}
-          {orderedListButton}
           {quoteButton}
         </div>
         <div className="editor-toolbar-group">
           <div className="editor-separator" />
-          {findButton}
+          {strikeButton}
+          {scriptControls}
+          {clearFormattingButton}
         </div>
+        <div className="editor-toolbar-group">
+          <div className="editor-separator" />
+          <FontFamilySelect editor={editor} />
+          <FontSizeSelect editor={editor} />
+        </div>
+        {zoomSelect && (
+          <div className="editor-toolbar-group">
+            <div className="editor-separator" />
+            {zoomSelect}
+          </div>
+        )}
       </div>
       {overflowing && <MoreToolsButton open={moreOpen} onToggle={() => setMoreOpen(open => !open)} />}
     </div>

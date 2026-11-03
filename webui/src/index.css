@@ -4396,6 +4396,19 @@ input::-webkit-contacts-auto-fill-button {
   background: var(--border-subtle);
 }
 
+/* The whole title the phone header cuts, wrapped instead of truncated. */
+.kebab-heading {
+  max-width: 260px;
+  margin-bottom: 4px;
+  padding: 8px 12px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
 .kebab-item {
   display: flex;
   align-items: center;
@@ -5214,7 +5227,9 @@ input::-webkit-contacts-auto-fill-button {
   border-left: 1px solid var(--border-subtle);
 }
 
-@media (max-width: 720px) {
+/* Up to a portrait iPad Pro the two actions are icons, as on a phone: with their words the title
+   kept only a few letters. Landscape tablets and desktops have room for both. */
+@media (max-width: 1024px) {
   .editor-fullpage-copy-label { display: none; }
   .editor-fullpage-actions .settings-pill-button.editor-fullpage-copy { width: 32px; min-width: 32px; padding: 0; }
   .editor-fullpage-actions .icon-button.editor-fullpage-docx { width: 32px; padding: 0; }
@@ -6439,7 +6454,7 @@ input::-webkit-contacts-auto-fill-button {
     padding: 20px 16px 32px;
   }
 
-  /* The index opens from the toolbar as a sheet over the text: beside it the text had one word per line. */
+  /* The index opens from the header "…" menu ("Indice") as a sheet over the text: beside it the text had one word per line. */
   .editor-toc-col,
   .editor-toc-spacer {
     width: 0 !important;
@@ -6520,6 +6535,18 @@ input::-webkit-contacts-auto-fill-button {
   .find-bar-float {
     left: 8px;
     right: 8px;
+    min-width: 0;
+  }
+
+  /* The link panel opens under "+", at the right edge: it takes the width instead of running off it. */
+  .link-panel {
+    left: 8px !important;
+    right: 8px;
+    min-width: 0;
+  }
+
+  .link-panel .link-input {
+    flex: 1;
     min-width: 0;
   }
 
@@ -6612,7 +6639,8 @@ input::-webkit-contacts-auto-fill-button {
   }
 }
 
-/* Phone toolbar (EditorToolbar compact): one row, the rest under the arrow. */
+/* Phone toolbar (EditorToolbar compact): every tool on one row that scrolls sideways, like
+   Google Docs on a phone, with "+" fixed beside it. */
 .editor-toolbar-compact {
   flex-shrink: 0;
 }
@@ -6623,13 +6651,17 @@ input::-webkit-contacts-auto-fill-button {
   padding: 6px 6px;
 }
 
+/* The 6px above and below keep the 44px touch areas inside the scroller, which clips them. */
 .editor-toolbar-row {
   display: flex;
   flex: 1;
   align-items: center;
   gap: 2px;
   min-width: 0;
+  margin-block: -6px;
+  padding-block: 6px;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   scrollbar-width: none;
 }
 
@@ -6637,12 +6669,35 @@ input::-webkit-contacts-auto-fill-button {
   display: none;
 }
 
-.editor-toolbar.editor-toolbar-more {
-  gap: 4px;
-  padding: 6px 8px;
+/* A fade on each edge that hides tools says the row scrolls; it goes once the edge is reached. */
+.editor-toolbar-row[data-more-right] {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
 }
 
-/* Sized so the row fits a 390px iPhone with the index and the arrow beside it; narrower phones scroll it. */
+.editor-toolbar-row[data-more-left] {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 28px);
+  mask-image: linear-gradient(to right, transparent, #000 28px);
+}
+
+.editor-toolbar-row[data-more-left][data-more-right] {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+}
+
+/* "+" (the insert menu, a KebabMenu) and the header "…" match the 32px toolbar and header buttons. */
+.editor-insert-menu {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.editor-insert-menu-button,
+.editor-fullpage-menu {
+  width: 32px;
+  height: 32px;
+}
+
+/* A fixed width, so the row does not shift while the caret moves between paragraph styles. */
 .editor-toolbar.is-compact .editor-button.heading-dropdown-btn {
   width: 88px;
   min-width: 88px;

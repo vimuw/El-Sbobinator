@@ -1,6 +1,6 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Check, Copy, Download, FileText, Loader2, Moon, Sun, TriangleAlert, X } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Download, FileText, ListTree, Loader2, Moon, MoreHorizontal, Search, Sun, TriangleAlert, X } from 'lucide-react';
 import type { Heading } from './RichTextEditor';
 import { prepareHtmlForClipboardSync } from '../utils';
 import { createNativeClipboardFormats, writeEditorClipboard } from '../editorClipboard';
@@ -16,6 +16,7 @@ import { useEditorAutosave, type EditorSaveController } from '../hooks/useEditor
 import { STORAGE_KEYS } from '../storageKeys';
 import { getHostCapabilities, isTouchWeb } from '../hostCapabilities';
 import { EditorShortcuts } from './EditorShortcuts';
+import { KebabMenu, type KebabMenuItem } from './KebabMenu';
 // Bundled with the editor page: a lazy player flashed "Caricamento player..." on every first open.
 import { AudioDockEmpty } from './AudioDockEmpty';
 import { AudioPlayer } from './AudioPlayer';
@@ -127,6 +128,8 @@ export function EditorFullPage({
   const themeMode = propThemeMode ?? fallbackTheme.themeMode;
   const setThemeMode = propSetThemeMode ?? fallbackTheme.setThemeMode;
   const [isTocOpen, setIsTocOpen] = useState(false);
+  // Each change opens find and replace in the editor once (the phone header menu).
+  const [findRequest, setFindRequest] = useState(0);
   // The audio warning is closed per message: a new warning (another relink) shows again.
   const [dismissedAudioWarning, setDismissedAudioWarning] = useState('');
   const [headings, setHeadings] = useState<Heading[]>([]);
@@ -289,6 +292,18 @@ export function EditorFullPage({
     els[occurrencesBefore]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  const toggleTheme = () => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark');
+  const phoneMenuItems: KebabMenuItem[] = [
+    { label: 'Indice', icon: <ListTree className="w-4 h-4" />, checked: isTocOpen, onClick: () => setIsTocOpen(p => !p) },
+    { label: 'Trova e sostituisci', icon: <Search className="w-4 h-4" />, onClick: () => setFindRequest(n => n + 1) },
+    ...(offersDocx ? [{ label: 'Scarica .docx', icon: <Download className="w-4 h-4" />, onClick: handleDownloadDocx }] : []),
+    {
+      label: themeMode === 'dark' ? 'Tema chiaro' : 'Tema scuro',
+      icon: themeMode === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />,
+      onClick: toggleTheme,
+    },
+  ];
+
   return (
     <AnimatePresence>
       {previewContent !== null && (
@@ -346,7 +361,7 @@ export function EditorFullPage({
             </div>
 
             <div className="editor-fullpage-actions">
-              {offersDocx && (
+              {offersDocx && !isPhone && (
                 <button
                   type="button"
                   onClick={handleDownloadDocx}
@@ -368,18 +383,29 @@ export function EditorFullPage({
                 {isCopied ? <Check className="w-4 h-4" /> : isCopying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
                 <span className="editor-fullpage-copy-label">{isCopied ? 'Copiato!' : 'Copia documento'}</span>
               </button>
-              <div className="editor-fullpage-utilities">
-                {/* Keyboard shortcuts mean nothing on a phone's touch keyboard. */}
-                {!isPhone && <EditorShortcuts audioAvailable={showAudioDock && Boolean(audioSrc)} />}
-                <button
-                  onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
-                  className="icon-button theme-toggle-btn"
-                  aria-label={themeMode === 'dark' ? 'Attiva tema chiaro' : 'Attiva tema scuro'}
-                  title={themeMode === 'dark' ? 'Tema chiaro' : 'Tema scuro'}
-                >
-                  {themeMode === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-                </button>
-              </div>
+              {isPhone ? (
+                // Phone: like Google Docs, the less used actions wait under "…" with their names,
+                // under the whole title the header has to cut. Copy, the point of the app, stays out.
+                <KebabMenu
+                  items={phoneMenuItems}
+                  heading={previewTitle}
+                  icon={<MoreHorizontal className="w-4 h-4" />}
+                  buttonClassName="editor-fullpage-menu"
+                  ariaLabel="Altre opzioni"
+                />
+              ) : (
+                <div className="editor-fullpage-utilities">
+                  <EditorShortcuts audioAvailable={showAudioDock && Boolean(audioSrc)} />
+                  <button
+                    onClick={toggleTheme}
+                    className="icon-button theme-toggle-btn"
+                    aria-label={themeMode === 'dark' ? 'Attiva tema chiaro' : 'Attiva tema scuro'}
+                    title={themeMode === 'dark' ? 'Tema chiaro' : 'Tema scuro'}
+                  >
+                    {themeMode === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -445,6 +471,7 @@ export function EditorFullPage({
                 onHeadingsChange={setHeadings}
                 isTocOpen={isTocOpen}
                 onTocToggle={() => setIsTocOpen(p => !p)}
+                findRequest={findRequest}
                 tocHeadings={headings}
                 onScrollToHeading={scrollToHeading}
                 zoomLevel={zoomLevel}

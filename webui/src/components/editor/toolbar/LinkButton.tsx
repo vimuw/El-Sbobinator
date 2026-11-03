@@ -4,7 +4,13 @@ import { type Editor as TiptapEditor } from '@tiptap/core';
 import { Link2, Link2Off } from 'lucide-react';
 import { shortcutLabel } from '../../../keyboardLabels';
 
-export const LinkButton = ({ editor, openRequest = 0 }: { editor: TiptapEditor; openRequest?: number }) => {
+// On a phone the button itself is hidden: the "+" menu asks for the panel, which opens under it.
+export const LinkButton = ({ editor, openRequest = 0, hideButton = false, anchorRef }: {
+  editor: TiptapEditor;
+  openRequest?: number;
+  hideButton?: boolean;
+  anchorRef?: React.RefObject<HTMLElement | null>;
+}) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const [url, setUrl] = React.useState('');
   const [panelPos, setPanelPos] = React.useState({ top: 0, left: 0 });
@@ -15,8 +21,9 @@ export const LinkButton = ({ editor, openRequest = 0 }: { editor: TiptapEditor; 
 
   const showPanel = () => {
     setUrl(editor.getAttributes('link').href ?? '');
-    if (buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
+    const anchor = anchorRef?.current ?? buttonRef.current;
+    if (anchor) {
+      const rect = anchor.getBoundingClientRect();
       setPanelPos({ top: rect.bottom + 6, left: rect.left });
     }
     setIsOpen(true);
@@ -71,15 +78,17 @@ export const LinkButton = ({ editor, openRequest = 0 }: { editor: TiptapEditor; 
 
   return (
     <>
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={openPanel}
-        className={`editor-button${isActive ? ' is-active' : ''}`}
-        title={isActive ? 'Rimuovi link' : shortcutLabel('Inserisci link (Ctrl+K)')}
-      >
-        {isActive ? <Link2Off className="h-4 w-4" /> : <Link2 className="h-4 w-4" />}
-      </button>
+      {!hideButton && (
+        <button
+          ref={buttonRef}
+          type="button"
+          onClick={openPanel}
+          className={`editor-button${isActive ? ' is-active' : ''}`}
+          title={isActive ? 'Rimuovi link' : shortcutLabel('Inserisci link (Ctrl+K)')}
+        >
+          {isActive ? <Link2Off className="h-4 w-4" /> : <Link2 className="h-4 w-4" />}
+        </button>
+      )}
       {isOpen && createPortal(
         <div
           ref={panelRef}
