@@ -1,9 +1,10 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Check, Copy, FileText, Headphones, Loader2, Moon, Plus, Sun, TriangleAlert, X } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Download, FileText, Headphones, Loader2, Moon, Plus, Sun, TriangleAlert, X } from 'lucide-react';
 import type { Heading } from './RichTextEditor';
 import { prepareHtmlForClipboardSync } from '../utils';
 import { createNativeClipboardFormats, writeEditorClipboard } from '../editorClipboard';
+import { downloadDocx } from '../docxExport';
 import { prepareHtmlLineSpacing } from '../editorLineSpacing';
 import { clipboardPlainText } from '../documentFormatting';
 import { reportClientError } from '../diagnostics';
@@ -13,7 +14,7 @@ import { useKeyboardInsets } from '../hooks/useKeyboardInsets';
 import { usePhoneLayout } from '../hooks/usePhoneLayout';
 import { useEditorAutosave, type EditorSaveController } from '../hooks/useEditorAutosave';
 import { STORAGE_KEYS } from '../storageKeys';
-import { getHostCapabilities } from '../hostCapabilities';
+import { getHostCapabilities, isTouchWeb } from '../hostCapabilities';
 import { EditorShortcuts } from './EditorShortcuts';
 // Bundled with the editor page: a lazy player flashed "Caricamento player..." on every first open.
 import { AudioPlayer } from './AudioPlayer';
@@ -31,6 +32,10 @@ export interface EditorDocumentProps {
   /** Web with Drive sync: this sbobina changed on another device while open here. */
   changedElsewhere?: boolean;
 }
+
+// iPad, phones and Safari give Google Docs only HTML, whose images arrive grey or not at all.
+export const COPY_IMAGES_NOTICE = 'Da iPad, telefono o Safari le immagini non arrivano in Google Docs con la copia. Usa “Scarica .docx” (l’icona di download) e apri il file con Google Docs: testo e immagini arrivano insieme.';
+export const DOCX_ERROR_NOTICE = 'Non è stato possibile creare il file .docx. Riprova; se succede ancora, usa “Copia documento”.';
 
 export const CHANGED_ELSEWHERE_NOTICE = 'Questa sbobina è stata modificata su un altro dispositivo. La nuova versione arriva quando chiudi l’editor; se intanto la modifichi anche qui, verranno tenute tutte e due (una con “(conflitto)” nel nome).';
 
@@ -127,6 +132,9 @@ export function EditorFullPage({
   const [isCopied, setIsCopied] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
   const isCopyingRef = useRef(false);
+  const [exportNotice, setExportNotice] = useState('');
+  // Web only: the desktop app copies images into Docs, and its WebView has no download sheet.
+  const offersDocx = getHostCapabilities().kind === 'web';
   const [relinkSuccess, setRelinkSuccess] = useState(false);
   const [isRelinking, setIsRelinking] = useState(false);
   const [isRemovingAudio, setIsRemovingAudio] = useState(false);
@@ -179,6 +187,7 @@ export function EditorFullPage({
   useEffect(() => {
     if (copiedTimerRef.current) { window.clearTimeout(copiedTimerRef.current); copiedTimerRef.current = null; }
     setIsCopied(false);
+    setExportNotice('');
     setRelinkSuccess(false);
     setIsTocOpen(false);
   }, [previewContent]);
@@ -246,6 +255,7 @@ export function EditorFullPage({
         formats = { 'text/html': prepareHtmlLineSpacing(clipboardHtml), 'text/plain': clipboardPlainText(temp) };
       }
       await writeEditorClipboard(clipboardHtml, formats['text/plain'], sourceRoot, formats);
+      if (offersDocx && (isTouchWeb() || /Apple/.test(navigator.vendor ?? '')) && /<img[\s>]/i.test(clipboardHtml)) setExportNotice(COPY_IMAGES_NOTICE);
     } catch (error) {
       reportClientError('Clipboard error', error);
       return;
@@ -256,6 +266,18 @@ export function EditorFullPage({
     setIsCopied(true);
     if (copiedTimerRef.current) window.clearTimeout(copiedTimerRef.current);
     copiedTimerRef.current = window.setTimeout(() => setIsCopied(false), 2000);
+  };
+
+  // Synchronous: Safari only lets the download start while the tap is being handled.
+  const handleDownloadDocx = () => {
+    try {
+      const sourceRoot = document.querySelector<HTMLElement>('.tiptap-editor') ?? undefined;
+      downloadDocx(getHtmlRef.current?.() ?? lastPersistedRef.current, previewTitle, sourceRoot);
+      setExportNotice('');
+    } catch (error) {
+      reportClientError('Docx export error', error);
+      setExportNotice(DOCX_ERROR_NOTICE);
+    }
   };
 
   const scrollToHeading = (heading: Heading) => {
@@ -328,6 +350,18 @@ export function EditorFullPage({
             </div>
 
             <div className="editor-fullpage-actions">
+              {offersDocx && (
+                <button
+                  type="button"
+                  onClick={handleDownloadDocx}
+                  className="icon-button editor-fullpage-docx"
+                  title="Scarica un file Word (.docx) con testo e immagini: aprilo con Google Docs, anche da iPad o telefono."
+                  aria-label="Scarica .docx"
+                >
+                  <Download className="w-4 h-4" />
+                  <span className="editor-fullpage-copy-label">Scarica .docx</span>
+                </button>
+              )}
               <button
                 onClick={() => void handleCopy()}
                 className={`settings-pill-button editor-fullpage-copy${isCopied ? ' is-copied' : ''}`}
@@ -362,6 +396,22 @@ export function EditorFullPage({
             >
               {CHANGED_ELSEWHERE_NOTICE}
             </p>
+          )}
+
+          {exportNotice && (
+            <div role="status" data-testid="editor-export-notice" className="editor-audio-warning">
+              <TriangleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <p className="min-w-0 flex-1">{exportNotice}</p>
+              <button
+                type="button"
+                className="editor-audio-warning-close"
+                aria-label="Chiudi avviso"
+                title="Chiudi avviso"
+                onClick={() => setExportNotice('')}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
           )}
 
           {/* Under the header like the notice above, so the player row never carries text over its controls. */}

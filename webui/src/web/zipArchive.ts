@@ -63,18 +63,36 @@ function dosDateTime(timestamp: number): { time: number; date: number } {
  * only slow step (every byte is read once).
  */
 export async function createZip(inputs: ZipInput[], onProgress?: (done: number, total: number) => void): Promise<Blob> {
-  const encoder = new TextEncoder();
   const total = inputs.reduce((sum, input) => sum + input.data.size, 0);
   let done = 0;
+  const crcs: number[] = [];
+  for (const input of inputs) {
+    crcs.push(await crc32(input.data, bytes => {
+      done += bytes;
+      onProgress?.(done, total);
+    }));
+  }
+  return assembleZip(inputs, crcs);
+}
+
+/**
+ * A small in-memory ZIP built synchronously, so a download can start inside the tap that asked
+ * for it (Safari drops a download started after an await).
+ */
+export function createZipSync(inputs: Array<{ name: string; data: Uint8Array<ArrayBuffer> }>, type = 'application/zip'): Blob {
+  const crcs = inputs.map(input => (updateCrc(0xffffffff, input.data) ^ 0xffffffff) >>> 0);
+  const zip = assembleZip(inputs.map(input => ({ name: input.name, data: new Blob([input.data]) })), crcs);
+  return new Blob([zip], { type });
+}
+
+function assembleZip(inputs: ZipInput[], crcs: number[]): Blob {
+  const encoder = new TextEncoder();
   const parts: BlobPart[] = [];
   const central: Uint8Array<ArrayBuffer>[] = [];
   let offset = 0;
-  for (const input of inputs) {
+  for (const [index, input] of inputs.entries()) {
     const name = encoder.encode(input.name) as Uint8Array<ArrayBuffer>;
-    const crc = await crc32(input.data, bytes => {
-      done += bytes;
-      onProgress?.(done, total);
-    });
+    const crc = crcs[index];
     const { time, date } = dosDateTime(input.lastModified ?? Date.now());
     const size = input.data.size;
     if (offset + 30 + name.length + size > MAX_ZIP_BYTES) {

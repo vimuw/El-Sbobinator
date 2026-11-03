@@ -5083,6 +5083,17 @@ input::-webkit-contacts-auto-fill-button {
   box-shadow: none;
 }
 
+/* Scarica .docx (web): an outline pill, quieter than the filled Copia documento. */
+.editor-fullpage-actions .icon-button.editor-fullpage-docx {
+  width: auto;
+  gap: 7px;
+  padding: 0 0.85rem;
+  border-color: var(--border-subtle);
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .editor-fullpage-utilities {
   display: flex;
   align-items: center;
@@ -5095,6 +5106,7 @@ input::-webkit-contacts-auto-fill-button {
 @media (max-width: 720px) {
   .editor-fullpage-copy-label { display: none; }
   .editor-fullpage-actions .settings-pill-button.editor-fullpage-copy { width: 32px; min-width: 32px; padding: 0; }
+  .editor-fullpage-actions .icon-button.editor-fullpage-docx { width: 32px; padding: 0; }
 }
 
 .editor-fullpage-actions .icon-button.icon-button--active {

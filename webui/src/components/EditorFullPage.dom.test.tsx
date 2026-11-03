@@ -289,6 +289,8 @@ describe('EditorFullPage autosave', () => {
       expect(copied.querySelector('ul ul li')?.textContent).toBe('due');
       expect(await item.data['text/plain'].text()).toContain('Testo importante');
       await waitFor(() => expect(screen.getByRole('button', { name: 'Copia documento' }).textContent).toContain('Copiato!'));
+      // Without images the copy is complete: no pointer to the .docx.
+      expect(screen.queryByTestId('editor-export-notice')).toBeNull();
     } finally {
       setHostCapabilities(DESKTOP_CAPABILITIES);
       vendor.mockRestore();
@@ -299,6 +301,47 @@ describe('EditorFullPage autosave', () => {
       if (execDescriptor) Object.defineProperty(document, 'execCommand', execDescriptor);
       else Reflect.deleteProperty(document, 'execCommand');
     }
+  });
+
+  it('web on iPad: a copy with images points to the .docx, which downloads inside the tap', async () => {
+    const write = vi.fn().mockResolvedValue(undefined);
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    const clipboardItemDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'ClipboardItem');
+    const vendor = vi.spyOn(navigator, 'vendor', 'get').mockReturnValue('Apple Computer, Inc.');
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { write } });
+    Object.defineProperty(globalThis, 'ClipboardItem', { configurable: true, value: class { constructor(public data: Record<string, Blob>) {} } });
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:docx');
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    setHostCapabilities({ kind: 'web' });
+    try {
+      editorMockState.html = '<p>Testo</p><div data-editor-image="true" data-width="35" data-layout="inline"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" alt="Figura"></div>';
+      render(<EditorFullPage {...baseProps} previewTitle="Anatomia" />);
+      await waitFor(() => expect(screen.getByTestId('rich-text-editor')).toBeTruthy());
+      fireEvent.click(screen.getByRole('button', { name: 'Copia documento' }));
+      expect((await screen.findByTestId('editor-export-notice')).textContent).toContain('Scarica .docx');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Scarica .docx' }));
+      // Synchronous: the anchor is clicked before the tap handler returns.
+      expect(click).toHaveBeenCalledTimes(1);
+      expect((click.mock.contexts[0] as HTMLAnchorElement).download).toBe('Anatomia.docx');
+      expect((createObjectURL.mock.calls[0][0] as Blob).type).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      expect(screen.queryByTestId('editor-export-notice')).toBeNull();
+    } finally {
+      setHostCapabilities(DESKTOP_CAPABILITIES);
+      vendor.mockRestore();
+      createObjectURL.mockRestore();
+      click.mockRestore();
+      if (clipboardDescriptor) Object.defineProperty(navigator, 'clipboard', clipboardDescriptor);
+      else Reflect.deleteProperty(navigator, 'clipboard');
+      if (clipboardItemDescriptor) Object.defineProperty(globalThis, 'ClipboardItem', clipboardItemDescriptor);
+      else Reflect.deleteProperty(globalThis, 'ClipboardItem');
+    }
+  });
+
+  it('desktop has no .docx button: its copy already carries the images', async () => {
+    render(<EditorFullPage {...baseProps} />);
+    await waitFor(() => expect(screen.getByTestId('rich-text-editor')).toBeTruthy());
+    expect(screen.queryByRole('button', { name: 'Scarica .docx' })).toBeNull();
   });
 
   it('shows the pressed copy before the blocking clipboard work and ignores repeated clicks', async () => {
