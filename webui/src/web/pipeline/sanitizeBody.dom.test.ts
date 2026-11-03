@@ -1,3 +1,4 @@
+import katex from 'katex';
 import { describe, expect, it } from 'vitest';
 import { sanitizeBodyHtml } from './export';
 
@@ -38,15 +39,40 @@ describe('sanitizeBodyHtml', () => {
     expect(sanitizeBodyHtml(body)).toBe('<a>tab</a><a>riga</a><a>controllo</a><a>barre</a><a>miste</a><img>');
   });
 
-  it('drops SVG and MathML, whose animation elements can set a javascript: href', () => {
+  it('drops SVG, whose animation elements can set a javascript: href', () => {
     const body = [
       '<p>prima</p>',
       '<svg><animate attributeName="href" values="javascript:alert(1)"/><a><text>x</text></a></svg>',
       '<svg><set attributeName="href" to="javascript:alert(1)"/></svg>',
-      '<math><maction actiontype="statusline"><mtext>y</mtext></maction></math>',
       '<p>dopo <span data-math="x^2">x²</span></p>',
     ].join('');
     expect(sanitizeBodyHtml(body)).toBe('<p>prima</p><p>dopo <span data-math="x^2">x²</span></p>');
+  });
+
+  it('keeps the MathML of formulas without its active parts', () => {
+    // Regression: dropping all MathML left formulas from Drive or a backup as loose characters in
+    // "Esporta nel mio Drive", which shows the stored text without KaTeX's stylesheet.
+    const formula = katex.renderToString('\\sqrt{x}', { throwOnError: false, output: 'mathml' });
+    expect(sanitizeBodyHtml(formula)).toBe(formula);
+    const body = [
+      '<math><maction actiontype="statusline"><mtext>y</mtext></maction>',
+      '<mi href="javascript:alert(1)">x</mi>',
+      '<semantics><mi>z</mi><annotation-xml encoding="text/html"><a href="https://evil.example">k</a></annotation-xml></semantics></math>',
+    ].join('');
+    expect(sanitizeBodyHtml(body)).toBe('<math><mi>x</mi><semantics><mi>z</mi></semantics></math>');
+  });
+
+  it('leaves nothing active when its result is parsed again (mutation XSS through MathML)', () => {
+    // Regression: kept MathML let these through: parsed a second time (the Drive export's .html file),
+    // the text inside the raw-text element became a live <img onerror>.
+    const active = (html: string) => [...new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html').body.querySelectorAll('*')]
+      .some(element => [...element.attributes].some(attribute => attribute.name.startsWith('on')) || element.tagName.toLowerCase() === 'script');
+    for (const raw of ['xmp', 'noembed', 'noframes']) {
+      const body = `<math><mtext><table><mglyph><${raw}></math><img src=x onerror=alert(1)>`;
+      const clean = sanitizeBodyHtml(body);
+      expect(active(clean), raw).toBe(false);
+      expect(sanitizeBodyHtml(clean), raw).toBe(clean);
+    }
   });
 
   it('keeps the SVG images the editor stores as data: URLs', () => {

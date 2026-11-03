@@ -190,9 +190,12 @@ export function buildBody(finalMarkdown: string, revisionFailed: boolean): strin
   return i < 0 ? warningBanner() + body : body.slice(0, i + 5) + '\n' + warningBanner() + body.slice(i + 5);
 }
 
-// Elements a stored body never needs: code, frames, forms and document-level tags. SVG and MathML
-// go too: formulas are saved as data-math LaTeX, and SVG animation can set a javascript: href.
-const UNSAFE_ELEMENTS = 'script,style,iframe,frame,frameset,object,embed,applet,link,meta,base,form,input,button,textarea,select,noscript,template,svg,math';
+// Elements a stored body never needs: code, frames, forms and document-level tags. Inline SVG goes
+// too (its animation can set a javascript: href; formulas are redrawn from data-math). MathML stays,
+// since the Drive export shows formulas through it, without its actions and embedded markup. The
+// raw-text elements and MathML's mglyph/malignmark go too: parsed again they turn markup inside
+// them into live elements (mutation XSS).
+const UNSAFE_ELEMENTS = 'script,style,iframe,frame,frameset,object,embed,applet,link,meta,base,form,input,button,textarea,select,noscript,template,svg,maction,annotation-xml,mglyph,malignmark,xmp,noembed,noframes,plaintext';
 const URL_ATTRIBUTES = ['href', 'src', 'xlink:href', 'action', 'formaction', 'poster', 'background'];
 
 /**
@@ -202,6 +205,18 @@ const URL_ATTRIBUTES = ['href', 'src', 'xlink:href', 'action', 'formaction', 'po
  * handlers go, links keep http(s)/mailto and images also inline data: images. Needs a DOMParser.
  */
 export function sanitizeBodyHtml(html: string): string {
+  // Cleaned until a new parse finds nothing left to clean: what the browser builds when it reads the
+  // result again is what was checked.
+  let clean = cleanOnce(html);
+  for (let pass = 0; pass < 3; pass += 1) {
+    const again = cleanOnce(clean);
+    if (again === clean) return clean;
+    clean = again;
+  }
+  return '';
+}
+
+function cleanOnce(html: string): string {
   const doc = new DOMParser().parseFromString(`<body>${html.replace(SCRIPT_OR_STYLE, '')}</body>`, 'text/html');
   doc.body.querySelectorAll(UNSAFE_ELEMENTS).forEach(element => element.remove());
   doc.body.querySelectorAll('*').forEach(element => {
