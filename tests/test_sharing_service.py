@@ -58,6 +58,29 @@ def test_create_sbobina_package_full_and_unpack(tmp_path):
     assert os.path.isfile(os.path.join(imported_dir, "audio", "lezione.mp3"))
 
 
+def test_package_with_full_quality_photos_over_32_mb_imports(tmp_path):
+    session_dir = tmp_path / "foto"
+    session_dir.mkdir()
+    (session_dir / "session.json").write_text('{"stage": "done"}', encoding="utf-8")
+    # About eight 4-7 MB phone photos, base64 encoded in the HTML.
+    photo = "/9j/" + "A" * (34 * 1024 * 1024)
+    html = f'<h1>Lezione</h1><p><img src="data:image/jpeg;base64,{photo}"></p>'
+    (session_dir / "Sbobina.html").write_text(html, encoding="utf-8")
+    assert len(html) > 32 * 1024 * 1024
+
+    target = tmp_path / "foto.sbobina"
+    assert create_sbobina_package(str(session_dir), str(target), "text_only")["ok"]
+
+    session_root = tmp_path / "sessions_root"
+    session_root.mkdir()
+    res = unpack_and_import_package(str(target), str(session_root))
+    assert res["ok"] is True, res.get("error")
+    with open(
+        os.path.join(res["session_dir"], "Sbobina.html"), encoding="utf-8"
+    ) as handle:
+        assert f"data:image/jpeg;base64,{photo}" in handle.read()
+
+
 def test_create_sbobina_package_text_only(tmp_path):
     session_dir = tmp_path / "mock_session_text"
     session_dir.mkdir()

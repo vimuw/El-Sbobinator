@@ -150,7 +150,6 @@ export interface ImageOptimizationOptions {
   maxWidth?: number;
   maxHeight?: number;
   quality?: number;
-  format?: 'image/jpeg' | 'image/png' | 'image/webp';
 }
 
 export function calculateOptimalDimensions(
@@ -180,6 +179,102 @@ export const readFileAsDataUrl = (file: File) =>
     reader.readAsDataURL(file);
   });
 
+// Google Docs refuses images above 25 megapixels.
+export const DOCS_MAX_IMAGE_PIXELS = 25_000_000;
+
+/** EXIF orientation of a JPEG data URL; 1 (upright) when absent or unreadable. */
+export const jpegOrientation = (dataUrl: string): number => {
+  try {
+    // The Exif segment sits in the first kilobytes; decode only those.
+    const head = dataUrl.slice(dataUrl.indexOf(',') + 1, dataUrl.indexOf(',') + 1 + 87_384);
+    const bytes = Uint8Array.from(atob(head.slice(0, head.length - (head.length % 4))), c => c.charCodeAt(0));
+    const view = new DataView(bytes.buffer);
+    for (let i = 2; i + 4 < bytes.length && bytes[i] === 0xff;) {
+      const marker = bytes[i + 1];
+      if (marker === 0xda) break;
+      const length = view.getUint16(i + 2);
+      if (marker === 0xe1 && view.getUint32(i + 4) === 0x45786966) {
+        const tiff = i + 10;
+        const little = view.getUint16(tiff) === 0x4949;
+        const ifd = tiff + view.getUint32(tiff + 4, little);
+        for (let entry = 0; entry < view.getUint16(ifd, little); entry++) {
+          const at = ifd + 2 + entry * 12;
+          if (view.getUint16(at, little) === 0x0112) return view.getUint16(at + 8, little);
+        }
+        return 1;
+      }
+      i += 2 + length;
+    }
+  } catch { /* Truncated or malformed header: treat it as upright. */ }
+  return 1;
+};
+
+// Header segments a JPEG needs to look the same: JFIF (APP0), the ICC colour
+// profile (APP2) and Adobe's colour transform (APP14). Exif, XMP, other APPn
+// and comments can carry the GPS position, the device or the author.
+const keepsJpegSegment = (bytes: Uint8Array, at: number): boolean => {
+  const marker = bytes[at + 1];
+  const named = (id: string) => Array.from(id).every((c, k) => bytes[at + 4 + k] === c.charCodeAt(0));
+  if (marker === 0xe2) return named('ICC_PROFILE\0');
+  if (marker === 0xee) return named('Adobe');
+  return marker === 0xe0 || (marker < 0xe0 || marker > 0xef) && marker !== 0xfe;
+};
+
+/**
+ * Drop the metadata of a JPEG data URL without recompressing it: the bytes
+ * from the SOS marker on are copied unchanged. Returns the input when there is
+ * nothing to drop, null when the header cannot be read.
+ */
+export const stripJpegMetadata = (dataUrl: string): string | null => {
+  const comma = dataUrl.indexOf(',');
+  if (!/;base64$/i.test(dataUrl.slice(0, comma))) return null;
+  let bytes: Uint8Array;
+  try {
+    bytes = Uint8Array.from(atob(dataUrl.slice(comma + 1)), c => c.charCodeAt(0));
+  } catch {
+    return null;
+  }
+  if (bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
+  const kept: Uint8Array[] = [bytes.subarray(0, 2)];
+  let removed = false;
+  let i = 2;
+  while (i + 1 < bytes.length && bytes[i + 1] !== 0xda) {
+    if (bytes[i] !== 0xff) return null;
+    const marker = bytes[i + 1];
+    if (marker === 0xff) { i++; continue; }
+    // Standalone markers have no length field.
+    const end = marker === 0x01 || (marker >= 0xd0 && marker <= 0xd9) ? i + 2 : i + 2 + ((bytes[i + 2] << 8) | bytes[i + 3]);
+    if (keepsJpegSegment(bytes, i)) kept.push(bytes.subarray(i, end));
+    else removed = true;
+    i = end;
+  }
+  if (!removed) return dataUrl;
+  kept.push(bytes.subarray(i));
+  let binary = '';
+  for (const part of kept) {
+    for (let k = 0; k < part.length; k += 0x8000) binary += String.fromCharCode(...part.subarray(k, k + 0x8000));
+  }
+  return `${dataUrl.slice(0, comma)},${btoa(binary)}`;
+};
+
+const hasTransparency = (img: HTMLImageElement): boolean => {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  if (!ctx?.getImageData) return false;
+  ctx.drawImage(img, 0, 0, 128, 128);
+  const { data } = ctx.getImageData(0, 0, 128, 128);
+  for (let i = 3; i < data.length; i += 4) if (data[i] < 255) return true;
+  return false;
+};
+
+/**
+ * Keep inserted images at their source quality: Docs and the .docx export
+ * receive exactly the stored pixels. PNG files and the compressed data of JPEG
+ * files (without their metadata) stay byte-for-byte unless Docs would refuse
+ * them (over 25 MP); photos above `maxWidth`/`maxHeight`
+ * and formats Docs cannot import are re-encoded, transparency as PNG.
+ */
 export const optimizeDataUrlImage = async (
   dataUrl: string,
   options: ImageOptimizationOptions = {}
@@ -193,15 +288,17 @@ export const optimizeDataUrlImage = async (
   }
 
   const {
-    maxWidth = 1600,
-    maxHeight = 1600,
-    quality = 0.85,
-    format = 'image/jpeg',
+    maxWidth = 4096,
+    maxHeight = 4096,
+    quality = 0.92,
   } = options;
 
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     return dataUrl;
   }
+
+  const png = dataUrl.startsWith('data:image/png');
+  const jpeg = dataUrl.startsWith('data:image/jpeg');
 
   return new Promise<string>((resolve) => {
     try {
@@ -216,24 +313,28 @@ export const optimizeDataUrlImage = async (
             return;
           }
 
-          const { width, height } = calculateOptimalDimensions(
-            srcWidth,
-            srcHeight,
-            maxWidth,
-            maxHeight
-          );
+          // Screenshots keep every pixel; only photos get the side limit.
+          let { width, height } = png
+            ? { width: srcWidth, height: srcHeight }
+            : calculateOptimalDimensions(srcWidth, srcHeight, maxWidth, maxHeight);
+          const pixelScale = Math.sqrt(DOCS_MAX_IMAGE_PIXELS / (width * height));
+          if (pixelScale < 1) {
+            width = Math.max(1, Math.floor(width * pixelScale));
+            height = Math.max(1, Math.floor(height * pixelScale));
+          }
+          const resized = width !== srcWidth || height !== srcHeight;
 
-          if (
-            format === 'image/jpeg' &&
-            dataUrl.startsWith('data:image/jpeg') &&
-            srcWidth <= maxWidth &&
-            srcHeight <= maxHeight &&
-            dataUrl.length < 200_000
-          ) {
-            resolve(dataUrl);
+          // A rotated JPEG is redrawn upright: not every Docs/Word import
+          // honours the EXIF orientation the editor displays. An upright one
+          // keeps its compressed data but loses the Exif/GPS metadata; an
+          // unreadable header is redrawn, which drops it too.
+          const original = png ? dataUrl : jpeg && jpegOrientation(dataUrl) === 1 ? stripJpegMetadata(dataUrl) : null;
+          if (original && !resized) {
+            resolve(original);
             return;
           }
 
+          const format = png || (!jpeg && hasTransparency(img)) ? 'image/png' : 'image/jpeg';
           const canvas = document.createElement('canvas');
           canvas.width = width;
           canvas.height = height;
@@ -249,27 +350,8 @@ export const optimizeDataUrlImage = async (
           }
 
           ctx.drawImage(img, 0, 0, width, height);
-
-          let optimizedDataUrl = canvas.toDataURL(format, quality);
-
-          if (format === 'image/jpeg' && !optimizedDataUrl.startsWith('data:image/jpeg')) {
-            const jpegDataUrl = canvas.toDataURL('image/jpeg', quality);
-            if (jpegDataUrl.startsWith('data:image/jpeg')) {
-              optimizedDataUrl = jpegDataUrl;
-            }
-          }
-
-          if (
-            dataUrl.startsWith(format) &&
-            srcWidth <= maxWidth &&
-            srcHeight <= maxHeight &&
-            dataUrl.length > 0 &&
-            dataUrl.length < optimizedDataUrl.length
-          ) {
-            resolve(dataUrl);
-          } else {
-            resolve(optimizedDataUrl);
-          }
+          const optimizedDataUrl = canvas.toDataURL(format, quality);
+          resolve(optimizedDataUrl.startsWith(`data:${format}`) ? optimizedDataUrl : dataUrl);
         } catch {
           resolve(dataUrl);
         }
