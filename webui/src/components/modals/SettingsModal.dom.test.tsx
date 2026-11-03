@@ -1284,6 +1284,25 @@ describe('SettingsModal on the web host', () => {
     expect(link.getAttribute('target')).toBe('_blank');
   });
 
+  it('re-reads the space on Archiviazione when a Drive sync changed the archive, keeping the old figures meanwhile', async () => {
+    let resolveSecond: (value: unknown) => void = () => {};
+    const getInfo = vi.fn()
+      .mockResolvedValueOnce({ ok: true, total_bytes: 2048, total_sessions: 5, session_root: 'browser' })
+      .mockReturnValueOnce(new Promise(resolve => { resolveSecond = resolve; }));
+    setPywebview({ get_session_storage_info: getInfo });
+    const props = makeProps({ isOpen: false });
+    const { rerender } = render(<SettingsModal {...props} storage={{ archiveRevision: 0 }} />);
+    rerender(<SettingsModal {...props} isOpen storage={{ archiveRevision: 0 }} initialTab="storage" />);
+    await vi.waitFor(() => expect(screen.getByTestId('storage-count').textContent).toBe('5'));
+
+    // A sbobina restored on another device arrived with the sync while the page is open.
+    rerender(<SettingsModal {...props} isOpen storage={{ archiveRevision: 1 }} initialTab="storage" />);
+    expect(getInfo).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId('storage-count').textContent).toBe('5');
+    await act(async () => { resolveSecond({ ok: true, total_bytes: 4096, total_sessions: 6, session_root: 'browser' }); });
+    expect(screen.getByTestId('storage-count').textContent).toBe('6');
+  });
+
   it('opens on Archiviazione when asked, e.g. from the moved-address notice', () => {
     const props = makeProps({ isOpen: false });
     const { rerender } = render(<SettingsModal {...props} />);

@@ -107,11 +107,14 @@ export function useSettingsStorage({
     };
   }, []);
 
-  const fetchSessionStorageInfo = useCallback(() => {
+  const fetchSessionStorageInfo = useCallback((options?: { quiet?: boolean }) => {
     if (!window.pywebview?.api?.get_session_storage_info) return;
     const reqId = ++sessionInfoReqIdRef.current;
-    setIsLoadingSessionInfo(true);
-    setSessionInfo(null);
+    // Quiet: the archive changed under an open page, whose figures stay until the new ones arrive.
+    if (!options?.quiet) {
+      setIsLoadingSessionInfo(true);
+      setSessionInfo(null);
+    }
     try {
       const p = window.pywebview.api.get_session_storage_info();
       if (!p || typeof p.then !== 'function') {

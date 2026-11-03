@@ -1384,6 +1384,29 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
         expect(getArchiveFolders).toHaveBeenCalledTimes(2);
       });
     });
+
+    it('re-reads the space of an open Archiviazione when a Drive sync changed the archive', async () => {
+      vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
+      const getStorageInfo = vi.fn()
+        .mockResolvedValueOnce({ ok: true, total_bytes: 2048, total_sessions: 5, session_root: 'browser' })
+        .mockResolvedValueOnce({ ok: true, total_bytes: 4096, total_sessions: 6, session_root: 'browser' });
+      setPywebview({
+        get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [] }),
+        get_archive_folders: vi.fn().mockResolvedValue({ ok: true, folders: [] }),
+        get_session_storage_info: getStorageInfo,
+      });
+
+      await act(async () => { render(<App />); });
+      await act(async () => { fireEvent.click(screen.getByLabelText('Apri impostazioni')); });
+      const storageTab = (await screen.findByText('Archiviazione')).closest('button')!;
+      await act(async () => { fireEvent.click(storageTab); });
+      expect(getStorageInfo).toHaveBeenCalledTimes(1);
+
+      const bridgeOptions = vi.mocked(useBridgeCallbacks).mock.calls.at(-1)?.[0];
+      await act(async () => { bridgeOptions?.onArchiveChangedRemotely?.(); });
+
+      await vi.waitFor(() => expect(getStorageInfo).toHaveBeenCalledTimes(2));
+    });
   });
 
   describe('Dashboard queue actions', () => {

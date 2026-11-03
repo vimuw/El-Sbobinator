@@ -61,6 +61,8 @@ export interface SettingsStorageProps {
   onSessionRootMoved?: (payload?: { oldRoot?: string; newRoot?: string }) => void;
   /** Web build: a backup was imported, the archive must be reloaded. */
   onArchiveImported?: () => void;
+  /** Web build: grows each time a Drive sync changes the archive; an open Archiviazione re-reads the space. */
+  archiveRevision?: number;
 }
 
 export interface SettingsModalProps {
@@ -343,6 +345,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       }
     }
   }, [isOpen, activeTab, fetchApiUsage, fetchSessionStorageInfo]);
+
+  // A Drive sync changed the archive (a sbobina restored or trashed on another device) while
+  // Archiviazione is open: its figures follow, as the trash list below already does.
+  const archiveRevision = storage?.archiveRevision;
+  const seenArchiveRevisionRef = useRef(archiveRevision);
+  useEffect(() => {
+    if (archiveRevision === seenArchiveRevisionRef.current) return;
+    seenArchiveRevisionRef.current = archiveRevision;
+    if (isOpen && activeTab === 'storage') fetchSessionStorageInfo({ quiet: true });
+  }, [archiveRevision, isOpen, activeTab, fetchSessionStorageInfo]);
 
   useEffect(() => {
     if (isOpen) {

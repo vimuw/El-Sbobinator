@@ -96,6 +96,8 @@ export default function App() {
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab | undefined>();
+  // Counts the archive changes a Drive sync brought in: an open Archiviazione re-reads its figures.
+  const [archiveRevision, setArchiveRevision] = useState(0);
   const [isConsoleExpanded, setIsConsoleExpanded] = useState(false);
   const [hasOpenedSettings, setHasOpenedSettings] = useState(false);
   const shouldRenderSettings = isSettingsOpen || hasOpenedSettings;
@@ -442,7 +444,10 @@ export default function App() {
     batchTotal,
     onDownloadProgress: handleDownloadProgress,
     onRequestQuitConfirmation: requestQuitConfirmation,
-    onArchiveChangedRemotely: () => void handleSessionRootMoved(),
+    onArchiveChangedRemotely: () => {
+      setArchiveRevision(revision => revision + 1);
+      void handleSessionRootMoved();
+    },
     onDocumentChangedElsewhere: data => markChangedElsewhere(data.session_dir),
     onDriveNeedsReconnect: () => addNotification(
       'Google Drive da ricollegare',
@@ -763,6 +768,7 @@ export default function App() {
             storage={{
               onSessionRootMoved: handleSessionRootMoved,
               onArchiveImported: () => void handleSessionRootMoved(),
+              archiveRevision,
             }}
           />
         </React.Suspense>
