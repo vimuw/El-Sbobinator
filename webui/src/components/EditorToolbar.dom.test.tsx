@@ -194,7 +194,7 @@ describe('EditorToolbar MenuBar', () => {
     } finally { editor.destroy(); }
   });
 
-  it('keeps one row on a phone, with the index and the other tools behind "Aa"', () => {
+  it('keeps one row on a phone, with redo by undo and the other tools behind the arrow', () => {
     vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(max-width: 640px)' }));
     try {
       const { editor } = createMockEditor();
@@ -216,7 +216,10 @@ describe('EditorToolbar MenuBar', () => {
       const row = container.querySelector('.editor-toolbar-row')!;
       expect(row.querySelector('[title^="Grassetto"]')).toBeTruthy();
       expect(row.querySelector('[title="Elenco puntato"]')).toBeTruthy();
-      // Font, size and the insert buttons wait under "Aa".
+      // Redo sits right after undo, not in the second row.
+      const rowTitles = Array.from(row.children).map(child => child.getAttribute('title'));
+      expect(rowTitles.slice(0, 2)).toEqual(['Annulla (Ctrl+Z)', 'Ripeti (Ctrl+Y)']);
+      // Font, size and the insert buttons wait under the arrow.
       expect(screen.queryByTitle('Barrato')).toBeNull();
       expect(container.querySelector('.font-family-dropdown-btn')).toBeNull();
 
@@ -230,6 +233,8 @@ describe('EditorToolbar MenuBar', () => {
       expect(panel.querySelector('[title="Barrato"]')).toBeTruthy();
       expect(panel.querySelector('.font-family-dropdown-btn')).toBeTruthy();
       expect(panel.querySelector('[title^="Trova e sostituisci"]')).toBeTruthy();
+      expect(panel.querySelector('[title="Elenco numerato"]')).toBeTruthy();
+      expect(panel.querySelector('[title^="Ripeti"]')).toBeNull();
     } finally {
       vi.unstubAllGlobals();
     }
@@ -254,6 +259,129 @@ describe('EditorToolbar MenuBar', () => {
       expect(screen.queryByRole('button', { name: 'Indice' })).toBeNull();
     } finally {
       vi.unstubAllGlobals();
+    }
+  });
+  // jsdom has no layout: groups from wrapFrom on report a second line, and the stubbed
+  // ResizeObserver lets the test resize the window. Like a real one, it only reports for an
+  // element it observes that is still on the page, until it is disconnected.
+  const stubToolbarLayout = () => {
+    let wrapFrom = Infinity;
+    const observers: Array<{ callback: () => void; targets: Element[] }> = [];
+    vi.stubGlobal('ResizeObserver', class {
+      private entry: { callback: () => void; targets: Element[] };
+      constructor(callback: () => void) {
+        this.entry = { callback, targets: [] };
+        observers.push(this.entry);
+      }
+      observe(target: Element) { this.entry.targets.push(target); }
+      disconnect() { this.entry.targets = []; }
+    });
+    const offsetTop = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetTop');
+    Object.defineProperty(HTMLElement.prototype, 'offsetTop', {
+      configurable: true,
+      get(this: HTMLElement) {
+        const parent = this.parentElement;
+        if (!parent?.classList.contains('editor-toolbar-groups')) return 0;
+        return Array.from(parent.children).indexOf(this) >= wrapFrom ? 40 : 0;
+      },
+    });
+    const resize = (from: number) => {
+      wrapFrom = from;
+      act(() => observers
+        .filter(({ targets }) => targets.some(target => target.isConnected))
+        .forEach(({ callback }) => callback()));
+    };
+    const restore = () => {
+      if (offsetTop) Object.defineProperty(HTMLElement.prototype, 'offsetTop', offsetTop);
+      vi.unstubAllGlobals();
+    };
+    return { resize, restore };
+  };
+
+  it('folds the toolbar groups that wrap behind the arrow and opens them on request', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: false }));
+    const { resize, restore } = stubToolbarLayout();
+    try {
+      const { editor } = createMockEditor();
+      const { container } = render(
+        <MenuBar
+          editor={editor as unknown as TiptapEditor}
+          onOpenMath={vi.fn()} onOpenImagePicker={vi.fn()}
+          showFindReplace={false}
+          onToggleFindReplace={vi.fn()}
+          onOpenLink={vi.fn()}
+        />
+      );
+      const toolbar = container.querySelector('.editor-toolbar-full')!;
+      const groups = Array.from(container.querySelector('.editor-toolbar-groups')!.children);
+      const groupOf = (title: string) => groups.find(group => group.querySelector(`[title^="${title}"]`))!;
+
+      // Everything fits: one line and no arrow, as on a wide desktop window.
+      expect(screen.queryByRole('button', { name: 'Altri strumenti' })).toBeNull();
+
+      // A narrower window: the lists and search wrap and fold, bold stays on the first line.
+      resize(groups.indexOf(groupOf('Elenco puntato')));
+      const more = screen.getByRole('button', { name: 'Altri strumenti' });
+      expect(more.getAttribute('aria-expanded')).toBe('false');
+      expect(groupOf('Elenco puntato').hasAttribute('data-wrapped')).toBe(true);
+      expect(groupOf('Elenco puntato').hasAttribute('data-line-start')).toBe(true);
+      expect(groupOf('Trova e sostituisci').hasAttribute('data-wrapped')).toBe(true);
+      expect(groupOf('Grassetto').hasAttribute('data-wrapped')).toBe(false);
+      expect(toolbar.classList.contains('is-expanded')).toBe(false);
+
+      fireEvent.click(more);
+      expect(more.getAttribute('aria-expanded')).toBe('true');
+      expect(toolbar.classList.contains('is-expanded')).toBe(true);
+
+      // Wide again: the arrow goes and the lines close, so the next overflow starts folded.
+      resize(Infinity);
+      expect(screen.queryByRole('button', { name: 'Altri strumenti' })).toBeNull();
+      expect(toolbar.classList.contains('is-expanded')).toBe(false);
+      expect(groupOf('Elenco puntato').hasAttribute('data-wrapped')).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
+  it('watches the groups row that appears after the toolbar mounts', () => {
+    // A fresh load renders the toolbar before TipTap creates the editor, and a phone turned
+    // sideways swaps the phone row for the full one: a resize must still fold what wraps.
+    let phone = false;
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: phone && query === '(max-width: 640px)' }));
+    const { resize, restore } = stubToolbarLayout();
+    try {
+      const { editor } = createMockEditor();
+      const menuBar = (current: TiptapEditor | null) => (
+        <MenuBar
+          editor={current}
+          onOpenMath={vi.fn()} onOpenImagePicker={vi.fn()}
+          showFindReplace={false}
+          onToggleFindReplace={vi.fn()}
+          onOpenLink={vi.fn()}
+        />
+      );
+      const arrow = () => screen.queryByRole('button', { name: 'Altri strumenti' });
+      const { container, rerender } = render(menuBar(null));
+      expect(container.querySelector('.editor-toolbar-groups')).toBeNull();
+
+      rerender(menuBar(editor as unknown as TiptapEditor));
+      expect(arrow()).toBeNull();
+      resize(5);
+      expect(arrow()).toBeTruthy();
+      resize(Infinity);
+      expect(arrow()).toBeNull();
+
+      // Phone and back: the new row is watched, not the one the phone layout dropped.
+      phone = true;
+      rerender(menuBar(editor as unknown as TiptapEditor));
+      expect(container.querySelector('.editor-toolbar-groups')).toBeNull();
+      phone = false;
+      rerender(menuBar(editor as unknown as TiptapEditor));
+      expect(arrow()).toBeNull();
+      resize(5);
+      expect(arrow()).toBeTruthy();
+    } finally {
+      restore();
     }
   });
 });

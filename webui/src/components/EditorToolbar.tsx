@@ -1,9 +1,9 @@
 import React, { useRef } from 'react';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import {
-  Bold, Italic, List, ListOrdered, ListTree, Quote, Redo,
+  Bold, ChevronDown, Italic, List, ListOrdered, ListTree, Quote, Redo,
   RemoveFormatting, Search, Strikethrough, Superscript, Subscript,
-  Type, Underline as UnderlineIcon, Undo,
+  Underline as UnderlineIcon, Undo,
 } from 'lucide-react';
 import {
   ColorPickerButton, HighlightPickerButton, FontFamilySelect,
@@ -14,6 +14,7 @@ import {
 import { editorIsBold } from '../editorBold';
 import { shortcutLabel } from '../keyboardLabels';
 import { usePhoneLayout } from '../hooks/usePhoneLayout';
+import { useToolbarOverflow } from '../hooks/useToolbarOverflow';
 
 const menuBarStateKey = (editor: TiptapEditor): string => [
   editorIsBold(editor),
@@ -53,6 +54,20 @@ const keepEditorFocus = (event: React.MouseEvent) => {
   if (target.closest('button')) event.preventDefault();
 };
 
+// The same button opens the second row on a phone and the wrapped lines on a tablet.
+const MoreToolsButton = ({ open, onToggle }: { open: boolean; onToggle: () => void }) => (
+  <button
+    type="button"
+    onClick={onToggle}
+    className={`editor-button editor-more-button${open ? ' is-active' : ''}`}
+    title={open ? 'Nascondi altri strumenti' : 'Altri strumenti'}
+    aria-label="Altri strumenti"
+    aria-expanded={open}
+  >
+    <ChevronDown className="h-4 w-4" />
+  </button>
+);
+
 export const MenuBar = ({
   editor,
   onOpenImagePicker,
@@ -82,6 +97,9 @@ export const MenuBar = ({
   const compact = usePhoneLayout();
   const [moreOpen, setMoreOpen] = React.useState(false);
   const prevMenuKeyRef = useRef('');
+  const [groupsRef, overflowing] = useToolbarOverflow();
+  // Once everything fits again the lines close, so the next overflow starts folded.
+  if (!compact && moreOpen && !overflowing) setMoreOpen(false);
 
   React.useEffect(() => {
     if (!editor) return;
@@ -184,15 +202,15 @@ export const MenuBar = ({
       <LinkButton editor={editor} openRequest={linkRequest} />
     </>
   );
-  const listButtons = (
-    <>
-      <button type="button" onClick={() => editor.chain().focus().toggleBulletList().run()} className={btn(editor.isActive('bulletList'))} title="Elenco puntato">
-        <List className="h-4 w-4" />
-      </button>
-      <button type="button" onClick={() => editor.chain().focus().toggleOrderedList().run()} className={btn(editor.isActive('orderedList'))} title="Elenco numerato">
-        <ListOrdered className="h-4 w-4" />
-      </button>
-    </>
+  const bulletListButton = (
+    <button type="button" onClick={() => editor.chain().focus().toggleBulletList().run()} className={btn(editor.isActive('bulletList'))} title="Elenco puntato">
+      <List className="h-4 w-4" />
+    </button>
+  );
+  const orderedListButton = (
+    <button type="button" onClick={() => editor.chain().focus().toggleOrderedList().run()} className={btn(editor.isActive('orderedList'))} title="Elenco numerato">
+      <ListOrdered className="h-4 w-4" />
+    </button>
   );
   const quoteButton = (
     <button type="button" onClick={() => editor.chain().focus().toggleBlockquote().run()} className={btn(editor.isActive('blockquote'))} title="Citazione">
@@ -211,18 +229,20 @@ export const MenuBar = ({
   );
 
   // Phone: one row with what a student uses while reading and fixing a sbobina, like Google Docs
-  // on a phone; "Aa" opens the rest below it. The row scrolls sideways on the narrowest screens.
+  // on a phone; the arrow opens the rest below it. Redo sits by undo, so the numbered list waits
+  // below to keep the row within a 390px iPhone; narrower phones scroll it sideways.
   if (compact) {
     return (
       <div className="editor-toolbar-compact" onMouseDown={keepEditorFocus}>
         <div className="editor-toolbar is-compact">
           <div className="editor-toolbar-row">
             {undoButton}
+            {redoButton}
             <HeadingSelect editor={editor} />
             {boldButton}
             {italicButton}
             <HighlightPickerButton editor={editor} />
-            {listButtons}
+            {bulletListButton}
           </div>
           {onTocToggle && (
             <button
@@ -236,20 +256,11 @@ export const MenuBar = ({
               <ListTree className="h-4 w-4" />
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => setMoreOpen(open => !open)}
-            className={btn(moreOpen)}
-            title="Altri strumenti"
-            aria-label="Altri strumenti"
-            aria-expanded={moreOpen}
-          >
-            <Type className="h-4 w-4" />
-          </button>
+          <MoreToolsButton open={moreOpen} onToggle={() => setMoreOpen(open => !open)} />
         </div>
         {moreOpen && (
           <div className="editor-toolbar editor-toolbar-more" role="group" aria-label="Altri strumenti">
-            {redoButton}
+            {orderedListButton}
             {underlineButton}
             {zoomSelect}
             <FontFamilySelect editor={editor} />
@@ -268,40 +279,68 @@ export const MenuBar = ({
     );
   }
 
+  // Tablets and narrow windows: the groups that do not fit on the first line fold behind the
+  // arrow, like Google Docs, instead of pushing the page down with a second and third line.
+  // Each group carries its leading separator, so a group wraps whole.
   return (
-    <div className="editor-toolbar" onMouseDown={keepEditorFocus}>
-      {undoButton}
-      {redoButton}
-
-      {zoomSelect && (
-        <>
+    <div
+      className={`editor-toolbar editor-toolbar-full${moreOpen ? ' is-expanded' : ''}`}
+      onMouseDown={keepEditorFocus}
+    >
+      <div className="editor-toolbar-groups" ref={groupsRef}>
+        <div className="editor-toolbar-group">
+          {undoButton}
+          {redoButton}
+        </div>
+        {zoomSelect && (
+          <div className="editor-toolbar-group">
+            <div className="editor-separator" />
+            {zoomSelect}
+          </div>
+        )}
+        <div className="editor-toolbar-group">
           <div className="editor-separator" />
-          {zoomSelect}
-        </>
-      )}
-
-      <div className="editor-separator" />
-      <HeadingSelect editor={editor} />
-      <FontFamilySelect editor={editor} />
-      <FontSizeSelect editor={editor} />
-      <div className="editor-separator" />
-      {boldButton}
-      {italicButton}
-      {underlineButton}
-      {strikeButton}
-      {scriptControls}
-      <ColorPickerButton editor={editor} />
-      <HighlightPickerButton editor={editor} />
-      {clearFormattingButton}
-      <div className="editor-separator" />
-      {insertButtons}
-      <div className="editor-separator" />
-      <AlignDropdownButton editor={editor} />
-      <div className="editor-separator" />
-      {listButtons}
-      {quoteButton}
-      <div className="editor-separator" />
-      {findButton}
+          <HeadingSelect editor={editor} />
+          <FontFamilySelect editor={editor} />
+          <FontSizeSelect editor={editor} />
+        </div>
+        <div className="editor-toolbar-group">
+          <div className="editor-separator" />
+          {boldButton}
+          {italicButton}
+          {underlineButton}
+          {strikeButton}
+        </div>
+        {/* Split without separators (the script pair has its own borders): on a portrait iPad
+            bold and italic stay out even when the colours fold. */}
+        <div className="editor-toolbar-group">
+          {scriptControls}
+        </div>
+        <div className="editor-toolbar-group">
+          <ColorPickerButton editor={editor} />
+          <HighlightPickerButton editor={editor} />
+          {clearFormattingButton}
+        </div>
+        <div className="editor-toolbar-group">
+          <div className="editor-separator" />
+          {insertButtons}
+        </div>
+        <div className="editor-toolbar-group">
+          <div className="editor-separator" />
+          <AlignDropdownButton editor={editor} />
+        </div>
+        <div className="editor-toolbar-group">
+          <div className="editor-separator" />
+          {bulletListButton}
+          {orderedListButton}
+          {quoteButton}
+        </div>
+        <div className="editor-toolbar-group">
+          <div className="editor-separator" />
+          {findButton}
+        </div>
+      </div>
+      {overflowing && <MoreToolsButton open={moreOpen} onToggle={() => setMoreOpen(open => !open)} />}
     </div>
   );
 };

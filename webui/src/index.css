@@ -2483,6 +2483,59 @@ button {
   border-bottom: 1px solid var(--border-subtle);
 }
 
+/* Full toolbar (EditorToolbar): groups wrap whole; the lines below the first fold behind the
+   arrow on tablets and narrow windows (useToolbarOverflow marks them). Wide windows see one line. */
+.editor-toolbar.editor-toolbar-full {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}
+
+.editor-toolbar-groups {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 0.3rem;
+  min-width: 0;
+}
+
+.editor-toolbar-group {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+/* Folded: one 32px line. The 6px around it keeps the 44px touch areas and focus rings uncut;
+   the 8px row gap keeps the next line out of it. */
+.editor-toolbar-full:not(.is-expanded) .editor-toolbar-groups {
+  max-height: 44px;
+  margin-block: -6px;
+  padding-block: 6px;
+  overflow: hidden;
+}
+
+/* Hidden, not removed: the group keeps its size, so the next measure sees the same layout. */
+.editor-toolbar-full:not(.is-expanded) .editor-toolbar-group[data-wrapped] {
+  visibility: hidden;
+}
+
+.editor-toolbar-group[data-line-start] > .editor-separator:first-child {
+  visibility: hidden;
+}
+
+.editor-toolbar-full > .editor-more-button {
+  margin-left: 0.3rem;
+}
+
+.editor-more-button svg {
+  transition: transform 180ms ease;
+}
+
+.editor-more-button[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
 .editor-select-wrap {
   position: relative;
   display: inline-flex;
@@ -6553,7 +6606,7 @@ input::-webkit-contacts-auto-fill-button {
   }
 }
 
-/* Phone toolbar (EditorToolbar compact): one row, the rest under "Aa". */
+/* Phone toolbar (EditorToolbar compact): one row, the rest under the arrow. */
 .editor-toolbar-compact {
   flex-shrink: 0;
 }
@@ -6583,7 +6636,7 @@ input::-webkit-contacts-auto-fill-button {
   padding: 6px 8px;
 }
 
-/* Sized so the row fits a 390px iPhone with the index and "Aa" beside it; narrower phones scroll it. */
+/* Sized so the row fits a 390px iPhone with the index and the arrow beside it; narrower phones scroll it. */
 .editor-toolbar.is-compact .editor-button.heading-dropdown-btn {
   width: 88px;
   min-width: 88px;
