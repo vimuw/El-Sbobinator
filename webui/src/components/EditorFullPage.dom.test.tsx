@@ -564,8 +564,8 @@ describe('EditorFullPage on the web build', () => {
     const onRelink = vi.fn().mockResolvedValue(true);
     render(<EditorFullPage {...baseProps} audio={{ src: null, relinkNeeded: true, onRelink, onRemoveAudio: vi.fn(), init: {}, onStateChange: vi.fn() }} />);
 
-    expect(screen.getByText('Audio della lezione')).toBeTruthy();
-    expect(screen.getByText('L’audio non resta salvato nel browser: scegli il file della lezione per ascoltarlo.')).toBeTruthy();
+    expect(screen.getByText('Audio non salvato')).toBeTruthy();
+    expect(screen.getByText('Scegli il file della lezione per riascoltarla mentre rileggi.')).toBeTruthy();
     expect(screen.queryByText('Audio non trovato')).toBeNull();
     expect(screen.queryByRole('button', { name: /Rimuovi audio/ })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Ricollega audio' })).toBeNull();

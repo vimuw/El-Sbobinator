@@ -1,6 +1,6 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Check, Copy, Download, FileText, Headphones, Loader2, Moon, Plus, Sun, TriangleAlert, X } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Download, FileText, Loader2, Moon, Sun, TriangleAlert, X } from 'lucide-react';
 import type { Heading } from './RichTextEditor';
 import { prepareHtmlForClipboardSync } from '../utils';
 import { createNativeClipboardFormats, writeEditorClipboard } from '../editorClipboard';
@@ -17,6 +17,7 @@ import { STORAGE_KEYS } from '../storageKeys';
 import { getHostCapabilities, isTouchWeb } from '../hostCapabilities';
 import { EditorShortcuts } from './EditorShortcuts';
 // Bundled with the editor page: a lazy player flashed "Caricamento player..." on every first open.
+import { AudioDockEmpty } from './AudioDockEmpty';
 import { AudioPlayer } from './AudioPlayer';
 import { RichTextEditorChunk } from '../editorPreload';
 
@@ -135,11 +136,8 @@ export function EditorFullPage({
   const [exportNotice, setExportNotice] = useState('');
   // Web only: the desktop app copies images into Docs, and its WebView has no download sheet.
   const offersDocx = getHostCapabilities().kind === 'web';
-  const [relinkSuccess, setRelinkSuccess] = useState(false);
-  const [isRelinking, setIsRelinking] = useState(false);
   const [isRemovingAudio, setIsRemovingAudio] = useState(false);
   const [showConfirmRemove, setShowConfirmRemove] = useState(false);
-  const relinkTimerRef = useRef<number | null>(null);
   const copiedTimerRef = useRef<number | null>(null);
   const getHtmlRef = useRef<(() => string) | null>(null);
   const showAudioDock = getHostCapabilities().editorAudio;
@@ -188,13 +186,11 @@ export function EditorFullPage({
     if (copiedTimerRef.current) { window.clearTimeout(copiedTimerRef.current); copiedTimerRef.current = null; }
     setIsCopied(false);
     setExportNotice('');
-    setRelinkSuccess(false);
     setIsTocOpen(false);
   }, [previewContent]);
 
   useEffect(() => {
     return () => {
-      if (relinkTimerRef.current) window.clearTimeout(relinkTimerRef.current);
       if (copiedTimerRef.current) window.clearTimeout(copiedTimerRef.current);
     };
   }, []);
@@ -479,104 +475,15 @@ export function EditorFullPage({
                     onRemoveAudio={audioPicked ? undefined : onRemoveAudio}
                     keep={audioPicked && onKeepChange ? { kept: Boolean(audioProp?.kept), size: audioProp?.size ?? 0, onChange: onKeepChange } : undefined}
                   />
-                ) : audioRelinkNeeded ? (
-                  <div className="flex items-center justify-between gap-3 py-3.5">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{audioPicked ? 'Audio della lezione' : 'Audio non trovato'}</p>
-                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                        {audioPicked
-                          ? 'L’audio non resta salvato nel browser: scegli il file della lezione per ascoltarlo.'
-                          : 'Seleziona di nuovo il file per conservarne una copia nella sbobina.'}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {onRemoveAudio && !audioPicked && (
-                        <button
-                          type="button"
-                          onClick={() => setShowConfirmRemove(true)}
-                          disabled={isRemovingAudio}
-                          className="app-button-secondary is-settings-action"
-                          title="Rimuovi audio dalla sbobina"
-                          aria-label="Rimuovi audio dalla sbobina"
-                        >
-                          {isRemovingAudio ? 'Rimozione...' : 'Rimuovi audio'}
-                        </button>
-                      )}
-                      <button
-                        onClick={async () => {
-                          if (isRelinking) return;
-                          setIsRelinking(true);
-                          try {
-                            const ok = await onRelink();
-                            if (ok) {
-                              if (relinkTimerRef.current) window.clearTimeout(relinkTimerRef.current);
-                              setRelinkSuccess(true);
-                              relinkTimerRef.current = window.setTimeout(() => setRelinkSuccess(false), 3000);
-                            }
-                          } finally { setIsRelinking(false); }
-                        }}
-                        disabled={isRelinking}
-                        className="app-button-secondary is-settings-action"
-                        style={relinkSuccess ? { borderColor: 'var(--success-ring)', color: 'var(--success-text)' } : {}}
-                      >
-                        {relinkSuccess
-                          ? <><Check className="w-3.5 h-3.5" /> {audioPicked ? 'Audio pronto' : 'Ricollegato'}</>
-                          : isRelinking ? 'Selezione...' : audioPicked ? 'Scegli il file audio' : 'Ricollega audio'}
-                      </button>
-                    </div>
-                  </div>
                 ) : (
-                  <div className="flex items-center justify-between gap-3 py-3.5">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div
-                        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                        style={{ background: 'var(--bg-panel)', color: 'var(--text-muted)' }}
-                      >
-                        <Headphones className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium leading-none mb-1" style={{ color: 'var(--text-primary)' }}>Nessun audio collegato</p>
-                        <p className="text-xs leading-none" style={{ color: 'var(--text-muted)' }}>
-                          {audioPicked
-                            ? 'Scegli il file della lezione per ascoltarlo mentre rileggi.'
-                            : 'Aggiungi un file audio: una copia verrà conservata nella sbobina.'}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (isRelinking) return;
-                          setIsRelinking(true);
-                          try {
-                            const ok = await onRelink();
-                            if (ok) {
-                              if (relinkTimerRef.current) window.clearTimeout(relinkTimerRef.current);
-                              setRelinkSuccess(true);
-                              relinkTimerRef.current = window.setTimeout(() => setRelinkSuccess(false), 3000);
-                            }
-                          } finally {
-                            setIsRelinking(false);
-                          }
-                        }}
-                        disabled={isRelinking}
-                        className="settings-pill-button"
-                      >
-                        {isRelinking ? (
-                          <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            <span>Selezione...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>{audioPicked ? 'Scegli il file audio' : 'Aggiungi audio'}</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
+                  <AudioDockEmpty
+                    key={htmlPath}
+                    state={audioRelinkNeeded ? 'missing' : 'none'}
+                    audioPicked={audioPicked}
+                    onRelink={onRelink}
+                    onRemove={audioRelinkNeeded && onRemoveAudio && !audioPicked ? () => setShowConfirmRemove(true) : undefined}
+                    isRemoving={isRemovingAudio}
+                  />
                 )}
               </div>
             </div>
