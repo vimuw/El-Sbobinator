@@ -105,8 +105,9 @@ async function mountApp() {
     // An old address with an empty browser moves to elsbobinator.com: nothing to mount here.
     if (await applyCanonicalOrigin()) return;
     const { initWebHost } = await import('./web/webHost');
-    // Waits while another tab of this browser has the app (one at a time).
-    await initWebHost();
+    // Waits while another tab of this browser has the app (one at a time). False: the browser
+    // blocks the site's data, and a page says so instead of the app.
+    if (!await initWebHost()) return;
   } else {
     validateDesktopBuild(APP_VERSION);
     if (!window.elDesktopStartup) await initBrowserHost();

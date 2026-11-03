@@ -55,6 +55,29 @@ describe('web host', () => {
     expect(checked.result?.credentials?.[1].operational_status).toBe('unused');
   });
 
+  it('says why instead of staying blank when the browser blocks the site data', async () => {
+    // Regression: with cookies and site data blocked, every use of localStorage throws, and the host
+    // stopped while starting (the Gemini usage store reads it): the page stayed blank.
+    const targets = [...new Set<object>([window, globalThis])];
+    const saved = targets.map(target => Object.getOwnPropertyDescriptor(target, 'localStorage'));
+    for (const target of targets) {
+      Object.defineProperty(target, 'localStorage', { configurable: true, get: () => { throw new DOMException('The operation is insecure.', 'SecurityError'); } });
+    }
+    try {
+      await expect(initWebHost()).resolves.toBe(false);
+    } finally {
+      targets.forEach((target, index) => {
+        if (saved[index]) Object.defineProperty(target, 'localStorage', saved[index]!);
+        else delete (target as { localStorage?: Storage }).localStorage;
+      });
+    }
+    expect(window.pywebview).toBeUndefined();
+    const page = document.querySelector('[role="alert"]');
+    expect(page?.textContent).toContain('Il browser blocca i dati di questo sito');
+    expect(page?.querySelector('button')?.textContent).toBe('Ricarica');
+    page?.remove();
+  });
+
   it('installs the in-page API with web capabilities and announces it', async () => {
     const onReady = vi.fn();
     window.addEventListener('pywebviewready', onReady, { once: true });

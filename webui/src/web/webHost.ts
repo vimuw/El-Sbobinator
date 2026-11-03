@@ -15,6 +15,7 @@ import { createPageState } from './pageLifecycle';
 import { measureWebStorage, type WebStorageUsage } from './webDatabase';
 import { createApiUsageStore, type ApiUsageStore } from './apiUsage';
 import { claimActiveTab, showWaitingPage } from './activeTab';
+import { showSiteDataBlockedPage, siteDataBlocked } from './siteData';
 import { GeminiClient, GeminiHttpError, isAbortError } from './pipeline/gemini';
 import { CancelledError } from './pipeline/retry';
 import { retryFailedSections, type AudioSource, type PipelineEnv } from './pipeline/run';
@@ -919,7 +920,12 @@ export function leaveTab(reload: () => void = () => window.location.reload()): v
   reload();
 }
 
-export async function initWebHost(): Promise<void> {
+/** False when the app cannot run in this browser (site data blocked): a page says why. */
+export async function initWebHost(): Promise<boolean> {
+  if (siteDataBlocked()) {
+    showSiteDataBlockedPage();
+    return false;
+  }
   let hideWaiting = () => {};
   await claimActiveTab({ onWaiting: takeOver => { hideWaiting = showWaitingPage(takeOver); }, onLost: () => leaveTab() });
   hideWaiting();
@@ -933,4 +939,5 @@ export async function initWebHost(): Promise<void> {
   const emit = createBridgeEmitter(() => window.elSbobinatorBridge);
   window.pywebview = { api: createWebPywebviewApi(emit, { simulation }) };
   window.dispatchEvent(new Event('pywebviewready'));
+  return true;
 }
