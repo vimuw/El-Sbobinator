@@ -10,11 +10,11 @@ import { createDriveConnection, driveEnabled, type DriveConnection } from './dri
 import { createDriveService, type DriveService } from './drive/driveService';
 import { CONFLICT_SUFFIX } from './drive/sync';
 import { readRecord, syncMarks, trackArchive } from './drive/syncState';
-import { createTabLocks, type TabChannel } from './drive/tabLocks';
 import { type BridgeEventName, type EmitBridgeEvent, runFakePipeline } from './fakePipeline';
 import { createPageState } from './pageLifecycle';
 import { measureWebStorage, type WebStorageUsage } from './webDatabase';
 import { createApiUsageStore, type ApiUsageStore } from './apiUsage';
+import { claimActiveTab, showWaitingPage } from './activeTab';
 import { GeminiClient, GeminiHttpError, isAbortError } from './pipeline/gemini';
 import { CancelledError } from './pipeline/retry';
 import { retryFailedSections, type AudioSource, type PipelineEnv } from './pipeline/run';
@@ -179,10 +179,6 @@ export interface WebHostOptions {
   drive?: DriveConnection | null;
   /** Quiet period before a sync after local changes (tests shorten it). */
   driveDelayMs?: number;
-  /** navigator.locks, shared with the other tabs of the site (tests pass a fake one shared by two hosts). */
-  locks?: LockManager | null;
-  /** Opens this tab's end of the channel to the other tabs (tests pass fake ones shared by two hosts). */
-  openTabChannel?: () => TabChannel | null;
   /** Deleting moves a sbobina to the trash (default: the builds with the Drive sync, connected or not). */
   trash?: boolean;
 }
@@ -211,10 +207,16 @@ const noAudio: AudioSource = {
   toBase64: () => Promise.reject(new Error('Audio non necessario per la revisione.')),
 };
 
+// Another tab took over this one (leaveTab): the page reloads without asking.
+let tabLeft = false;
+// Stops the host of this page when another tab takes over: its run and its Drive token.
+let stopHost: () => void = () => {};
+
 export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOptions = {}): PywebviewApi {
   let activeRun: AbortController | null = null;
   // Leaving or reloading the page stops the run: the browser asks first while one is active.
   const confirmLeave = (event: BeforeUnloadEvent) => {
+    if (tabLeft) return;
     event.preventDefault();
     event.returnValue = '';
   };
@@ -239,25 +241,21 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
   // Drive sync (previews with a client ID only): every write of the user leaves a mark for it.
   // Without it the archive is the plain one, as in the released site.
   const driveConnection = options.drive === undefined ? createDriveConnection() : options.drive;
-  // The sbobina open in the editor: Drive's changes to it wait until the editor closes, in this tab
-  // and in the other tabs of the site, which see it through its lock.
-  const tabLocks = createTabLocks(options.locks === undefined ? globalThis.navigator?.locks : options.locks, options.openTabChannel);
-  let openInEditor: string | null = null;
-  let releaseEditor: (() => void) | null = null;
-  const setOpenInEditor = (sessionDir: string | null) => {
-    if (sessionDir === openInEditor) return;
-    releaseEditor?.();
-    releaseEditor = sessionDir ? tabLocks.holdEditor(sessionDir) : null;
-    openInEditor = sessionDir;
+  stopHost = () => {
+    activeRun?.abort();
+    // Also from memory: the page keeps running a moment before the reload.
+    driveConnection?.auth.expire();
   };
+  // The sbobina open in the editor: Drive's changes to it wait until the editor closes. One tab of
+  // the site runs at a time (activeTab.ts), so this tab's editor is the only one.
+  let openInEditor: string | null = null;
   // A round of this page has merged Drive's changes: the trash may expire what is on Drive too.
   let driveMerged = false;
   const drive: DriveService | null = driveConnection ? createDriveService({
     factory: database,
     ...driveConnection,
     isBusy: () => activeRun !== null,
-    isOpenInEditor: sessionDir => sessionDir === openInEditor || tabLocks.editorOpen(sessionDir),
-    exclusive: run => tabLocks.exclusive(run),
+    isOpenInEditor: sessionDir => sessionDir === openInEditor,
     delayMs: options.driveDelayMs,
     onReport: report => {
       if (!driveMerged) {
@@ -265,23 +263,13 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
         void purgeTrash();
       }
       if (report.downloaded || report.removed || report.conflicts || report.foldersChanged) emit('archiveChangedRemotely');
-      // Held back for this tab's editor or another tab's: the editor that has it open shows the notice.
       for (const sessionDir of report.deferred) {
         if (sessionDir === openInEditor) emit('documentChangedElsewhere', { session_dir: sessionDir });
-        tabLocks.tellEditors(sessionDir);
       }
     },
     onNeedsReconnect: () => emit('driveNeedsReconnect'),
     archive: () => archive,
   }) : null;
-  // Another tab's round held a change back for the sbobina open here; or another tab, without a
-  // token, closed the editor that held one back: this tab's round brings it in, if it has a token.
-  if (drive) {
-    tabLocks.onEditorsTold(sessionDir => {
-      if (sessionDir === openInEditor) emit('documentChangedElsewhere', { session_dir: sessionDir });
-    });
-    tabLocks.onEditorClosed(() => drive.schedule());
-  }
   const archive = drive ? trackArchive(database, () => drive.schedule()) : createWebArchive(database);
   drive?.start();
   const trashEnabled = options.trash ?? driveConnection !== null;
@@ -663,7 +651,7 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
     },
 
     read_html_content: async path => {
-      if (drive) setOpenInEditor(path.replace(/\/sbobina\.html$/, ''));
+      if (drive) openInEditor = path.replace(/\/sbobina\.html$/, '');
       const content = await archive.readHtml(path).catch(() => null);
       if (content === null) return { ok: false, error: 'Sbobina non trovata in questo browser.' };
       editorRead(sessionDirOf(path), content);
@@ -862,11 +850,7 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
       if (frontendEvents.length > 100) frontendEvents.shift();
       return { ok: true };
     },
-    ...(drive ? driveMethods(drive, () => {
-      setOpenInEditor(null);
-      // This tab runs no round without a token of its own: another tab with one brings the change in.
-      if (drive.status().needs_reconnect) tabLocks.tellEditorClosed();
-    }) : {}),
+    ...(drive ? driveMethods(drive, () => { openInEditor = null; }) : {}),
     ...(trashEnabled ? {
       list_trash: async () => {
         try {
@@ -917,7 +901,28 @@ function driveMethods(drive: DriveService, closeEditor: () => void): Partial<Pyw
   };
 }
 
-export function initWebHost(): void {
+/**
+ * Another tab took over: this one stops by reloading into the waiting page, without asking (a run
+ * stops, resumable from its checkpoint) and without its Drive token, which the other tab may since
+ * have bound to another account.
+ */
+export function leaveTab(reload: () => void = () => window.location.reload()): void {
+  tabLeft = true;
+  // The app's own leave guard (App.tsx) would otherwise ask during a run and keep this tab alive.
+  (window as unknown as { __elSbobinatorQuitting?: boolean }).__elSbobinatorQuitting = true;
+  stopHost();
+  try {
+    sessionStorage.removeItem(STORAGE_KEYS.WEB_DRIVE_TOKEN_V1);
+  } catch {
+    // Storage blocked: the token was in memory only and goes with the page.
+  }
+  reload();
+}
+
+export async function initWebHost(): Promise<void> {
+  let hideWaiting = () => {};
+  await claimActiveTab({ onWaiting: takeOver => { hideWaiting = showWaitingPage(takeOver); }, onLost: () => leaveTab() });
+  hideWaiting();
   // ?simulazione=1 keeps the M0 simulated run (no Gemini calls) for demos and the smoke test.
   const simulation = new URLSearchParams(window.location.search).get('simulazione') === '1';
   // The trash comes with the Drive sync: hidden, like it, in the released site.

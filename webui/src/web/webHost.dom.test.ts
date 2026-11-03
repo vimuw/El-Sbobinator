@@ -55,11 +55,11 @@ describe('web host', () => {
     expect(checked.result?.credentials?.[1].operational_status).toBe('unused');
   });
 
-  it('installs the in-page API with web capabilities and announces it', () => {
+  it('installs the in-page API with web capabilities and announces it', async () => {
     const onReady = vi.fn();
     window.addEventListener('pywebviewready', onReady, { once: true });
 
-    initWebHost();
+    await initWebHost();
 
     expect(onReady).toHaveBeenCalledTimes(1);
     // The touch sizing in index.css applies to the web build only.

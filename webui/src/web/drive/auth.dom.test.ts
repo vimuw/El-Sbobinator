@@ -92,22 +92,21 @@ describe('Drive auth', () => {
     expect(auth.account()).toBe('a@b.it');
   });
 
-  it('remembers which account the tab\'s token belongs to, apart from the account shared by the tabs', async () => {
+  it('keeps a login asked with keep: false only once adopted, for this page and a reloaded one', async () => {
     const { auth, reply } = setup();
-    const connecting = auth.connect();
+    const connecting = auth.connect({ keep: false });
     reply(tokenFields);
-    await connecting;
+    const token = await connecting;
+    expect(auth.token()).toBeNull();
+    expect(setup().auth.token()).toBeNull();
+    auth.adopt(token);
+    expect(auth.token()).toBe(token.accessToken);
+    expect(setup().auth.token()).toBe(token.accessToken);
+    // Its account is known once bound, also to a page reloaded (or a tab restored) with it.
     expect(auth.tokenAccount()).toBeNull();
     auth.setAccount('studente@uniupo.it');
     expect(auth.tokenAccount()).toBe('studente@uniupo.it');
-    // A reloaded page finds it with the token.
     expect(setup().auth.tokenAccount()).toBe('studente@uniupo.it');
-
-    // Another tab (same localStorage, its own sessionStorage) connects a different account.
-    const otherTab = setup({ session: null });
-    otherTab.auth.setAccount('altro@uniupo.it');
-    expect(auth.account()).toBe('altro@uniupo.it');
-    expect(auth.tokenAccount()).toBe('studente@uniupo.it');
   });
 
   it('disconnects even when the revoke never answers', async () => {
@@ -197,7 +196,7 @@ describe('Drive auth', () => {
     await expect(refused).rejects.toMatchObject({ code: 'file_scope_missing', message: expect.stringContaining('permesso di creare file') });
   });
 
-  it('keeps the account for this page when localStorage is blocked, so its token still counts as its own', async () => {
+  it('keeps the account for this page when localStorage is blocked', async () => {
     const blocked = () => { throw new DOMException('blocked', 'SecurityError'); };
     const local = { getItem: blocked, setItem: blocked, removeItem: blocked } as unknown as Storage;
     const { auth, reply } = setup({ local });
@@ -206,7 +205,6 @@ describe('Drive auth', () => {
     await connecting;
     auth.setAccount('studente@example.com');
     expect(auth.account()).toBe('studente@example.com');
-    expect(auth.tokenAccount()).toBe('studente@example.com');
 
     await auth.disconnect();
     expect(auth.account()).toBeNull();

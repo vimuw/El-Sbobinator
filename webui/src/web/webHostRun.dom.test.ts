@@ -106,11 +106,11 @@ describe('web host with the real pipeline', () => {
     const { fetchMock } = mockGemini([]);
     vi.stubGlobal('indexedDB', database);
     window.elSbobinatorBridge = {} as Window['elSbobinatorBridge'];
-    initWebHost();
+    await initWebHost();
     expect(getHostCapabilities().realPipeline).toBe(true);
 
     window.history.replaceState(null, '', '/?simulazione=1');
-    initWebHost();
+    await initWebHost();
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const [file] = await window.pywebview!.api.upload_browser_files!([new File(['a'], 'Demo.mp3')]);
     expect(await window.pywebview!.api.start_processing!([file], KEY, true, 'gemini-2.5-flash')).toEqual({ ok: true });

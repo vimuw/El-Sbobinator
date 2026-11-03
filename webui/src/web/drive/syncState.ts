@@ -50,11 +50,6 @@ export interface SyncMeta {
   deferred: DeferredFile[];
   /** Google account this state belongs to: another account starts from scratch. */
   account?: string;
-  /**
-   * The Drive data was erased from this browser: no round runs until an account is bound again.
-   * Read by the other tabs inside the lock, unlike the remembered account, which reaches them late.
-   */
-  erased?: boolean;
 }
 
 function newMeta(): SyncMeta {
@@ -92,8 +87,7 @@ export async function bindAccount(factory: IDBFactory | undefined, account: stri
     const meta = await requestValue(store.get(META_KEY) as IDBRequest<SyncMeta | undefined>);
     // First account of this state: whatever it holds was synced with it.
     if (meta?.account === undefined) {
-      const { erased: _erased, ...kept } = meta ?? newMeta();
-      store.put({ ...kept, account });
+      store.put({ ...(meta ?? newMeta()), account });
       return false;
     }
     if (meta.account === account) return false;
@@ -109,7 +103,7 @@ export async function resetSyncState(factory: IDBFactory | undefined): Promise<v
     const store = transaction.objectStore(SYNC);
     const meta = await requestValue(store.get(META_KEY) as IDBRequest<SyncMeta | undefined>);
     store.clear();
-    store.put({ ...newMeta(), device_id: meta?.device_id ?? crypto.randomUUID(), erased: true });
+    store.put({ ...newMeta(), device_id: meta?.device_id ?? crypto.randomUUID() });
   });
 }
 

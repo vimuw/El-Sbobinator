@@ -1,13 +1,13 @@
 import { IDBFactory } from 'fake-indexeddb';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { STORAGE_KEYS } from '../../storageKeys';
 import { createWebArchive, type NewArchiveSession } from '../webSessions';
-import { DriveAuthError } from './auth';
+import { DriveAuthError, createDriveAuth } from './auth';
 import { DriveError, createDriveApi } from './driveApi';
 import { createDriveService, describeDriveError, type DriveServiceOptions } from './driveService';
-import { createFakeAuth, createFakeDrive, createFakeLocks, type FakeDrive } from './fakeDrive';
+import { createFakeAuth, createFakeDrive, type FakeDrive } from './fakeDrive';
 import { sessionFileName, toSessionFile } from './syncFormat';
 import { bindAccount, readMeta, readRecords, trackArchive } from './syncState';
-import { createTabLocks } from './tabLocks';
 
 const input = (name: string): NewArchiveSession => ({
   name,
@@ -103,34 +103,22 @@ describe('Drive sync service', () => {
     await vi.waitFor(() => expect(drive.files()).toHaveLength(1));
   });
 
-  it('lets the round in progress end before a held write, and runs the one asked for meanwhile after it', async () => {
-    const drive = createFakeDrive();
-    const pc = device(drive, 'pc', { token: true, email: 'studente@example.com' });
-    await createWebArchive(pc.factory).create(input('Biologia'), '<p>tre</p>');
-    const round = pc.service.syncNow();
-    let listsDuringWork = -1;
-    const held = pc.service.hold(async () => {
-      const lists = listCalls(drive);
-      void pc.service.syncNow();
-      await new Promise(resolve => setTimeout(resolve, 50));
-      listsDuringWork = listCalls(drive) - lists;
-      return 'fatto';
-    });
-    await round;
-    expect(await held).toBe('fatto');
-    expect(listsDuringWork).toBe(0);
-    await vi.waitFor(() => expect(listCalls(drive)).toBe(2));
-  });
-
   it('runs one round at a time and one more for a change made during it', async () => {
     const drive = createFakeDrive();
     const pc = device(drive, 'pc', { token: true, email: 'studente@example.com' });
     await createWebArchive(pc.factory).create(input('Biologia'), '<p>tre</p>');
     const first = pc.service.syncNow();
-    const second = pc.service.syncNow();
-    await Promise.all([first, second]);
-    expect(listCalls(drive)).toBe(2);
-    expect(drive.files()).toHaveLength(1);
+    // Asked for before the first round starts: that round serves both.
+    await Promise.all([first, pc.service.syncNow()]);
+    expect(listCalls(drive)).toBe(1);
+    // Asked for once a round is on the network: it may have read the archive already, one more follows.
+    await createWebArchive(pc.factory).create(input('Chimica'), '<p>quattro</p>');
+    const running = pc.service.syncNow();
+    await vi.waitFor(() => expect(listCalls(drive)).toBe(2));
+    const next = pc.service.syncNow();
+    await Promise.all([running, next]);
+    expect(listCalls(drive)).toBe(3);
+    expect(drive.files()).toHaveLength(2);
   });
 
   it('reports an expired login and offers the reconnect tap', async () => {
@@ -240,88 +228,6 @@ describe('Drive sync service', () => {
     expect(second.files().map(file => (file.content as { body: string }).body)).toEqual(['<p>empty</p>']);
   });
 
-  it('stops the tabs still holding the previous account\'s token once another tab connects a different one', async () => {
-    const first = createFakeDrive();
-    const second = createFakeDrive({ email: 'altro@example.com' });
-    // Tabs of one browser: one database, one remembered account, a token each.
-    const factory = new IDBFactory();
-    const shared = { email: 'studente@example.com' as string | null };
-    const tab = (drive: FakeDrive, name: string) => {
-      const login = createFakeAuth(name, { token: true, shared });
-      const api = createDriveApi({ getToken: () => login.auth.token(), fetchImpl: drive.fetch, sleep: async () => {} });
-      const reconnects: string[] = [];
-      const service = createDriveService({ factory, auth: login.auth, api, isBusy: () => false, onNeedsReconnect: () => reconnects.push(name) });
-      return { service, reconnects };
-    };
-    const switching = tab(second, 'scheda-a');
-    const syncing = tab(first, 'scheda-b');
-    const erasing = tab(first, 'scheda-c');
-    await bindAccount(factory, 'studente@example.com');
-    const archive = trackArchive(factory, () => {});
-    const session = await archive.create(input('Patologia'), '<p>uno</p>');
-    await syncing.service.syncNow();
-    expect(first.files()).toHaveLength(1);
-
-    await switching.service.connect();
-    expect(second.files()).toHaveLength(1);
-    await archive.saveHtml(session.html_path, '<p>due</p>', Date.now());
-    await archive.create(input('Nuova'), '<p>nuova</p>');
-
-    // The previous account's Drive receives nothing more, and is not emptied from here.
-    expect(await syncing.service.syncNow()).toMatchObject({ email: 'altro@example.com', needs_reconnect: true });
-    expect(await erasing.service.erase()).toMatchObject({ removed: 0, needs_reconnect: true });
-    expect(first.files()).toHaveLength(1);
-    expect([...syncing.reconnects, ...erasing.reconnects]).toEqual(['scheda-b', 'scheda-c']);
-
-    // The tab of the new account sends both changes to its Drive.
-    await switching.service.syncNow();
-    expect(second.files().map(file => (file.content as { body: string }).body).sort()).toEqual(['<p>due</p>', '<p>nuova</p>']);
-    expect(await createWebArchive(factory).readHtml(session.html_path)).toContain('<p>due</p>');
-  });
-
-  it('stops a tab that still reads the previous account once another tab has bound a different one', async () => {
-    const first = createFakeDrive();
-    const second = createFakeDrive({ email: 'altro@example.com' });
-    const factory = new IDBFactory();
-    const locks = createTabLocks(createFakeLocks());
-    const shared = { email: 'studente@example.com' as string | null };
-    // Tabs B and C read the remembered account late (localStorage reaches other tabs a moment later):
-    // for them it is still the previous one, while the database already names the new one.
-    const tab = (drive: FakeDrive, name: string, remembered?: { email: string | null }) => {
-      const login = createFakeAuth(name, { token: true, shared: remembered ?? { email: 'studente@example.com' } });
-      const api = createDriveApi({ getToken: () => login.auth.token(), fetchImpl: drive.fetch, sleep: async () => {} });
-      const reconnects: string[] = [];
-      const service = createDriveService({ factory, auth: login.auth, api, isBusy: () => false, exclusive: run => locks.exclusive(run), onNeedsReconnect: () => reconnects.push(name) });
-      return { service, reconnects };
-    };
-    const switching = tab(second, 'scheda-a', shared);
-    const syncing = tab(first, 'scheda-b');
-    const erasing = tab(first, 'scheda-c');
-    await bindAccount(factory, 'studente@example.com');
-    const archive = trackArchive(factory, () => {});
-    await archive.create(input('Patologia'), '<p>uno</p>');
-    await syncing.service.syncNow();
-    expect(first.files()).toHaveLength(1);
-
-    await switching.service.connect();
-    await archive.create(input('Nuova'), '<p>nuova</p>');
-    const before = [...(await readRecords(factory)).values()];
-
-    // The previous account's Drive receives nothing and is not emptied, and the new account's state
-    // keeps no file of it.
-    expect(await syncing.service.syncNow()).toMatchObject({ needs_reconnect: true });
-    expect(await erasing.service.erase()).toMatchObject({ removed: 0, needs_reconnect: true });
-    expect(first.files()).toHaveLength(1);
-    expect([...(await readRecords(factory)).values()]).toEqual(before);
-    expect(await readMeta(factory)).toMatchObject({ account: 'altro@example.com' });
-    expect(await readMeta(factory)).not.toHaveProperty('erased');
-    expect([...syncing.reconnects, ...erasing.reconnects]).toEqual(['scheda-b', 'scheda-c']);
-
-    // The tab of the new account sends both sbobine to its Drive.
-    await switching.service.syncNow();
-    expect(second.files().map(file => (file.content as { body: string }).body).sort()).toEqual(['<p>nuova</p>', '<p>uno</p>']);
-  });
-
   it('brings the other account\'s older sbobine even when rounds run while it is being bound', async () => {
     const first = createFakeDrive();
     // The first account's Drive is busy: its listing watermark ends far ahead of the other Drive's clock.
@@ -359,152 +265,147 @@ describe('Drive sync service', () => {
     expect((await readMeta(pc.factory)).account).toBe('altro@example.com');
   });
 
-  it('binds another account only once the round of another tab is over, so its Drive receives what that round downloaded', async () => {
-    const first = createFakeDrive();
-    const second = createFakeDrive({ email: 'altro@example.com' });
-    const factory = new IDBFactory();
-    const shared = { email: 'studente@example.com' as string | null };
-    const locks = createTabLocks(createFakeLocks());
-    const tab = (drive: FakeDrive, name: string) => {
-      const login = createFakeAuth(name, { token: true, shared });
-      const api = createDriveApi({ getToken: () => login.auth.token(), fetchImpl: drive.fetch, sleep: async () => {} });
-      return { api, service: createDriveService({ factory, auth: login.auth, api, isBusy: () => false, exclusive: run => locks.exclusive(run) }) };
-    };
-    await bindAccount(factory, 'studente@example.com');
-    // Made on the tablet: only on the first account's Drive.
-    const dir = 'web-session://11111111-2222-4333-8444-555555555555';
-    const old = { session_dir: dir, html_path: `${dir}/sbobina.html`, name: 'Dal tablet', completed_at_iso: '2026-10-27T08:00:00.000Z', effective_model: '', input_path: '' };
-    first.put(sessionFileName(dir), toSessionFile(old, '<p>tablet</p>', 0, { updated_at: '2026-10-27T08:00:01.000Z', device_id: 'tablet' }));
-    const syncing = tab(first, 'scheda-b');
-    const switching = tab(second, 'scheda-a');
-    const read = syncing.api.readJson.bind(syncing.api);
-    let answerRead: (() => void) | null = null;
-    vi.spyOn(syncing.api, 'readJson').mockImplementation(async id => {
-      const value = await read(id);
-      await new Promise<void>(resolve => { answerRead = resolve; });
-      return value;
-    });
+  it('drops the token of an account this browser has left (a tab restored with it): no round, no erase on its Drive', async () => {
+    // Regression: a tab reopened or duplicated with its sessionStorage kept the previous account's
+    // token, and its rounds and "Elimina tutti i miei dati" worked on that account's Drive.
+    const drive = createFakeDrive();
+    const reconnects = vi.fn();
+    const pc = device(drive, 'pc', { token: true, email: 'studente@example.com', onNeedsReconnect: reconnects });
+    await bindAccount(pc.factory, 'studente@example.com');
+    await pc.archive.create(input('Anatomia'), '<p>ossa</p>');
+    await pc.service.syncNow();
+    expect(drive.files()).toHaveLength(1);
 
-    // Tab B is downloading the tablet's sbobina when tab A connects the other account.
-    const downloading = syncing.service.syncNow();
-    await vi.waitFor(() => expect(answerRead).not.toBeNull());
-    const connecting = switching.service.connect();
-    await new Promise(resolve => setTimeout(resolve, 20));
-    expect((await readMeta(factory)).account).toBe('studente@example.com');
-    answerRead!();
-    await Promise.all([downloading, connecting]);
-
-    expect(await createWebArchive(factory).get(dir)).toMatchObject({ name: 'Dal tablet' });
-    expect((await readMeta(factory)).account).toBe('altro@example.com');
-    expect(second.files().map(file => file.name)).toContain(sessionFileName(dir));
+    // Another account was connected in this browser since; this tab still holds the first one's token.
+    await bindAccount(pc.factory, 'altro@example.com');
+    const requests = drive.requests.length;
+    expect(await pc.service.syncNow()).toMatchObject({ needs_reconnect: true });
+    pc.login.auth.adopt({ accessToken: 'pc-0', expiresAt: Date.now() + 3_600_000, scopes: [] });
+    pc.login.auth.setAccount('studente@example.com');
+    expect(await pc.service.erase()).toMatchObject({ removed: 0 });
+    expect(drive.requests.length).toBe(requests);
+    expect(drive.files()).toHaveLength(1);
+    expect(reconnects).toHaveBeenCalledTimes(2);
+    expect(pc.login.auth.token()).toBeNull();
   });
 
-  it('keeps a round waiting for another tab\'s lock out of a login until its account is bound', async () => {
-    const first = createFakeDrive();
-    const second = createFakeDrive({ email: 'altro@example.com' });
-    const factory = new IDBFactory();
-    const shared = { email: 'studente@example.com' as string | null };
-    const locks = createTabLocks(createFakeLocks());
-    await bindAccount(factory, 'studente@example.com');
-    await trackArchive(factory, () => {}).create(input('Anatomia'), '<p>ossa</p>');
-    const dir = 'web-session://11111111-2222-4333-8444-555555555555';
-    const old = { session_dir: dir, html_path: `${dir}/sbobina.html`, name: 'Dal tablet', completed_at_iso: '2026-10-27T08:00:00.000Z', effective_model: '', input_path: '' };
-    first.put(sessionFileName(dir), toSessionFile(old, '<p>tablet</p>', 0, { updated_at: '2026-10-27T08:00:01.000Z', device_id: 'tablet' }));
+  describe('a tab restored with its token after another tab left Drive', () => {
+    // The real login: sessionStorage per tab, the remembered account in the shared localStorage.
+    const memoryStorage = (): Storage => {
+      const items = new Map<string, string>();
+      return {
+        get length() { return items.size; },
+        clear: () => items.clear(),
+        getItem: key => items.get(key) ?? null,
+        key: index => [...items.keys()][index] ?? null,
+        removeItem: key => { items.delete(key); },
+        setItem: (key, value) => { items.set(key, String(value)); },
+      };
+    };
+    let first = createFakeDrive();
+    let second = createFakeDrive({ email: 'altro@example.com' });
+    const tab =(factory: IDBFactory, token: string | null, account: string) => {
+      const session = memoryStorage();
+      if (token) session.setItem(STORAGE_KEYS.WEB_DRIVE_TOKEN_V1, JSON.stringify({ accessToken: token, expiresAt: Date.now() + 3_600_000, scopes: [], account }));
+      const auth = createDriveAuth({ clientId: 'id', redirectUri: 'https://elsbobinator.com/drive-auth', session, fetchImpl: vi.fn(async () => new Response()) });
+      const api = createDriveApi({
+        getToken: () => auth.token(),
+        fetchImpl: (url, init) => (new Headers(init?.headers).get('Authorization') === 'Bearer tok-altro' ? second : first).fetch(url, init),
+        sleep: async () => {},
+      });
+      const reconnects = vi.fn();
+      return { auth, reconnects, service: createDriveService({ factory, auth, api, isBusy: () => false, onNeedsReconnect: reconnects }) };
+    };
+    const setup = async () => {
+      localStorage.clear();
+      first = createFakeDrive();
+      second = createFakeDrive({ email: 'altro@example.com' });
+      const factory = new IDBFactory();
+      await createWebArchive(factory).create(input('Anatomia'), '<p>ossa</p>');
+      localStorage.setItem(STORAGE_KEYS.WEB_DRIVE_ACCOUNT_V1, 'studente@example.com');
+      await bindAccount(factory, 'studente@example.com');
+      return factory;
+    };
+    afterEach(() => localStorage.clear());
 
-    const loginB = createFakeAuth('scheda-b', { token: true, shared });
-    const apiB = createDriveApi({ getToken: () => loginB.auth.token(), fetchImpl: first.fetch, sleep: async () => {} });
-    const read = apiB.readJson.bind(apiB);
-    let answerRead: (() => void) | null = null;
-    vi.spyOn(apiB, 'readJson').mockImplementation(async id => {
-      const value = await read(id);
-      await new Promise<void>(resolve => { answerRead = resolve; });
-      return value;
+    it('sends nothing to the other account\'s Drive after "Elimina dati Drive"', async () => {
+      // Regression: the erase left the state unbound, and a tab closed while linked to the other
+      // account came back with its token and sent the whole archive to that Drive.
+      const factory = await setup();
+      const restored = tab(factory, 'tok-altro', 'altro@example.com');
+      expect(await tab(factory, 'tok-studente', 'studente@example.com').service.erase()).toMatchObject({ connected: false });
+
+      expect(await restored.service.syncNow()).toMatchObject({ connected: false, needs_reconnect: false });
+      expect(second.requests).toEqual([]);
+      expect(restored.auth.token()).toBeNull();
+      expect(restored.reconnects).not.toHaveBeenCalled();
     });
-    const tabB = createDriveService({ factory, auth: loginB.auth, api: apiB, isBusy: () => false, exclusive: run => locks.exclusive(run) });
-    // Tab A's first token is the first account's; the one of the new login reaches the other Drive.
-    const loginA = createFakeAuth('scheda-a', { token: true, shared });
-    const apiA = createDriveApi({
-      getToken: () => loginA.auth.token(),
-      fetchImpl: (input, init) => (new Headers(init?.headers).get('Authorization') === 'Bearer scheda-a-0' ? first : second).fetch(input, init),
+
+    it('stays disconnected after "Disconnetti" in a tab whose token had expired', async () => {
+      // Regression: with nothing to revoke the binding stayed, and a restored tab of the same account
+      // went on syncing (the settings read "Collegato") after the user disconnected.
+      const factory = await setup();
+      const restored = tab(factory, 'tok-studente', 'studente@example.com');
+      await tab(factory, null, 'studente@example.com').service.disconnect();
+
+      expect(await restored.service.syncNow()).toMatchObject({ connected: false });
+      expect(first.files()).toEqual([]);
+      expect(first.requests).toEqual([]);
+      expect(restored.auth.token()).toBeNull();
+      expect(restored.reconnects).not.toHaveBeenCalled();
+    });
+  });
+
+  it('keeps the emptied Drive empty when a round is asked for during the erase', async () => {
+    const drive = createFakeDrive();
+    const pc = device(drive, 'pc', { token: true, email: 'studente@example.com' });
+    await pc.archive.create(input('Anatomia'), '<p>ossa</p>');
+    await pc.service.syncNow();
+    expect(drive.files()).toHaveLength(1);
+
+    const erased = pc.service.erase();
+    // The page comes back to the foreground while the folder is emptied.
+    const waiting = pc.service.syncNow();
+    expect(await erased).toMatchObject({ removed: 1, connected: false, needs_reconnect: false });
+    await waiting;
+    expect(drive.files()).toHaveLength(0);
+    expect(await readRecords(pc.factory)).toEqual(new Map());
+  });
+
+  it('binds a new login before any round uses its token', async () => {
+    const first = createFakeDrive();
+    const pc = device(first, 'pc', { token: true, email: 'studente@example.com' });
+    await bindAccount(pc.factory, 'studente@example.com');
+    await pc.archive.create(input('Anatomia'), '<p>ossa</p>');
+    await pc.service.syncNow();
+    const second = createFakeDrive({ email: 'altro@example.com' });
+    // The first token reaches the first Drive; the one of the new login, the other Drive.
+    const api = createDriveApi({
+      getToken: () => pc.login.auth.token(),
+      fetchImpl: (url, init) => (new Headers(init?.headers).get('Authorization') === 'Bearer pc-0' ? first : second).fetch(url, init),
       sleep: async () => {},
     });
-    const tabA = createDriveService({ factory, auth: loginA.auth, api: apiA, isBusy: () => false, exclusive: run => locks.exclusive(run) });
+    const list = api.listChanged.bind(api);
+    let answerList: (() => void) | null = null;
+    vi.spyOn(api, 'listChanged').mockImplementationOnce(async since => {
+      await new Promise<void>(resolve => { answerList = resolve; });
+      return list(since);
+    });
+    const service = createDriveService({ factory: pc.factory, auth: pc.login.auth, api, isBusy: () => false });
 
-    // Tab B holds the lock while downloading; tab A's round asks for it, then tab A connects the other account.
-    const downloading = tabB.syncNow();
-    await vi.waitFor(() => expect(answerRead).not.toBeNull());
-    const queued = tabA.syncNow();
+    // A round of the first account is on the network when the login answers; another is asked for.
+    const running = service.syncNow();
+    await vi.waitFor(() => expect(answerList).not.toBeNull());
+    const connecting = service.connect();
     await Promise.resolve();
-    const connecting = tabA.connect();
-    answerRead!();
-    await Promise.all([downloading, queued, connecting]);
+    const again = service.syncNow();
+    answerList!();
+    await Promise.all([running, connecting, again]);
 
     // The other Drive is asked whose it is before anything else: no round used it unbound.
     expect(second.requests[0]?.url).toContain('/about');
-    expect((await readMeta(factory)).account).toBe('altro@example.com');
-    expect(second.files().map(file => file.name)).toContain(sessionFileName(dir));
-  });
-
-  it('stops the other tabs once one of them erases the Drive data: nothing goes back to the emptied Drive', async () => {
-    const drive = createFakeDrive();
-    const factory = new IDBFactory();
-    const shared = { email: 'studente@example.com' as string | null };
-    const tab = (name: string) => {
-      const login = createFakeAuth(name, { token: true, shared });
-      const api = createDriveApi({ getToken: () => login.auth.token(), fetchImpl: drive.fetch, sleep: async () => {} });
-      const reconnects: string[] = [];
-      const service = createDriveService({ factory, auth: login.auth, api, isBusy: () => false, onNeedsReconnect: () => reconnects.push(name) });
-      return { service, reconnects };
-    };
-    await bindAccount(factory, 'studente@example.com');
-    await trackArchive(factory, () => {}).create(input('Anatomia'), '<p>ossa</p>');
-    const erasing = tab('scheda-a');
-    const other = tab('scheda-b');
-    await erasing.service.syncNow();
-    expect(drive.files()).toHaveLength(1);
-
-    expect(await erasing.service.erase()).toMatchObject({ removed: 1, connected: false });
-    // The other tab comes back to the foreground: disconnected as well, not asked to reconnect.
-    expect(await other.service.syncNow()).toMatchObject({ connected: false, email: null, needs_reconnect: false });
-    expect(drive.files()).toHaveLength(0);
-    expect(other.reconnects).toEqual([]);
-  });
-
-  it('keeps the emptied Drive empty when another tab\'s round waits for the erase to end', async () => {
-    const drive = createFakeDrive();
-    const factory = new IDBFactory();
-    const locks = createTabLocks(createFakeLocks());
-    // Tab B sees the account forgotten by tab A one task late: localStorage reaches the other tabs
-    // of the browser on its own schedule, not with the lock.
-    const remembered = { email: 'studente@example.com' as string | null };
-    const seenByOther = { email: remembered.email };
-    const tab = (name: string, shared: { email: string | null }) => {
-      const login = createFakeAuth(name, { token: true, shared });
-      const api = createDriveApi({ getToken: () => login.auth.token(), fetchImpl: drive.fetch, sleep: async () => {} });
-      const reconnects: string[] = [];
-      const service = createDriveService({ factory, auth: login.auth, api, isBusy: () => false, exclusive: run => locks.exclusive(run), onNeedsReconnect: () => reconnects.push(name) });
-      return { service, reconnects };
-    };
-    await bindAccount(factory, 'studente@example.com');
-    await trackArchive(factory, () => {}).create(input('Anatomia'), '<p>ossa</p>');
-    const erasing = tab('scheda-a', remembered);
-    const other = tab('scheda-b', seenByOther);
-    await erasing.service.syncNow();
-    expect(drive.files()).toHaveLength(1);
-
-    const erased = erasing.service.erase();
-    await Promise.resolve();
-    // Tab B's round asks for the lock while tab A empties the folder, and runs before B learns that
-    // the account was forgotten.
-    const waiting = other.service.syncNow();
-    expect(await erased).toMatchObject({ removed: 1, connected: false });
-    await waiting;
-    expect(drive.files()).toHaveLength(0);
-    expect(other.reconnects).toEqual([]);
-
-    seenByOther.email = remembered.email;
-    expect(await other.service.syncNow()).toMatchObject({ connected: false, needs_reconnect: false });
-    expect(drive.files()).toHaveLength(0);
+    expect((await readMeta(pc.factory)).account).toBe('altro@example.com');
+    expect(second.files()).toHaveLength(1);
   });
 });
 

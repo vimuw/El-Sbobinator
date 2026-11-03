@@ -52,7 +52,7 @@ export interface SyncDeps {
   factory: IDBFactory | undefined;
   api: DriveApi;
   now?: () => Date;
-  /** The editor (of this tab or another) has this sbobina open: a remote change waits instead of overwriting it. */
+  /** The editor has this sbobina open: a remote change waits instead of overwriting it. */
   isOpenInEditor?: (sessionDir: string) => boolean | Promise<boolean>;
 }
 
