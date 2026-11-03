@@ -112,6 +112,9 @@ describe('one active tab of the site', () => {
     const hide = showWaitingPage(takeOver);
     expect(document.body.textContent).toContain('El Sbobinator è aperto in un’altra scheda');
     const button = [...document.querySelectorAll('button')].find(item => item.textContent === 'Usa qui')!;
+    // The app's primary pill, not the bare secondary button that rendered tiny.
+    expect(button.classList.contains('modal-action-button')).toBe(true);
+    expect(button.classList.contains('is-primary')).toBe(true);
     button.click();
     button.click();
     expect(takeOver).toHaveBeenCalledTimes(1);

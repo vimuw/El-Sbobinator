@@ -24,7 +24,9 @@ export function showNoticePage(notice: Notice, target: Document = document): () 
   text.textContent = notice.text;
   const button = target.createElement('button');
   button.type = 'button';
-  button.className = 'app-button-secondary';
+  // The page's only action: the app's primary pill, wide enough that a short label isn't a stub.
+  button.className = 'modal-action-button is-primary';
+  button.style.minWidth = '8.5rem';
   button.textContent = notice.button;
   button.addEventListener('click', () => {
     button.disabled = true;
