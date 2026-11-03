@@ -271,8 +271,8 @@ export function trackArchive(factory: IDBFactory | undefined, onChange: () => vo
       const session = await archive.update(sessionDir, patch);
       return changed(session, session !== null && syncedFields(Object.keys(patch)));
     },
-    delete: async (sessionDir, changedAt) => {
-      const deleted = await archive.delete(sessionDir, changedAt);
+    delete: async (sessionDir, changedAt, trashedAt) => {
+      const deleted = await archive.delete(sessionDir, changedAt, trashedAt);
       return changed(deleted, deleted);
     },
     trash: async (sessionDir, at) => {

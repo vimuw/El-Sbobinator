@@ -25,6 +25,7 @@ import { createBackup, describeBackup, describeImport, importBackup, loadLastBac
 import { NEW_KEY_TIMEOUT_MS, REGENERATE_TIMEOUT_MS, bridgeReporter, runWebFile, sleepWithSignal, type RegenerateAnswer } from './webRun';
 import {
   createWebArchive,
+  emptyTrash,
   purgeExpiredTrash,
   requestPersistentStorage,
   sessionDirOf,
@@ -869,8 +870,7 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
       },
       empty_trash: async () => {
         try {
-          let removed = 0;
-          for (const session of await archive.listTrash()) if (await archive.delete(session.session_dir)) removed += 1;
+          const removed = await emptyTrash(archive);
           revokeMediaUrl();
           return { ok: true, removed };
         } catch (error) {

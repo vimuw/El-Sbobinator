@@ -33,9 +33,10 @@ export interface WebArchive {
   update(sessionDir: string, patch: Partial<ArchiveSession>): Promise<ArchiveSession | null>;
   /**
    * Removes the sbobina, its document, its audio and its pipeline checkpoint, for good. `changedAt`:
-   * when the deletion counts as made for the Drive sync (default: now).
+   * when the deletion counts as made for the Drive sync (default: now). `trashedAt`: only a sbobina
+   * still in the trash since then goes; one restored meanwhile (here or by a Drive round) stays.
    */
-  delete(sessionDir: string, changedAt?: string): Promise<boolean>;
+  delete(sessionDir: string, changedAt?: string, trashedAt?: string): Promise<boolean>;
   /** Moves the sbobina to the trash: out of the archive and the search, everything else kept. */
   trash(sessionDir: string, at: string): Promise<boolean>;
   /** Brings a sbobina back from the trash. */
@@ -69,11 +70,12 @@ export const DELETE_STORES = [SESSIONS, DOCUMENTS, CHECKPOINTS, FOLDERS, MEDIA];
 
 /**
  * Removes the sbobina, its document, its audio, its checkpoint and its place in the folders, inside
- * a transaction over DELETE_STORES. False when it is not here.
+ * a transaction over DELETE_STORES. False when it is not here, or `trashedAt` is given and it is no
+ * longer in the trash since then.
  */
-export async function deleteInTransaction(transaction: IDBTransaction, sessionDir: string): Promise<boolean> {
+export async function deleteInTransaction(transaction: IDBTransaction, sessionDir: string, trashedAt?: string): Promise<boolean> {
   const session = await requestValue(transaction.objectStore(SESSIONS).get(sessionDir) as IDBRequest<ArchiveSession | undefined>);
-  if (!session) return false;
+  if (!session || (trashedAt !== undefined && session.trashed_at !== trashedAt)) return false;
   transaction.objectStore(SESSIONS).delete(sessionDir);
   transaction.objectStore(DOCUMENTS).delete(sessionDir);
   // The checkpoint would offer "already done" for a sbobina that no longer exists.
@@ -103,9 +105,21 @@ export async function purgeExpiredTrash(archive: WebArchive, now: Date, wait?: (
   for (const session of await archive.listTrash()) {
     const at = Date.parse(session.trashed_at ?? '');
     if (!Number.isFinite(at) || at > limit || await wait?.(session.session_dir)) continue;
-    if (await archive.delete(session.session_dir, new Date(at).toISOString())) purged += 1;
+    if (await archive.delete(session.session_dir, new Date(at).toISOString(), session.trashed_at)) purged += 1;
   }
   return purged;
+}
+
+/**
+ * "Svuota cestino": deletes for good the sbobine in the trash; returns how many. One restored
+ * meanwhile (a Drive round bringing in a restore made on another device) stays.
+ */
+export async function emptyTrash(archive: WebArchive): Promise<number> {
+  let removed = 0;
+  for (const session of await archive.listTrash()) {
+    if (await archive.delete(session.session_dir, undefined, session.trashed_at ?? '')) removed += 1;
+  }
+  return removed;
 }
 
 export function webSessionHtmlPath(sessionDir: string): string {
@@ -254,10 +268,10 @@ export function createWebArchive(factory: IDBFactory | undefined = globalThis.in
       });
     },
 
-    async delete(sessionDir, changedAt) {
+    async delete(sessionDir, changedAt, trashedAt) {
       const dir = sessionDirOf(sessionDir);
       return inTransaction(factory, writing(DELETE_STORES), 'readwrite', async transaction => {
-        if (!await deleteInTransaction(transaction, dir)) return false;
+        if (!await deleteInTransaction(transaction, dir, trashedAt)) return false;
         await marks?.session(transaction, dir, { deleted: true, at: changedAt });
         return true;
       });
