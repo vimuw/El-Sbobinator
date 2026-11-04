@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DriveExportResult, DriveStatus } from '../bridge';
 import { loadStorageChoice, saveStorageChoice, type WebStorageChoice } from '../components/modals/settings/webStorageChoice';
+import { readDriveStatus, webStorageSnapshot } from '../components/modals/settings/webStorageSnapshot';
 
 // Web builds with Drive sync: the host's Drive status (web/drive/driveService.ts), read while the
 // caller is mounted, and its actions. The settings cards and the sidebar account button share it.
@@ -24,7 +25,8 @@ export interface DriveController {
 }
 
 export function useDriveStatus(pollMs = 2000): DriveController {
-  const [status, setStatus] = useState<DriveStatus | null>(null);
+  // The last status read on this host shows at once (Archiviazione's badge doesn't flip on opening).
+  const [status, setStatus] = useState<DriveStatus | null>(() => webStorageSnapshot().drive ?? null);
   const [busy, setBusy] = useState<DriveAction | null>(null);
   const [storedChoice, setStoredChoice] = useState<WebStorageChoice | null>(() => loadStorageChoice());
   const busyRef = useRef<DriveAction | null>(null);
@@ -32,7 +34,7 @@ export function useDriveStatus(pollMs = 2000): DriveController {
   const available = Boolean(window.pywebview?.api?.get_drive_status);
 
   const refresh = useCallback(async () => {
-    const next = await window.pywebview?.api?.get_drive_status?.().catch(() => null);
+    const next = await readDriveStatus();
     if (mountedRef.current && next) setStatus(next);
   }, []);
 
@@ -57,6 +59,7 @@ export function useDriveStatus(pollMs = 2000): DriveController {
     markBusy(action);
     void call().then(
       next => {
+        webStorageSnapshot().drive = next;
         if (!mountedRef.current) return;
         setStatus(next);
         after?.(next);

@@ -67,22 +67,42 @@
   --bg-panel: #faf8f5;
   --bg-elevated: #ffffff;
   --bg-input: #ffffff;
-  --bg-hover: rgba(0, 0, 0, 0.05);
+  --bg-hover: rgba(0, 0, 0, 0.10);
+  /* Rows inside floating surfaces (menus, popovers, the notification panel, the Settings
+     selects) lighten towards white instead, as the dark theme's do: the black hover made a
+     dark, heavy band on the menus' beige. 65% white moves the beige as far in lightness as the
+     dark hover moves its menus (a weaker one barely shows), and still reads cream, not as a hole
+     cut to the white page. Selected rows take a pale green and the danger row (Elimina) a pale
+     rose, each as far from the beige as its dark counterpart. index.css hands them down. */
+  --bg-hover-floating: rgba(255, 255, 255, 0.65);
+  --bg-selected-floating: #ecf2e6;
+  --bg-danger-hover-floating: #fdf3f0;
   --bg-overlay: rgba(28, 25, 23, 0.40);
 
-  --border-default: rgba(120, 113, 108, 0.24);
-  --border-subtle: rgba(120, 113, 108, 0.16);
-  --border-strong: rgba(120, 113, 108, 0.46);
+  /* Hover and the three borders separate as much as their dark counterparts do: the same
+     difference in perceived lightness (CIELAB L*) over the white surface as the dark values
+     give over #202020. Weaker light values let cards, fields and menus melt into the page. */
+  --border-default: rgba(120, 113, 108, 0.33);
+  --border-subtle: rgba(120, 113, 108, 0.21);
+  --border-strong: rgba(120, 113, 108, 0.58);
 
   --text-primary: #1c1917;
   --text-secondary: #44403c;
-  --text-muted: #635d57;
-  --text-faint: #857e77;
+  /* Muted keeps 4.5:1 even on a row under the page hover (10% black) and at the deepest point
+     of an unread notification's tint; the page hover cannot lighten without separating less
+     than the dark theme's. */
+  --text-muted: #59534e;
+  /* Text keeps at least 4.5:1 on every surface it can sit on, menus included. On the light
+     menus' beige that leaves no room for a readable step below muted, so faint text is muted
+     text, in both themes. The lighter grey survives only for marks that are not text, such as
+     the search field's icons, which need 3:1. */
+  --text-faint: var(--text-muted);
+  --icon-faint: #857e77;
 
   --accent-bg: #3d6b3a;
   --accent-bg-hover: #2d5529;
   --accent-text: #2d5529;
-  --accent-subtle: rgba(61, 107, 58, 0.08);
+  --accent-subtle: rgba(61, 107, 58, 0.12);
   --accent-ring: rgba(61, 107, 58, 0.18);
   --accent-gradient-start: #5a8a48;
   --accent-gradient-end: #3d6b3a;
@@ -90,22 +110,34 @@
   --brand-warm-subtle: rgba(196, 154, 60, 0.12);
 
   --success-bg: #2f855a;
-  --success-text: #23744a;
+  /* Status text keeps 4.5:1 everywhere it shows, the worst place being a notification's category
+     badge on the deepest point of an unread row's tint, on the menus' beige (3.3:1 at #23744a,
+     #8f5410, #b91c1c). Same hues, darker. */
+  --success-text: #1b5b3a;
   --success-subtle: rgba(47, 133, 90, 0.10);
   --success-ring: rgba(47, 133, 90, 0.22);
   --error-bg: #b91c1c;
-  --error-text: #b91c1c;
+  --error-text: #961c15;
   --error-subtle: rgba(185, 28, 28, 0.08);
   --error-ring: rgba(185, 28, 28, 0.20);
   --warning-bg: #975a16;
-  --warning-text: #8f5410;
+  --warning-text: #73440d;
   --warning-subtle: rgba(151, 90, 22, 0.09);
   --warning-ring: rgba(151, 90, 22, 0.20);
 
-  --processing-bg: rgba(61, 107, 58, 0.08);
+  --processing-bg: rgba(61, 107, 58, 0.10);
   --processing-text: #3d6b3a;
   --processing-ring: rgba(61, 107, 58, 0.22);
   --processing-dot: #5a8a48;
+
+  /* The parts of Impostazioni → Archiviazione's space bar: the dark theme's bright green, white and
+     yellow have no light counterpart among the text colours (they all go dark and muddy), so the
+     light theme takes clear mid tones of its own, each at 3:1 or more on the white card but the gold. */
+  --storage-part-1: #4e8c4a;
+  --storage-part-2: #5d82a8;
+  --storage-part-3: #c99a32;
+  --storage-part-4: #a39b94;
+  --storage-part-5: #3f9283;
 
   --btn-primary-bg: #3d6b3a;
   --btn-primary-text: #ffffff;
@@ -122,22 +154,22 @@
   --console-header: #faf8f5;
   --console-heading: #1c1917;
   --console-text: #44403c;
-  --console-muted: #635d57;
+  --console-muted: #59534e;
   --console-border: var(--border-subtle);
   --console-shell-border: var(--border-default);
-  --console-error: #b91c1c;
-  --console-success: #23744a;
-  --console-warning: #8f5410;
+  --console-error: #961c15;
+  --console-success: #1b5b3a;
+  --console-warning: #73440d;
 
   --gradient-title-from: #1a2e18;
   --gradient-title-to: #4a7c40;
 
-  --progress-bg: rgba(61, 107, 58, 0.12);
-  --scrubber-rest: rgba(120, 113, 108, 0.35);
+  --progress-bg: rgba(61, 107, 58, 0.16);
+  --scrubber-rest: rgba(120, 113, 108, 0.41);
   --card-queued-bg: #ffffff;
-  --card-queued-border: rgba(120, 113, 108, 0.28);
+  --card-queued-border: rgba(120, 113, 108, 0.36);
   --glass-bg: #ffffff;
-  --glass-border: rgba(120, 113, 108, 0.24);
+  --glass-border: var(--border-default);
 
   --shadow-soft: none;
   --shadow-strong: 0 8px 32px rgba(28, 25, 18, 0.08);
@@ -147,11 +179,65 @@
   --shadow-sm: 0 1px 2px rgba(28, 25, 18, 0.04), 0 4px 12px -4px rgba(28, 25, 18, 0.08);
   --shadow-md: 0 1px 3px rgba(28, 25, 18, 0.05), 0 10px 24px -8px rgba(28, 25, 18, 0.14);
 
-  --radius-card: 12px;
-  --radius-panel: 16px;
+  /* Named corners on the radius scale in index.css (@theme), which Tailwind's rounded-* share. */
+  --radius-card: var(--radius-xl);
+  --radius-panel: var(--radius-2xl);
+  --radius-pill: 999px;
 
+  /* Controls. Buttons and the fields beside them share three heights, so a row of them lines
+     up. Text buttons are pills in four variants (primary, secondary, tinted, ghost) with one
+     weight; icon buttons are rounded squares in four sizes. The player keeps its round controls. */
+  --control-height-sm: 32px;
+  --control-height-md: 36px;
+  --control-height-lg: 40px;
+  --button-padding-sm: 0.25rem 0.875rem;
+  --button-padding-md: 0.25rem 1rem;
+  --button-padding-lg: 0.375rem 1.125rem;
+  --button-weight: 600;
+  --icon-button-xs: 28px;
+  --icon-button-sm: 32px;
+  --icon-button-md: 36px;
+  --icon-button-lg: 42px;
+
+  /* Keyboard focus. One ring for every control, in both themes: a solid outline in the accent
+     text colour, which keeps at least 3:1 against every surface it can sit on, drawn just
+     outside the control and only for :focus-visible. Where a container clips it (a scrolling
+     list, a menu, a row that scrolls sideways) the same ring moves inside with the inset offset
+     instead of changing style. */
+  --focus-ring-color: var(--accent-text);
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --focus-ring-inset: calc(-1 * var(--focus-ring-width));
+  --focus-ring: var(--focus-ring-width) solid var(--focus-ring-color);
+
+  /* App-wide stacking, lowest first. Only layers that sit over the whole window take a name;
+     z-index inside one component (image handles, a header over its list) stays local and small.
+     Menus top everything because they open from any of the layers below them. */
+  --z-sticky: 20;            /* bars pinned while the page scrolls */
+  --z-sidebar: 30;           /* the navigation sidebar */
+  --z-dismiss-layer: 40;     /* the invisible click-catcher under a sidebar flyout */
+  --z-dialog: 50;            /* full-window surfaces: the editor, Settings, sidebar flyouts, selection bar */
+  --z-modal: 60;             /* modals, which can open over a dialog; the file drop overlay */
+  --z-tooltip: 200;
+  --z-inline-toolbar: 999;   /* the formatting bubble that follows the text selection */
+  --z-drag: 1000;            /* an image being dragged; its alignment guide sits one above */
+  --z-sheet: 9000;           /* the phone formatting sheet */
+  --z-popover: 9999;         /* menus, dropdowns, link and video cards */
+
+  /* Motion. fast, base and slow match DURATION in motion.ts; state is the hover, focus and
+     colour change every control shares; instant is the press. Choreographed animations (the
+     processing glow, the dock fold) keep durations of their own. */
+  --duration-instant: 80ms;
+  --duration-fast: 120ms;
+  --duration-state: 160ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
   /* Matches EASE_OUT in motion.ts: decelerate, never overshoot. */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);         /* EASE_IN: exits */
+  --ease-move: cubic-bezier(0.4, 0, 0.2, 1);     /* travel there and back: the dock folding */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);      /* the springy press of a button */
+  --ease-spring-soft: cubic-bezier(0.34, 1.2, 0.64, 1);  /* the same, gentler, for cards */
 
   --tracking-display: -0.025em;
 
@@ -159,6 +245,19 @@
 
   --header-bg: #f0ede6;
   --editor-chrome-bg: #f0ede6;
+  /* As in the dark theme, each layer of the editor has a tone of its own: the toolbar a step
+     lighter than the header, the page white, and menus, popovers and the player a step darker
+     than the header, so they stand out from the page and from both bars. */
+  --editor-toolbar-bg: #f6f4ef;
+  /* Everything that floats over the page (menus, popovers, tooltips, the player, the selection
+     bar) shares these three. The dark theme separates them with a lighter grey and a deep
+     shadow; on a light page a tone step alone barely shows, so the frame carries the same
+     separation here. The shadow only lifts: a wide, dark one reads as a halo on the beige. */
+  --bg-floating: #e4dfd5;
+  --border-floating: rgba(120, 113, 108, 0.36);
+  --shadow-floating: 0 1px 3px rgba(28, 25, 18, 0.07), 0 8px 20px -6px rgba(28, 25, 18, 0.16);
+  /* The same, cast upwards, for the player's menus that open above the dock. */
+  --shadow-floating-up: 0 -1px 3px rgba(28, 25, 18, 0.07), 0 -8px 20px -6px rgba(28, 25, 18, 0.16);
 }
 
 :root[data-theme="dark"] {
@@ -168,6 +267,10 @@
     --bg-elevated: #2b2b2b;
     --bg-input: #1a1a1a;
     --bg-hover: rgba(255, 255, 255, 0.08);
+    /* Floating rows already lighten here: the same hover, selection and danger tint as elsewhere. */
+    --bg-hover-floating: var(--bg-hover);
+    --bg-selected-floating: var(--accent-subtle);
+    --bg-danger-hover-floating: var(--error-subtle);
     --bg-overlay: rgba(0, 0, 0, 0.72);
 
     --border-default: rgba(255, 255, 255, 0.15);
@@ -175,9 +278,10 @@
     --border-strong: rgba(255, 255, 255, 0.28);
 
     --text-primary: #f1f1ef;
-    --text-secondary: #d1d5db;
-    --text-muted: #9ca3af;
-    --text-faint: #6b7280;
+    /* Neutral greys with the light theme's warm tint, at the lightness of the old blue-greys. */
+    --text-secondary: #d7d4d1;
+    --text-muted: #b3b0ad;
+    --icon-faint: #7f7c79;
 
     --accent-bg: #5aa356;
     --accent-bg-hover: #7ec97a;
@@ -207,22 +311,31 @@
     --processing-ring: rgba(90, 163, 86, 0.22);
     --processing-dot: #7ec97a;
 
-    --btn-primary-bg: #5aa356;
+    --storage-part-1: var(--accent-text);
+    --storage-part-2: var(--text-primary);
+    --storage-part-3: var(--warning-text);
+    --storage-part-4: var(--text-muted);
+    --storage-part-5: var(--success-text);
+
+    /* As in the light theme, primaries are white text on a dark green, at 4.5:1 or more: on the
+       accent green #5aa356 white read at 3.1:1. The hover goes darker, as there. */
+    --btn-primary-bg: #447b41;
     --btn-primary-text: #ffffff;
-    --btn-primary-hover: #4a9247;
+    --btn-primary-hover: #3d6e3a;
     --btn-primary-ring: rgba(90, 163, 86, 0.32);
     --btn-danger-bg: #dc2626;
     --btn-danger-text: #ffffff;
     --btn-danger-hover: #b91c1c;
     --btn-danger-ring: rgba(220, 38, 38, 0.32);
-    --btn-disabled-bg: rgba(71, 85, 105, 0.4);
-    --btn-disabled-text: rgba(203, 213, 225, 0.42);
+    /* The light theme's warm stone, one step darker, at the lightness of the old slate. */
+    --btn-disabled-bg: rgba(87, 83, 78, 0.4);
+    --btn-disabled-text: rgba(215, 212, 209, 0.42);
 
     --console-bg: #0a0a0a;
     --console-header: #141414;
     --console-heading: #f5f5f5;
-    --console-text: #d1d5db;
-    --console-muted: #9ca3af;
+    --console-text: #d7d4d1;
+    --console-muted: #b3b0ad;
     --console-border: rgba(255, 255, 255, 0.08);
     --console-shell-border: var(--border-default);
     --console-error: #fca5a5;
@@ -249,4 +362,8 @@
 
     --header-bg: #191919;
     --editor-chrome-bg: #191919;
+    --bg-floating: var(--bg-elevated);
+    --border-floating: var(--border-subtle);
+    --shadow-floating: var(--shadow-strong);
+    --shadow-floating-up: 0 -10px 28px -14px rgb(0 0 0 / 0.45), 0 0 0 1px color-mix(in srgb, var(--border-subtle) 40%, transparent);
 }

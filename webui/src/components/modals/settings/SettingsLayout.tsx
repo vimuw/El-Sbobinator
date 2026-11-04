@@ -98,10 +98,12 @@ interface SettingsRowProps {
 }
 
 // A labelled row with its control on the right, like "Elaborazioni incomplete" on the desktop.
+// The text keeps at least 12rem: a control too wide for the rest (a labelled button on a phone)
+// wraps under it, while a switch stays on the right.
 export function SettingsRow({ title, description, descriptionId, children }: SettingsRowProps) {
   return (
-    <div className="flex items-center justify-between gap-3 p-2.5 rounded-lg hover:bg-[var(--bg-hover)] transition-colors -mx-2">
-      <div className="space-y-0.5 min-w-0">
+    <div data-testid="settings-row" className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 p-2.5 rounded-lg hover:bg-[var(--bg-hover)] transition-colors -mx-2">
+      <div className="space-y-0.5 min-w-0 flex-[1_1_12rem]">
         <span className="text-sm font-bold text-[var(--text-primary)] block">{title}</span>
         {description && <p id={descriptionId} className="text-xs text-[var(--text-secondary)]">{description}</p>}
       </div>
@@ -212,8 +214,8 @@ interface StatusBadgeProps {
 
 export function StatusBadge({ tone, children, title, minor = false }: StatusBadgeProps) {
   const size = minor
-    ? 'text-[10px] font-medium px-2'
-    : 'text-[11px] font-semibold px-2.5';
+    ? 'text-micro font-medium px-2'
+    : 'text-caption font-semibold px-2.5';
   return (
     <span
       className={`${size} py-0.5 rounded-full border inline-flex items-center justify-center gap-1 leading-normal shrink-0 ${BADGE_TONE[tone]}`}

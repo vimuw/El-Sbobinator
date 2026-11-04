@@ -80,7 +80,7 @@ export const NavSidebar = memo(function NavSidebar({
         background: 'var(--sidebar-bg)',
         borderRight: '1px solid var(--border-subtle)',
         flexShrink: 0,
-        zIndex: 30,
+        zIndex: 'var(--z-sidebar)',
         overflow: 'visible',
       }}
     >

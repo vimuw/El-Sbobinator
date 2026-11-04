@@ -3,6 +3,7 @@ import { DndContext } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { describe, expect, it, vi } from 'vitest';
 import type { FileItem } from '../appState';
+import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 import { CompletedFileCard, QueueFileCard } from './QueueFileCard';
 
 function makeFile(overrides: Partial<FileItem> = {}): FileItem {
@@ -346,7 +347,7 @@ describe('CompletedFileCard', () => {
     expect(screen.getByText('lezione.mp3')).toBeTruthy();
   });
 
-  it('shows kebab menu button when outputHtml is set', () => {
+  it('puts its secondary actions on the card instead of a ⋮ menu', () => {
     render(
       <CompletedFileCard
         file={makeFile({ status: 'done', outputHtml: '/out/file.html' })}
@@ -354,10 +355,11 @@ describe('CompletedFileCard', () => {
         onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()}
       />,
     );
-    expect(screen.getByLabelText('Altre opzioni')).toBeTruthy();
+    expect(screen.queryByLabelText('Altre opzioni')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Rimuovi dai Recenti' })).toBeTruthy();
   });
 
-  it('opens the editor from Apri and does not repeat it in the kebab menu', () => {
+  it('opens the editor from Apri', () => {
     const onPreview = vi.fn();
     render(
       <CompletedFileCard
@@ -366,24 +368,26 @@ describe('CompletedFileCard', () => {
         onRemove={vi.fn()} onPreview={onPreview} onOpenFile={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /Apri/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Apri' }));
     expect(onPreview).toHaveBeenCalledWith('/out/file.html', 'lezione.mp3', undefined, 'f1', undefined);
-    fireEvent.click(screen.getByLabelText('Altre opzioni'));
-    expect(screen.queryByText('Modifica')).toBeNull();
   });
 
-  it('calls onRemove when Rimuovi is clicked in kebab menu', () => {
+  it('removes from Recenti with a plain ✕, not a red delete that reads as losing the sbobina', () => {
     const onRemove = vi.fn();
+    const onPreview = vi.fn();
     render(
       <CompletedFileCard
-        file={makeFile({ status: 'done' })}
+        file={makeFile({ status: 'done', outputHtml: '/out/file.html' })}
         isNewest={false}
-        onRemove={onRemove} onPreview={vi.fn()} onOpenFile={vi.fn()}
+        onRemove={onRemove} onPreview={onPreview} onOpenFile={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByLabelText('Altre opzioni'));
-    fireEvent.click(screen.getByText('Rimuovi'));
+    const remove = screen.getByRole('button', { name: 'Rimuovi dai Recenti' });
+    expect(remove.getAttribute('title')).toContain("resta nell'Archivio");
+    expect(remove.className).not.toContain('is-danger');
+    fireEvent.click(remove);
     expect(onRemove).toHaveBeenCalledWith('f1');
+    expect(onPreview).not.toHaveBeenCalled();
   });
 
   it('calls onPreview when card is clicked (isClickable)', () => {
@@ -424,19 +428,29 @@ describe('CompletedFileCard', () => {
     expect(screen.getByTitle('Raccolta: Corso A')).toBeTruthy();
   });
 
-  it('offers Apri cartella but not Apri nel browser in the kebab menu', () => {
+  it('offers Apri cartella as an icon on desktop and leaves it out on the web', () => {
     const onOpenFile = vi.fn();
-    render(
+    const renderCard = () => render(
       <CompletedFileCard
         file={makeFile({ status: 'done', outputHtml: '/out/file.html', outputDir: '/out' })}
         isNewest={false}
         onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={onOpenFile}
       />,
     );
-    fireEvent.click(screen.getByLabelText('Altre opzioni'));
+    const first = renderCard();
     expect(screen.queryByText('Apri nel browser')).toBeNull();
-    fireEvent.click(screen.getByText('Apri cartella'));
+    fireEvent.click(screen.getByRole('button', { name: 'Apri cartella' }));
     expect(onOpenFile).toHaveBeenCalledWith('/out');
+    first.unmount();
+
+    setHostCapabilities({ kind: 'web', openLocalPath: false });
+    try {
+      renderCard();
+      expect(screen.queryByRole('button', { name: 'Apri cartella' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Rimuovi dai Recenti' })).toBeTruthy();
+    } finally {
+      setHostCapabilities(DESKTOP_CAPABILITIES);
+    }
   });
 
   it('shows the effective model for a regenerated legacy queue entry without a fallback badge', () => {
@@ -478,12 +492,12 @@ describe('CompletedFileCard fresh highlight', () => {
 describe('CompletedFileCard open affordance', () => {
   const openableFile = () => makeFile({ status: 'done', outputHtml: '/out/file.html', path: '/src/f.mp3', outputDir: '/sessions/s1' });
 
-  it('shows an Apri button that opens the editor once, next to the kebab menu', () => {
+  it('shows an Apri button that opens the editor once, next to the remove icon', () => {
     const onPreview = vi.fn();
     render(<CompletedFileCard file={openableFile()} onRemove={vi.fn()} onPreview={onPreview} onOpenFile={vi.fn()} />);
     const openButton = screen.getByRole('button', { name: 'Apri' });
     expect(openButton.className).toContain('completed-open-button');
-    expect(screen.getByLabelText('Altre opzioni')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Rimuovi dai Recenti' })).toBeTruthy();
     fireEvent.click(openButton);
     expect(onPreview).toHaveBeenCalledTimes(1);
     expect(onPreview).toHaveBeenCalledWith('/out/file.html', 'lezione.mp3', '/src/f.mp3', 'f1', '/sessions/s1');
@@ -503,7 +517,7 @@ describe('CompletedFileCard open affordance', () => {
   it('leaves Enter on inner buttons to their own action', () => {
     const onPreview = vi.fn();
     render(<CompletedFileCard file={openableFile()} onRemove={vi.fn()} onPreview={onPreview} onOpenFile={vi.fn()} />);
-    fireEvent.keyDown(screen.getByLabelText('Altre opzioni'), { key: 'Enter' });
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Rimuovi dai Recenti' }), { key: 'Enter' });
     expect(onPreview).not.toHaveBeenCalled();
   });
 
@@ -525,5 +539,31 @@ describe('CompletedFileCard open affordance', () => {
     );
     expect(screen.getByText('Completata con avvisi').className).toContain('--warning-text');
     expect(screen.getByText(/1 blocco non revisionato/).className).toContain('--warning-text');
+  });
+
+  it('wraps the meta line on wider screens instead of cutting "6 ore fa" to "6 ore f"', () => {
+    const { container } = render(
+      <CompletedFileCard file={makeFile({ status: 'done', outputHtml: '/out/file.html', size: 293_400_000, effectiveModel: 'gemini-2.5-flash', completedAt: Date.now() - 6 * 3_600_000 })} onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} />,
+    );
+    const meta = container.querySelector('.queue-card-meta') as HTMLElement;
+    expect(meta.textContent).toContain('6 ore fa');
+    expect(meta.classList.contains('flex-wrap')).toBe(true);
+    expect(meta.classList.contains('overflow-hidden')).toBe(false);
+  });
+
+  it('keeps the meta line to one line on a phone, the time whole and the rest shortened', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(max-width: 640px)' }));
+    try {
+      const { container } = render(
+        <CompletedFileCard file={makeFile({ status: 'done', outputHtml: '/out/file.html', size: 293_400_000, effectiveModel: 'gemini-2.5-flash', completedAt: Date.now() - 6 * 3_600_000 })} onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} />,
+      );
+      const meta = container.querySelector('.queue-card-meta') as HTMLElement;
+      expect(meta.classList.contains('flex-nowrap')).toBe(true);
+      expect(screen.getByText('6 ore fa').classList.contains('shrink-0')).toBe(true);
+      expect(screen.getByText('279,8 MB').classList.contains('truncate')).toBe(true);
+      expect(screen.getByText('2.5-flash').classList.contains('truncate')).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

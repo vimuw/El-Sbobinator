@@ -15,13 +15,14 @@ interface WebSharedDeviceNoticeProps {
 // removed in one go when the user is done. The button sits beside the explanation, not in the header.
 // Removing is immediate (not on "Salva"), so it asks first, like the other deletions in the settings;
 // the question and its button say it all, so the confirmation has no text underneath.
+// The small bin never wraps under the text, where on a phone it was left alone in a corner.
 export const WebSharedDeviceNotice: React.FC<WebSharedDeviceNoticeProps> = ({ keyCount, onRemoveKeys, disabled = false }) => {
   const [confirming, setConfirming] = useState(false);
   const label = removeAllKeysLabel(keyCount);
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-[var(--border-subtle)] p-3 text-xs text-[var(--text-secondary)]" data-testid="shared-device-warning">
-        <div className="flex items-start gap-2 flex-1 min-w-[220px]">
+      <div className="flex items-center gap-3 rounded-lg border border-[var(--border-subtle)] p-3 text-xs text-[var(--text-secondary)]" data-testid="shared-device-warning">
+        <div className="flex items-start gap-2 flex-1 min-w-0">
           <AlertTriangle className="w-4 h-4 shrink-0 text-[var(--warning-text)]" aria-hidden="true" />
           <p>
             Le chiavi restano solo in questo browser e vengono inviate solo a Google. Se il dispositivo è condiviso,

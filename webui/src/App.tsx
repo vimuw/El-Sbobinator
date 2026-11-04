@@ -549,12 +549,14 @@ export default function App() {
     setIsSettingsOpen(true);
   }, [setIsSettingsOpen]);
 
+  // Removing from Recenti keeps the sbobina in the Archivio, so it needs no confirmation.
   const handleRemoveDoneFile = useCallback((id: string) => {
     const f = filesRef.current.find(item => item.id === id);
     if (!f) return;
     if (appStateRef.current !== 'idle' && f.status !== 'done') return;
-    setConfirmAction({ type: 'remove-file', fileId: id, fileName: f.title || f.name, isDone: true });
-  }, [setConfirmAction]);
+    dispatch({ type: 'queue/remove', id });
+    if (f.status === 'done') void refreshArchiveSessions();
+  }, [refreshArchiveSessions]);
 
   // Full motion even when Windows "Animation effects" is off: the workflow relies on it.
   return (

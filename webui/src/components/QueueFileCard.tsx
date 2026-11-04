@@ -1,15 +1,16 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { DURATION, EASE_IN, enterTransition, exitTransition } from '../motion';
-import { AlertCircle, AlertTriangle, ArrowUpRight, CheckCircle, Clock, FileAudio, FolderOpen, GripVertical, Mic, RotateCcw, Settings, Trash2, X, XCircle } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowUpRight, CheckCircle, Clock, FileAudio, FolderOpen, GripVertical, Mic, RotateCcw, Settings, X, XCircle } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { AppStatus, FileItem } from '../appState';
 import type { ArchiveFolder } from '../bridge';
 import { getHostCapabilities } from '../hostCapabilities';
 import { errorLabel, formatDuration, formatRelativeTime, formatSize, isPausedError, isQuotaError, isResumableError, shortModelName } from '../utils';
-import { KebabMenu, type KebabMenuItem } from './KebabMenu';
 import { FolderIndicatorChip } from './FolderChip';
+import { MiddleTruncate } from './MiddleTruncate';
+import { usePhoneLayout } from '../hooks/usePhoneLayout';
 
 interface QueueFileCardProps {
   file: FileItem;
@@ -114,8 +115,8 @@ function QueueFileCardInner({
               </div>
             </div>
             <div className="min-w-0 flex-1">
-              <h4 className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{file.name}</h4>
-              <div className="queue-card-meta flex items-center gap-2 mt-0.5 text-xs text-[var(--text-muted)] min-w-0 flex-nowrap overflow-hidden">
+              <h4 className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]"><MiddleTruncate text={file.name} /></h4>
+              <div className="queue-card-meta flex flex-wrap items-center gap-x-2 gap-y-1 mt-0.5 text-xs text-[var(--text-muted)] min-w-0">
                 <span className="shrink-0">{formatSize(file.size)}</span>
                 {file.duration > 0 && (
                   <>
@@ -160,7 +161,7 @@ function QueueFileCardInner({
             {appState === 'idle' && file.status === 'error' && onOpenSettings && isQuotaError(file.errorText) && (
               <button
                 onClick={onOpenSettings}
-                className="premium-button-secondary compact-button"
+                className="compact-button"
                 title="Aggiungi una chiave API di riserva per evitare interruzioni"
                 aria-label="Chiavi di riserva"
               >
@@ -242,6 +243,10 @@ function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetry
     }
   };
   const displayName = file.title || file.name;
+  // A phone keeps the meta line to one line, so every card has the same height: size, duration,
+  // model and the block warning take the ellipsis when it runs out, never the time.
+  const isPhone = usePhoneLayout();
+  const fit = isPhone ? 'min-w-0 truncate' : 'shrink-0';
   const openEditor = () => onPreview(file.outputHtml!, displayName, file.path, file.id, file.outputDir);
   const handleCardKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     // Only the card itself: Enter on the inner buttons keeps their own action.
@@ -278,23 +283,23 @@ function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetry
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 min-w-0">
-              <h4 className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{displayName}</h4>
+              <h4 className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]"><MiddleTruncate text={displayName} /></h4>
               {currentFolder && (
                 <FolderIndicatorChip folder={currentFolder} />
               )}
             </div>
-            <div className="queue-card-meta flex items-center gap-2 mt-0.5 text-xs text-[var(--text-muted)] min-w-0 flex-nowrap overflow-hidden">
-              <span className="shrink-0">{formatSize(file.size)}</span>
+            <div className={`queue-card-meta flex items-center gap-x-2 gap-y-1 mt-0.5 text-xs text-[var(--text-muted)] min-w-0 ${isPhone ? 'flex-nowrap overflow-hidden' : 'flex-wrap'}`}>
+              <span className={fit}>{formatSize(file.size)}</span>
               {file.duration > 0 && (
                 <>
                   <span className="w-1 h-1 rounded-full bg-[var(--border-default)] shrink-0" />
-                  <span className="shrink-0">{formatDuration(file.duration)}</span>
+                  <span className={fit}>{formatDuration(file.duration)}</span>
                 </>
               )}
               {file.effectiveModel && (
                 <>
                   <span className="w-1 h-1 rounded-full bg-[var(--border-default)] shrink-0" />
-                  <span className="shrink-0" title={file.effectiveModel}>
+                  <span className={fit} title={file.effectiveModel}>
                     {shortModelName(file.effectiveModel)}
                   </span>
                 </>
@@ -307,10 +312,10 @@ function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetry
                 <>
                   <span className="w-1 h-1 rounded-full bg-[var(--border-default)] shrink-0" />
                   <span
-                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--warning-text)] shrink-0"
+                    className={`inline-flex items-center gap-1 text-caption font-semibold text-[var(--warning-text)] ${isPhone ? 'min-w-0' : 'shrink-0'}`}
                   >
-                    <AlertTriangle className="w-3 h-3" />
-                    {failedBlockCount} {failedBlockCount === 1 ? 'blocco non revisionato' : 'blocchi non revisionati'}
+                    <AlertTriangle className="w-3 h-3 shrink-0" />
+                    <span className="truncate text-[var(--warning-text)]">{failedBlockCount} {failedBlockCount === 1 ? 'blocco non revisionato' : 'blocchi non revisionati'}</span>
                   </span>
                 </>
               )}
@@ -344,23 +349,27 @@ function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetry
               <ArrowUpRight className="w-3.5 h-3.5" />
             </button>
           )}
-          <KebabMenu
-            items={[
-              ...( file.outputHtml ? [
-                ...(canOpenLocalPath ? [{
-                  label: 'Apri cartella',
-                  icon: <FolderOpen className="w-3.5 h-3.5" />,
-                  onClick: () => onOpenFile(file.outputDir ?? file.outputHtml!),
-                } as KebabMenuItem] : []),
-              ] : []),
-              {
-                label: 'Rimuovi',
-                icon: <Trash2 className="w-3.5 h-3.5" />,
-                danger: true,
-                onClick: () => onRemove(file.id),
-              },
-            ]}
-          />
+          {/* One or two secondary actions sit on the card as icons: a menu for them only hides them. */}
+          {file.outputHtml && canOpenLocalPath && (
+            <button
+              type="button"
+              onClick={() => onOpenFile(file.outputDir ?? file.outputHtml!)}
+              className="icon-button compact-icon-button"
+              title="Apri cartella"
+              aria-label="Apri cartella"
+            >
+              <FolderOpen className="w-4 h-4" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => onRemove(file.id)}
+            className="icon-button compact-icon-button group/remove"
+            title="Rimuovi dai Recenti (resta nell'Archivio)"
+            aria-label="Rimuovi dai Recenti"
+          >
+            <X className="w-4 h-4 transition-transform duration-200 group-hover/remove:scale-110 group-hover/remove:rotate-90" />
+          </button>
         </div>
       </div>
     </motion.div>

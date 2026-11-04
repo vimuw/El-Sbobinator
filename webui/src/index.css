@@ -6,7 +6,7 @@
 
 /* ── Theme Mode Toggle Button Animation ─────────── */
 .theme-toggle-btn svg {
-  transition: transform 300ms cubic-bezier(0.34, 1.2, 0.64, 1), color 250ms ease;
+  transition: transform var(--duration-slow) var(--ease-spring-soft), color var(--duration-base) var(--ease-out);
 }
 
 .theme-toggle-btn:hover svg {
@@ -31,7 +31,6 @@
 .editor-page-outer,
 .editor-page,
 .editor-toc-col,
-.toc-left-sidebar,
 .editor-toc-sticky,
 .editor-toc-header,
 .editor-toc-btn,
@@ -53,10 +52,11 @@
 :root:not([data-theme="dark"]) .helper-chip,
 :root:not([data-theme="dark"]) .action-chip,
 :root:not([data-theme="dark"]) .status-pill {
-  background: #ffffff;
+  background: var(--bg-surface);
 }
 
-:root:not([data-theme="dark"]) .premium-button-secondary:not(.is-danger) {
+/* In light mode the ghost queue action stays clear on hover too: only its text darkens. */
+:root:not([data-theme="dark"]) .compact-button {
   background: transparent;
 }
 
@@ -97,7 +97,7 @@
   position: relative;
   text-decoration: none;
   color: inherit;
-  transition: transform 150ms ease, opacity 150ms ease;
+  transition: transform var(--duration-state) var(--ease-out), opacity var(--duration-state) var(--ease-out);
 }
 
 .footer-link::after {
@@ -108,7 +108,7 @@
   width: 0;
   height: 1px;
   background: currentColor;
-  transition: width 200ms ease;
+  transition: width var(--duration-base) var(--ease-out);
 }
 
 .footer-link:hover {
@@ -146,33 +146,55 @@
   background: var(--bg-hover);
 }
 
-:root:not([data-theme="dark"]) .editor-button.is-active {
-  background: rgba(0, 0, 0, 0.10);
-  border-color: var(--border-strong);
-}
-
 :root:not([data-theme="dark"]) .color-reset:hover,
 :root:not([data-theme="dark"]) .color-custom:hover {
   background: var(--bg-hover);
 }
 
-:root:not([data-theme="dark"]) .toc-left-sidebar {
-  background: var(--editor-chrome-bg);
-  border-right-color: rgba(120, 113, 108, 0.22);
-}
-
-:root:not([data-theme="dark"]) .editor-toc-col .toc-left-sidebar {
-  background: var(--editor-chrome-bg);
-}
-
-:root:not([data-theme="dark"]) .toc-left-close:hover,
-:root:not([data-theme="dark"]) .toc-item:hover,
-:root:not([data-theme="dark"]) .context-menu-item:hover {
-  background: rgba(0, 0, 0, 0.07);
-}
-
 @theme {
   --font-sans: "Manrope", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* The one radius scale: Tailwind's rounded-sm…rounded-2xl and the rules below both read it.
+   Static so the variables exist even where no utility uses them. Corners that must stay
+   concentric with what they hold (the player, the pinned and selection bars) keep their own. */
+@theme static {
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+
+  /* The one type scale for the interface, Tailwind's text-* included. xs, sm, base, lg and 2xl
+     are Tailwind's own sizes; micro, caption, label and title fill the steps the app uses.
+     The document page has its own sizes (--document-*), set in points like Google Docs. */
+  --text-micro: 0.625rem;    /* 10px: badges, counters */
+  --text-caption: 0.6875rem; /* 11px: metadata, shortcuts, match counts */
+  --text-xs: 0.75rem;        /* 12px */
+  --text-label: 0.8125rem;   /* 13px: menu rows, chips, labels */
+  --text-sm: 0.875rem;       /* 14px */
+  --text-base: 1rem;         /* 16px: section titles */
+  --text-lg: 1.125rem;       /* 18px */
+  --text-2xl: 1.5rem;        /* 24px */
+  --text-title: 2rem;        /* 32px: page titles */
+
+  /* Tailwind's own sizes bring their own line-heights (1.333, 1.429, 1.5, 1.556, 1.333). Each one
+     reads the nearest step of the leading scale below instead, so no line moves by more than a
+     pixel; a leading-* class next to it still wins. The app's own sizes set no line-height. */
+  --text-xs--line-height: var(--leading-snug);     /* 16.5px, was 16 */
+  --text-sm--line-height: var(--leading-snug);     /* 19.25px, was 20 */
+  --text-base--line-height: var(--leading-normal); /* 24px, unchanged */
+  --text-lg--line-height: var(--leading-normal);   /* 27px, was 28 */
+  --text-2xl--line-height: var(--leading-snug);    /* 33px, was 32 */
+
+  /* The one leading scale, Tailwind's leading-* included, at Tailwind's own values. Document
+     text keeps the line spacing of its Google Docs and .docx export (--document-*). */
+  --leading-none: 1;        /* badges, counters, icons, one-line display figures */
+  --leading-tight: 1.25;    /* titles and headings */
+  --leading-snug: 1.375;    /* menu headings, notices, compact labels */
+  --leading-normal: 1.5;    /* body text, callouts, tooltips */
+  --leading-relaxed: 1.625; /* long explanations */
 }
 
 /* ═══ RESET & BASE ═══ */
@@ -198,7 +220,7 @@ body::-webkit-scrollbar {
 html::-webkit-scrollbar-thumb,
 body::-webkit-scrollbar-thumb {
   background: var(--border-strong);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 3px solid transparent;
   background-clip: padding-box;
 }
@@ -213,7 +235,7 @@ body {
   font-family: "Manrope", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
   background: var(--bg-base);
   color: var(--text-primary);
-  transition: background-color 300ms ease, color 250ms ease;
+  transition: background-color var(--duration-slow) var(--ease-out), color var(--duration-slow) var(--ease-out);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -240,6 +262,20 @@ button {
   cursor: pointer;
 }
 
+/* ═══ KEYBOARD FOCUS ═══ */
+/* The one focus ring (theme.css): every control gets it from here, so component rules only move
+   it inside where a container would clip it, or hand it to the element that frames the control. */
+:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* The document page shows focus with its caret, as Google Docs does; a ring round the whole
+   page would only frame the text being written. */
+.tiptap-editor:focus-visible {
+  outline: none;
+}
+
 ::selection {
   background: var(--accent-ring);
 }
@@ -255,24 +291,17 @@ button {
   background: var(--bg-base);
   color: var(--text-secondary);
   overflow: hidden;
-  transition: background-color 300ms ease, color 250ms ease;
+  transition: background-color var(--duration-slow) var(--ease-out), color var(--duration-slow) var(--ease-out);
 }
 
 
 /* ═══ HEADER & NAV ═══ */
 
-.brand-mark {
-  font-family: var(--font-display);
-  letter-spacing: -0.05em;
-  font-weight: 700;
-}
-
 .premium-panel,
-.premium-panel-strong,
 .modal-card,
 .editor-shell {
   border: 1px solid var(--glass-border);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   box-shadow: none;
 }
 
@@ -286,37 +315,30 @@ button {
 
 /* Panels nested in a modal sit on an already elevated card. */
 .modal-card .premium-panel {
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   box-shadow: none;
 }
 
-/* Fields in a modal are pills, like the inputs in Impostazioni. */
+/* Fields in a modal are pills, like the inputs in Impostazioni, on the 40px step without
+   vertical padding, so the phone's 16px text keeps them there. */
 .modal-card .app-input {
-  min-height: 2.5rem;
-  padding: 0.5rem 1.1rem;
-  border-radius: 999px;
+  height: var(--control-height-lg);
+  padding: 0 1.1rem;
+  border-radius: var(--radius-pill);
 }
 
-/* Type scale for the queue page: one display title, quieter section titles. */
+/* Type scale for the queue page: one display title. */
 .page-title {
-  font-size: 2rem;
+  font-size: var(--text-title);
   font-weight: 700;
-  line-height: 1.15;
+  line-height: var(--leading-tight);
   letter-spacing: var(--tracking-display);
-  color: var(--text-primary);
-}
-
-.section-title {
-  font-size: 1.125rem;
-  font-weight: 600;
-  line-height: 1.3;
-  letter-spacing: -0.015em;
   color: var(--text-primary);
 }
 
 /* Welcome summary: one friendly line under the greeting; the figures carry the accent. */
 .welcome-summary {
-  font-size: 1rem;
+  font-size: var(--text-base);
   color: var(--text-muted);
 }
 
@@ -327,7 +349,6 @@ button {
 }
 
 
-.premium-panel-strong,
 .modal-card {
   background: var(--glass-bg);
   border-color: var(--glass-border);
@@ -348,7 +369,7 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border-default);
   background: rgba(255, 255, 255, 0.02);
   color: var(--text-secondary);
@@ -359,14 +380,14 @@ button {
 .action-chip,
 .status-pill {
   padding: 0.55rem 0.9rem;
-  font-size: 0.8rem;
+  font-size: var(--text-label);
   font-weight: 600;
 }
 
-/* Header metadata next to a .section-title: present, not shouting. */
+/* Header metadata next to a .dashboard-section-title: present, not shouting. */
 :root .status-pill.is-quiet {
   padding: 0.12rem 0.5rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   color: var(--text-muted);
@@ -381,7 +402,7 @@ button {
   min-width: 1.5rem;
   height: 1.5rem;
   padding: 0 0.2rem;
-  line-height: 1;
+  line-height: var(--leading-none);
 }
 
 :root .status-pill.is-quiet.is-warning {
@@ -391,95 +412,15 @@ button {
   background: var(--warning-subtle);
 }
 
-.premium-button,
-.premium-button-secondary,
 .icon-button {
   border: 1px solid transparent;
   transition:
-    transform 180ms ease,
-    background 180ms ease,
-    border-color 180ms ease,
-    color 180ms ease,
-    box-shadow 180ms ease,
-    opacity 180ms ease;
-}
-
-.premium-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.7rem;
-  padding: 0.95rem 1.25rem;
-  border-radius: 8px;
-  background: var(--btn-primary-bg);
-  color: var(--btn-primary-text);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-  font-weight: 700;
-  transition: transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1), background 160ms ease, box-shadow 160ms ease;
-}
-
-.premium-button:hover:not(:disabled) {
-  transform: translateY(-1px) scale(1.005);
-  background: var(--btn-primary-hover);
-}
-
-.premium-button:focus-visible {
-  outline: none;
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.10), 0 0 0 3px var(--btn-primary-ring);
-}
-
-.premium-button:active:not(:disabled) {
-  transform: scale(0.985);
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08), 0 0 0 3px var(--btn-primary-ring);
-}
-
-.premium-button svg {
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.premium-button:hover:not(:disabled) svg {
-  transform: scale(1.1);
-}
-
-.premium-button:disabled {
-  background: var(--btn-disabled-bg);
-  color: var(--btn-disabled-text);
-  box-shadow: none;
-  cursor: not-allowed;
-}
-
-.premium-button.is-danger {
-  background: var(--error-subtle);
-  color: var(--error-text);
-  border-color: var(--error-ring);
-  box-shadow: none;
-}
-
-.premium-button.is-danger:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--error-text) 14%, transparent);
-  color: var(--error-text);
-  border-color: var(--error-ring);
-}
-
-.premium-button.is-danger:focus-visible {
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.10), 0 0 0 3px var(--error-ring);
-}
-
-.premium-button.is-danger:active:not(:disabled) {
-  background: color-mix(in srgb, var(--error-text) 20%, transparent);
-  box-shadow: 0 0 0 3px var(--error-ring);
-}
-
-/* While a run is going well, stopping it is available but not the loudest thing on screen. */
-.premium-button.queue-stop-button {
-  background: transparent;
-  color: var(--text-secondary);
-  border-color: var(--border-default);
-  box-shadow: none;
-}
-
-.premium-button.queue-stop-button svg {
-  color: var(--error-text);
+    transform var(--duration-state) var(--ease-out),
+    background var(--duration-state) var(--ease-out),
+    border-color var(--duration-state) var(--ease-out),
+    color var(--duration-state) var(--ease-out),
+    box-shadow var(--duration-state) var(--ease-out),
+    opacity var(--duration-state) var(--ease-out);
 }
 
 /* The app's primary pill: the queue's start action (full width, the twin of the banner's Interrompi)
@@ -487,19 +428,19 @@ button {
 .queue-start-button,
 .settings-pill-button {
   display: inline-flex;
-  min-height: 2.5rem;
+  min-height: var(--control-height-lg);
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  padding: 0.5rem 1.15rem;
+  padding: var(--button-padding-lg);
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--btn-primary-bg);
   color: var(--btn-primary-text);
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: var(--text-sm);
+  font-weight: var(--button-weight);
   box-shadow: var(--shadow-sm);
-  transition: transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s var(--ease-out), box-shadow 0.15s var(--ease-out);
+  transition: transform var(--duration-state) var(--ease-spring), background var(--duration-state) var(--ease-out), box-shadow var(--duration-state) var(--ease-out);
 }
 
 .queue-start-button:hover:not(:disabled),
@@ -511,12 +452,6 @@ button {
 .queue-start-button:active:not(:disabled),
 .settings-pill-button:active:not(:disabled) {
   transform: scale(0.985);
-}
-
-.queue-start-button:focus-visible,
-.settings-pill-button:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--btn-primary-ring);
 }
 
 .queue-start-button:disabled,
@@ -532,11 +467,13 @@ button {
   width: 100%;
 }
 
-/* In a settings row the pill sits beside a 38px input, so it matches that height. */
+/* In a settings row the pill sits beside a settings field, so both take the md control height. */
 .settings-pill-button {
-  min-height: 2.375rem;
+  min-height: var(--control-height-md);
   flex-shrink: 0;
-  font-size: 0.8125rem;
+  font-size: var(--text-label);
+  padding: var(--button-padding-md);
+  font-weight: var(--button-weight);
 }
 
 .queue-start-meta {
@@ -551,7 +488,7 @@ button {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem;
-  font-size: 0.8rem;
+  font-size: var(--text-label);
   color: var(--warning-text);
 }
 
@@ -559,12 +496,13 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.3rem 0.5rem;
-  border-radius: 6px;
-  font-size: 0.8rem;
-  font-weight: 500;
+  padding: var(--button-padding-sm);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: var(--button-weight);
   color: var(--text-muted);
-  transition: color 160ms var(--ease-out), background 160ms var(--ease-out);
+  transition: color var(--duration-state) var(--ease-out), background var(--duration-state) var(--ease-out);
+  min-height: var(--control-height-sm);
 }
 
 .queue-start-hint .queue-text-button {
@@ -588,19 +526,13 @@ button {
   background: var(--error-subtle);
 }
 
-.queue-text-button:focus-visible,
-.queue-switch:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--accent-ring);
-}
-
 .queue-switch {
   display: inline-flex;
   align-items: center;
   gap: 0.55rem;
   padding: 0.25rem 0.35rem 0.25rem 0.15rem;
-  border-radius: 6px;
-  font-size: 0.8rem;
+  border-radius: var(--radius-md);
+  font-size: var(--text-label);
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -610,9 +542,9 @@ button {
   display: inline-flex;
   width: 28px;
   height: 16px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--border-default);
-  transition: background 180ms var(--ease-out);
+  transition: background var(--duration-state) var(--ease-out);
 }
 
 .queue-switch-thumb {
@@ -621,10 +553,10 @@ button {
   left: 2px;
   width: 12px;
   height: 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: #ffffff;
   box-shadow: var(--shadow-xs);
-  transition: transform 180ms var(--ease-out);
+  transition: transform var(--duration-state) var(--ease-out);
 }
 
 .queue-switch[aria-checked="true"] {
@@ -647,44 +579,10 @@ button {
   transform: translateX(12px);
 }
 
-.premium-button-secondary {
-  background: transparent;
-  color: var(--text-secondary);
-  border-color: transparent;
-}
-
 .icon-button {
   background: transparent;
   color: var(--text-secondary);
   border-color: transparent;
-}
-
-.premium-button-secondary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.6rem;
-  padding: 0.95rem 1.15rem;
-  border-radius: 8px;
-  font-weight: 700;
-}
-
-.premium-button-secondary:hover {
-  background: var(--sidebar-active-bg);
-  border-color: transparent;
-  color: var(--text-primary);
-}
-
-.premium-button-secondary.is-danger {
-  color: var(--error-text);
-  border-color: var(--error-ring);
-  background: var(--bg-elevated);
-}
-
-.premium-button-secondary.is-danger:hover:not(:disabled) {
-  background: var(--error-subtle);
-  color: var(--error-text);
-  border-color: var(--error-ring);
 }
 
 .icon-button:hover {
@@ -694,49 +592,12 @@ button {
 
 .icon-button:active {
   transform: scale(0.94);
-  transition-duration: 80ms;
+  transition-duration: var(--duration-instant);
 }
 
 .icon-button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-}
-
-.icon-button:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--btn-primary-ring);
-}
-
-.toast-dismiss-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  background: none;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  color: var(--text-faint);
-  transition: color 140ms ease, transform 140ms ease;
-}
-
-.toast-dismiss-btn svg {
-  transition: transform 180ms ease, opacity 180ms ease;
-}
-
-.toast-dismiss-btn:hover {
-  color: var(--text-primary);
-  background: none;
-}
-
-.toast-dismiss-btn:hover svg {
-  transform: rotate(90deg) scale(1.1);
-}
-
-.toast-dismiss-btn:active {
-  transform: scale(0.92);
 }
 
 .icon-button.is-danger {
@@ -749,12 +610,6 @@ button {
   background: var(--error-subtle);
   color: var(--error-text);
   border-color: var(--error-ring);
-}
-
-.icon-button.hover-danger:hover:not(:disabled),
-.icon-button.is-danger-hover:hover:not(:disabled) {
-  background: var(--error-subtle);
-  color: var(--error-text) !important;
 }
 
 .icon-button.icon-button--active,
@@ -771,73 +626,13 @@ button {
   border-color: color-mix(in srgb, var(--processing-text) 50%, transparent);
 }
 
-.icon-btn-theme svg {
-  transition: transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.icon-btn-theme:hover svg {
-  transform: rotate(22deg) scale(1.12);
-}
-
-.icon-btn-theme:active svg {
-  transform: rotate(45deg) scale(0.9);
-}
-
-.icon-btn-settings svg {
-  transition: transform 360ms cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.icon-btn-settings:hover svg {
-  transform: rotate(55deg);
-}
-
-.icon-btn-settings:active svg {
-  transform: rotate(90deg) scale(0.9);
-}
-
-@keyframes console-flash {
-  0%   { opacity: 0.15; transform: scale(0.82); }
-  55%  { opacity: 1;    transform: scale(1.12); }
-  100% { opacity: 1;    transform: scale(1); }
-}
-
-.icon-btn-console svg {
-  transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.icon-btn-console:hover svg {
-  transform: rotate(10deg) scale(1.1);
-}
-
-.icon-btn-console:active svg {
-  transform: rotate(6deg) scale(0.90);
-}
-
-.icon-btn-console.icon-button--active,
-:root:not([data-theme="dark"]) .icon-btn-console.icon-button--active {
-  background: color-mix(in srgb, var(--processing-text) 12%, transparent);
-  border-color: color-mix(in srgb, var(--processing-text) 35%, transparent);
-  color: var(--processing-text);
-  box-shadow: none;
-}
-
-.icon-btn-console.icon-button--active:hover,
-:root:not([data-theme="dark"]) .icon-btn-console.icon-button--active:hover {
-  background: color-mix(in srgb, var(--processing-text) 18%, transparent);
-  border-color: color-mix(in srgb, var(--processing-text) 50%, transparent);
-}
-
-.icon-btn-console.icon-button--active svg {
-  animation: console-flash 340ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
-}
-
 .icon-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 8px;
+  width: var(--icon-button-lg);
+  height: var(--icon-button-lg);
+  border-radius: var(--radius-lg);
 }
 
 /* ═══ MODALS ═══ */
@@ -855,22 +650,22 @@ button {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  min-height: 2.5rem;
-  padding: 0.5rem 1.15rem;
+  min-height: var(--control-height-lg);
+  padding: var(--button-padding-lg);
   border: 1px solid var(--border-default);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--bg-surface);
   color: var(--text-secondary);
-  font-size: 0.875rem;
-  font-weight: 500;
+  font-size: var(--text-sm);
+  font-weight: var(--button-weight);
   box-shadow: none;
   transition:
-    transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1),
-    background 160ms ease,
-    border-color 160ms ease,
-    color 160ms ease,
-    box-shadow 160ms ease,
-    opacity 160ms ease;
+    transform var(--duration-state) var(--ease-spring),
+    background var(--duration-state) var(--ease-out),
+    border-color var(--duration-state) var(--ease-out),
+    color var(--duration-state) var(--ease-out),
+    box-shadow var(--duration-state) var(--ease-out),
+    opacity var(--duration-state) var(--ease-out);
 }
 
 /* Secondary actions are outline pills, the twins of .app-button-secondary.is-settings-action. */
@@ -878,11 +673,6 @@ button {
   background: var(--bg-hover);
   border-color: var(--border-strong);
   color: var(--text-primary);
-}
-
-.modal-action-button:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--btn-primary-ring);
 }
 
 .modal-action-button:active:not(:disabled) {
@@ -912,10 +702,6 @@ button {
   transform: translateY(-1px);
 }
 
-.modal-action-button.is-primary:focus-visible {
-  box-shadow: 0 0 0 3px var(--btn-primary-ring);
-}
-
 .modal-action-button.is-primary:disabled {
   background: var(--btn-disabled-bg);
   color: var(--btn-disabled-text);
@@ -937,9 +723,9 @@ button {
 }
 
 .modal-action-button.is-compact {
-  min-height: 2rem;
-  padding: 0.35rem 0.85rem;
-  font-size: 0.75rem;
+  min-height: var(--control-height-sm);
+  padding: var(--button-padding-sm);
+  font-size: var(--text-xs);
   gap: 0.4rem;
 }
 
@@ -948,19 +734,19 @@ button {
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
-  border-radius: 8px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border-default);
   background: var(--bg-surface);
   color: var(--text-primary);
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: var(--text-xs);
+  font-weight: var(--button-weight);
   cursor: pointer;
   transition:
-    transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1),
-    background 180ms ease,
-    border-color 180ms ease,
-    color 180ms ease,
-    box-shadow 180ms ease;
+    transform var(--duration-state) var(--ease-spring),
+    background var(--duration-state) var(--ease-out),
+    border-color var(--duration-state) var(--ease-out),
+    color var(--duration-state) var(--ease-out),
+    box-shadow var(--duration-state) var(--ease-out);
 }
 
 .app-button-secondary:hover:not(:disabled) {
@@ -974,11 +760,6 @@ button {
   transform: scale(0.98);
 }
 
-.app-button-secondary:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--accent-ring);
-}
-
 .app-button-secondary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -986,11 +767,11 @@ button {
 
 /* Settings actions are pills, the outline twins of .settings-pill-button and of the same height. */
 .app-button-secondary.is-settings-action {
-  min-height: 2.375rem;
-  padding: 0 0.95rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 500;
+  min-height: var(--control-height-md);
+  padding: var(--button-padding-md);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-label);
+  font-weight: var(--button-weight);
   color: var(--text-secondary);
   gap: 0.5rem;
   box-shadow: none;
@@ -1004,17 +785,13 @@ button {
   transform: none;
 }
 
-.app-button-secondary.is-settings-action:focus-visible {
-  box-shadow: 0 0 0 3px var(--accent-ring);
-}
-
 .app-button-secondary.is-settings-action:hover:not(:disabled) .settings-refresh-icon {
   transform: rotate(180deg);
 }
 
 .app-button-secondary.is-settings-action.is-icon {
-  width: 2.375rem;
-  height: 2.375rem;
+  width: var(--control-height-md);
+  height: var(--control-height-md);
   padding: 0;
 }
 
@@ -1053,13 +830,15 @@ button {
   background: var(--bg-hover);
 }
 
-/* The key field is a pill too, so the Aggiungi row reads as one shape. */
+/* The key field is a pill too, so the Aggiungi row reads as one shape. A fixed height with no
+   vertical padding, like the other fields: the phone's 16px anti-zoom text made a padded
+   min-height field 38px tall, off the 32/36/40 scale. */
 .app-input.is-settings-input {
-  min-height: 2.375rem;
-  padding: 0.375rem 2.5rem 0.375rem 1rem;
-  border-radius: 999px;
+  height: var(--control-height-md);
+  padding: 0 2.5rem 0 1rem;
+  border-radius: var(--radius-pill);
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .app-input.is-settings-input.is-invalid {
@@ -1068,8 +847,9 @@ button {
 
 .settings-nav {
   display: grid;
-  /* The tabs: three, four with Sincronizzazione. */
-  grid-template-columns: repeat(var(--settings-tab-count, 3), minmax(0, 1fr));
+  /* The tabs: three, four with Sincronizzazione. Equal while they fit; a longer label
+     ("Archiviazione") takes the room it needs from the others instead of spilling out of its tab. */
+  grid-template-columns: repeat(var(--settings-tab-count, 3), minmax(max-content, 1fr));
   flex-shrink: 0;
   gap: 4px;
   padding: 12px;
@@ -1084,12 +864,12 @@ button {
   gap: 8px;
   min-height: 40px;
   padding: 10px 14px;
-  border-radius: 8px;
-  font-size: 0.875rem;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   font-weight: 600;
   text-align: left;
   color: var(--text-secondary);
-  transition: background 150ms ease, color 150ms ease;
+  transition: background var(--duration-state) var(--ease-out), color var(--duration-state) var(--ease-out);
 }
 
 .settings-nav-item:hover {
@@ -1102,12 +882,6 @@ button {
   color: var(--text-primary);
   font-weight: 700;
   box-shadow: inset 0 0 0 1px var(--border-default);
-}
-
-.settings-nav-item:focus-visible,
-.settings-details > summary:focus-visible {
-  outline: 2px solid var(--accent-text);
-  outline-offset: 2px;
 }
 
 /* At the right of the page title, which leaves room for it (pr-14 / md:pr-16). */
@@ -1123,7 +897,7 @@ button {
   .settings-nav-item {
     justify-content: center;
     padding: 8px 4px;
-    font-size: 0.75rem;
+    font-size: var(--text-xs);
   }
 
   .settings-nav-item > div {
@@ -1141,7 +915,7 @@ button {
 
   .settings-nav-item {
     padding: 8px 2px;
-    font-size: 0.6875rem;
+    font-size: var(--text-caption);
   }
 }
 
@@ -1171,7 +945,7 @@ button {
 /* Quota matrix: one card whose header stays the trigger, like the key list above it. */
 .settings-details.is-api-quota {
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding-top: 0;
   overflow: hidden;
   background: var(--bg-surface);
@@ -1182,7 +956,7 @@ button {
   justify-content: flex-start;
   padding: 10px 14px;
   background: transparent;
-  transition: background 150ms ease, color 150ms ease;
+  transition: background var(--duration-state) var(--ease-out), color var(--duration-state) var(--ease-out);
 }
 
 .settings-details.is-api-quota > summary:hover {
@@ -1190,7 +964,7 @@ button {
 }
 
 .settings-details.is-api-quota > summary:focus-visible {
-  outline-offset: -2px;
+  outline-offset: var(--focus-ring-inset);
 }
 
 .settings-details.is-api-quota[open] > summary {
@@ -1225,7 +999,7 @@ button {
 }
 
 .settings-details > summary > svg {
-  transition: transform 180ms ease;
+  transition: transform var(--duration-state) var(--ease-out);
 }
 
 .settings-details[open] > summary > svg {
@@ -1244,7 +1018,7 @@ button {
   color: var(--text-secondary);
   cursor: pointer;
   list-style: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 .settings-more-info > summary::-webkit-details-marker {
@@ -1255,13 +1029,8 @@ button {
   color: var(--text-primary);
 }
 
-.settings-more-info > summary:focus-visible {
-  outline: 2px solid var(--accent-text);
-  outline-offset: 2px;
-}
-
 .settings-more-info > summary > svg {
-  transition: transform 180ms ease;
+  transition: transform var(--duration-state) var(--ease-out);
   transform: rotate(-90deg);
 }
 
@@ -1285,7 +1054,7 @@ button {
   align-items: flex-start;
   gap: 12px;
   padding: 14px;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
 }
@@ -1297,7 +1066,7 @@ button {
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: 9px;
+  border-radius: var(--radius-lg);
 }
 
 .settings-callout.is-warning .settings-callout-icon {
@@ -1335,17 +1104,17 @@ button {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 0.75rem;
-  line-height: 1.45;
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
   color: var(--text-secondary);
 }
 
 /* The title sits level with the middle of the 32px icon. */
 .settings-callout-title {
   margin-top: 7px;
-  font-size: 0.8125rem;
+  font-size: var(--text-label);
   font-weight: 600;
-  line-height: 1.35;
+  line-height: var(--leading-snug);
   color: var(--text-primary);
 }
 
@@ -1397,9 +1166,7 @@ button {
 }
 
 .settings-inline-link:focus-visible {
-  outline: 2px solid var(--accent-text);
-  outline-offset: 2px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
 }
 
 .settings-callout .settings-more-info {
@@ -1410,7 +1177,7 @@ button {
 .drive-avatar {
   background: var(--btn-primary-bg);
   color: var(--btn-primary-text);
-  line-height: 1;
+  line-height: var(--leading-none);
 }
 
 /* A choice drawn as a settings row (e.g. "Dove tengo le sbobine?"): the radio stays real and focusable. */
@@ -1420,9 +1187,9 @@ button {
   gap: 10px;
   padding: 10px;
   margin: 0 -8px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: background 150ms ease;
+  transition: background var(--duration-state) var(--ease-out);
 }
 
 .settings-choice:hover {
@@ -1433,8 +1200,14 @@ button {
   accent-color: var(--accent-bg);
 }
 
+/* The ring frames the whole choice, not the small radio inside it. */
 .settings-choice:has(input:focus-visible) {
-  box-shadow: 0 0 0 3px var(--accent-ring);
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.settings-choice input:focus-visible {
+  outline: none;
 }
 
 .settings-choice:has(input:disabled) {
@@ -1443,14 +1216,14 @@ button {
 }
 
 .modal-icon-button {
-  width: 36px;
-  height: 36px;
-  border-radius: 999px;
+  width: var(--icon-button-md);
+  height: var(--icon-button-md);
+  border-radius: var(--radius-lg);
   box-shadow: none;
 }
 
 .modal-icon-button svg {
-  transition: transform 200ms ease, opacity 200ms ease;
+  transition: transform var(--duration-base) var(--ease-out), opacity var(--duration-base) var(--ease-out);
 }
 
 .icon-button.modal-icon-button {
@@ -1471,44 +1244,59 @@ button {
   transform: scale(0.94);
 }
 
+/* The queue's ghost text actions ("Chiavi di riserva", "Gestisci credenziali"): an md pill. */
 .compact-button {
-  height: 36px;
-  padding: 0 0.92rem;
-  border-radius: 8px;
-  font-size: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--control-height-md);
+  padding: var(--button-padding-md);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-label);
   gap: 0.45rem;
+  font-weight: var(--button-weight);
+  transition:
+    transform var(--duration-state) var(--ease-out),
+    background var(--duration-state) var(--ease-out),
+    border-color var(--duration-state) var(--ease-out),
+    color var(--duration-state) var(--ease-out),
+    box-shadow var(--duration-state) var(--ease-out),
+    opacity var(--duration-state) var(--ease-out);
+}
+
+.compact-button:hover {
+  background: var(--sidebar-active-bg);
+  border-color: transparent;
+  color: var(--text-primary);
 }
 
 .compact-icon-button {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-}
-
-.mini-icon-button {
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
+  width: var(--icon-button-md);
+  height: var(--icon-button-md);
+  border-radius: var(--radius-lg);
 }
 
 .drag-handle-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: var(--icon-button-xs);
+  height: var(--icon-button-xs);
+  border-radius: var(--radius-lg);
   border: none;
   background: transparent;
   color: var(--text-muted);
   cursor: grab;
   touch-action: none;
-  transition: color 160ms ease, background 160ms ease;
+  transition: color var(--duration-state) var(--ease-out), background var(--duration-state) var(--ease-out);
 }
 
 .drag-handle-btn:hover {
   color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--bg-hover);
 }
 
 .drag-handle-btn:active {
@@ -1522,13 +1310,13 @@ button {
   background: var(--bg-hover);
   opacity: 0;
   z-index: 1;
-  transition: opacity 160ms var(--ease-out), color 160ms ease, background 160ms ease;
+  transition: opacity var(--duration-state) var(--ease-out), color var(--duration-state) var(--ease-out), background var(--duration-state) var(--ease-out);
 }
 
 /* A faded icon gets its own stacking layer, so without these it would sit on the handle and swallow the press. */
 .queue-item .queue-status-icon {
   pointer-events: none;
-  transition: opacity 160ms var(--ease-out);
+  transition: opacity var(--duration-state) var(--ease-out);
 }
 
 /* Keyboard focus only: a click focuses the sortable item too, and must not leave the handle on. */
@@ -1948,36 +1736,20 @@ button {
   border-radius: var(--radius-panel);
   border: 1.5px solid transparent;
   transition:
-    box-shadow 200ms var(--ease-out),
-    border-color 200ms var(--ease-out);
+    box-shadow var(--duration-base) var(--ease-out),
+    border-color var(--duration-base) var(--ease-out);
 }
 
 .dropzone-card:focus-visible {
-  outline: none;
   border-color: var(--accent-bg);
-  box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
 .dropzone-title {
   margin-bottom: 0.25rem;
-  font-size: 1.05rem;
+  font-size: var(--text-base);
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--text-primary);
-}
-
-/* ═══ STAT CHIP ═══ */
-
-.stat-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border-radius: 20px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-default);
-  font-size: 0.8rem;
-  font-weight: 500;
 }
 
 /* ═══ DROPZONE COMPACT ═══ */
@@ -1987,13 +1759,13 @@ button {
   --drop-beat: 2.8s;
   min-height: 2.5rem;
   padding: 0 1.1rem 0 0.45rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1.5px dashed var(--border-default);
   background: transparent;
   transition:
-    border-color 200ms var(--ease-out),
-    background 200ms var(--ease-out),
-    box-shadow 200ms var(--ease-out);
+    border-color var(--duration-base) var(--ease-out),
+    background var(--duration-base) var(--ease-out),
+    box-shadow var(--duration-base) var(--ease-out);
 }
 
 .dropzone-compact:hover {
@@ -2002,10 +1774,8 @@ button {
 }
 
 .dropzone-compact:focus-visible {
-  outline: none;
   border-color: var(--accent-bg);
   background: color-mix(in srgb, var(--accent-subtle) 60%, transparent);
-  box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
 .dropzone-compact-icon {
@@ -2013,18 +1783,18 @@ button {
   width: 24px;
   height: 24px;
   flex-shrink: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: var(--accent-subtle);
   color: var(--accent-text);
-  transition: background 200ms var(--ease-out), color 200ms var(--ease-out);
+  transition: background var(--duration-base) var(--ease-out), color var(--duration-base) var(--ease-out);
 }
 
 .dropzone-compact-label {
   color: var(--text-secondary);
-  transition: color 200ms var(--ease-out);
+  transition: color var(--duration-base) var(--ease-out);
 }
 
 .dropzone-compact:hover .dropzone-compact-label,
@@ -2035,7 +1805,7 @@ button {
 .dropzone-compact:hover .dropzone-compact-icon,
 .dropzone-compact:focus-visible .dropzone-compact-icon,
 .dropzone-compact.is-dragging .dropzone-compact-icon {
-  background: var(--accent-bg);
+  background: var(--btn-primary-bg);
   color: var(--btn-primary-text);
 }
 
@@ -2054,12 +1824,12 @@ button {
 .queue-card {
   position: relative;
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: var(--radius-card);
   border: 1px solid var(--card-queued-border);
   background: var(--card-queued-bg);
   transition:
-    border-color 180ms ease,
-    background 180ms ease;
+    border-color var(--duration-state) var(--ease-out),
+    background var(--duration-state) var(--ease-out);
 }
 
 .queue-card:hover {
@@ -2067,29 +1837,11 @@ button {
 }
 
 :root[data-theme="dark"] .queue-card:hover {
-  border-color: rgba(255, 255, 255, 0.28);
-  background: #202020;
+  border-color: var(--border-strong);
+  background: var(--bg-surface);
 }
 
 /* ═══ STATUS BANNER ═══ */
-
-.processing-chip {
-  background: var(--processing-bg);
-  border-color: var(--processing-ring);
-  color: var(--processing-text);
-}
-
-.canceling-chip {
-  background: var(--error-subtle);
-  border-color: var(--error-ring);
-  color: var(--error-text);
-}
-
-.processing-chip-compact {
-  padding: 0.42rem 0.78rem;
-  font-size: 0.75rem;
-  gap: 0.4rem;
-}
 
 /* Processing hero: sits on the page, no card. Step title, a large figure, one segmented track. */
 /* The stop button sits close to the queue below, as the banner's own parts sit close to each other. */
@@ -2111,12 +1863,12 @@ button {
   top: 50%;
   width: 112px;
   height: 112px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   opacity: 0.55;
   filter: blur(28px);
   transform: translate(-50%, -50%);
   pointer-events: none;
-  transition: background 0.2s var(--ease-out);
+  transition: background var(--duration-base) var(--ease-out);
 }
 
 /* While a step runs the halo breathes; the icon itself stays still. */
@@ -2134,10 +1886,10 @@ button {
   position: absolute;
   inset: 0;
   border: 1.5px solid color-mix(in srgb, currentColor 30%, transparent);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   opacity: 0;
   pointer-events: none;
-  animation: processing-ring var(--processing-beat) cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  animation: processing-ring var(--processing-beat) var(--ease-out) infinite;
 }
 
 @keyframes processing-ring {
@@ -2147,7 +1899,7 @@ button {
 
 .processing-live-dot-halo {
   opacity: 0;
-  animation: processing-dot-halo var(--processing-beat) cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  animation: processing-dot-halo var(--processing-beat) var(--ease-out) infinite;
 }
 
 @keyframes processing-dot-halo {
@@ -2161,14 +1913,14 @@ button {
   justify-content: center;
   width: 64px;
   height: 64px;
-  border-radius: 999px;
-  transition: background 0.2s var(--ease-out), color 0.2s var(--ease-out);
+  border-radius: var(--radius-pill);
+  transition: background var(--duration-base) var(--ease-out), color var(--duration-base) var(--ease-out);
 }
 
 .processing-hero-title {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   font-weight: 600;
-  line-height: 1.25;
+  line-height: var(--leading-tight);
   letter-spacing: -0.02em;
   color: var(--text-primary);
 }
@@ -2176,36 +1928,34 @@ button {
 .processing-hero-percent {
   font-size: 3.5rem;
   font-weight: 700;
-  line-height: 1;
+  line-height: var(--leading-none);
   letter-spacing: -0.035em;
   font-variant-numeric: tabular-nums;
-  transition: color 0.2s var(--ease-out);
+  transition: color var(--duration-base) var(--ease-out);
 }
 
-/* Quiet: the run is the focus, stopping is one deliberate click away. */
+/* Quiet: the run is the focus, stopping is one deliberate click away. The size of the queue's
+   start pill, set apart from the details above it. */
 .processing-stop-button {
   display: inline-flex;
+  min-height: var(--control-height-lg);
   align-items: center;
-  gap: 0.45rem;
-  padding: 0.4rem 0.85rem;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding: var(--button-padding-lg);
   border: 1px solid var(--border-default);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: var(--text-secondary);
-  font-size: 0.8125rem;
-  font-weight: 500;
-  transition: color 0.15s var(--ease-out), border-color 0.15s var(--ease-out), background 0.15s var(--ease-out);
+  font-size: var(--text-sm);
+  font-weight: var(--button-weight);
+  transition: color var(--duration-state) var(--ease-out), border-color var(--duration-state) var(--ease-out), background var(--duration-state) var(--ease-out);
 }
 
 .processing-stop-button:hover:not(:disabled) {
   border-color: var(--error-ring);
   background: var(--error-subtle);
   color: var(--error-text);
-}
-
-.processing-stop-button:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--error-ring);
 }
 
 .processing-stop-button.is-pending {
@@ -2220,11 +1970,11 @@ button {
   gap: 0.6rem;
   padding: 0.55rem 0.8rem;
   border: 1px solid color-mix(in srgb, var(--warning-text) 28%, transparent);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   background: var(--warning-subtle);
   color: var(--warning-text);
-  font-size: 0.8125rem;
-  line-height: 1.35;
+  font-size: var(--text-label);
+  line-height: var(--leading-snug);
 }
 
 .processing-notice-detail {
@@ -2246,8 +1996,8 @@ button {
   align-items: flex-start;
   gap: 0.5rem;
   color: var(--warning-text);
-  font-size: 0.8125rem;
-  line-height: 1.4;
+  font-size: var(--text-label);
+  line-height: var(--leading-snug);
 }
 
 .processing-warning svg {
@@ -2259,7 +2009,7 @@ button {
   flex: 1 1 0;
   height: 10px;
   overflow: hidden;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--progress-bg);
 }
 
@@ -2268,7 +2018,7 @@ button {
   overflow: hidden;
   height: 100%;
   border-radius: inherit;
-  transition: background 0.2s var(--ease-out);
+  transition: background var(--duration-base) var(--ease-out);
 }
 
 /* The running segment carries a narrow sheen that passes, then rests for the rest of the beat. */
@@ -2281,7 +2031,7 @@ button {
   width: 40%;
   background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.28) 50%, transparent);
   transform: translateX(-120%);
-  animation: processing-progress-sheen var(--processing-beat, 2.8s) cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation: processing-progress-sheen var(--processing-beat, 2.8s) var(--ease-move) infinite;
 }
 
 @keyframes processing-progress-sheen {
@@ -2310,7 +2060,7 @@ button {
    the track swells, a soft ring spreads out and a light sweeps across.
    Like the rest of the app (MotionConfig in App.tsx), the banner ignores Windows "Riduci animazioni". */
 .phase-segment.is-settled {
-  animation: processing-segment-pop 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.45s both;
+  animation: processing-segment-pop 0.6s var(--ease-out) 0.45s both;
 }
 
 @keyframes processing-segment-pop {
@@ -2338,7 +2088,7 @@ button {
   width: 50%;
   background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.5) 50%, transparent);
   transform: translateX(-110%);
-  animation: processing-segment-sweep 0.75s cubic-bezier(0.4, 0, 0.2, 1) 0.45s both;
+  animation: processing-segment-sweep 0.75s var(--ease-move) 0.45s both;
 }
 
 @keyframes processing-segment-sweep {
@@ -2346,14 +2096,7 @@ button {
 }
 
 .processing-step-label:focus-visible {
-  border-radius: 4px;
-  box-shadow: 0 0 0 2px var(--processing-ring);
-}
-
-.soft-divider {
-  width: 100%;
-  height: 1px;
-  background: var(--border-subtle);
+  border-radius: var(--radius-sm);
 }
 
 /* ═══ CONSOLE ═══ */
@@ -2374,15 +2117,6 @@ button {
 .console-scroll {
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
-}
-
-.hide-scrollbar {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.hide-scrollbar::-webkit-scrollbar {
-  display: none;
 }
 
 .app-scroll {
@@ -2414,14 +2148,14 @@ button {
 
 .console-scroll::-webkit-scrollbar-thumb {
   background: var(--border-strong);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 3px solid transparent;
   background-clip: padding-box;
 }
 
 .app-scroll::-webkit-scrollbar-thumb {
   background: var(--border-strong);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 3px solid transparent;
   background-clip: padding-box;
 }
@@ -2430,35 +2164,25 @@ button {
   background: transparent;
 }
 
-.app-input,
-.app-textarea {
+.app-input {
   width: 100%;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-default);
   background: var(--bg-input);
   color: var(--text-primary);
   font-family: inherit;
-  outline: none;
   transition:
-    border-color 180ms ease,
-    box-shadow 180ms ease,
-    background 180ms ease;
+    border-color var(--duration-state) var(--ease-out),
+    box-shadow var(--duration-state) var(--ease-out),
+    background var(--duration-state) var(--ease-out);
 }
 
 .app-input {
   padding: 0.95rem 1rem;
 }
 
-.app-textarea {
-  padding: 1rem;
-  resize: vertical;
-  min-height: 110px;
-}
-
-.app-input:focus,
-.app-textarea:focus {
+.app-input:focus {
   border-color: var(--accent-bg);
-  box-shadow: 0 0 0 4px var(--accent-ring);
 }
 
 /* ═══ EDITOR SHELL & PAGE ═══ */
@@ -4165,7 +3889,7 @@ input::-webkit-contacts-auto-fill-button {
 .app-logo {
   width: 96px;
   height: 96px;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   object-fit: contain;
   flex-shrink: 0;
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.18));
@@ -4193,7 +3917,7 @@ input::-webkit-contacts-auto-fill-button {
 
 .app-sidebar {
   border-right: 1px solid var(--glass-border);
-  transition: background 300ms ease;
+  transition: background var(--duration-slow) var(--ease-out);
   scrollbar-width: none;
 }
 
@@ -4203,7 +3927,7 @@ input::-webkit-contacts-auto-fill-button {
 
 .sidebar-nav-item {
   border: 1px solid transparent;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.18s cubic-bezier(0.34, 1.2, 0.64, 1);
+  transition: background var(--duration-state) var(--ease-out), color var(--duration-state) var(--ease-out), border-color var(--duration-state) var(--ease-out), transform var(--duration-state) var(--ease-spring-soft);
 }
 
 .sidebar-nav-item:hover {
@@ -4217,7 +3941,7 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 .sidebar-nav-item svg {
-  transition: transform 0.2s cubic-bezier(0.34, 1.2, 0.64, 1);
+  transition: transform var(--duration-base) var(--ease-spring-soft);
 }
 
 .sidebar-nav-item:hover svg {
@@ -4265,11 +3989,11 @@ input::-webkit-contacts-auto-fill-button {
   justify-content: center;
   width: 22px;
   height: 22px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--text-muted) 16%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-muted) 28%, transparent);
   color: var(--text-secondary);
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition: background-color var(--duration-base) var(--ease-out), color var(--duration-base) var(--ease-out);
 }
 
 .group\/util:hover .sidebar-account-empty {
@@ -4288,10 +4012,10 @@ input::-webkit-contacts-auto-fill-button {
 
 /* The account menu of the sidebar (SidebarAccount): framed like the notifications panel. */
 .sidebar-account-menu {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: 14px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14);
+  background: var(--bg-floating);
+  border: 1px solid var(--border-floating);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-floating);
 }
 
 .sidebar-account-link {
@@ -4300,8 +4024,8 @@ input::-webkit-contacts-auto-fill-button {
   gap: 8px;
   width: 100%;
   padding: 8px;
-  border-radius: 8px;
-  font-size: 0.8125rem;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-label);
   font-weight: 500;
   color: var(--text-secondary);
   background: transparent;
@@ -4319,16 +4043,11 @@ input::-webkit-contacts-auto-fill-button {
   cursor: default;
 }
 
-.sidebar-account-link:focus-visible {
-  outline: 2px solid var(--accent-text);
-  outline-offset: 2px;
-}
-
 .sidebar-badge-dot {
   position: relative;
   width: 100%;
   height: 100%;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--badge-color);
   border: 1.5px solid var(--sidebar-bg);
 }
@@ -4336,10 +4055,10 @@ input::-webkit-contacts-auto-fill-button {
 .sidebar-badge-halo {
   position: absolute;
   inset: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--badge-color);
   opacity: 0;
-  animation: processing-dot-halo var(--processing-beat) cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  animation: processing-dot-halo var(--processing-beat) var(--ease-out) infinite;
 }
 
 .sidebar-tooltip-anchor {
@@ -4352,17 +4071,17 @@ input::-webkit-contacts-auto-fill-button {
   left: calc(100% + 10px);
   top: 50%;
   transform: translateY(-50%);
-  background: var(--bg-elevated);
+  background: var(--bg-floating);
   color: var(--text-primary);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   white-space: nowrap;
   padding: 5px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-floating);
   pointer-events: none;
-  z-index: 200;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  z-index: var(--z-tooltip);
+  box-shadow: var(--shadow-floating);
 }
 
 .sidebar-tooltip.placement-top {
@@ -4371,11 +4090,21 @@ input::-webkit-contacts-auto-fill-button {
   transform: none;
 }
 
-:root[data-theme="dark"] .sidebar-tooltip {
-  background: var(--bg-elevated);
-  color: var(--text-primary);
-  border-color: var(--border-subtle);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+
+/* ═══ FLOATING SURFACES: ROW STATES ═══ */
+
+/* Inside everything that floats over the page, the hover is the floating one: in the light theme
+   it lightens the menus' beige instead of darkening it (theme.css), in the dark theme it is the
+   same hover as elsewhere. Handing the token down covers every row, button and Tailwind
+   hover:bg-[var(--bg-hover)] inside them. Docked bars (the player, the pinned Archive bar) sit
+   in the page and keep the page hover, as does the editor's index while it is a column beside
+   the page (on a phone it floats: see its sheet). Selected rows use --bg-selected-floating where
+   they are styled. */
+:is(.kebab-panel, .context-menu, .color-picker-panel, .editor-bubble-menu, .link-panel,
+  .editor-link-card, .editor-video-preview, .editor-image-toolbar, .sidebar-account-menu,
+  .sidebar-tooltip, .select-dropdown, .notification-dropdown-panel, .archive-selection-bar,
+  .find-bar-float, .find-replace-dialog, .folder-name-tooltip, .phone-format-sheet) {
+  --bg-hover: var(--bg-hover-floating);
 }
 
 /* ═══ KEBAB & CONTEXT DROPDOWNS ═══ */
@@ -4383,10 +4112,10 @@ input::-webkit-contacts-auto-fill-button {
 /* Menus are framed like the cards; their items read like the dashboard's rows, with an 8px radius
    that sits concentric inside the 4px padding. Placement stays inline, computed per opening. */
 .kebab-panel {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
+  background: var(--bg-floating);
+  border: 1px solid var(--border-floating);
   border-radius: var(--radius-card);
-  box-shadow: var(--shadow-strong);
+  box-shadow: var(--shadow-floating);
   padding: 4px;
 }
 
@@ -4402,9 +4131,9 @@ input::-webkit-contacts-auto-fill-button {
   margin-bottom: 4px;
   padding: 8px 12px 10px;
   border-bottom: 1px solid var(--border-subtle);
-  font-size: 13px;
+  font-size: var(--text-label);
   font-weight: 600;
-  line-height: 1.35;
+  line-height: var(--leading-snug);
   color: var(--text-primary);
   overflow-wrap: anywhere;
 }
@@ -4415,15 +4144,15 @@ input::-webkit-contacts-auto-fill-button {
   gap: 10px;
   width: 100%;
   padding: 8px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: none;
   cursor: pointer;
   text-align: left;
-  font-size: 14px;
+  font-size: var(--text-sm);
   background: transparent;
   color: var(--text-primary);
   font-weight: 400;
-  transition: background 140ms ease, color 140ms ease, transform 140ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: background var(--duration-state) var(--ease-out), color var(--duration-state) var(--ease-out), transform var(--duration-state) var(--ease-spring);
   white-space: nowrap;
 }
 
@@ -4431,12 +4160,19 @@ input::-webkit-contacts-auto-fill-button {
   background: var(--bg-hover);
 }
 
+/* Menu rows fill panels that scroll or clip (long menus, the font sizes, the zoom levels, the
+   Settings selects), so their ring sits inside the row instead of under the panel's edge. */
+.kebab-item:focus-visible,
+.select-dropdown [role="option"]:focus-visible {
+  outline-offset: var(--focus-ring-inset);
+}
+
 .kebab-item:active {
   transform: scale(0.98);
 }
 
 .kebab-item svg {
-  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform var(--duration-state) var(--ease-spring);
 }
 
 .kebab-item:hover svg {
@@ -4444,7 +4180,7 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 .kebab-item.is-active {
-  background: var(--accent-subtle);
+  background: var(--bg-selected-floating);
   color: var(--accent-text);
   font-weight: 600;
 }
@@ -4454,7 +4190,7 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 .kebab-item.is-danger:hover {
-  background: var(--error-subtle);
+  background: var(--bg-danger-hover-floating);
 }
 
 /* ═══ FOLDER CARDS ═══ */
@@ -4467,7 +4203,7 @@ input::-webkit-contacts-auto-fill-button {
   border: 1px solid var(--border-subtle);
   background: var(--bg-surface);
   box-shadow: var(--shadow-xs);
-  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: border-color var(--duration-state) var(--ease-out), background var(--duration-state) var(--ease-out), box-shadow var(--duration-state) var(--ease-out), transform var(--duration-state) var(--ease-spring);
 }
 
 .folder-card:hover {
@@ -4487,7 +4223,7 @@ input::-webkit-contacts-auto-fill-button {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: border-color var(--duration-state) var(--ease-out), background var(--duration-state) var(--ease-out), transform var(--duration-state) var(--ease-spring);
 }
 
 .folder-card-new:hover {
@@ -4501,7 +4237,7 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 .folder-card-new svg {
-  transition: transform 0.2s cubic-bezier(0.34, 1.2, 0.64, 1);
+  transition: transform var(--duration-base) var(--ease-spring-soft);
 }
 
 .folder-card-new:hover svg {
@@ -4515,7 +4251,7 @@ input::-webkit-contacts-auto-fill-button {
   height: 12px;
   background: var(--folder-color, var(--accent-bg));
   flex-shrink: 0;
-  transition: transform 0.2s cubic-bezier(0.34, 1.2, 0.64, 1);
+  transition: transform var(--duration-base) var(--ease-spring-soft);
 }
 
 .folder-card:hover .folder-color-dot {
@@ -4537,9 +4273,8 @@ input::-webkit-contacts-auto-fill-button {
 .archive-session-card {
   background: var(--card-queued-bg);
   border: 1px solid var(--card-queued-border);
-  border-radius: 10px;
-  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, transform 0.18s cubic-bezier(0.34, 1.2, 0.64, 1);
-  outline: none;
+  border-radius: var(--radius-card);
+  transition: border-color var(--duration-state) var(--ease-out), background var(--duration-state) var(--ease-out), box-shadow var(--duration-state) var(--ease-out), transform var(--duration-state) var(--ease-spring-soft);
   box-shadow: none;
 }
 
@@ -4553,7 +4288,7 @@ input::-webkit-contacts-auto-fill-button {
 
 .archive-session-card svg.lucide-file-text,
 .archive-session-card svg.lucide-file-audio {
-  transition: transform 0.2s cubic-bezier(0.34, 1.2, 0.64, 1);
+  transition: transform var(--duration-base) var(--ease-spring-soft);
 }
 
 .archive-session-card:hover svg.lucide-file-text,
@@ -4562,15 +4297,11 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 .archive-session-card .folder-color-dot {
-  transition: transform 0.2s cubic-bezier(0.34, 1.2, 0.64, 1);
+  transition: transform var(--duration-base) var(--ease-spring-soft);
 }
 
 .archive-session-card:hover .folder-color-dot {
   transform: scale(1.05);
-}
-
-.archive-session-card:focus-visible {
-  outline: none;
 }
 
 :root:not([data-theme="dark"]) .archive-session-card {
@@ -4579,16 +4310,11 @@ input::-webkit-contacts-auto-fill-button {
 
 :root:not([data-theme="dark"]) .archive-session-card:hover {
   box-shadow: none;
-  border-color: rgba(120, 113, 108, 0.52);
 }
 
 :root[data-theme="dark"] .archive-session-card {
   background: var(--card-queued-bg);
   border-color: var(--card-queued-border);
-}
-
-:root[data-theme="dark"] .archive-session-card:hover {
-  border-color: rgba(255, 255, 255, 0.35);
 }
 
 .archive-session-card.is-selected,
@@ -4612,37 +4338,6 @@ input::-webkit-contacts-auto-fill-button {
   border-color: var(--warning-ring);
 }
 
-/* ═══ HOURGLASS BADGE ANIMATION ═══ */
-
-@keyframes hg-rotate {
-  0%,  72% { transform: rotate(0deg); }
-  88%, 100% { transform: rotate(180deg); }
-}
-
-@keyframes hg-sand-t {
-  0%        { y: 1px;  height: 8px; }
-  68%, 100% { y: 9px;  height: 0px; }
-}
-
-@keyframes hg-sand-b {
-  0%        { y: 19px; height: 0px; }
-  68%, 100% { y: 11px; height: 8px; }
-}
-
-.hg-svg {
-  animation: hg-rotate 2.4s linear infinite;
-  transform-origin: 50% 50%;
-  display: block;
-}
-
-.hg-sand-t {
-  animation: hg-sand-t 2.4s linear infinite;
-}
-
-.hg-sand-b {
-  animation: hg-sand-b 2.4s linear infinite;
-}
-
 /* ═══ SEARCH & FILTER CONTROLS ═══ */
 
 /* Flat at rest; once pinned it floats as a framed panel the list scrolls behind.
@@ -4650,13 +4345,13 @@ input::-webkit-contacts-auto-fill-button {
 .archive-sticky-toolbar {
   position: sticky;
   top: 8px;
-  z-index: 20;
+  z-index: var(--z-sticky);
   margin: -8px;
   padding: 7px;
   border: 1px solid transparent;
   /* Concentric with the 36px pills inside: 18px + the 8px inset. */
   border-radius: 26px;
-  transition: background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+  transition: background-color var(--duration-state) var(--ease-out), border-color var(--duration-state) var(--ease-out), box-shadow var(--duration-state) var(--ease-out);
 }
 
 /* Once pinned the panel is the only frame: the field and chips inside drop their own
@@ -4678,12 +4373,11 @@ input::-webkit-contacts-auto-fill-button {
   background: var(--bg-surface);
 }
 
+/* Solid like the menus and the player, not glass: nothing else in the app blurs what is behind it. */
 .archive-sticky-toolbar[data-stuck='true'] {
-  background: color-mix(in srgb, var(--bg-elevated) 86%, transparent);
-  border-color: var(--border-subtle);
+  background: var(--bg-floating);
+  border-color: var(--border-floating);
   box-shadow: var(--shadow-md);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
-  backdrop-filter: blur(14px) saturate(140%);
 }
 
 .folder-card-title {
@@ -4698,22 +4392,20 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 .folder-card-title:focus-visible {
-  outline: 2px solid var(--accent-bg);
-  outline-offset: 2px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 
 .folder-name-tooltip {
   position: fixed;
-  z-index: 80;
+  z-index: var(--z-tooltip);
   padding: 10px 12px;
-  border: 1px solid var(--border-default);
-  border-radius: 8px;
-  background: var(--bg-surface);
+  border: 1px solid var(--border-floating);
+  border-radius: var(--radius-lg);
+  background: var(--bg-floating);
   color: var(--text-primary);
-  box-shadow: var(--shadow-strong);
-  font-size: 14px;
-  line-height: 1.5;
+  box-shadow: var(--shadow-floating);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
   overflow-wrap: anywhere;
 }
 
@@ -4727,16 +4419,15 @@ input::-webkit-contacts-auto-fill-button {
 /* Archive search is a pill, like the settings key field, with its icon and hint pulled in from the curve. */
 .search-pill-input {
   width: 100%;
-  height: 36px;
+  height: var(--control-height-md);
   padding: 0 2.6rem 0 2.35rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border-default);
   background: var(--bg-input);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
-  outline: none;
-  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+  transition: border-color var(--duration-state) var(--ease-out), background var(--duration-state) var(--ease-out), box-shadow var(--duration-state) var(--ease-out);
 }
 
 .search-pill-input::placeholder {
@@ -4752,7 +4443,6 @@ input::-webkit-contacts-auto-fill-button {
 .search-pill-input:focus {
   border-color: var(--accent-bg);
   background: var(--bg-surface);
-  box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
 :root[data-theme="dark"] .search-pill-input {
@@ -4761,22 +4451,21 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 :root[data-theme="dark"] .search-pill-input:hover {
-  background: #252525;
+  background: var(--bg-panel);
   border-color: var(--border-strong);
 }
 
 :root[data-theme="dark"] .search-pill-input:focus {
-  background: #252525;
+  background: var(--bg-panel);
   border-color: var(--accent-bg);
-  box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
 .search-pill-icon {
   position: absolute;
   left: 0.85rem;
   pointer-events: none;
-  color: var(--text-faint);
-  transition: color 150ms ease;
+  color: var(--icon-faint);
+  transition: color var(--duration-state) var(--ease-out);
 }
 
 .search-pill-input:focus ~ .search-pill-icon,
@@ -4792,16 +4481,16 @@ input::-webkit-contacts-auto-fill-button {
   justify-content: center;
   width: 22px;
   height: 22px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: none;
   background: transparent;
-  color: var(--text-faint);
+  color: var(--icon-faint);
   cursor: pointer;
-  transition: background 140ms ease, color 140ms ease, transform 140ms ease;
+  transition: background var(--duration-state) var(--ease-out), color var(--duration-state) var(--ease-out), transform var(--duration-state) var(--ease-out);
 }
 
 .search-pill-clear svg {
-  transition: transform 180ms ease, opacity 180ms ease;
+  transition: transform var(--duration-state) var(--ease-out), opacity var(--duration-state) var(--ease-out);
 }
 
 .search-pill-clear:hover {
@@ -4827,14 +4516,14 @@ input::-webkit-contacts-auto-fill-button {
 
 .search-pill-hint kbd {
   font-family: var(--font-display);
-  font-size: 0.7rem;
+  font-size: var(--text-caption);
   font-weight: 600;
   color: var(--text-faint);
   background: var(--accent-subtle);
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 1px 5px;
-  line-height: 1.4;
+  line-height: var(--leading-snug);
   letter-spacing: 0;
 }
 
@@ -4842,18 +4531,18 @@ input::-webkit-contacts-auto-fill-button {
 .filter-chip {
   height: 36px;
   padding: 0 0.65rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border-default);
   background: var(--bg-input);
   color: var(--text-secondary);
-  font-size: 0.8rem;
+  font-size: var(--text-label);
   font-weight: 600;
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
   white-space: nowrap;
   cursor: pointer;
-  transition: border-color 150ms ease, background 150ms ease, color 150ms ease, transform 150ms ease;
+  transition: border-color var(--duration-state) var(--ease-out), background var(--duration-state) var(--ease-out), color var(--duration-state) var(--ease-out), transform var(--duration-state) var(--ease-out);
   flex-shrink: 0;
 }
 
@@ -4873,13 +4562,13 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 :root[data-theme="dark"] .filter-chip:hover {
-  background: #252525;
+  background: var(--bg-panel);
   border-color: var(--border-strong);
   color: var(--text-primary);
 }
 
 .search-results-count {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--text-faint);
   padding-left: 0.15rem;
@@ -5247,18 +4936,18 @@ input::-webkit-contacts-auto-fill-button {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: 36px;
-  padding: 0 0.95rem;
-  border-radius: 999px;
+  height: var(--control-height-md);
+  padding: var(--button-padding-md);
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border-default);
   background: var(--bg-surface);
   color: var(--text-secondary);
-  font-size: 0.8rem;
-  font-weight: 600;
+  font-size: var(--text-label);
+  font-weight: var(--button-weight);
   flex-shrink: 0;
   white-space: nowrap;
   cursor: pointer;
-  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
+  transition: background var(--duration-state) var(--ease-out), border-color var(--duration-state) var(--ease-out), color var(--duration-state) var(--ease-out), transform var(--duration-state) var(--ease-out);
 }
 
 .archive-action-button:hover {
@@ -5270,16 +4959,11 @@ input::-webkit-contacts-auto-fill-button {
 .archive-action-button.is-collection-create {
   height: 32px;
   padding: 0 0.8rem;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .archive-action-button.is-collection-create:hover {
   background: var(--bg-surface);
-}
-
-.archive-action-button.is-collection-create:focus-visible {
-  outline: 2px solid var(--accent-bg);
-  outline-offset: 2px;
 }
 
 .archive-action-button.is-accent {
@@ -5299,7 +4983,7 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 .recent-session-arrow {
-  transition: transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform var(--duration-state) var(--ease-spring);
 }
 
 .archive-session-card:hover .recent-session-arrow,
@@ -5308,7 +4992,7 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 .folder-add-lessons-plus {
-  transition: transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform var(--duration-state) var(--ease-spring);
 }
 
 .folder-add-lessons-btn:hover .folder-add-lessons-plus {
@@ -5319,12 +5003,12 @@ input::-webkit-contacts-auto-fill-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
+  font-size: var(--text-micro);
   font-weight: 700;
   padding: 1px 6px;
-  border-radius: 999px;
-  background: var(--accent-text);
-  color: white;
+  border-radius: var(--radius-pill);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
   min-width: 16px;
 }
 
@@ -5431,7 +5115,7 @@ input::-webkit-contacts-auto-fill-button {
   flex: 1 1 0%;
   overflow-y: auto;
   padding: 20px;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -5453,17 +5137,13 @@ input::-webkit-contacts-auto-fill-button {
   border-top: 1px solid var(--border-subtle) !important;
 }
 
-.border-b-subtle {
-  border-bottom: 1px solid var(--border-subtle) !important;
-}
-
 /* Select Field Custom Styling */
 .select-dropdown {
-  background: var(--bg-elevated) !important;
-  border: 1px solid var(--border-default) !important;
-  box-shadow: var(--shadow-strong) !important;
-  border-radius: 12px !important;
-  animation: dropdownPop 0.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  background: var(--bg-floating) !important;
+  border: 1px solid var(--border-floating) !important;
+  box-shadow: var(--shadow-floating) !important;
+  border-radius: var(--radius-card) !important;
+  animation: dropdownPop 0.2s var(--ease-out) forwards;
   transform-origin: top center;
 }
 
@@ -5477,17 +5157,17 @@ input::-webkit-contacts-auto-fill-button {
 /* 28px is the 8px padding plus half a pill button: one row reads as a pill, and a bar wrapped
    onto two rows on a phone keeps corners concentric with its buttons instead of a stadium. */
 .archive-selection-bar {
-  background: var(--bg-elevated) !important;
-  border: 1px solid var(--border-subtle) !important;
+  background: var(--bg-floating) !important;
+  border: 1px solid var(--border-floating) !important;
   border-radius: 28px !important;
-  box-shadow: var(--shadow-strong) !important;
+  box-shadow: var(--shadow-floating) !important;
 }
 
 .notification-dropdown-panel {
-  background: var(--bg-elevated) !important;
-  border: 1px solid var(--border-subtle) !important;
+  background: var(--bg-floating) !important;
+  border: 1px solid var(--border-floating) !important;
   border-radius: var(--radius-card) !important;
-  box-shadow: var(--shadow-strong) !important;
+  box-shadow: var(--shadow-floating) !important;
 }
 
 /* Keep the pointer joined to a neutral frame, independent of scrolling rows. */
@@ -5496,7 +5176,7 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 .notification-dropdown-panel.has-caret .notification-dropdown-content {
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 /* Tutte / Non lette: small outline pills; the active one takes the accent tint. */
@@ -5506,14 +5186,14 @@ input::-webkit-contacts-auto-fill-button {
   gap: 6px;
   height: 28px;
   padding: 0 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border-default);
   background: transparent;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 500;
   cursor: pointer;
-  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+  transition: background var(--duration-state) var(--ease-out), border-color var(--duration-state) var(--ease-out), color var(--duration-state) var(--ease-out);
 }
 
 .notification-filter:hover {
@@ -5522,7 +5202,7 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 .notification-filter.is-active {
-  background: var(--accent-subtle);
+  background: var(--bg-selected-floating);
   border-color: var(--accent-ring);
   color: var(--accent-text);
 }
@@ -5530,10 +5210,10 @@ input::-webkit-contacts-auto-fill-button {
 .notification-filter-count {
   min-width: 16px;
   padding: 0 5px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--accent-subtle);
   color: var(--accent-text);
-  font-size: 10px;
+  font-size: var(--text-micro);
   font-weight: 700;
   line-height: 16px;
   text-align: center;
@@ -5543,11 +5223,11 @@ input::-webkit-contacts-auto-fill-button {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 10px;
-  line-height: 1;
+  font-size: var(--text-micro);
+  line-height: var(--leading-none);
   font-weight: 600;
   padding: 2px 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   flex-shrink: 1;
   min-width: 0;
   max-width: 100%;
@@ -5584,10 +5264,10 @@ input::-webkit-contacts-auto-fill-button {
   align-items: flex-start;
   gap: 12px;
   padding: 10px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: transparent;
   cursor: pointer;
-  transition: background-color 150ms ease, opacity 150ms ease;
+  transition: background-color var(--duration-state) var(--ease-out), opacity var(--duration-state) var(--ease-out);
 }
 
 .notification-item:hover {
@@ -5611,7 +5291,7 @@ input::-webkit-contacts-auto-fill-button {
     transparent 85%
   );
   opacity: 0;
-  transition: opacity 320ms ease;
+  transition: opacity var(--duration-slow) var(--ease-out);
   pointer-events: none;
 }
 
@@ -5619,21 +5299,38 @@ input::-webkit-contacts-auto-fill-button {
   opacity: 1;
 }
 
+/* In the dark theme the unread tint and the hover both lighten the row, and together they took its
+   grey and coloured text under 4.5:1: under the hover the tint steps down to about a third (5% at
+   its deepest point), which still shows its colour. */
+:root[data-theme="dark"] .notification-item.is-unread:hover::before {
+  opacity: 0.35;
+}
+
+/* A category badge wears its type's tint. In the dark theme the tint is laid on the menu's own grey,
+   so whatever lies under the badge (an unread row's tint, the hover) cannot lighten it further. */
+.notification-category-badge {
+  background: var(--badge-bg);
+}
+
+:root[data-theme="dark"] .notification-category-badge {
+  background: linear-gradient(var(--badge-bg), var(--badge-bg)), var(--bg-floating);
+}
+
 /* Setup page: the key field and Salva are the settings pills, a touch taller as the page's one task. */
 .app-input.is-settings-input.setup-key-input {
-  min-height: 2.75rem;
-  font-size: 0.8125rem;
+  height: var(--control-height-lg);
+  font-size: var(--text-label);
 }
 
 .app-input.is-settings-input.setup-key-input.is-valid { border-color: var(--success-ring); }
-.app-input.is-settings-input.setup-key-input.is-valid:focus { border-color: var(--success-text); box-shadow: 0 0 0 3px var(--success-ring); }
+.app-input.is-settings-input.setup-key-input.is-valid:focus { border-color: var(--success-text); }
 .app-input.is-settings-input.setup-key-input.is-warning { border-color: var(--warning-ring); }
-.app-input.is-settings-input.setup-key-input.is-warning:focus { border-color: var(--warning-text); box-shadow: 0 0 0 3px var(--warning-ring); }
+.app-input.is-settings-input.setup-key-input.is-warning:focus { border-color: var(--warning-text); }
 
 .settings-pill-button.setup-save-button {
-  min-height: 2.75rem;
+  min-height: var(--control-height-lg);
   padding-inline: 1.35rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 /* The how-to card is framed like the dashboard sections. */
@@ -5657,10 +5354,10 @@ input::-webkit-contacts-auto-fill-button {
   height: 1.25rem;
   margin-top: 0.125rem;
   border: 1px solid var(--border-subtle);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--bg-panel);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--text-caption);
   font-weight: 600;
 }
 
@@ -5674,8 +5371,8 @@ input::-webkit-contacts-auto-fill-button {
   border-radius: var(--radius-card);
   background: var(--error-subtle);
   color: var(--error-text);
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
 }
 
 .setup-error-icon { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; }
@@ -5697,21 +5394,20 @@ input::-webkit-contacts-auto-fill-button {
   cursor: pointer;
   background: transparent;
   border: 1px solid var(--error-ring);
-  border-radius: 999px;
-  transition: background 0.15s var(--ease-out), border-color 0.15s var(--ease-out);
+  border-radius: var(--radius-pill);
+  transition: background var(--duration-state) var(--ease-out), border-color var(--duration-state) var(--ease-out);
 }
 .setup-error-action:hover { background: var(--bg-hover); border-color: currentColor; }
-.setup-error-action:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--error-ring); }
-.setup-error-toggle svg { transition: transform 0.15s var(--ease-out); }
+.setup-error-toggle svg { transition: transform var(--duration-state) var(--ease-out); }
 .setup-error-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
 .setup-error-technical { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--error-ring); }
 .setup-error-technical p { margin: 0; }
-.setup-error-technical pre { margin: 5px 0 0; max-height: 160px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; user-select: text; }
+.setup-error-technical pre { margin: 5px 0 0; max-height: 160px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--text-caption); user-select: text; }
 .setup-error-copy-status:empty { display: none; }
 .setup-error-copy-status:not(:empty) { margin-top: 4px; }
 
 .alert-card {
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -5748,86 +5444,28 @@ input::-webkit-contacts-auto-fill-button {
   color: var(--text-secondary) !important;
 }
 
-.notice-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 16px;
-  border-radius: 12px;
-  font-size: 0.875rem;
-}
-
-.notice-banner.is-warning {
-  background: var(--warning-subtle) !important;
-  border: 1px solid var(--warning-ring) !important;
-  color: var(--warning-text) !important;
-}
-
-.notice-banner.is-info {
-  background: var(--accent-subtle) !important;
-  border: 1px solid var(--accent-ring) !important;
-  color: var(--accent-text) !important;
-}
-
-.notice-banner.is-error {
-  background: var(--error-subtle) !important;
-  border: 1px solid var(--error-ring) !important;
-  color: var(--error-text) !important;
-}
-
-.notice-banner.is-success {
-  background: var(--success-subtle) !important;
-  border: 1px solid var(--success-ring) !important;
-  color: var(--success-text) !important;
-}
-
 /* Earthy Warning Action Styles */
-.btn-warning-filled {
-  padding: 5px 10px;
-  font-size: 12px;
-  border-radius: 8px;
-  background: var(--warning-text) !important;
-  color: var(--bg-surface) !important;
-  border: none !important;
-  cursor: pointer;
-  font-weight: 600;
-  box-shadow: 0 2px 6px var(--warning-ring) !important;
-  transition: transform 180ms ease, opacity 180ms ease, background 180ms ease;
-}
-
-.btn-warning-filled:hover {
-  transform: translateY(-1px);
-  background: var(--warning-bg) !important;
-}
-
-.btn-warning-filled:active {
-  transform: translateY(0);
-}
-
-.premium-button-secondary.is-warning {
+.compact-button.is-warning {
   color: var(--warning-text) !important;
   border: 1px solid var(--warning-ring) !important;
   background: var(--bg-elevated) !important;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-xs);
 }
 
-.premium-button-secondary.is-warning:hover:not(:disabled) {
+.compact-button.is-warning:hover:not(:disabled) {
   background: var(--warning-subtle) !important;
   border-color: var(--warning-text) !important;
   color: var(--warning-text) !important;
 }
 
 /* Badges */
-.premium-badge.is-success,
-.badge-success {
+.premium-badge.is-success {
   background: var(--success-subtle) !important;
   color: var(--success-text) !important;
   border: 1px solid var(--success-ring) !important;
 }
 
-.premium-badge.is-warning,
-.badge-warning {
+.premium-badge.is-warning {
   background: var(--warning-subtle) !important;
   color: var(--warning-text) !important;
   border: 1px solid var(--warning-ring) !important;
@@ -5851,7 +5489,7 @@ input::-webkit-contacts-auto-fill-button {
   top: 50%;
   width: 280px;
   height: 280px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: radial-gradient(
     circle closest-side,
     color-mix(in srgb, var(--accent-bg) 20%, transparent) 0%,
@@ -5863,8 +5501,8 @@ input::-webkit-contacts-auto-fill-button {
   transform: translate(-50%, -50%) scale(0.5);
   pointer-events: none;
   transition:
-    opacity 320ms var(--ease-out),
-    transform 480ms cubic-bezier(0.22, 1, 0.36, 1);
+    opacity var(--duration-slow) var(--ease-out),
+    transform var(--duration-slow) var(--ease-out);
 }
 
 /* On the near-black page the same mix barely registers, so the dark theme lights a stronger core. */
@@ -5896,13 +5534,13 @@ input::-webkit-contacts-auto-fill-button {
   justify-content: center;
   width: 56px;
   height: 56px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--accent-subtle);
   color: var(--accent-text);
   transition:
-    transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1),
-    background 200ms var(--ease-out),
-    color 200ms var(--ease-out);
+    transform var(--duration-base) var(--ease-spring),
+    background var(--duration-base) var(--ease-out),
+    color var(--duration-base) var(--ease-out);
 }
 
 /* Hover previews the live state: the icon fills with the accent and lifts toward the pointer. */
@@ -5923,37 +5561,37 @@ input::-webkit-contacts-auto-fill-button {
   position: absolute;
   inset: 0;
   border: 1.5px solid color-mix(in srgb, var(--accent-bg) 45%, transparent);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   opacity: 0;
   pointer-events: none;
-  animation: processing-ring var(--drop-beat, 2.8s) cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  animation: processing-ring var(--drop-beat, 2.8s) var(--ease-out) infinite;
 }
 
 /* The primary action of the empty page: a pill, like the queue's start and the banner's Interrompi.
    It moves in step with the icon: soft at rest, filled with the accent when the card is hovered. */
 .dropzone-browse-button {
   margin-top: 1.25rem;
-  min-height: 2.25rem;
-  padding: 0 1.15rem;
+  min-height: var(--control-height-md);
+  padding: var(--button-padding-md);
   display: inline-flex;
   align-items: center;
-  border-radius: 999px;
-  font-size: 0.85rem;
-  font-weight: 600;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-label);
+  font-weight: var(--button-weight);
   background: var(--accent-subtle);
   color: var(--accent-text);
   transition:
-    transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1),
-    background 200ms var(--ease-out),
-    color 200ms var(--ease-out),
-    box-shadow 200ms var(--ease-out);
+    transform var(--duration-state) var(--ease-spring),
+    background var(--duration-base) var(--ease-out),
+    color var(--duration-base) var(--ease-out),
+    box-shadow var(--duration-base) var(--ease-out);
 }
 
 .dropzone-card:hover .dropzone-browse-button,
 .dropzone-card:focus-visible .dropzone-browse-button {
-  background: var(--accent-bg);
+  background: var(--btn-primary-bg);
   color: var(--btn-primary-text);
-  box-shadow: var(--shadow-sm), 0 4px 16px color-mix(in srgb, var(--accent-bg) 30%, transparent);
+  box-shadow: var(--shadow-sm), 0 4px 16px color-mix(in srgb, var(--btn-primary-bg) 30%, transparent);
   transform: translateY(-1px);
 }
 
@@ -5967,7 +5605,7 @@ input::-webkit-contacts-auto-fill-button {
   --drop-beat: 2.8s;
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: var(--z-modal);
   padding: 16px;
   display: flex;
   pointer-events: none;
@@ -5988,7 +5626,7 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 .drop-overlay-title {
-  font-size: 1.05rem;
+  font-size: var(--text-base);
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--text-primary);
@@ -5999,7 +5637,7 @@ input::-webkit-contacts-auto-fill-button {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-xs);
-  transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms var(--ease-out), transform 180ms var(--ease-out);
+  transition: background var(--duration-state) var(--ease-out), border-color var(--duration-state) var(--ease-out), box-shadow var(--duration-state) var(--ease-out), transform var(--duration-state) var(--ease-out);
 }
 
 /* Like the Archivio cards, hover only firms up the border: a deeper shadow would spill
@@ -6057,25 +5695,25 @@ input::-webkit-contacts-auto-fill-button {
 /* A completed card's primary action: the whole card opens the editor, and
    "Apri" says so on hover or keyboard focus instead of cluttering every row. */
 .queue-card.is-completed:focus-visible {
-  outline: none;
   border-color: var(--border-default);
-  box-shadow: 0 0 0 3px var(--accent-ring), var(--shadow-sm);
+  box-shadow: var(--shadow-sm);
 }
 
 .completed-open-button {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  padding: 0.3rem 0.55rem 0.3rem 0.65rem;
-  border-radius: 6px;
-  border: 1px solid var(--border-subtle);
+  padding: var(--button-padding-sm);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-default);
   background: var(--bg-surface);
-  font-size: 0.8rem;
-  font-weight: 500;
+  font-size: var(--text-xs);
+  font-weight: var(--button-weight);
   color: var(--text-secondary);
   opacity: 0;
   transform: translateX(-2px);
-  transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out), color 160ms var(--ease-out), border-color 160ms var(--ease-out), background 160ms var(--ease-out);
+  transition: opacity var(--duration-state) var(--ease-out), transform var(--duration-state) var(--ease-out), color var(--duration-state) var(--ease-out), border-color var(--duration-state) var(--ease-out), background var(--duration-state) var(--ease-out);
+  min-height: var(--control-height-sm);
 }
 
 .queue-card:hover .completed-open-button,
@@ -6088,11 +5726,6 @@ input::-webkit-contacts-auto-fill-button {
   color: var(--text-primary);
   border-color: var(--border-default);
   background: var(--bg-hover);
-}
-
-.completed-open-button:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
 @media (hover: none) {
@@ -6111,7 +5744,7 @@ input::-webkit-contacts-auto-fill-button {
   border-radius: inherit;
   background: var(--success-subtle);
   pointer-events: none;
-  animation: queue-card-fresh 1.6s cubic-bezier(0.4, 0, 1, 1) 0.2s both;
+  animation: queue-card-fresh 1.6s var(--ease-in) 0.2s both;
 }
 
 @keyframes queue-card-fresh {
@@ -6130,7 +5763,7 @@ input::-webkit-contacts-auto-fill-button {
   justify-content: center;
   gap: 16px;
   color: var(--text-muted) !important;
-  font-size: 13px;
+  font-size: var(--text-label);
   flex-shrink: 0;
 }
 
@@ -6362,9 +5995,9 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 .dashboard-section-title {
-  font-size: 0.9375rem;
+  font-size: var(--text-base);
   font-weight: 600;
-  line-height: 1.3;
+  line-height: var(--leading-tight);
   letter-spacing: -0.01em;
   color: var(--text-primary);
 }
@@ -6561,12 +6194,24 @@ input::-webkit-contacts-auto-fill-button {
     row-gap: 8px;
   }
 
-  /* A long lecture title keeps two lines instead of a few letters. */
-  .queue-card h4.truncate {
-    display: -webkit-box;
-    white-space: normal;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
+  /* A long lecture title loses its middle, not its end (MiddleTruncate.tsx): every card keeps one
+     line and one height, and "Lezione 8.m4a" still tells it from the one before. "pre" keeps the
+     space where the name is cut, which would otherwise fall at the end of the head. */
+  .middle-truncate {
+    display: flex;
+    min-width: 0;
+  }
+
+  .middle-truncate-head {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: pre;
+  }
+
+  .middle-truncate-tail {
+    flex-shrink: 0;
+    white-space: pre;
   }
 
   /* The whole card opens the sbobina: its title gets the room of the extra button. */

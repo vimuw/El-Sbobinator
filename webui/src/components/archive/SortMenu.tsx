@@ -100,7 +100,7 @@ export function SortMenu({ sort, onSortChange, options = SORT_OPTIONS }: SortMen
                 position: 'fixed',
                 ...(pos.top !== undefined ? { top: pos.top } : { bottom: pos.bottom }),
                 ...(pos.left !== undefined ? { left: pos.left } : { right: pos.right }),
-                zIndex: 9999,
+                zIndex: 'var(--z-popover)',
                 minWidth: 200,
                 width: 'max-content',
               }}

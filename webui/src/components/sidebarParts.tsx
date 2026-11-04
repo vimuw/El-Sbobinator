@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { motion, AnimatePresence, type Variants } from 'motion/react';
+import { DURATION } from '../motion';
 
 // Pieces shared by the sidebar's own buttons and by the account button beside them.
 
@@ -46,7 +47,7 @@ export function SidebarTooltip({
             initial={{ opacity: 0, x: -4 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -4 }}
-            transition={{ duration: 0.12 }}
+            transition={{ duration: DURATION.fast }}
           >
             {label}
           </motion.span>
@@ -58,7 +59,7 @@ export function SidebarTooltip({
 
 // The pointer of a panel opened from a sidebar button: 12×18px on the panel's left edge, its tip
 // at `centerFromBottom` px above the panel's bottom. Fill and stroke match the panel frame
-// (--bg-elevated, --border-subtle), the fill running past the edge to cover the frame's border.
+// (--bg-floating, --border-floating), the fill running past the edge to cover the frame's border.
 export const POPOVER_CARET_HEIGHT = 18;
 
 export function PopoverCaret({ centerFromBottom, variants }: { centerFromBottom: number; variants?: Variants }) {
@@ -71,10 +72,10 @@ export function PopoverCaret({ centerFromBottom, variants }: { centerFromBottom:
       data-testid="popover-caret"
     >
       <svg width="12" height={POPOVER_CARET_HEIGHT} viewBox="0 0 12 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <polygon points="12,0.5 8.5,0.5 0.5,9 8.5,17.5 12,17.5" fill="var(--bg-elevated)" />
+        <polygon points="12,0.5 8.5,0.5 0.5,9 8.5,17.5 12,17.5" fill="var(--bg-floating)" />
         <path
           d="M 8.5 0.5 L 0.5 9 L 8.5 17.5"
-          stroke="var(--border-subtle)"
+          stroke="var(--border-floating)"
           strokeWidth="1"
           strokeLinecap="round"
           strokeLinejoin="round"

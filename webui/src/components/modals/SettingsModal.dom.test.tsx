@@ -1266,6 +1266,8 @@ describe('SettingsModal on the web host', () => {
     expect(screen.getByTestId('shared-device-warning').textContent).toContain('solo in questo browser');
     // The one-go removal sits in the shared-device notice that explains it, not in the section header.
     expect(within(screen.getByTestId('shared-device-warning')).getByRole('button', { name: 'Rimuovi tutte le chiavi' })).toBeTruthy();
+    // Beside the text on every width: on a phone it used to wrap alone into the bottom-left corner.
+    expect(screen.getByTestId('shared-device-warning').className).not.toContain('flex-wrap');
     expect(screen.queryByText('Notifiche di sistema')).toBeNull();
     expect(screen.queryByText('Versione e aggiornamenti')).toBeNull();
     // No updater on the web: the version is shown, updates arrive with the next load.
@@ -1300,6 +1302,40 @@ describe('SettingsModal on the web host', () => {
     expect(getInfo).toHaveBeenCalledTimes(2);
     expect(screen.getByTestId('storage-count').textContent).toBe('5');
     await act(async () => { resolveSecond({ ok: true, total_bytes: 4096, total_sessions: 6, session_root: 'browser' }); });
+    expect(screen.getByTestId('storage-count').textContent).toBe('6');
+  });
+
+  it('reads Archiviazione on opening, so the tab shows at once like the others and keeps its figures on return', async () => {
+    let resolveReturn: (value: unknown) => void = () => {};
+    const getInfo = vi.fn()
+      .mockResolvedValueOnce({ ok: true, total_bytes: 2048, total_sessions: 5, session_root: 'browser', persisted: false })
+      .mockReturnValueOnce(new Promise(resolve => { resolveReturn = resolve; }));
+    const getBackup = vi.fn().mockResolvedValue({ ok: true, sessions: 5, text_bytes: 2048, audio_bytes: 4096, audio_files: 1, last_backup_at: null });
+    const listTrash = vi.fn().mockResolvedValue({ ok: true, sessions: [] });
+    setPywebview({ get_session_storage_info: getInfo, get_web_backup_info: getBackup, list_trash: listTrash });
+    const props = makeProps({ isOpen: false });
+    const { rerender } = render(<SettingsModal {...props} />);
+    rerender(<SettingsModal {...props} isOpen />);
+
+    // Still on Generale: the figures are read already, once each.
+    await vi.waitFor(() => expect(listTrash).toHaveBeenCalled());
+    await act(async () => {});
+    expect(getInfo).toHaveBeenCalledTimes(1);
+    expect(getBackup).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Archiviazione' }));
+    // Shown on the tab's first frame, with what was read, not after a wait.
+    expect(screen.getByTestId('web-storage-page').dataset.revealed).toBe('true');
+    expect(screen.getByTestId('storage-count').textContent).toBe('5');
+    expect(screen.getByRole('switch', { name: 'Includi gli audio delle lezioni nel backup' }).getAttribute('aria-checked')).toBe('true');
+
+    // Back on the tab later: the last figures show while the space is read again.
+    fireEvent.click(screen.getByRole('button', { name: /Generale/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Archiviazione' }));
+    expect(screen.getByTestId('web-storage-page').dataset.revealed).toBe('true');
+    expect(screen.getByTestId('storage-count').textContent).toBe('5');
+    expect(screen.queryByText('Calcolo dello spazio occupato…')).toBeNull();
+    await act(async () => { resolveReturn({ ok: true, total_bytes: 4096, total_sessions: 6, session_root: 'browser', persisted: false }); });
     expect(screen.getByTestId('storage-count').textContent).toBe('6');
   });
 

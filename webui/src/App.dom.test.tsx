@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act, within } from '@testing-library/react';
+import { render, screen, fireEvent, act, within, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 import App from './App';
@@ -155,6 +155,10 @@ afterEach(() => {
 });
 
 describe('App', () => {
+  // The notification panel stays mounted while closed, but inert and hidden, so out of the
+  // accessibility tree; these tests read what it holds without opening it.
+  const closedNotificationPanel = () => document.querySelector<HTMLElement>('[role="dialog"][aria-label="Notifiche"]')!;
+
   function expectUpdateInstallFeedback(message: RegExp, startedIn: 'notice' | 'section' = 'notice') {
     // Settings shows the feedback once, where the install was started.
     const section = within(screen.getByRole('region', { name: 'Versione e aggiornamenti' }));
@@ -165,8 +169,8 @@ describe('App', () => {
       expect(within(screen.getByRole('region', { name: 'Aggiornamento applicazione' })).getByText(message)).toBeTruthy();
       expect(section.queryByText(message)).toBeNull();
     }
-    const notifications = within(screen.getByRole('dialog', { name: 'Notifiche' }));
-    expect(notifications.getAllByRole('heading', { name: 'Installazione aggiornamento' })).toHaveLength(1);
+    const notifications = within(closedNotificationPanel());
+    expect(notifications.getAllByText('Installazione aggiornamento', { selector: 'h1, h2, h3, h4, h5, h6' })).toHaveLength(1);
     expect(notifications.getByText(message)).toBeTruthy();
   }
 
@@ -341,7 +345,7 @@ describe('App', () => {
 
     expectUpdateInstallFeedback(/Verifica integrità fallita/i, 'section');
     await act(async () => {
-      fireEvent.click(within(screen.getByRole('dialog', { name: 'Notifiche' })).getByRole('button', { name: 'Apri GitHub' }));
+      fireEvent.click(within(closedNotificationPanel()).getByText('Apri GitHub', { selector: 'button > span' }).closest('button')!);
     });
     expect(openUrl).toHaveBeenCalledWith('https://github.com/vimuw/El-Sbobinator/releases/latest');
   });
@@ -429,12 +433,12 @@ describe('App', () => {
     });
     expectUpdateInstallFeedback(/Verifica integrità fallita/i);
 
-    const notifications = within(screen.getByRole('dialog', { name: 'Notifiche' }));
+    const notifications = within(closedNotificationPanel());
     await act(async () => {
-      fireEvent.click(notifications.getByRole('button', { name: 'Apri GitHub' }));
+      fireEvent.click(notifications.getByText('Apri GitHub', { selector: 'button > span' }).closest('button')!);
     });
     expect(openUrl).toHaveBeenCalledWith('https://github.com/vimuw/El-Sbobinator/releases/latest');
-    expect(notifications.queryByRole('heading', { name: 'Installazione aggiornamento' })).toBeNull();
+    expect(notifications.queryByText('Installazione aggiornamento', { selector: 'h1, h2, h3, h4, h5, h6' })).toBeNull();
     expect(notifications.queryByText(/Verifica integrità fallita/i)).toBeNull();
     expect(within(updateNotice).getByText(/Verifica integrità fallita/i)).toBeTruthy();
     expect(within(screen.getByRole('region', { name: 'Versione e aggiornamenti' })).queryByText(/Verifica integrità fallita/i)).toBeNull();
@@ -1190,7 +1194,7 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
       expect(screen.queryByRole('heading', { name: 'Rimuovere questo elemento?' })).toBeNull();
     });
 
-    it('names a renamed Recenti transcript by its title in the remove confirmation', async () => {
+    it('removes a Recenti transcript at once, since it stays in the Archivio', async () => {
       vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
       vi.mocked(useQueuePersistence).mockImplementation((_files, _structuralVersion, dispatch) => {
         React.useEffect(() => {
@@ -1206,14 +1210,10 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
       await act(async () => { render(<App />); });
       const card = (await screen.findByText('Anatomia del cuore')).closest('.queue-card') as HTMLElement;
       await act(async () => {
-        fireEvent.click(within(card).getByRole('button', { name: 'Altre opzioni' }));
+        fireEvent.click(within(card).getByRole('button', { name: 'Rimuovi dai Recenti' }));
       });
-      await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'Rimuovi' }));
-      });
-      const dialog = screen.getByRole('alertdialog');
-      expect(within(dialog).getByText(/"Anatomia del cuore" verrà rimossa dai Recenti/)).toBeTruthy();
-      expect(within(dialog).queryByText(/lezione_03\.m4a/)).toBeNull();
+      expect(screen.queryByRole('alertdialog')).toBeNull();
+      await waitFor(() => expect(screen.queryByText('Anatomia del cuore')).toBeNull());
     });
 
     it('handles start and retry queue actions', async () => {

@@ -130,14 +130,14 @@ export function SidebarAccount({ onOpenStorageSettings }: SidebarAccountProps) {
 
       {open && (
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden="true" />
+          <div className="fixed inset-0 z-[var(--z-dismiss-layer)]" onClick={() => setOpen(false)} aria-hidden="true" />
           <motion.div
             role="dialog"
             aria-label="Account Google Drive"
             initial="closed"
             animate="open"
             variants={popoverVariants({ x: isPhone ? 0 : -6, y: isPhone ? 4 : 0, scale: 0.94, blur: 6 })}
-            className="sidebar-account-menu fixed z-50 flex flex-col"
+            className="sidebar-account-menu fixed z-[var(--z-dialog)] flex flex-col"
             style={isPhone
               ? { left: 8, right: 8, bottom: 64, transformOrigin: 'bottom center' }
               : { left: MENU_LEFT, bottom: anchor?.bottom ?? 16, width: 300, transformOrigin: anchor ? `left calc(100% - ${anchor.caret}px)` : 'left bottom' }}

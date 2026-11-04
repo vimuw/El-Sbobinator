@@ -60,7 +60,7 @@ export function WebStorageChoicePrompt({ sessionCount, blocked, onConnectResult 
   return (
     <AnimatePresence>
       {open && (
-        <motion.div exit={{ opacity: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <motion.div exit={{ opacity: 0 }} className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-4">
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="modal-overlay absolute inset-0" />
           <motion.div
             {...modalCard}

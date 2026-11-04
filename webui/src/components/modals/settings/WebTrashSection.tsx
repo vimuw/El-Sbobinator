@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, RotateCcw, Trash2 } from 'lucide-react';
 import type { ArchiveSession } from '../../../bridge';
 import { InlineConfirm, SettingsPanel, StatusBadge } from './SettingsLayout';
+import { readTrash, webStorageSnapshot } from './webStorageSnapshot';
 
 // Web previews with the trash: deleted sbobine wait here 30 days, then go for good (on Drive too).
 
@@ -19,30 +20,38 @@ function daysLeft(trashedAt: string | undefined, now: number): number {
 interface WebTrashSectionProps {
   /** A restore or the emptied trash changed the archive. */
   onArchiveChanged?: () => void;
+  /** The first reading of the trash answered, with the list or an error. */
+  onLoaded?: () => void;
 }
 
-export const WebTrashSection: React.FC<WebTrashSectionProps> = ({ onArchiveChanged }) => {
-  const [sessions, setSessions] = useState<ArchiveSession[] | null>(null);
+export const WebTrashSection: React.FC<WebTrashSectionProps> = ({ onArchiveChanged, onLoaded }) => {
+  // The last list read (also by the prefetch when the settings opened) shows until a fresh one lands.
+  const [sessions, setSessions] = useState<ArchiveSession[] | null>(() => webStorageSnapshot().trash ?? null);
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmEmpty, setConfirmEmpty] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // When the list was read: the days left count from there.
-  const [now, setNow] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
   const api = window.pywebview?.api;
 
   const mountedRef = useRef(true);
+  const onLoadedRef = useRef(onLoaded);
+  onLoadedRef.current = onLoaded;
 
   const load = useCallback(async () => {
-    const result = await window.pywebview?.api?.list_trash?.().catch(() => null);
+    const result = await readTrash();
     if (!mountedRef.current) return;
     setNow(Date.now());
-    if (result?.ok) setSessions(result.sessions ?? []);
-    else setError(result?.error ?? 'Cestino non leggibile.');
+    if ('sessions' in result) setSessions(result.sessions);
+    else setError(result.error);
   }, []);
 
   useEffect(() => {
     mountedRef.current = true;
-    void load();
+    if (webStorageSnapshot().trash) onLoadedRef.current?.();
+    void load().finally(() => {
+      if (mountedRef.current) onLoadedRef.current?.();
+    });
     const timer = setInterval(() => void load(), REFRESH_MS);
     return () => {
       mountedRef.current = false;

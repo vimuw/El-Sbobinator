@@ -100,18 +100,18 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
                     style={{ gridTemplateColumns: `minmax(9rem, 1fr) repeat(${credentials.length}, 2.75rem) 3rem` }}
                   >
                     <div role="row" className="contents">
-                      <span role="columnheader" className="py-2 text-[11px] font-semibold text-[var(--text-secondary)]">Modello</span>
+                      <span role="columnheader" className="py-2 text-caption font-semibold text-[var(--text-secondary)]">Modello</span>
                       {credentials.map((c, idx) => (
                         <span
                           key={c.id || `${c.masked_key}-${idx}`}
                           role="columnheader"
-                          className="py-2 text-center font-mono text-[10px] font-semibold text-[var(--text-secondary)]"
+                          className="py-2 text-center font-mono text-micro font-semibold text-[var(--text-secondary)]"
                           title={c.label || undefined}
                         >
                           {maskedSuffix(c.masked_key)}
                         </span>
                       ))}
-                      <span role="columnheader" className="py-2 text-right text-[11px] font-semibold text-[var(--text-secondary)]">Totale</span>
+                      <span role="columnheader" className="py-2 text-right text-caption font-semibold text-[var(--text-secondary)]">Totale</span>
                     </div>
 
                     {allKnownModels.map(mName => {
@@ -126,13 +126,13 @@ export const QuotasSection: React.FC<QuotasSectionProps> = React.memo(
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-bold text-[var(--text-primary)]">{modelName}</span>
                               {mName === effectivePreferredModel && (
-                                <span className="text-[11px] font-semibold text-[var(--accent-text)] shrink-0">
+                                <span className="text-caption font-semibold text-[var(--accent-text)] shrink-0">
                                   Selezionato
                                 </span>
                               )}
                             </div>
                             {!sharedLimitsLabel && (
-                              <span className="text-[11px] text-[var(--text-secondary)] block">
+                              <span className="text-caption text-[var(--text-secondary)] block">
                                 {limitsLabel(mName)}
                               </span>
                             )}

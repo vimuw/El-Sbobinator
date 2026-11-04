@@ -6,6 +6,7 @@ import { GEMINI_KEY_PATTERN } from '../utils';
 import { getHostCapabilities } from '../hostCapabilities';
 import { BrandLogo } from './BrandLogo';
 import { SetupErrorNotice } from './SetupErrorNotice';
+import { enterTransition } from '../motion';
 
 interface SetupPageProps {
   hasProtectedKey: boolean;
@@ -74,7 +75,7 @@ export function SetupPage({
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, ease: 'easeOut' }}
+      transition={enterTransition()}
       className="w-full max-w-2xl mx-auto"
     >
       {/* Document Header */}

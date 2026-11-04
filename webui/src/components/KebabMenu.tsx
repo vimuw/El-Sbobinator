@@ -122,18 +122,23 @@ export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, 
       const spaceLeft = parentRect.left - 8;
 
       const opensLeft = spaceRight < 220 && spaceLeft >= spaceRight;
+      // A phone has room on neither side: the submenu opens under its item, over the menu.
+      const overlaps = spaceRight < 200 && spaceLeft < 200;
 
       let left: number | undefined;
       let right: number | undefined;
 
-      if (opensLeft) {
+      if (overlaps) {
+        right = Math.max(8, window.innerWidth - parentRect.right);
+      } else if (opensLeft) {
         right = Math.max(8, window.innerWidth - parentRect.left + 4);
       } else {
         left = Math.max(8, parentRect.right + 4);
       }
 
       const maxHeight = Math.min(280, Math.max(120, window.innerHeight - 24));
-      const top = Math.max(8, Math.min(itemRect.top - 4, window.innerHeight - maxHeight - 12));
+      const anchorTop = overlaps ? itemRect.bottom + 4 : itemRect.top - 4;
+      const top = Math.max(8, Math.min(anchorTop, window.innerHeight - maxHeight - 12));
 
       setSubmenuPos({ top, left, right, maxHeight, opensLeft });
     };
@@ -280,7 +285,7 @@ export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, 
           padding: 4,
           background: open ? 'var(--sidebar-active-bg)' : undefined,
           color: open ? 'var(--text-primary)' : 'var(--text-secondary)',
-          borderRadius: 8,
+          borderRadius: 'var(--radius-lg)',
           cursor: 'pointer',
         }}
         aria-label={ariaLabel || 'Altre opzioni'}
@@ -307,7 +312,7 @@ export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, 
                 ...(pos.right !== undefined ? { right: pos.right } : { left: pos.left }),
                 maxHeight: pos.maxHeight,
                 overflowY: 'auto',
-                zIndex: 9999,
+                zIndex: 'var(--z-popover)',
                 minWidth: 210,
               }}
               onClick={e => e.stopPropagation()}
@@ -383,7 +388,7 @@ export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, 
                 ...(submenuPos.right !== undefined ? { right: submenuPos.right } : { left: submenuPos.left }),
                 maxHeight: submenuPos.maxHeight,
                 overflowY: 'auto',
-                zIndex: 10000,
+                zIndex: 'calc(var(--z-popover) + 1)',
                 minWidth: 200,
                 maxWidth: 280,
               }}

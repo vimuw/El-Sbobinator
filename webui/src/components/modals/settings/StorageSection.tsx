@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, FolderInput, FolderOpen, HardDrive, Info, 
 import type { StorageUsagePart } from '../../../bridge';
 import { formatSize } from '../../../utils';
 import { SettingsCallout, SettingsMoreInfo, SettingsPanel, SettingsSectionHeading, StatusBadge } from './SettingsLayout';
+import { enterTransition } from '../../../motion';
 
 interface StorageSectionProps {
   sessionInfo: {
@@ -180,7 +181,7 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
                 initial={{ opacity: 0, y: -6, height: 0 }}
                 animate={{ opacity: 1, y: 0, height: 'auto' }}
                 exit={{ opacity: 0, y: -6, height: 0 }}
-                transition={{ duration: 0.2, ease: 'easeOut' }}
+                transition={enterTransition()}
                 className="overflow-hidden"
               >
                 <div
@@ -209,7 +210,7 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
                       onClick={onDismissCleanupResult}
                       aria-label="Chiudi notifica"
                       title="Chiudi notifica"
-                      className="absolute top-2.5 right-2.5 p-1 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer shrink-0"
+                      className="absolute top-2.5 right-2.5 flex items-center justify-center w-[var(--icon-button-xs)] h-[var(--icon-button-xs)] rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer shrink-0"
                     >
                       <X className="w-4 h-4 shrink-0" />
                     </button>
@@ -306,8 +307,8 @@ function WebSpacePanel({ sessionInfo, isLoadingSessionInfo, drive = 'unavailable
 
 type WebSessionInfo = NonNullable<StorageSectionProps['sessionInfo']>;
 
-// --processing-text equals the accent in the dark theme, so the second colour is the plain text one.
-const PART_COLORS = ['var(--accent-text)', 'var(--text-primary)', 'var(--warning-text)', 'var(--text-muted)', 'var(--success-text)'];
+// Colours of their own (theme.css): the text colours read bright in the dark theme but muddy in the light one.
+const PART_COLORS = ['var(--storage-part-1)', 'var(--storage-part-2)', 'var(--storage-part-3)', 'var(--storage-part-4)', 'var(--storage-part-5)'];
 const partColor = (index: number) => PART_COLORS[index % PART_COLORS.length];
 
 function WebUsageSummary({ info }: { info: WebSessionInfo }) {
@@ -348,7 +349,7 @@ function WebUsageSummary({ info }: { info: WebSessionInfo }) {
         </p>
       )}
       {parts.length > 0 && info.browser_estimate_bytes !== undefined && (
-        <p data-testid="storage-browser-estimate" className="text-[11px] text-[var(--text-muted)]">
+        <p data-testid="storage-browser-estimate" className="text-caption text-[var(--text-muted)]">
           Stima del browser: {formatSize(info.browser_estimate_bytes)}. Su Safari può non contare gli audio.
         </p>
       )}

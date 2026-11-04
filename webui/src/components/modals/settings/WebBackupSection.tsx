@@ -2,18 +2,13 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Archive, Download, Loader2, Upload } from 'lucide-react';
 import { formatSize } from '../../../utils';
 import { SettingsMoreInfo, SettingsPanel, SettingsRow } from './SettingsLayout';
+import { readBackupFigures, webStorageSnapshot, type WebBackupFigures } from './webStorageSnapshot';
 
 // Web build only: backup of the sbobine kept in this browser. Preparing and saving are two taps:
 // the zip is built asynchronously, then a real <a download> link saves it, so Safari on iPad sees
 // the download inside a tap.
 
-interface BackupInfo {
-  sessions: number;
-  textBytes: number;
-  audioBytes: number;
-  audioFiles: number;
-  lastBackupAt: string | null;
-}
+type BackupInfo = WebBackupFigures;
 
 interface PreparedBackup {
   url: string;
@@ -35,10 +30,13 @@ interface WebBackupSectionProps {
   onArchiveImported?: () => void;
   /** Rows after the backup, e.g. "Esporta nel mio Drive". */
   children?: React.ReactNode;
+  /** The first reading of the figures answered, with them or without. */
+  onLoaded?: () => void;
 }
 
-export const WebBackupSection: React.FC<WebBackupSectionProps> = ({ onArchiveImported, children }) => {
-  const [info, setInfo] = useState<BackupInfo | null>(null);
+export const WebBackupSection: React.FC<WebBackupSectionProps> = ({ onArchiveImported, children, onLoaded }) => {
+  // The last figures read (also by the prefetch when the settings opened) show until fresh ones land.
+  const [info, setInfo] = useState<BackupInfo | null>(() => webStorageSnapshot().backup ?? null);
   const [includeAudio, setIncludeAudio] = useState(true);
   const [progress, setProgress] = useState<number | null>(null);
   const [prepared, setPrepared] = useState<PreparedBackup | null>(null);
@@ -47,17 +45,12 @@ export const WebBackupSection: React.FC<WebBackupSectionProps> = ({ onArchiveImp
   const inputRef = useRef<HTMLInputElement>(null);
   const mountedRef = useRef(true);
   const preparedUrlRef = useRef<string | null>(null);
+  const onLoadedRef = useRef(onLoaded);
+  onLoadedRef.current = onLoaded;
 
   const refresh = useCallback(async () => {
-    const result = await window.pywebview?.api?.get_web_backup_info?.().catch(() => null);
-    if (!mountedRef.current || !result?.ok) return;
-    setInfo({
-      sessions: result.sessions ?? 0,
-      textBytes: result.text_bytes ?? 0,
-      audioBytes: result.audio_bytes ?? 0,
-      audioFiles: result.audio_files ?? 0,
-      lastBackupAt: result.last_backup_at ?? null,
-    });
+    const figures = await readBackupFigures();
+    if (mountedRef.current && figures) setInfo(figures);
   }, []);
 
   const dropPrepared = useCallback(() => {
@@ -68,7 +61,10 @@ export const WebBackupSection: React.FC<WebBackupSectionProps> = ({ onArchiveImp
 
   useEffect(() => {
     mountedRef.current = true;
-    void refresh();
+    if (webStorageSnapshot().backup) onLoadedRef.current?.();
+    void refresh().finally(() => {
+      if (mountedRef.current) onLoadedRef.current?.();
+    });
     return () => {
       mountedRef.current = false;
       if (preparedUrlRef.current) URL.revokeObjectURL(preparedUrlRef.current);
@@ -98,7 +94,12 @@ export const WebBackupSection: React.FC<WebBackupSectionProps> = ({ onArchiveImp
   const handleSaved = async () => {
     const result = await window.pywebview?.api?.record_web_backup_download?.().catch(() => null);
     if (mountedRef.current && result?.last_backup_at) {
-      setInfo(current => (current ? { ...current, lastBackupAt: result.last_backup_at ?? null } : current));
+      setInfo(current => {
+        if (!current) return current;
+        const next = { ...current, lastBackupAt: result.last_backup_at ?? null };
+        webStorageSnapshot().backup = next;
+        return next;
+      });
     }
   };
 
@@ -139,7 +140,9 @@ export const WebBackupSection: React.FC<WebBackupSectionProps> = ({ onArchiveImp
         title="Includi gli audio delle lezioni"
         description={!info ? '…' : info.audioFiles === 0 ? 'Nessun audio salvato in questo browser' : `${info.audioFiles} file, ${formatSize(info.audioBytes)}`}
       >
+        {/* Remounted when the figures arrive: the switch shows up in its state instead of sliding into it. */}
         <button
+          key={info ? 'known' : 'loading'}
           type="button"
           role="switch"
           aria-checked={audioIncluded}
@@ -149,12 +152,12 @@ export const WebBackupSection: React.FC<WebBackupSectionProps> = ({ onArchiveImp
             setIncludeAudio(value => !value);
             dropPrepared();
           }}
-          className={`touch-hit relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)] disabled:opacity-50 disabled:cursor-not-allowed ${
-            audioIncluded ? 'bg-[var(--accent-bg)]' : 'bg-[var(--bg-input)] ring-1 ring-[var(--border-strong)]'
+          className={`touch-hit relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed ${
+            audioIncluded ? 'bg-[var(--accent-bg)]' : 'bg-[var(--border-default)]'
           }`}
         >
           <span
-            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-[var(--shadow-xs)] ring-0 transition duration-200 ease-in-out ${
               audioIncluded ? 'translate-x-5' : 'translate-x-0'
             }`}
           />

@@ -286,6 +286,18 @@ describe('ArchivePage', () => {
     expect(screen.getByText('Lezione Disponibile')).toBeTruthy();
   });
 
+  it('keeps one "Aggiungi lezioni" and no search bar in an empty collection', () => {
+    const folder: ArchiveFolder = { id: 'f1', name: 'Triade', color: '#4D96FF', session_dirs: [] };
+    renderArchive({ sessions: [makeSession('s1'), makeSession('s2')], folders: [folder] });
+
+    fireEvent.click(screen.getAllByText('Triade')[0]);
+
+    expect(screen.getByText('Nessuna sbobina in questa raccolta.')).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: /Aggiungi lezioni/ })).toHaveLength(1);
+    expect(screen.getByText(/Usa «Aggiungi lezioni» in alto/)).toBeTruthy();
+    expect(screen.queryByPlaceholderText('Cerca per nome...')).toBeNull();
+  });
+
   it('renders the last opened/modified sbobina mini section and triggers preview on click', () => {
     const onPreview = vi.fn();
     const s1 = {

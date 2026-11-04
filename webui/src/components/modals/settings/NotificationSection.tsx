@@ -30,12 +30,12 @@ export const NotificationSection: React.FC<NotificationSectionProps> = React.mem
         onClick={() => onChange(!notificationsEnabled)}
         disabled={disabled}
         aria-label="Attiva o disattiva notifiche di sistema"
-        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)] disabled:opacity-50 disabled:cursor-not-allowed ${
-          notificationsEnabled ? 'bg-[var(--accent-bg)]' : 'bg-[var(--bg-input)] ring-1 ring-[var(--border-strong)]'
+        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed ${
+          notificationsEnabled ? 'bg-[var(--accent-bg)]' : 'bg-[var(--border-default)]'
         }`}
       >
         <span
-          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-[var(--shadow-xs)] ring-0 transition duration-200 ease-in-out ${
             notificationsEnabled ? 'translate-x-5' : 'translate-x-0'
           }`}
         />

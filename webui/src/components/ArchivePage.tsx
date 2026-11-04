@@ -9,6 +9,7 @@ import type { ArchiveFolder, ArchiveSession } from '../bridge';
 import { loadAllEditorSessions } from '../editorSessions';
 import { formatRelativeTime, normalizeSessionPath, shortModelName } from '../utils';
 import { FolderIndicatorChip } from './FolderChip';
+import { MiddleTruncate } from './MiddleTruncate';
 import { ShareExportModal } from './modals/ShareExportModal';
 import { getHostCapabilities } from '../hostCapabilities';
 import { ArchivePageTitle, ArchiveSectionHeading } from './archive/ArchiveLayout';
@@ -51,6 +52,7 @@ export {
   DEFAULT_FOLDER_COLOR,
   FOLDER_COLORS,
 } from './archive/FolderModals';
+import { DURATION } from '../motion';
 export { ArchiveSelectionBar } from './archive/ArchiveSelectionBar';
 export { FullTextResultList } from './archive/FullTextResults';
 
@@ -399,7 +401,7 @@ export function ArchivePage({
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold truncate tracking-tight" style={{ color: 'var(--text-primary)' }}>
-                  {lastOpenedOrModifiedSessionData.session.name}
+                  <MiddleTruncate text={lastOpenedOrModifiedSessionData.session.name} />
                 </p>
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-0.5 text-xs min-w-0" style={{ color: 'var(--text-muted)' }}>
                   {lastOpenedOrModifiedSessionData.isOpened ? (
@@ -467,7 +469,7 @@ export function ArchivePage({
                     initial={{ opacity: 0, scale: 0.7 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.7 }}
-                    transition={{ duration: 0.1 }}
+                    transition={{ duration: DURATION.fast }}
                     onClick={() => { setSearch(''); searchInputRef.current?.focus(); }}
                     className="search-pill-clear"
                     aria-label="Cancella ricerca"
@@ -481,7 +483,7 @@ export function ArchivePage({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={{ duration: 0.12 }}
+                    transition={{ duration: DURATION.fast }}
                   >
                     <kbd>/</kbd>
                   </motion.span>

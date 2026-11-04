@@ -1,11 +1,11 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDriveApi } from '../../../web/drive/driveApi';
 import { createFakeAuth, createFakeDrive } from '../../../web/drive/fakeDrive';
 import { createWebPywebviewApi } from '../../../web/webHost';
 import { WebDrivePage } from './WebDrivePage';
-import { WebStoragePage } from './WebStoragePage';
+import { REVEAL_TIMEOUT_MS, WebStoragePage } from './WebStoragePage';
 
 // Impostazioni → Archiviazione of the web build, and Impostazioni → Sincronizzazione beside it.
 
@@ -85,5 +85,80 @@ describe('WebStoragePage', () => {
     expect(details.open).toBe(true);
     // The warning keeps the short reason in view and folds the Safari detail.
     expect(screen.getByTestId('storage-persist-warning').querySelector('details')!.textContent).toContain('circa 7 giorni');
+  });
+
+  describe('first load', () => {
+    function deferred<T>() {
+      let resolve!: (value: T) => void;
+      const promise = new Promise<T>(done => { resolve = done; });
+      return { promise, resolve };
+    }
+
+    // Each section asks the host on its own: the answers are held here and released one by one.
+    function setupPending() {
+      const drive = deferred<{ connected: boolean }>();
+      const backup = deferred<Record<string, unknown>>();
+      const trash = deferred<{ ok: boolean; sessions: [] }>();
+      window.pywebview = {
+        api: {
+          get_drive_status: vi.fn(() => drive.promise),
+          get_web_backup_info: vi.fn(() => backup.promise),
+          list_trash: vi.fn(() => trash.promise),
+        } as never,
+      };
+      return { drive, backup, trash };
+    }
+
+    const page = () => screen.getByTestId('web-storage-page');
+    const backupInfo = { ok: true, sessions: 3, text_bytes: 2048, audio_bytes: 5 * 1024 * 1024, audio_files: 2, last_backup_at: null };
+
+    it('shows the page at once, when space, Drive, backup and trash have all answered, and keeps it shown', async () => {
+      const pending = setupPending();
+      const view = render(<WebStoragePage sessionInfo={null} isLoadingSessionInfo onArchiveChanged={() => {}} />);
+      expect(page().dataset.revealed).toBe('false');
+      expect(page().getAttribute('aria-busy')).toBe('true');
+
+      view.rerender(<WebStoragePage sessionInfo={sessionInfo} isLoadingSessionInfo={false} onArchiveChanged={() => {}} />);
+      await act(async () => pending.backup.resolve(backupInfo));
+      await act(async () => pending.trash.resolve({ ok: true, sessions: [] }));
+      // The badge would still flip from "Non protette" to "Salvate anche su Drive".
+      expect(page().dataset.revealed).toBe('false');
+
+      await act(async () => pending.drive.resolve({ connected: true }));
+      expect(page().dataset.revealed).toBe('true');
+      expect(screen.getByText('Salvate anche su Drive')).toBeTruthy();
+
+      // A restore reads the space again: the page stays, with its loading line.
+      view.rerender(<WebStoragePage sessionInfo={null} isLoadingSessionInfo onArchiveChanged={() => {}} />);
+      expect(page().dataset.revealed).toBe('true');
+    });
+
+    it('does not hold the page hidden past the timeout when a section never answers', () => {
+      vi.useFakeTimers();
+      try {
+        setupPending();
+        render(<WebStoragePage sessionInfo={sessionInfo} isLoadingSessionInfo={false} onArchiveChanged={() => {}} />);
+        act(() => vi.advanceTimersByTime(REVEAL_TIMEOUT_MS - 1));
+        expect(page().dataset.revealed).toBe('false');
+        act(() => vi.advanceTimersByTime(1));
+        expect(page().dataset.revealed).toBe('true');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('draws the audio switch already on when the backup figures arrive, instead of sliding it on', async () => {
+      const pending = setupPending();
+      render(<WebStoragePage sessionInfo={sessionInfo} isLoadingSessionInfo={false} onArchiveChanged={() => {}} />);
+      const loadingSwitch = screen.getByRole('switch', { name: 'Includi gli audio delle lezioni nel backup' });
+      expect(loadingSwitch.getAttribute('aria-checked')).toBe('false');
+
+      await act(async () => pending.backup.resolve(backupInfo));
+      const knownSwitch = screen.getByRole('switch', { name: 'Includi gli audio delle lezioni nel backup' });
+      expect(knownSwitch.getAttribute('aria-checked')).toBe('true');
+      // A new element: its CSS transition has no "off" state to start from.
+      expect(knownSwitch).not.toBe(loadingSwitch);
+      expect(loadingSwitch.isConnected).toBe(false);
+    });
   });
 });

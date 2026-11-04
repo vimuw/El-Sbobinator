@@ -38,7 +38,7 @@ export function DuplicateFileModal({ prompt, onDismiss, onAddAgain }: DuplicateF
       {prompt && (
         <motion.div
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+          className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-4"
         >
           <motion.div
             initial={{ opacity: 0 }}

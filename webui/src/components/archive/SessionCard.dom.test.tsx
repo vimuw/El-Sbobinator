@@ -364,3 +364,47 @@ describe('SessionCard on hosts without local folders', () => {
     }
   });
 });
+
+describe('SessionCard meta line', () => {
+  const opened: ArchiveSession = { ...mockWarningSession, completed_at_iso: new Date(Date.now() - 4 * 3_600_000).toISOString(), last_opened_at_iso: new Date(Date.now() - 23 * 60_000).toISOString() };
+  const renderCard = () => render(
+    <DraggableSessionCard
+      session={opened}
+      allFolders={[]}
+      onAssignToFolder={vi.fn()}
+      onRemoveFromFolder={vi.fn()}
+      onPreview={vi.fn()}
+      onOpenFile={vi.fn()}
+      onDeleteSession={vi.fn()}
+    />,
+  );
+
+  it('shows both times and every warning on wider screens, wrapping when they do not fit', () => {
+    const { container } = renderCard();
+    const meta = container.querySelector('.session-card-meta') as HTMLElement;
+    expect(meta.classList.contains('flex-wrap')).toBe(true);
+    expect(meta.textContent).toContain('4 ore fa');
+    expect(meta.textContent).toContain('Aperto 23 minuti fa');
+    expect(meta.textContent).toContain('Completata con avvisi');
+    expect(meta.textContent).toContain('1 blocco non revisionato');
+  });
+
+  it('keeps one line on a phone, so every card has the same height, and never cuts the time', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(max-width: 640px)' }));
+    try {
+      const { container } = renderCard();
+      const meta = container.querySelector('.session-card-meta') as HTMLElement;
+      expect(meta.classList.contains('flex-nowrap')).toBe(true);
+      // Only the latest activity, first and whole; the model and the warning take the ellipsis.
+      expect(meta.textContent).not.toContain('4 ore fa');
+      const time = meta.firstElementChild as HTMLElement;
+      expect(time.textContent).toBe('Aperto 23 minuti fa');
+      expect(time.classList.contains('shrink-0')).toBe(true);
+      expect(screen.getByText('2.5-flash').classList.contains('truncate')).toBe(true);
+      expect(meta.textContent).not.toContain('Completata con avvisi');
+      expect(screen.getByText('1 blocco non revisionato').classList.contains('truncate')).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

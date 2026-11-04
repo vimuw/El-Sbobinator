@@ -9,6 +9,7 @@ import { ModelSection } from './settings/ModelSection';
 import { NotificationSection } from './settings/NotificationSection';
 import { StorageSection } from './settings/StorageSection';
 import { WebStoragePage } from './settings/WebStoragePage';
+import { prefetchWebStorage } from './settings/webStorageSnapshot';
 import { WebDrivePage } from './settings/WebDrivePage';
 import { ExternalLinkIcon } from '../ExternalLinkIcon';
 import { DiagnosticsSection } from './settings/DiagnosticsSection';
@@ -23,7 +24,7 @@ import { credentialStorageWarning } from '../../credentialStorage';
 import { getHostCapabilities } from '../../hostCapabilities';
 import { APP_VERSION, WEB_PREVIEW_BUILD, WEB_PRIVACY_PATH } from '../../branding';
 import { STORAGE_KEYS } from '../../storageKeys';
-import { modalCard } from '../../motion';
+import { DURATION, modalCard } from '../../motion';
 
 export type { SettingsUpdateInstallState };
 
@@ -341,10 +342,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         void fetchApiUsage();
       }
       if (activeTab === 'storage') {
-        void fetchSessionStorageInfo();
+        void fetchSessionStorageInfo({ reuse: true });
       }
     }
   }, [isOpen, activeTab, fetchApiUsage, fetchSessionStorageInfo]);
+
+  // Web build: Archiviazione's figures come from reading this browser's whole archive. They are read
+  // as soon as the settings open, so the tab shows at once like the others instead of waiting for them.
+  const isWebHost = hostCapabilities.kind === 'web';
+  useEffect(() => {
+    if (!isOpen || !isWebHost) return;
+    fetchSessionStorageInfo({ reuse: true });
+    prefetchWebStorage();
+  }, [isOpen, isWebHost, fetchSessionStorageInfo]);
 
   // A Drive sync changed the archive (a sbobina restored or trashed on another device) while
   // Archiviazione is open: its figures follow, as the trash list below already does.
@@ -574,12 +584,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     <>
       <AnimatePresence>
         {isOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[var(--z-dialog)] flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
+              transition={{ duration: DURATION.fast }}
               className="modal-overlay absolute inset-0"
             />
 

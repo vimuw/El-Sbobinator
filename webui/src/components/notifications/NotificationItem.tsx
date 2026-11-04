@@ -154,7 +154,7 @@ export function NotificationItem({
             {notification.title}
           </h4>
           <span
-            className="text-[9px] font-medium px-1.5 py-0.2 rounded-full shrink-0"
+            className="notification-category-badge text-micro font-medium px-1.5 py-0.2 rounded-full shrink-0"
             style={getCategoryBadgeStyle(notification.category, notification.type)}
           >
             {getCategoryLabel(notification.category)}
@@ -168,7 +168,7 @@ export function NotificationItem({
 
         {/* Inline error feedback if action failed */}
         {errorText && (
-          <div className="flex items-center gap-1 text-[10px] mt-0.5" style={{ color: 'var(--error-text)' }}>
+          <div className="flex items-center gap-1 text-micro mt-0.5" style={{ color: 'var(--error-text)' }}>
             <AlertCircle className="w-3 h-3 shrink-0" />
             <span>
               {errorText}
@@ -178,13 +178,13 @@ export function NotificationItem({
         )}
 
         {/* Bottom line: Action link on Left, Timestamp aligned on Right */}
-        <div className="flex items-center justify-between mt-1 text-[11px] gap-2">
+        <div className="flex items-center justify-between mt-1 text-caption gap-2">
           {notification.action ? (
             <button
               type="button"
               onClick={handleAction}
               disabled={isLoading}
-              className="text-[11px] font-medium inline-flex items-center gap-1 hover:underline transition-all"
+              className="text-caption font-medium inline-flex items-center gap-1 hover:underline transition-all"
               style={{
                 color: actionColor,
                 background: 'none',
@@ -211,7 +211,7 @@ export function NotificationItem({
           )}
 
           {/* Timestamp aligned on the right */}
-          <span className="text-[11px] shrink-0 ml-auto" style={{ color: 'var(--text-faint)' }}>
+          <span className="text-caption shrink-0 ml-auto" style={{ color: 'var(--text-faint)' }}>
             {formatRelativeTime(notification.timestamp)}
           </span>
         </div>
@@ -225,7 +225,7 @@ export function NotificationItem({
           onDelete(notification.id);
         }}
         disabled={isLoading}
-        className="absolute top-2.5 right-2.5 p-1 rounded-full opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 hover:bg-neutral-500/15 transition-all text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+        className="absolute top-2.5 right-2.5 p-1 rounded-full opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 hover:bg-[var(--bg-hover)] transition-all text-[var(--text-muted)] hover:text-[var(--text-primary)]"
         title="Archivia"
         aria-label="Archivia notifica"
         style={{ cursor: isLoading ? 'default' : 'pointer' }}

@@ -95,6 +95,12 @@ describe('WebDriveSection', () => {
     // The way out sits in the account box, beside "Sincronizza ora"; the question opens under the
     // box and nothing happens before an answer.
     const account = screen.getByTestId('web-drive-account');
+    // Avatar and text form one block that keeps its width; the actions wrap under it on a phone
+    // instead of squeezing the text to a word per line.
+    const identity = within(account).getByTestId('web-drive-identity');
+    expect(identity.className).toContain('flex-[1_1_14rem]');
+    expect(identity.contains(screen.getByTestId('web-drive-last-sync'))).toBe(true);
+    expect(identity.contains(within(account).getByRole('button', { name: 'Disconnetti questo browser' }))).toBe(false);
     fireEvent.click(within(account).getByRole('button', { name: 'Disconnetti questo browser' }));
     expect(login.disconnects).toHaveLength(0);
     // Under the box: when it syncs, then the question.

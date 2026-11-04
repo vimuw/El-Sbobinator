@@ -411,7 +411,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
     if (rowId === nextRowId) {
       return (
         <span
-          className="text-[11px] text-[var(--text-secondary)]"
+          className="text-caption text-[var(--text-secondary)]"
           title={`Subentra quando la chiave attiva esaurisce la quota di ${preferredModelName}`}
         >
           Prossima
@@ -428,7 +428,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
     const others = exhausted.filter(m => m !== effectivePreferredModel);
     if (others.length === 0) return null;
     return (
-      <span className="block mt-0.5 text-[11px] text-[var(--text-secondary)] leading-snug">
+      <span className="block mt-0.5 text-caption text-[var(--text-secondary)] leading-snug">
         {exhausted.includes(effectivePreferredModel) ? 'Esaurita anche su' : 'Esaurita su'}{' '}
         {others.map(getModelDisplayName).join(', ')}
       </span>
@@ -535,7 +535,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
                 <span className="font-bold text-[var(--text-primary)]">Principale</span>
 
                 <span
-                  className="font-mono text-[11px] text-[var(--text-secondary)] select-all"
+                  className="font-mono text-caption text-[var(--text-secondary)] select-all"
                   title="Chiave protetta"
                 >
                   {primaryMaskedDisplay}
@@ -543,7 +543,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
 
                 {hasProtectedKey && !apiKey && (
                   <span
-                    className="text-[11px] font-medium text-[var(--success-text)] inline-flex items-center gap-1"
+                    className="text-caption font-medium text-[var(--success-text)] inline-flex items-center gap-1"
                     title="Credenziale cifrata dal sistema operativo (DPAPI su Windows, Keychain su macOS)"
                   >
                     <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
@@ -624,7 +624,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
                   <span className="font-bold text-[var(--text-primary)]">{`Riserva ${idx + 1}`}</span>
 
                   <span
-                    className="font-mono text-[11px] text-[var(--text-secondary)] select-all"
+                    className="font-mono text-caption text-[var(--text-secondary)] select-all"
                     title="Chiave protetta"
                   >
                     {masked}

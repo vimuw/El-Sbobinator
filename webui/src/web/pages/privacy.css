@@ -28,10 +28,14 @@ a:hover {
   color: var(--accent-bg-hover);
 }
 
+/* The app's one focus ring (theme.css). */
+:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
 a:focus-visible {
-  outline: none;
   border-radius: 4px;
-  box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
 .site-header,
@@ -79,9 +83,7 @@ main {
 }
 
 .brand:focus-visible {
-  outline: none;
   border-radius: 8px;
-  box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
 .brand img {

@@ -72,6 +72,10 @@ export function useSettingsStorage({
   const isMountedRef = useRef(true);
   const isOpenRef = useRef(isOpen);
   const sessionInfoReqIdRef = useRef(0);
+  // The reading in flight, if any: a tab entry joins it instead of starting the count again.
+  const pendingSessionInfoReqRef = useRef<number | null>(null);
+  const sessionInfoRef = useRef<SessionStorageInfo | null>(null);
+  sessionInfoRef.current = sessionInfo;
   const moveTimerRef = useRef<NodeJS.Timeout | null>(null);
   const cleanupDismissTimerRef = useRef<NodeJS.Timeout | null>(null);
   const pollMoveStatusRef = useRef<() => Promise<void>>(() => Promise.resolve());
@@ -107,17 +111,22 @@ export function useSettingsStorage({
     };
   }, []);
 
-  const fetchSessionStorageInfo = useCallback((options?: { quiet?: boolean }) => {
+  const fetchSessionStorageInfo = useCallback((options?: { quiet?: boolean; reuse?: boolean }) => {
     if (!window.pywebview?.api?.get_session_storage_info) return;
+    // Reuse: opening the settings or the tab. A reading already in flight will answer it, and
+    // figures read before stay in view until the new ones arrive, so the page opens at once.
+    if (options?.reuse && pendingSessionInfoReqRef.current === sessionInfoReqIdRef.current) return;
     const reqId = ++sessionInfoReqIdRef.current;
+    pendingSessionInfoReqRef.current = reqId;
     // Quiet: the archive changed under an open page, whose figures stay until the new ones arrive.
-    if (!options?.quiet) {
+    if (!options?.quiet && !(options?.reuse && sessionInfoRef.current)) {
       setIsLoadingSessionInfo(true);
       setSessionInfo(null);
     }
     try {
       const p = window.pywebview.api.get_session_storage_info();
       if (!p || typeof p.then !== 'function') {
+        pendingSessionInfoReqRef.current = null;
         return;
       }
       p.then((res) => {
@@ -128,11 +137,13 @@ export function useSettingsStorage({
       })
       .catch(() => {})
       .finally(() => {
+        if (pendingSessionInfoReqRef.current === reqId) pendingSessionInfoReqRef.current = null;
         if (isOpenRef.current && isMountedRef.current && reqId === sessionInfoReqIdRef.current) {
           setIsLoadingSessionInfo(false);
         }
       });
     } catch {
+      pendingSessionInfoReqRef.current = null;
       setIsLoadingSessionInfo(false);
     }
   }, []);
@@ -196,7 +207,7 @@ export function useSettingsStorage({
     let aborted = false;
 
     if (activeTab === 'storage' || activeTab === 'models' || activeTab === 'advanced') {
-      fetchSessionStorageInfo();
+      fetchSessionStorageInfo({ reuse: true });
     }
 
 

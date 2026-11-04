@@ -287,7 +287,7 @@ def build_missing_webview2_html() -> str:
 
 
 def get_boot_bg_color() -> str:
-    """Native background matching the HTML boot skeleton and CSS base (no flash)."""
+    """Native background matching the HTML boot background and CSS base (no flash)."""
     # Priority 1: explicit in-app preference (mirrors localStorage)
     try:
         from el_sbobinator.services.config_service import THEME_PREF_FILE

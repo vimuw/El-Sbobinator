@@ -55,6 +55,51 @@ describe('NotificationDropdown component', () => {
     expect(container?.className).toContain('pointer-events-none');
   });
 
+  it('keeps the closed panel out of the Tab order and away from screen readers', async () => {
+    // Closed at opacity 0, its buttons still took Tab focus and screen readers still read it.
+    const props = {
+      onClose: vi.fn(),
+      notifications: mockNotifications,
+      onMarkAsRead: vi.fn(),
+      onMarkAllAsRead: vi.fn(),
+      onDelete: vi.fn(),
+    };
+    const { rerender } = render(<NotificationDropdown isOpen={false} {...props} />);
+    const panel = () => screen.getByText('Notifiche').closest<HTMLElement>('[role="dialog"]')!;
+    expect(panel().hasAttribute('inert')).toBe(true);
+    expect(panel().style.visibility).toBe('hidden');
+    expect(screen.queryByRole('dialog', { name: 'Notifiche' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Segna come già lette' })).toBeNull();
+
+    rerender(<NotificationDropdown isOpen {...props} />);
+    expect(panel().hasAttribute('inert')).toBe(false);
+    expect(panel().style.visibility).not.toBe('hidden');
+    expect(screen.getByRole('dialog', { name: 'Notifiche' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Segna come già lette' })).toBeTruthy();
+
+    // Closing takes it out at once; it hides only once the exit has played.
+    rerender(<NotificationDropdown isOpen={false} {...props} />);
+    expect(panel().hasAttribute('inert')).toBe(true);
+    await waitFor(() => expect(panel().style.visibility).toBe('hidden'));
+  });
+
+  it('closes on Escape and gives focus back to the button that opened it', () => {
+    // Esc did nothing: only a click outside closed the panel.
+    const onClose = vi.fn();
+    const props = { onClose, notifications: mockNotifications, onMarkAsRead: vi.fn(), onMarkAllAsRead: vi.fn(), onDelete: vi.fn() };
+    const { rerender } = render(<><button type="button">Apri notifiche</button><NotificationDropdown isOpen={false} {...props} /></>);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+
+    const bell = screen.getByRole('button', { name: 'Apri notifiche' });
+    bell.focus();
+    rerender(<><button type="button">Apri notifiche</button><NotificationDropdown isOpen {...props} /></>);
+    screen.getByRole('button', { name: 'Segna come già lette' }).focus();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(document.activeElement).toBe(bell);
+  });
+
   it('renders notifications, unread badge, and handles tab switching', async () => {
     const handleMarkAsRead = vi.fn();
     const handleNotificationClick = vi.fn();

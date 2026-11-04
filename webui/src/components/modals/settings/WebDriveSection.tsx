@@ -120,21 +120,25 @@ export const WebDriveSection: React.FC<{ drive: DriveController }> = ({ drive })
       description="Le sbobine di questo browser si sincronizzano da sole con il tuo Drive."
       badge={<StatusBadge tone={HEALTH_TONE[health]}>{DRIVE_HEALTH_LABEL[health]}</StatusBadge>}
     >
-      {/* The account with its two actions: the daily one, then the way out, quieter. */}
+      {/* The account with its two actions: the daily one, then the way out, quieter. The avatar
+          stays beside the text, which keeps at least 14rem: when the actions don't fit next to it
+          (phone, tablet) they wrap under it, on the right. */}
       <div data-testid="web-drive-account" className="flex flex-wrap items-center gap-3 p-2.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-default)]">
-        <DriveAvatar email={status?.email ?? null} />
-        <div className="min-w-0 flex-1">
-          <p data-testid="web-drive-status" className="text-sm font-semibold text-[var(--text-primary)] truncate">
-            {`Collegato come ${status?.email ?? 'account Google'}`}
-          </p>
-          {/* The one line that asks for something: in the warning colour, saying what is on hold. */}
-          <p data-testid="web-drive-last-sync" className={`text-xs ${status?.needs_reconnect ? 'font-medium text-[var(--warning-text)]' : 'text-[var(--text-secondary)]'}`}>
-            {status?.needs_reconnect
-              ? 'Accesso a Google scaduto: le modifiche restano in questo browser e non vanno su Drive finché non riconnetti.'
-              : status?.syncing || busy === 'sync' ? 'Sincronizzazione in corso…' : formatLastSync(status?.last_sync_at ?? null)}
-          </p>
+        <div data-testid="web-drive-identity" className="flex items-center gap-3 min-w-0 flex-[1_1_14rem]">
+          <DriveAvatar email={status?.email ?? null} />
+          <div className="min-w-0 flex-1">
+            <p data-testid="web-drive-status" className="text-sm font-semibold text-[var(--text-primary)] truncate">
+              {`Collegato come ${status?.email ?? 'account Google'}`}
+            </p>
+            {/* The one line that asks for something: in the warning colour, saying what is on hold. */}
+            <p data-testid="web-drive-last-sync" className={`text-xs ${status?.needs_reconnect ? 'font-medium text-[var(--warning-text)]' : 'text-[var(--text-secondary)]'}`}>
+              {status?.needs_reconnect
+                ? 'Accesso a Google scaduto: le modifiche restano in questo browser e non vanno su Drive finché non riconnetti.'
+                : status?.syncing || busy === 'sync' ? 'Sincronizzazione in corso…' : formatLastSync(status?.last_sync_at ?? null)}
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 ml-auto">
           {status?.needs_reconnect ? (
             <button type="button" onClick={connect} disabled={busy !== null} className="app-button-secondary is-settings-action">
               {busy === 'connect' ? spinner : <RefreshCw className="w-4 h-4" />}
