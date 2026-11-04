@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { motion, useAnimationControls } from 'motion/react';
 import './BrandLogo.css';
+import { enterTransition } from '../motion';
 
 // The app ignores Windows "Riduci animazioni" everywhere (see MotionConfig in App.tsx),
 // so the mascot does not consult prefers-reduced-motion either.
@@ -99,7 +100,7 @@ export function BrandLogo({
       onClick={onClick ?? greet}
       whileHover={{ rotate: -5, y: -1 }}
       whileTap={{ scale: 0.95 }}
-      transition={{ duration: 0.18, ease: 'easeOut' }}
+      transition={enterTransition()}
     >
       <motion.img
         src="./icon.png"

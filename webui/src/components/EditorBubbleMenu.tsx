@@ -171,7 +171,7 @@ export const EditorBubbleMenu: React.FC<EditorBubbleMenuProps> = ({ editor, isCo
         top: coords.top,
         left: coords.left,
         transform: 'translateX(-50%)',
-        zIndex: 9999,
+        zIndex: 'var(--z-popover)',
         pointerEvents: 'auto',
       }}
     >
@@ -305,7 +305,7 @@ export const EditorBubbleMenu: React.FC<EditorBubbleMenuProps> = ({ editor, isCo
             position: 'absolute',
             top: 44,
             left: 0,
-            zIndex: 9999,
+            zIndex: 'var(--z-popover)',
           }}
         >
           <input

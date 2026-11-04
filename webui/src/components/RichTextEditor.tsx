@@ -53,6 +53,10 @@ interface RichTextEditorProps {
   onZoomChange?: (zoomLevel: number) => void;
   /** Height in px of chrome floating over the bottom of the page (the player dock). */
   bottomInset?: number;
+  /** Each change opens find and replace once (the phone header menu). */
+  findRequest?: number;
+  /** Phone: the header's "…" menu offers the zoom, so the toolbar leaves it out. */
+  zoomInHeaderMenu?: boolean;
 }
 
 export function RichTextEditor({
@@ -70,6 +74,8 @@ export function RichTextEditor({
   zoomLevel,
   onZoomChange,
   bottomInset = 0,
+  findRequest = 0,
+  zoomInHeaderMenu = false,
 }: RichTextEditorProps) {
   const bottomInsetRef = useRef(bottomInset);
   useEffect(() => { bottomInsetRef.current = bottomInset; }, [bottomInset]);
@@ -84,6 +90,13 @@ export function RichTextEditor({
   const [findFocusTrigger, setFindFocusTrigger] = useState(0);
   const findModeRef = useRef<null | 'find' | 'replace'>(null);
   useEffect(() => { findModeRef.current = findMode; }, [findMode]);
+  const handledFindRequestRef = useRef(findRequest);
+  useEffect(() => {
+    if (findRequest === handledFindRequestRef.current) return;
+    handledFindRequestRef.current = findRequest;
+    if (findModeRef.current === 'replace') setFindFocusTrigger(prev => prev + 1);
+    else setFindMode('replace');
+  }, [findRequest]);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const editorRef = useRef<TiptapEditor | null>(null);
   const initialContentRef = useRef(initialContent);
@@ -202,7 +215,7 @@ export function RichTextEditor({
     editorProps: {
       attributes: {
         // Typography comes from editorTypography.css, not Tailwind's prose classes.
-        class: 'focus:outline-none tiptap-editor',
+        class: 'tiptap-editor',
         spellcheck: 'false',
         style: editorFormattingVariables(),
       },
@@ -448,8 +461,7 @@ export function RichTextEditor({
         onToggleFindReplace={() => setFindMode(p => p ? null : 'find')}
         zoomLevel={zoomLevel}
         onZoomChange={onZoomChange}
-        isTocOpen={isTocOpen}
-        onTocToggle={onTocToggle}
+        zoomInHeaderMenu={zoomInHeaderMenu}
       />
       {findMode && editor && (
         <FindReplacePanel editor={editor} onClose={() => setFindMode(null)} initialMode={findMode} focusTrigger={findFocusTrigger} initialFindText={initialSearchTerm} />

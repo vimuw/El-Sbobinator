@@ -5,30 +5,19 @@ import { ChevronDown } from 'lucide-react';
 import { getLastHighlightColor, setLastHighlightColor } from '../../../editorUtils';
 import { HighlightIcon } from '../../HighlightIcon';
 import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
-
-const HIGHLIGHT_COLORS = [
-  { label: 'Giallo', color: '#fef08a' },
-  { label: 'Verde', color: '#bbf7d0' },
-  { label: 'Azzurro', color: '#bae6fd' },
-  { label: 'Rosa', color: '#fecdd3' },
-  { label: 'Arancione', color: '#fed7aa' },
-  { label: 'Viola', color: '#e9d5ff' },
-  { label: 'Nessuno', color: '#ffffff' },
-];
+import { useAnchoredPanel } from './anchoredPanel';
+import { HIGHLIGHT_COLORS } from './formatOptions';
 
 export const HighlightPickerButton = ({ editor }: { editor: TiptapEditor }) => {
   const [isOpen, setIsOpen] = React.useState(false);
-  const [panelPos, setPanelPos] = React.useState({ top: 0, left: 0 });
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   const panelRef = React.useRef<HTMLDivElement>(null);
+  const { panelPos, placeUnder } = useAnchoredPanel(isOpen, panelRef);
   const currentColor: string | undefined = editor.getAttributes('highlight').color;
   const activeColor = currentColor ?? getLastHighlightColor();
 
   const toggleOpen = () => {
-    if (!isOpen && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      setPanelPos({ top: rect.bottom + 6, left: rect.left });
-    }
+    if (!isOpen && buttonRef.current) placeUnder(buttonRef.current);
     setIsOpen(prev => !prev);
   };
 
@@ -65,7 +54,7 @@ export const HighlightPickerButton = ({ editor }: { editor: TiptapEditor }) => {
         <div
           ref={panelRef}
           className="color-picker-panel"
-          style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 9999 }}
+          style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 'var(--z-popover)' }}
         >
           <div className="color-row" style={{ flexWrap: 'wrap', gap: 5 }}>
             {HIGHLIGHT_COLORS.map(({ label, color }) => (
@@ -83,7 +72,7 @@ export const HighlightPickerButton = ({ editor }: { editor: TiptapEditor }) => {
                   setIsOpen(false);
                 }}
                 className={`color-swatch${currentColor === color ? ' is-selected' : ''}`}
-                style={{ background: color, border: color === '#ffffff' ? '1px solid #ccc' : undefined }}
+                style={{ background: color, border: color === '#ffffff' ? '1px solid var(--border-strong)' : undefined }}
                 title={label}
               />
             ))}

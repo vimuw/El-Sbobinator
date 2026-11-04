@@ -33,12 +33,27 @@ describe('web build page policy', () => {
     const connect = directive(csp.replace(/\s+/g, ' '), 'connect-src');
     expect(connect).toContain('https://generativelanguage.googleapis.com');
     expect(connect).toContain('ws://localhost:*');
+    // The picked audio plays from a blob: URL, as on the site; the desktop's local server stays.
+    const media = directive(csp.replace(/\s+/g, ' '), 'media-src');
+    expect(media).toBe('media-src http://127.0.0.1:* blob:');
+    expect(directive(WEB_CSP, 'media-src')).toBe("media-src 'self' blob:");
   });
 
   it('sends the same policy as a header, without cross-origin isolation', () => {
     const headers = webHeadersFile();
     expect(headers).toContain(`Content-Security-Policy: ${WEB_CSP}; frame-ancestors 'none'`);
     expect(headers).not.toMatch(/Cross-Origin-(Opener|Embedder)-Policy/);
+  });
+
+  it('keeps browsers on HTTPS without binding the subdomains', () => {
+    const rules = webHeadersFile().split('\n');
+    expect(rules.slice(0, rules.indexOf('/assets/*'))).toContain('  Strict-Transport-Security: max-age=31536000');
+  });
+
+  it('drops the Access-Control-Allow-Origin: * that Cloudflare Pages adds by default', () => {
+    const rules = webHeadersFile().split('\n');
+    expect(rules.slice(0, rules.indexOf('/assets/*'))).toContain('  ! Access-Control-Allow-Origin');
+    expect(webHeadersFile([], true)).not.toMatch(/^\s*Access-Control-Allow-Origin:/m);
   });
 
   it('caches hashed assets for a year and revalidates the page and the unhashed files', () => {
@@ -83,6 +98,14 @@ describe('privacy page of the web site', () => {
     expect(html).not.toMatch(/style="/i);
   });
 
+  it('lists every section in the index under the title, in page order', () => {
+    const sections = [...html.matchAll(/<h2 id="([^"]+)">([^<]+)<\/h2>/g)].map(([, id, title]) => [id, title]);
+    const index = /<nav class="toc"[^>]*>([\s\S]*?)<\/nav>/.exec(html)?.[1] ?? '';
+    const entries = [...index.matchAll(/<a href="#([^"]+)">([^<]+)<\/a>/g)].map(([, id, title]) => [id, title]);
+    expect(sections.length).toBeGreaterThan(5);
+    expect(entries).toEqual(sections);
+  });
+
   it('explains the Drive scopes: drive.appdata for the sync, drive.file only for the export', () => {
     const drive = html.slice(html.indexOf('id="google-drive"'), html.indexOf('id="diritti"'));
     expect(drive).toContain('<code>drive.appdata</code>');
@@ -98,8 +121,23 @@ describe('privacy page of the web site', () => {
     const drive = html.slice(html.indexOf('id="google-drive"'), html.indexOf('id="diritti"'));
     expect(drive).toMatch(/^id="google-drive">Google Drive \(facoltativo\)<\/h2>/);
     expect(html).not.toMatch(/in arrivo|non è ancora disponibile|quando arriverà/i);
-    expect(drive).toContain('Impostazioni → Archiviazione → Google Drive');
+    expect(drive).toContain('Impostazioni → Sincronizzazione');
     expect(html.slice(html.indexOf('id="in-breve"'), html.indexOf('id="titolare"'))).toContain('Google Drive');
+  });
+
+  it('applies the paid data terms to free keys in the EEA, as the Gemini API terms do', () => {
+    const gemini = html.slice(html.indexOf('id="gemini"'), html.indexOf('id="google-drive"'));
+    expect(gemini).toContain('Spazio economico europeo (Italia compresa), in Svizzera e nel Regno Unito');
+    expect(gemini).toContain('anche gratuita, le regole del livello a pagamento');
+    // The old blanket advice against free keys contradicted those terms for Italian users.
+    expect(html).not.toContain('non trascriverla con una chiave gratuita');
+  });
+
+  it('names what reaches the developer, the legal bases, the minimum age and the Garante', () => {
+    expect(html.slice(html.indexOf('id="sviluppatore"'), html.indexOf('id="base-giuridica"'))).toContain('Segnala un problema');
+    expect(html).toContain('Data Privacy Framework');
+    expect(html.slice(html.indexOf('id="eta"'), html.indexOf('id="diritti"'))).toContain('almeno 18 anni');
+    expect(html.slice(html.indexOf('id="diritti"'))).toContain('https://www.garanteprivacy.it/');
   });
 
   it("looks like the app: its theme tokens and Manrope, no colors of its own", () => {

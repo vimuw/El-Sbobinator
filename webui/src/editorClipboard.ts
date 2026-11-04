@@ -60,6 +60,23 @@ export const clipboardImageSize = (img: HTMLImageElement, sourceRoot?: HTMLEleme
 };
 
 /**
+ * Wrap decorations can move the paragraph while keeping its image fixed. Docs
+ * and Word offsets are relative to that paragraph, so export the displayed
+ * offset, not the unadjusted saved value.
+ */
+export function displayedWrapOffsetY(img: HTMLImageElement, saved: number, displayed?: HTMLElement, sourceRoot?: HTMLElement): number {
+  const surface = displayed?.querySelector<HTMLElement>('.editor-image-surface');
+  const paragraph = displayed?.closest<HTMLElement>('p,h1,h2,h3,h4,h5,h6');
+  if (displayed && sourceRoot?.offsetWidth && sourceRoot.contains(displayed) &&
+      displayed.querySelector('img')?.getAttribute('src') === img.getAttribute('src') && surface && paragraph) {
+    const scale = sourceRoot.getBoundingClientRect().width / sourceRoot.offsetWidth;
+    const rect = surface.getBoundingClientRect();
+    if (scale > 0 && rect.width > 0 && rect.height > 0) return (rect.top - paragraph.getBoundingClientRect().top) / scale;
+  }
+  return saved;
+}
+
+/**
  * Return null for content we cannot represent faithfully in the native format.
  * `portable` skips formatPortableHtml for HTML that prepareHtmlForClipboardSync
  * just produced unchanged: the pass is idempotent, and costs tens of ms on a long lecture.
@@ -179,17 +196,8 @@ export function createNativeClipboardFormats(html: string, sourceRoot?: HTMLElem
     const layout = normalizeImageLayout(container.getAttribute('data-layout')) === 'wrap' && !container.closest('td, th') && !shiftedCaption ? 'wrap' : 'inline';
     const blockAlign = !shiftedCaption ? 0 : position >= 67 ? 2 : position > 33 ? 1 : 0;
     let offsetY = normalizeImageOffsetY(container.getAttribute('data-offset-y'));
-    // Wrap decorations can move the paragraph while keeping its image fixed.
-    // Docs offsets are relative to that paragraph, so export the displayed
-    // offset, not the unadjusted saved value. HTML/internal paste stays intact.
-    const surface = displayed?.querySelector<HTMLElement>('.editor-image-surface');
-    const paragraph = displayed?.closest<HTMLElement>('p,h1,h2,h3,h4,h5,h6');
-    if (!caption && layout === 'wrap' && displayed && sourceRoot?.offsetWidth && sourceRoot.contains(displayed) &&
-        displayed.querySelector('img')?.getAttribute('src') === img.getAttribute('src') && surface && paragraph) {
-      const scale = sourceRoot.getBoundingClientRect().width / sourceRoot.offsetWidth;
-      const rect = surface.getBoundingClientRect();
-      if (scale > 0 && rect.width > 0 && rect.height > 0) offsetY = (rect.top - paragraph.getBoundingClientRect().top) / scale;
-    }
+    // HTML/internal paste keeps the saved offset intact.
+    if (!caption && layout === 'wrap') offsetY = displayedWrapOffsetY(img, offsetY, displayed, sourceRoot);
 
     const entityId = id();
     const placeholder = `PLACEHOLDER_sbobinator_${serial}`;

@@ -29,7 +29,9 @@ MAX_TOTAL_UNCOMPRESSED_SIZE = 1500 * 1024 * 1024  # 1.5 GB
 MAX_JSON_SIZE = 1024 * 1024
 # Macro blocks contain the full transcript, rather than small session metadata.
 MAX_TRANSCRIPT_JSON_SIZE = 32 * 1024 * 1024
-MAX_HTML_SIZE = 32 * 1024 * 1024
+# Pasted images stay at full quality inside the HTML (4096 px photos, PNGs up
+# to 25 megapixels), so a sbobina with a few dozen of them is legitimate.
+MAX_HTML_SIZE = 512 * 1024 * 1024
 EXTRACTION_BLOCK_SIZE = 64 * 1024
 DISK_SPACE_MARGIN = 64 * 1024 * 1024
 

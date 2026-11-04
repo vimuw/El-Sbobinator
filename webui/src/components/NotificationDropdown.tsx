@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   BellOff,
@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import { NotificationItem } from './notifications/NotificationItem';
 import { DURATION, enterTransition, popoverItemVariants, popoverVariants } from '../motion';
+import { PopoverCaret, caretCenterFromBottom } from './sidebarParts';
+import { useEscapeToClose } from '../hooks/useEscapeToClose';
 
 export interface NotificationAction {
   label: string;
@@ -48,11 +50,14 @@ export interface NotificationDropdownProps {
   bottomOffset?: number;
   /** The pointer towards the sidebar bell; off when the panel is not beside it. */
   showCaret?: boolean;
+  /** Phone: as tall as its rows, up to 60% of the screen, instead of a fixed half-screen frame. */
+  fitContent?: boolean;
 }
 
-// The caret sits 48px above the panel's bottom and is 18px tall; the open animation scales from its tip.
-const CARET_BOTTOM = 48;
-const CARET_CENTER_FROM_BOTTOM = CARET_BOTTOM + 9;
+// The caret points at the sidebar bell (data-sidebar-anchor="notifications"), measured on open since
+// the buttons below it vary by build; the open animation scales from its tip.
+const CARET_FALLBACK_CENTER = 57;
+const CARET_ANCHOR = '[data-sidebar-anchor="notifications"]';
 
 // The content lands in three beats after the frame: header, filters, then rows.
 const HEADER_VARIANTS = popoverItemVariants({ y: -4, blur: 4 });
@@ -78,9 +83,28 @@ export function NotificationDropdown({
   valign = 'top',
   bottomOffset = 16,
   showCaret = true,
+  fitContent = false,
 }: NotificationDropdownProps) {
   const [activeTab, setActiveTab] = useState<'all' | 'unread'>('all');
   const unreadCount = notifications.filter((n) => !n.read).length;
+  // The panel stays mounted so it can animate out, but at opacity 0 its buttons still took Tab
+  // focus and screen readers still read it. Closed, it is inert at once (the exit keeps playing)
+  // and hidden once the exit has finished; opening shows it again before the entrance starts.
+  const [exitDone, setExitDone] = useState(!isOpen);
+  const concealed = !isOpen && exitDone;
+
+  // Esc closes the panel like the other menus. Focus goes back to whatever opened it (the bell),
+  // since the panel turns inert as it closes and would otherwise drop focus on the page.
+  const openerRef = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    const active = document.activeElement;
+    openerRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
+  }, [isOpen]);
+  useEscapeToClose(isOpen, () => {
+    onClose();
+    if (openerRef.current?.isConnected) openerRef.current.focus();
+  });
 
   const filteredNotifications = [...notifications]
     .sort((a, b) => b.timestamp - a.timestamp)
@@ -89,12 +113,20 @@ export function NotificationDropdown({
       return true;
     });
 
-  const dynamicHeightStyle =
-    valign === 'bottom'
-      ? `clamp(320px, 52vh, min(480px, calc(var(--app-height) - ${bottomOffset + 16}px)))`
-      : 'clamp(320px, 52vh, min(480px, calc(var(--app-height) - 88px)))';
+  // The room left above (or below) the panel; a desktop panel keeps a steady frame within it.
+  const roomStyle = `calc(var(--app-height) - ${valign === 'bottom' ? bottomOffset + 16 : 88}px)`;
+  const dynamicHeightStyle = fitContent ? undefined : `clamp(320px, 52vh, min(480px, ${roomStyle}))`;
 
   const hasCaret = showCaret && align === 'left' && valign === 'bottom';
+  const [caretCenter, setCaretCenter] = useState(CARET_FALLBACK_CENTER);
+
+  useLayoutEffect(() => {
+    if (!isOpen || !hasCaret) return;
+    const measure = () => setCaretCenter(caretCenterFromBottom(document.querySelector(CARET_ANCHOR), bottomOffset, CARET_FALLBACK_CENTER));
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [isOpen, hasCaret, bottomOffset]);
 
   return (
     <>
@@ -106,9 +138,9 @@ export function NotificationDropdown({
           opacity: isOpen ? 1 : 0,
           pointerEvents: isOpen ? 'auto' : 'none',
         }}
-        transition={{ duration: 0.12 }}
+        transition={{ duration: DURATION.fast }}
         onClick={onClose}
-        className="fixed inset-0 z-40"
+        className="fixed inset-0 z-[var(--z-dismiss-layer)]"
         style={{ background: 'transparent' }}
       />
 
@@ -120,6 +152,9 @@ export function NotificationDropdown({
         aria-label="Notifiche"
         initial={false}
         animate={isOpen ? 'open' : 'closed'}
+        inert={!isOpen}
+        onAnimationStart={(definition) => { if (definition === 'open') setExitDone(false); }}
+        onAnimationComplete={(definition) => { if (definition === 'closed') setExitDone(true); }}
         variants={popoverVariants({
           x: hasCaret ? -6 : 0,
           y: hasCaret ? 0 : valign === 'bottom' ? 4 : -4,
@@ -127,17 +162,18 @@ export function NotificationDropdown({
           blur: 8,
           duration: DURATION.slow,
         })}
-        className={`fixed z-50 flex flex-col ${
+        className={`fixed z-[var(--z-dialog)] flex flex-col ${
           isOpen ? 'pointer-events-auto' : 'pointer-events-none'
         }`}
         style={{
+          visibility: concealed ? 'hidden' : undefined,
           transformOrigin: hasCaret
-            ? `left calc(100% - ${CARET_CENTER_FROM_BOTTOM}px)`
+            ? `left calc(100% - ${caretCenter}px)`
             : `${valign === 'bottom' ? 'bottom' : 'top'} ${align === 'left' ? 'left' : 'right'}`,
           // A phone is narrower than the panel: it fills the room beside the sidebar instead.
           width: `min(380px, calc(100vw - ${(align === 'left' ? leftOffset : 72) + 8}px))`,
           height: dynamicHeightStyle,
-          maxHeight: `calc(var(--app-height) - ${valign === 'bottom' ? bottomOffset + 16 : 88}px)`,
+          maxHeight: fitContent ? `min(60vh, ${roomStyle})` : roomStyle,
           top: valign === 'bottom' ? undefined : 64,
           bottom: valign === 'bottom' ? bottomOffset : undefined,
           left: align === 'left' ? leftOffset : undefined,
@@ -145,35 +181,7 @@ export function NotificationDropdown({
         }}
       >
         {/* Left pointer triangle pointing towards the sidebar trigger */}
-        {hasCaret && (
-          <motion.div
-            variants={CARET_VARIANTS}
-            className="absolute -left-[8px] pointer-events-none z-30 flex items-center"
-            style={{ bottom: CARET_BOTTOM, transformOrigin: 'right center' }}
-            aria-hidden="true"
-          >
-            <svg
-              width="12"
-              height="18"
-              viewBox="0 0 12 18"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              {/* Extend the opaque fill into the neutral frame to cover its border. */}
-              <polygon
-                points="12,0.5 8.5,0.5 0.5,9 8.5,17.5 12,17.5"
-                fill="var(--bg-elevated)"
-              />
-              <path
-                d="M 8.5 0.5 L 0.5 9 L 8.5 17.5"
-                stroke="var(--border-subtle)"
-                strokeWidth="1"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </motion.div>
-        )}
+        {hasCaret && <PopoverCaret centerFromBottom={caretCenter} variants={CARET_VARIANTS} />}
 
         {/* Inner bordered panel matching design system .notification-dropdown-panel */}
         <div
@@ -184,7 +192,7 @@ export function NotificationDropdown({
             <motion.div
               variants={HEADER_VARIANTS}
               custom={0}
-              className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-elevated)]"
+              className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-floating)]"
             >
               <div className="flex items-center gap-2">
                 <h3 className="text-sm font-semibold tracking-tight text-[var(--text-primary)]">
@@ -200,7 +208,7 @@ export function NotificationDropdown({
                   <button
                     type="button"
                     onClick={onMarkAllAsRead}
-                    className="p-1.5 rounded-full transition-colors hover:bg-[var(--accent-subtle)] flex items-center justify-center text-[var(--accent-text)] hover:text-[var(--text-primary)]"
+                    className="w-[var(--icon-button-xs)] h-[var(--icon-button-xs)] rounded-lg transition-colors hover:bg-[var(--bg-selected-floating)] flex items-center justify-center text-[var(--accent-text)] hover:text-[var(--text-primary)]"
                     style={{
                       cursor: 'pointer',
                     }}
@@ -214,7 +222,7 @@ export function NotificationDropdown({
                   <button
                     type="button"
                     onClick={onClearAll}
-                    className="p-1.5 rounded-full transition-colors hover:bg-[var(--error-subtle)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--error-text)]"
+                    className="w-[var(--icon-button-xs)] h-[var(--icon-button-xs)] rounded-lg transition-colors hover:bg-[var(--error-subtle)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--error-text)]"
                     style={{
                       cursor: 'pointer',
                     }}
@@ -231,7 +239,7 @@ export function NotificationDropdown({
             <motion.div
               variants={HEADER_VARIANTS}
               custom={1}
-              className="flex items-center gap-1.5 px-4 py-2 border-b border-[var(--border-subtle)] bg-[var(--bg-elevated)]"
+              className="flex items-center gap-1.5 px-4 py-2 border-b border-[var(--border-subtle)] bg-[var(--bg-floating)]"
             >
               <button
                 type="button"
@@ -278,7 +286,7 @@ export function NotificationDropdown({
                   <h4 className="text-xs font-semibold text-[var(--text-primary)]">
                     {activeTab === 'unread' ? 'Nessuna notifica non letta' : 'Nessuna notifica'}
                   </h4>
-                  <p className="text-[11px] leading-relaxed text-[var(--text-muted)] max-w-[240px]">
+                  <p className="text-caption leading-relaxed text-[var(--text-muted)] max-w-[240px]">
                     {activeTab === 'unread'
                       ? 'Tutte le notifiche sono state lette.'
                       : 'Qui troverai gli avvisi su elaborazioni, aggiornamenti e stato del sistema.'}

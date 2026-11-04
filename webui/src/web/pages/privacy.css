@@ -28,10 +28,14 @@ a:hover {
   color: var(--accent-bg-hover);
 }
 
+/* The app's one focus ring (theme.css). */
+:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
 a:focus-visible {
-  outline: none;
   border-radius: 4px;
-  box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
 .site-header,
@@ -43,11 +47,10 @@ main {
   padding-right: 16px;
 }
 
+/* The way back is the name itself, on the left where the eye starts, with an arrow before it. */
 .site-header {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   padding-top: 20px;
   padding-bottom: 16px;
@@ -68,42 +71,61 @@ main {
   color: var(--text-primary);
 }
 
+.brand-arrow {
+  color: var(--text-secondary);
+  font-weight: 500;
+  transition: transform 180ms ease, color 180ms ease;
+}
+
+.brand:hover .brand-arrow {
+  color: var(--text-primary);
+  transform: translateX(-2px);
+}
+
+.brand:focus-visible {
+  border-radius: 8px;
+}
+
 .brand img {
   width: 32px;
   height: 32px;
   border-radius: 8px;
 }
 
-/* The app's secondary button (.app-button-secondary in index.css), on the same tokens. */
-.back-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 2.25rem;
-  padding: 0.4rem 0.9rem;
-  border-radius: 8px;
-  border: 1px solid var(--border-default);
-  background: var(--bg-surface);
-  color: var(--text-primary);
-  font-size: 0.8125rem;
+/* The sections at a glance, under the title: a long page, read for one part at a time. */
+.toc {
+  margin: 0 0 8px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-panel);
+  font-size: 0.875rem;
+}
+
+.toc p {
+  margin: 0 0 6px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
   font-weight: 600;
-  text-decoration: none;
-  box-shadow: var(--shadow-xs);
-  transition:
-    transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1),
-    background 180ms ease,
-    border-color 180ms ease;
 }
 
-.back-button:hover {
-  color: var(--text-primary);
-  background: var(--accent-subtle);
-  border-color: var(--accent-bg);
-  transform: translateY(-1px);
+.toc ol {
+  margin: 0;
+  padding-left: 1.25rem;
+  columns: 2;
+  column-gap: 24px;
 }
 
-.back-button:active {
-  transform: scale(0.98);
+.toc li {
+  break-inside: avoid;
+}
+
+.toc li + li {
+  margin-top: 2px;
+}
+
+h2 {
+  scroll-margin-top: 16px;
 }
 
 main {
@@ -168,6 +190,44 @@ code {
   font-size: 0.875rem;
 }
 
+/* The summary table under "In breve": it scrolls inside its frame on a phone, never the page. */
+.table-wrap {
+  margin: 12px 0;
+  overflow-x: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+}
+
+table {
+  width: 100%;
+  min-width: 280px;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+th,
+td {
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+
+tbody tr + tr td,
+tbody tr:first-child td {
+  border-top: 1px solid var(--border-subtle);
+}
+
+td:first-child {
+  font-weight: 700;
+}
+
 .note {
   padding: 12px 14px;
   border-radius: 10px;
@@ -189,5 +249,18 @@ footer {
 
   h1 {
     font-size: 1.5rem;
+  }
+
+  table {
+    font-size: 0.8125rem;
+  }
+
+  th,
+  td {
+    padding: 8px;
+  }
+
+  .toc ol {
+    columns: 1;
   }
 }

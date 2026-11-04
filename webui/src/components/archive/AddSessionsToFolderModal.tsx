@@ -4,7 +4,8 @@ import { Check, FileText, FolderPlus, Plus, Search, X } from 'lucide-react';
 import type { ArchiveFolder, ArchiveSession } from '../../bridge';
 import { DEFAULT_FOLDER_COLOR } from './types';
 import { formatRelativeTime } from '../../utils';
-import { modalCard } from '../../motion';
+import { MiddleTruncate } from '../MiddleTruncate';
+import { DURATION, modalCard } from '../../motion';
 
 export interface AddSessionsToFolderModalProps {
   folder: ArchiveFolder;
@@ -81,7 +82,7 @@ export function AddSessionsToFolderModal({
   return (
     <motion.div
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-4"
     >
       <motion.div
         initial={{ opacity: 0 }}
@@ -148,7 +149,7 @@ export function AddSessionsToFolderModal({
                       initial={{ opacity: 0, scale: 0.7 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.7 }}
-                      transition={{ duration: 0.1 }}
+                      transition={{ duration: DURATION.fast }}
                       onClick={() => {
                         setSearch('');
                         searchInputRef.current?.focus();
@@ -245,10 +246,10 @@ export function AddSessionsToFolderModal({
                               className="text-xs font-semibold truncate"
                               style={{ color: 'var(--text-primary)' }}
                             >
-                              {session.name}
+                              <MiddleTruncate text={session.name} />
                             </p>
                             {ts > 0 && (
-                              <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                              <span className="text-caption" style={{ color: 'var(--text-muted)' }}>
                                 {formatRelativeTime(ts)}
                               </span>
                             )}

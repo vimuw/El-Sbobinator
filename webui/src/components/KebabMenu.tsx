@@ -22,6 +22,10 @@ interface KebabMenuProps {
   buttonClassName?: string;
   ariaLabel?: string;
   title?: string;
+  /** Replaces the three dots, e.g. "+" for an insert menu. */
+  icon?: React.ReactNode;
+  /** A line of plain text above the items, such as a title the header had to cut. */
+  heading?: string;
 }
 
 interface DropdownPos {
@@ -45,7 +49,7 @@ interface SubmenuPos {
 // Submenus open on hover, so their items appear with the frame.
 const MENU_ITEM_VARIANTS = popoverItemVariants({ step: 0.015 });
 
-export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, title }: KebabMenuProps) {
+export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, title, icon, heading }: KebabMenuProps) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<DropdownPos | null>(null);
   const [activeSubmenuIndex, setActiveSubmenuIndex] = useState<number | null>(null);
@@ -118,18 +122,23 @@ export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, 
       const spaceLeft = parentRect.left - 8;
 
       const opensLeft = spaceRight < 220 && spaceLeft >= spaceRight;
+      // A phone has room on neither side: the submenu opens under its item, over the menu.
+      const overlaps = spaceRight < 200 && spaceLeft < 200;
 
       let left: number | undefined;
       let right: number | undefined;
 
-      if (opensLeft) {
+      if (overlaps) {
+        right = Math.max(8, window.innerWidth - parentRect.right);
+      } else if (opensLeft) {
         right = Math.max(8, window.innerWidth - parentRect.left + 4);
       } else {
         left = Math.max(8, parentRect.right + 4);
       }
 
       const maxHeight = Math.min(280, Math.max(120, window.innerHeight - 24));
-      const top = Math.max(8, Math.min(itemRect.top - 4, window.innerHeight - maxHeight - 12));
+      const anchorTop = overlaps ? itemRect.bottom + 4 : itemRect.top - 4;
+      const top = Math.max(8, Math.min(anchorTop, window.innerHeight - maxHeight - 12));
 
       setSubmenuPos({ top, left, right, maxHeight, opensLeft });
     };
@@ -276,13 +285,13 @@ export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, 
           padding: 4,
           background: open ? 'var(--sidebar-active-bg)' : undefined,
           color: open ? 'var(--text-primary)' : 'var(--text-secondary)',
-          borderRadius: 8,
+          borderRadius: 'var(--radius-lg)',
           cursor: 'pointer',
         }}
         aria-label={ariaLabel || 'Altre opzioni'}
         title={title || ariaLabel || 'Altre opzioni'}
       >
-        <MoreVertical className="w-4 h-4" />
+        {icon ?? <MoreVertical className="w-4 h-4" />}
       </button>
 
       {createPortal(
@@ -303,11 +312,12 @@ export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, 
                 ...(pos.right !== undefined ? { right: pos.right } : { left: pos.left }),
                 maxHeight: pos.maxHeight,
                 overflowY: 'auto',
-                zIndex: 9999,
+                zIndex: 'var(--z-popover)',
                 minWidth: 210,
               }}
               onClick={e => e.stopPropagation()}
             >
+              {heading && <div className="kebab-heading">{heading}</div>}
               {items.map((item, i) => {
                 if ('separator' in item) {
                   return <div key={`sep-${i}`} className="kebab-separator" />;
@@ -378,7 +388,7 @@ export function KebabMenu({ items, align = 'right', buttonClassName, ariaLabel, 
                 ...(submenuPos.right !== undefined ? { right: submenuPos.right } : { left: submenuPos.left }),
                 maxHeight: submenuPos.maxHeight,
                 overflowY: 'auto',
-                zIndex: 10000,
+                zIndex: 'calc(var(--z-popover) + 1)',
                 minWidth: 200,
                 maxWidth: 280,
               }}

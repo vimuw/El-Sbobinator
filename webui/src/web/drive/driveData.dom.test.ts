@@ -1,6 +1,6 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
-import { createWebArchive, type NewArchiveSession, type WebArchive } from '../webSessions';
+import type { NewArchiveSession, WebArchive } from '../webSessions';
 import { DriveAuthError } from './auth';
 import { FOLDER_MIME, createDriveApi } from './driveApi';
 import { createDriveService } from './driveService';
@@ -36,7 +36,7 @@ function device(drive: FakeDrive, name: string, initial: { token?: boolean; emai
     archive: () => archive!,
     exportApi: token => client(() => token),
   });
-  archive = trackArchive(createWebArchive(factory), factory, () => service.schedule());
+  archive = trackArchive(factory, () => service.schedule());
   return { factory, service, archive, login };
 }
 

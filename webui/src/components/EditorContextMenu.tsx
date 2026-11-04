@@ -10,7 +10,7 @@ import {
   ImagePlus,
   Italic,
   Link2,
-  Radical,
+  Sigma,
   RemoveFormatting,
   Scissors,
   Search,
@@ -79,7 +79,7 @@ export function EditorContextMenu({
   return createPortal(
     <div
       ref={menuRef}
-      className="kebab-panel editor-context-menu fixed z-50 select-none"
+      className="kebab-panel editor-context-menu fixed z-[var(--z-popover)] select-none"
       style={{ left: contextMenu.x, top: contextMenu.y }}
       onClick={e => {
         e.stopPropagation();
@@ -260,7 +260,7 @@ export function EditorContextMenu({
         onClick={onOpenMath}
       >
         <span className="flex items-center gap-2.5 font-medium">
-          <Radical className="h-4 w-4 shrink-0" />
+          <Sigma className="h-4 w-4 shrink-0" />
           <span>Inserisci formula LaTeX</span>
         </span>
         <kbd className="editor-context-menu-shortcut">{shortcutLabel('Ctrl+M')}</kbd>

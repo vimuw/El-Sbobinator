@@ -1,13 +1,13 @@
 import type { ArchiveFolder, ArchiveSession } from '../../bridge';
 import { SYNC, inTransaction, requestValue } from '../webDatabase';
-import type { SaveHtmlResult, WebArchive } from '../webSessions';
+import { createWebArchive, type ArchiveMarks, type SaveHtmlResult, type WebArchive } from '../webSessions';
 
 // Local state of the Drive sync, in the IndexedDB store `sync`: one record per sbobina (its Drive
 // file, the Drive modifiedTime last synced, whether it has local changes to send) and one `meta`
 // record (this device's id, the listing watermark, the folder tree's state).
 
 export const META_KEY = 'meta';
-const sessionKey = (sessionDir: string) => `session:${sessionDir}`;
+export const sessionKey = (sessionDir: string) => `session:${sessionDir}`;
 
 export interface SessionSyncRecord {
   key: string;
@@ -126,6 +126,11 @@ export async function writeRecord(factory: IDBFactory | undefined, record: Omit<
   });
 }
 
+/** Whether a record still carries the mark read earlier: no local write came in between. */
+export function sameMark(current: SessionSyncRecord | null | undefined, before: SessionSyncRecord | null | undefined): boolean {
+  return (current?.updated_at ?? null) === (before?.updated_at ?? null) && (current?.dirty ?? null) === (before?.dirty ?? null);
+}
+
 /**
  * Updates a record only if it still is the one read before a slow step (an upload): a change made
  * meanwhile keeps its mark and goes in the next round.
@@ -134,106 +139,150 @@ export async function writeRecordIfUnchanged(factory: IDBFactory | undefined, be
   return inTransaction(factory, SYNC, 'readwrite', async transaction => {
     const store = transaction.objectStore(SYNC);
     const current = await requestValue(store.get(sessionKey(next.session_dir)) as IDBRequest<SessionSyncRecord | undefined>);
-    if ((current?.updated_at ?? null) !== (before?.updated_at ?? null) || (current?.dirty ?? null) !== (before?.dirty ?? null)) return false;
+    if (!sameMark(current, before)) return false;
     store.put({ ...next, key: sessionKey(next.session_dir) });
     return true;
   });
 }
 
-/** A local change to send: the mark the archive leaves after each write. */
-export async function markSessionChanged(factory: IDBFactory | undefined, sessionDir: string, at: string, deleted = false): Promise<void> {
+/**
+ * After an upload the record learns the Drive file just written: unchanged meanwhile it is synced;
+ * a local write made during the upload keeps its mark for the next round, which then does not take
+ * this device's own upload for a change from Drive. Nothing is written after an account switch
+ * (`account` is the one the round started with) or once another file took the record's place.
+ * A first upload during which the sbobina was deleted for good (its record went: it had no file yet)
+ * left its text on Drive: the record comes back as a deletion, and the next round sends the mark.
+ */
+export async function recordUpload(factory: IDBFactory | undefined, before: SessionSyncRecord, written: { id: string; modifiedTime: string }, account: string | undefined): Promise<void> {
+  await recordDriveFile(factory, before, written, account, true);
+}
+
+/**
+ * A conflict this side won: the record learns Drive's file, which this round's upload overwrites,
+ * and keeps its mark. As after an upload, a local write made during the merge keeps its own mark
+ * (a deletion for good included), and nothing is written after an account switch.
+ */
+export async function recordLocalWin(factory: IDBFactory | undefined, before: SessionSyncRecord, remote: { id: string; modifiedTime: string }, account: string | undefined): Promise<void> {
+  await recordDriveFile(factory, before, remote, account, false);
+}
+
+async function recordDriveFile(factory: IDBFactory | undefined, before: SessionSyncRecord, written: { id: string; modifiedTime: string }, account: string | undefined, sent: boolean): Promise<void> {
   await inTransaction(factory, SYNC, 'readwrite', async transaction => {
     const store = transaction.objectStore(SYNC);
-    const current = await requestValue(store.get(sessionKey(sessionDir)) as IDBRequest<SessionSyncRecord | undefined>);
-    // Never synced and deleted: nothing to tell Drive.
-    if (deleted && !current?.file_id) {
-      store.delete(sessionKey(sessionDir));
+    const [meta, current] = await Promise.all([
+      requestValue(store.get(META_KEY) as IDBRequest<SyncMeta | undefined>),
+      requestValue(store.get(sessionKey(before.session_dir)) as IDBRequest<SessionSyncRecord | undefined>),
+    ]);
+    if (account !== undefined && meta?.account !== account) return;
+    const file = { file_id: written.id, remote_modified: written.modifiedTime };
+    if (!current) {
+      if (before.file_id) return;
+      // Later than the text just written, so it wins on the devices that download that first.
+      const at = new Date(Date.parse(before.updated_at) + 1).toISOString();
+      store.put({ key: sessionKey(before.session_dir), session_dir: before.session_dir, ...file, dirty: true, updated_at: at, deleted_at: at } satisfies SessionSyncRecord);
       return;
     }
-    // A later mark always differs from the one an upload in flight read.
-    const updatedAt = current && at <= current.updated_at ? new Date(Date.parse(current.updated_at) + 1).toISOString() : at;
-    const record: SessionSyncRecord = { ...current, key: sessionKey(sessionDir), session_dir: sessionDir, dirty: true, updated_at: updatedAt };
-    if (deleted) record.deleted_at = updatedAt;
-    else delete record.deleted_at;
-    store.put(record);
+    if (sameMark(current, before)) store.put({ ...before, ...file, dirty: sent ? false : before.dirty, key: sessionKey(before.session_dir) });
+    else if (current.file_id === before.file_id) store.put({ ...current, ...file });
   });
 }
 
-/** Records which folders changed between two trees the UI saved. */
-export async function markFoldersChanged(factory: IDBFactory | undefined, before: ArchiveFolder[], after: ArchiveFolder[], at: string): Promise<void> {
+/** A local change to send, marked in the transaction (over SYNC) of the write it describes. */
+async function markSession(store: IDBObjectStore, sessionDir: string, at: string, deleted: boolean): Promise<void> {
+  const current = await requestValue(store.get(sessionKey(sessionDir)) as IDBRequest<SessionSyncRecord | undefined>);
+  // Never synced and deleted: nothing to tell Drive.
+  if (deleted && !current?.file_id) {
+    store.delete(sessionKey(sessionDir));
+    return;
+  }
+  // A later mark always differs from the one an upload in flight read.
+  const updatedAt = current && at <= current.updated_at ? new Date(Date.parse(current.updated_at) + 1).toISOString() : at;
+  const record: SessionSyncRecord = { ...current, key: sessionKey(sessionDir), session_dir: sessionDir, dirty: true, updated_at: updatedAt };
+  if (deleted) record.deleted_at = updatedAt;
+  else delete record.deleted_at;
+  store.put(record);
+}
+
+/** The sync state with the folders that changed between two trees marked. */
+function withFolderChanges(meta: SyncMeta, before: ArchiveFolder[], after: ArchiveFolder[], at: string): SyncMeta {
   const previous = new Map(before.map(folder => [folder.id, JSON.stringify(folder)]));
   const next = new Set(after.map(folder => folder.id));
-  await writeMeta(factory, meta => {
-    const times = { ...meta.folders.times };
-    const deleted = { ...meta.folders.deleted };
-    let changed = false;
-    for (const folder of after) {
-      if (previous.get(folder.id) === JSON.stringify(folder)) continue;
-      times[folder.id] = at;
-      delete deleted[folder.id];
-      changed = true;
-    }
-    for (const id of previous.keys()) {
-      if (next.has(id)) continue;
-      deleted[id] = at;
-      delete times[id];
-      changed = true;
-    }
-    return changed ? { ...meta, folders: { ...meta.folders, times, deleted, dirty: true } } : meta;
-  });
+  const times = { ...meta.folders.times };
+  const deleted = { ...meta.folders.deleted };
+  let changed = false;
+  for (const folder of after) {
+    if (previous.get(folder.id) === JSON.stringify(folder)) continue;
+    times[folder.id] = at;
+    delete deleted[folder.id];
+    changed = true;
+  }
+  for (const id of previous.keys()) {
+    if (next.has(id)) continue;
+    deleted[id] = at;
+    delete times[id];
+    changed = true;
+  }
+  return changed ? { ...meta, folders: { ...meta.folders, times, deleted, dirty: true } } : meta;
 }
 
 // Changes that are only about this device never go to Drive.
 const LOCAL_ONLY_FIELDS = new Set<keyof ArchiveSession>(['input_path', 'last_opened_at_iso']);
+const syncedFields = (fields: string[]) => fields.some(field => !LOCAL_ONLY_FIELDS.has(field as keyof ArchiveSession));
+
+/**
+ * The Drive sync's marks, for the archive and the backup import to write with each change. An expiry
+ * of the trash is dated when the sbobina went there (`at`; markSession keeps it after the last change
+ * known here).
+ */
+export function syncMarks(now: () => Date = () => new Date()): ArchiveMarks {
+  return {
+    store: SYNC,
+    async session(transaction, sessionDir, { deleted = false, at, fields } = {}) {
+      if (fields && !syncedFields(fields)) return;
+      await markSession(transaction.objectStore(SYNC), sessionDir, at ?? now().toISOString(), deleted);
+    },
+    async folders(transaction, before, after) {
+      const store = transaction.objectStore(SYNC);
+      const meta = await requestValue(store.get(META_KEY) as IDBRequest<SyncMeta | undefined>);
+      store.put(withFolderChanges(meta ?? newMeta(), before, after, now().toISOString()));
+    },
+  };
+}
 
 /**
  * The archive with sync marks: every write the user makes (editor saves, renames, deletions,
- * folders, a finished run) leaves a mark and calls onChange, so the sync sends it soon. The sync
- * engine itself writes to IndexedDB directly and leaves no marks.
+ * folders, a finished run) leaves its mark in its own transaction and calls onChange, so the sync
+ * sends it soon. The sync engine itself writes to IndexedDB directly and leaves no marks.
  */
-export function trackArchive(archive: WebArchive, factory: IDBFactory | undefined, onChange: () => void, now: () => Date = () => new Date()): WebArchive {
-  const mark = async (sessionDir: string, deleted = false) => {
-    await markSessionChanged(factory, sessionDir, now().toISOString(), deleted).catch(() => undefined);
-    onChange();
+export function trackArchive(factory: IDBFactory | undefined, onChange: () => void, now: () => Date = () => new Date()): WebArchive {
+  const archive = createWebArchive(factory, syncMarks(now));
+  const changed = <T,>(result: T, wrote: boolean): T => {
+    if (wrote) onChange();
+    return result;
   };
   return {
     ...archive,
-    async create(input, body) {
-      const session = await archive.create(input, body);
-      await mark(session.session_dir);
-      return session;
+    create: async (input, body) => changed(await archive.create(input, body), true),
+    saveHtml: async (path, body, generation, accept): Promise<SaveHtmlResult> => {
+      const result = await archive.saveHtml(path, body, generation, accept);
+      return changed(result, result.ok && Boolean(result.saved));
     },
-    async saveHtml(path, body, generation): Promise<SaveHtmlResult> {
-      const result = await archive.saveHtml(path, body, generation);
-      if (result.ok && result.saved) await mark(path.replace(/\/sbobina\.html$/, ''));
-      return result;
-    },
-    async update(sessionDir, patch) {
+    update: async (sessionDir, patch) => {
       const session = await archive.update(sessionDir, patch);
-      if (session && Object.keys(patch).some(field => !LOCAL_ONLY_FIELDS.has(field as keyof ArchiveSession))) await mark(session.session_dir);
-      return session;
+      return changed(session, session !== null && syncedFields(Object.keys(patch)));
     },
-    async delete(sessionDir) {
-      const deleted = await archive.delete(sessionDir);
-      if (deleted) await mark(sessionDir.replace(/\/sbobina\.html$/, ''), true);
-      return deleted;
+    delete: async (sessionDir, changedAt, trashedAt) => {
+      const deleted = await archive.delete(sessionDir, changedAt, trashedAt);
+      return changed(deleted, deleted);
     },
-    // Trash and restore travel as the file's deleted_at: the other devices follow.
-    async trash(sessionDir, at) {
+    trash: async (sessionDir, at) => {
       const trashed = await archive.trash(sessionDir, at);
-      if (trashed) await mark(sessionDir.replace(/\/sbobina\.html$/, ''));
-      return trashed;
+      return changed(trashed, trashed);
     },
-    async restore(sessionDir) {
+    restore: async sessionDir => {
       const session = await archive.restore(sessionDir);
-      if (session) await mark(session.session_dir);
-      return session;
+      return changed(session, session !== null);
     },
-    async saveFolders(folders) {
-      const before = await archive.loadFolders().catch(() => [] as ArchiveFolder[]);
-      await archive.saveFolders(folders);
-      await markFoldersChanged(factory, before, folders, now().toISOString()).catch(() => undefined);
-      onChange();
-    },
+    saveFolders: async folders => changed(await archive.saveFolders(folders), true),
   };
 }

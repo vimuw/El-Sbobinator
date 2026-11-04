@@ -65,7 +65,7 @@ export function RenameSessionModal({ session, onSave, onClose }: {
   };
 
   return (
-    <motion.div className="fixed inset-0 z-[60] flex items-center justify-center p-4" exit={{ opacity: 0 }}>
+    <motion.div className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-4" exit={{ opacity: 0 }}>
       <div className="modal-overlay absolute inset-0" />
       <motion.div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
         className="modal-card relative w-full max-w-md overflow-hidden" {...modalCard}>

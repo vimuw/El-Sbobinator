@@ -213,6 +213,12 @@ export interface SaveHtmlResult {
 }
 
 /** Web previews with Drive sync: what the settings show (web/drive/driveService.ts). */
+/** One kind of data in the web storage and the space it takes. */
+export interface StorageUsagePart {
+  label: string;
+  bytes: number;
+}
+
 export interface DriveStatus {
   /** This build syncs with Drive. */
   available: boolean;
@@ -336,7 +342,7 @@ export interface PywebviewApi {
     preferredModel?: string,
 
   ) => Promise<{ ok: boolean; result?: ValidationResult; error?: string }>;
-  get_session_storage_info?: () => Promise<{ ok: boolean; total_bytes?: number; total_sessions?: number; session_root?: string; usage_detail?: string; persisted?: boolean; error?: string }>;
+  get_session_storage_info?: () => Promise<{ ok: boolean; total_bytes?: number; total_sessions?: number; session_root?: string; usage_detail?: string; usage_breakdown?: StorageUsagePart[]; browser_estimate_bytes?: number; persisted?: boolean; error?: string }>;
   // Web build only: asks the browser to keep this site's data; false when it may still clear it.
   get_storage_protection?: () => Promise<{ ok: boolean; persisted: boolean }>;
   // Web build only: backup of the archive kept in this browser (webBackup.ts).

@@ -1,4 +1,4 @@
-import { useState, type MouseEvent } from 'react';
+import { Fragment, useState, type MouseEvent, type ReactNode } from 'react';
 import {
   AlertTriangle, Check, ChevronLeft, ChevronRight, Download,
   Eye, FileText, Folder, FolderOpen, Pencil, RotateCcw, Trash2, X,
@@ -11,7 +11,67 @@ import { formatRelativeTime, shortModelName } from '../../utils';
 import { getHostCapabilities } from '../../hostCapabilities';
 import { KebabMenu, type KebabMenuItem } from '../KebabMenu';
 import { FolderIndicatorChip } from '../FolderChip';
+import { MiddleTruncate } from '../MiddleTruncate';
+import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { type ArchivePageProps, getOpenedAtMs, DEFAULT_FOLDER_COLOR } from './types';
+
+interface SessionCardMetaProps {
+  completedAtMs: number;
+  openedAtMs: number;
+  model?: string | null;
+  folderIndicator?: ReactNode;
+  hasRevisionWarnings: boolean;
+  failedBlockCount: number;
+}
+
+// The line under a session's name. Wider screens wrap it and show everything. A phone keeps it to
+// one line, so every card has the same height: only the latest activity (opened, else completed),
+// as in "Ultima sbobina aperta / modificata", and one warning; the model, the collection and the
+// warning take the ellipsis when the line runs out, never the time.
+function SessionCardMeta({ completedAtMs, openedAtMs, model, folderIndicator, hasRevisionWarnings, failedBlockCount }: SessionCardMetaProps) {
+  const isPhone = usePhoneLayout();
+  const opened = openedAtMs > 0 && (
+    <span className="inline-flex items-center gap-1 shrink-0" title={`Ultima apertura: ${new Date(openedAtMs).toLocaleString('it-IT')}`}>
+      <Eye className="w-3 h-3 text-muted" style={{ opacity: 0.65 }} />
+      Aperto {formatRelativeTime(openedAtMs)}
+    </span>
+  );
+  const segments: { key: string; node: ReactNode; fit?: boolean }[] = [];
+  if (isPhone && opened) segments.push({ key: 'opened', node: opened });
+  else if (completedAtMs > 0) segments.push({ key: 'completed', node: <span className="shrink-0">{formatRelativeTime(completedAtMs)}</span> });
+  if (model) segments.push({ key: 'model', node: <span className="truncate">{shortModelName(model)}</span>, fit: true });
+  if (!isPhone && opened) segments.push({ key: 'opened', node: opened });
+  if (folderIndicator) segments.push({ key: 'folder', node: folderIndicator, fit: true });
+  if (hasRevisionWarnings && !(isPhone && failedBlockCount > 0)) {
+    segments.push({ key: 'warnings', node: <span className="truncate" style={{ color: 'var(--warning-text)', fontWeight: 600 }}>Completata con avvisi</span>, fit: true });
+  }
+  if (failedBlockCount > 0) {
+    segments.push({
+      key: 'failed',
+      fit: true,
+      node: (
+        <span className="inline-flex items-center gap-1 min-w-0 text-caption font-semibold text-[var(--warning-text)]">
+          <AlertTriangle className="w-3 h-3 shrink-0" />
+          <span className="truncate">{failedBlockCount} {failedBlockCount === 1 ? 'blocco non revisionato' : 'blocchi non revisionati'}</span>
+        </span>
+      ),
+    });
+  }
+  return (
+    <div
+      className={`session-card-meta flex items-center gap-x-2 gap-y-1 mt-0.5 text-xs min-w-0 ${isPhone ? 'flex-nowrap overflow-hidden' : 'flex-wrap'}`}
+      style={{ color: 'var(--text-muted)' }}
+    >
+      {segments.map(({ key, node, fit }, index) => index === 0 ? <Fragment key={key}>{node}</Fragment> : (
+        // The dot travels with its item, so a wrapped line never starts or ends on one.
+        <span key={key} className={`inline-flex items-center gap-2 max-w-full ${fit ? 'min-w-0' : 'shrink-0'}`}>
+          <span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--border-default)' }} />
+          {node}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 export interface DraggableSessionCardProps {
   session: ArchiveSession;
@@ -148,39 +208,15 @@ export function DraggableSessionCard({
         <FileText className="w-4 h-4 shrink-0 transition-transform duration-200 group-hover/card:scale-105" style={{ color: hasRevisionWarnings ? 'var(--warning-text)' : 'var(--text-muted)' }} />
 
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{session.name}</p>
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-0.5 text-xs min-w-0" style={{ color: 'var(--text-muted)' }}>
-            {ts > 0 && <span className="shrink-0">{formatRelativeTime(ts)}</span>}
-            {session.effective_model && (
-              <><span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--border-default)' }} /><span className="shrink-0">{shortModelName(session.effective_model)}</span></>
-            )}
-            {openedAtMs > 0 && (
-              <>
-                <span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--border-default)' }} />
-                <span className="inline-flex items-center gap-1 shrink-0" title={`Ultima apertura: ${new Date(openedAtMs).toLocaleString('it-IT')}`}>
-                  <Eye className="w-3 h-3 text-muted" style={{ opacity: 0.65 }} />
-                  Aperto {formatRelativeTime(openedAtMs)}
-                </span>
-              </>
-            )}
-            {currentFolder && (
-              <span className="inline-flex items-center gap-2 min-w-0 max-w-full">
-                <span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--border-default)' }} />
-                <FolderIndicatorChip folder={currentFolder} folders={allFolders} />
-              </span>
-            )}
-            {hasRevisionWarnings && (
-              <><span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--border-default)' }} /><span className="shrink-0" style={{ color: 'var(--warning-text)', fontWeight: 600 }}>Completata con avvisi</span></>
-            )}
-            {failedBlockCount > 0 && (
-              <>
-                <span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--border-default)' }} />
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--warning-text)] shrink-0">
-                  <AlertTriangle className="w-3 h-3" />{failedBlockCount} {failedBlockCount === 1 ? 'blocco non revisionato' : 'blocchi non revisionati'}
-                </span>
-              </>
-            )}
-          </div>
+          <p className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]"><MiddleTruncate text={session.name} /></p>
+          <SessionCardMeta
+            completedAtMs={ts}
+            openedAtMs={openedAtMs}
+            model={session.effective_model}
+            folderIndicator={currentFolder && <FolderIndicatorChip folder={currentFolder} folders={allFolders} />}
+            hasRevisionWarnings={hasRevisionWarnings}
+            failedBlockCount={failedBlockCount}
+          />
         </div>
       </div>
 
@@ -240,7 +276,7 @@ export function FolderSessionCardOverlay({
           />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{session.name}</p>
+          <p className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]"><MiddleTruncate text={session.name} /></p>
           <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>
             {ts > 0 && <span>{formatRelativeTime(ts)}</span>}
             {session.effective_model && (
@@ -401,39 +437,15 @@ export function SortableSessionCard({
           />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]">{session.name}</p>
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-0.5 text-xs min-w-0" style={{ color: 'var(--text-muted)' }}>
-            {ts > 0 && <span className="shrink-0">{formatRelativeTime(ts)}</span>}
-            {session.effective_model && (
-              <><span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--border-default)' }} /><span className="shrink-0">{shortModelName(session.effective_model)}</span></>
-            )}
-            {openedAtMs > 0 && (
-              <>
-                <span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--border-default)' }} />
-                <span className="inline-flex items-center gap-1 shrink-0" title={`Ultima apertura: ${new Date(openedAtMs).toLocaleString('it-IT')}`}>
-                  <Eye className="w-3 h-3 text-muted" style={{ opacity: 0.65 }} />
-                  Aperto {formatRelativeTime(openedAtMs)}
-                </span>
-              </>
-            )}
-            {collectionIndicator && (
-              <span className="inline-flex items-center gap-2 min-w-0 max-w-full">
-                <span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--border-default)' }} />
-                {collectionIndicator}
-              </span>
-            )}
-            {hasRevisionWarnings && (
-              <><span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--border-default)' }} /><span className="shrink-0" style={{ color: 'var(--warning-text)', fontWeight: 600 }}>Completata con avvisi</span></>
-            )}
-            {failedBlockCount > 0 && (
-              <>
-                <span className="w-1 h-1 rounded-full shrink-0" style={{ background: 'var(--border-default)' }} />
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--warning-text)] shrink-0">
-                  <AlertTriangle className="w-3 h-3" />{failedBlockCount} {failedBlockCount === 1 ? 'blocco non revisionato' : 'blocchi non revisionati'}
-                </span>
-              </>
-            )}
-          </div>
+          <p className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]"><MiddleTruncate text={session.name} /></p>
+          <SessionCardMeta
+            completedAtMs={ts}
+            openedAtMs={openedAtMs}
+            model={session.effective_model}
+            folderIndicator={collectionIndicator}
+            hasRevisionWarnings={hasRevisionWarnings}
+            failedBlockCount={failedBlockCount}
+          />
         </div>
       </div>
       <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>

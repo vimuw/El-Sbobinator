@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowDownToLine, CheckCircle2, RefreshCw, ExternalLink, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowDownToLine, CheckCircle2, RefreshCw, ExternalLink, Loader2, AlertCircle, Tag } from 'lucide-react';
 import { APP_VERSION, GITHUB_RELEASES_URL } from '../../../branding';
 import { SettingsSectionHeading } from './SettingsLayout';
+import { ExternalLinkIcon } from '../../ExternalLinkIcon';
 
 export interface SettingsUpdateInstallState {
   status?: 'idle' | 'downloading' | 'verifying' | 'installing' | 'done' | 'error';
@@ -97,8 +98,8 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
     <div role="region" aria-label="Versione e aggiornamenti" className="space-y-3">
       {/* Header row: Version Info & Check Button */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="space-y-1 min-w-0">
-          <SettingsSectionHeading>Versione e aggiornamenti</SettingsSectionHeading>
+        <div className="space-y-2 min-w-0">
+          <SettingsSectionHeading icon={Tag}>Versione e aggiornamenti</SettingsSectionHeading>
           <p className="text-xs text-[var(--text-secondary)]">
             Installata:{' '}
             <span className="font-mono font-bold text-[var(--text-primary)]">{cleanAppVersion}</span>
@@ -115,9 +116,10 @@ export const UpdaterSection: React.FC<UpdaterSectionProps> = React.memo(({
               href={GITHUB_RELEASES_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="ml-2 hover:underline text-[var(--accent-text)] font-semibold inline-flex items-center gap-0.5"
+              className="ml-2 underline text-[var(--accent-text)] font-semibold inline-flex items-center gap-0.5"
             >
-              Note di rilascio ↗
+              Note di rilascio
+              <ExternalLinkIcon />
             </a>}
           </p>
         </div>
@@ -232,7 +234,7 @@ export const UpdateNotice: React.FC<Pick<UpdaterSectionProps, 'latestVersion' | 
                     href={GITHUB_RELEASES_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs font-semibold text-[var(--accent-text)] hover:underline inline-flex items-center gap-1 transition-colors"
+                    className="text-xs font-semibold text-[var(--accent-text)] underline inline-flex items-center gap-1 transition-colors"
                   >
                     Note di rilascio su GitHub
                     <ExternalLink className="w-3.5 h-3.5" />

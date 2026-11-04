@@ -3,22 +3,20 @@ import { createPortal } from 'react-dom';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import { AlignCenter, AlignJustify, AlignLeft, AlignRight, ChevronDown } from 'lucide-react';
 import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
+import { useAnchoredPanel } from './anchoredPanel';
 
 export const AlignDropdownButton = ({ editor }: { editor: TiptapEditor }) => {
   const [isOpen, setIsOpen] = React.useState(false);
-  const [panelPos, setPanelPos] = React.useState({ top: 0, left: 0 });
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   const panelRef = React.useRef<HTMLDivElement>(null);
+  const { panelPos, placeUnder } = useAnchoredPanel(isOpen, panelRef);
 
   const isCenter = editor.isActive({ textAlign: 'center' });
   const isRight = editor.isActive({ textAlign: 'right' });
   const isJustify = editor.isActive({ textAlign: 'justify' });
 
   const toggleOpen = () => {
-    if (!isOpen && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      setPanelPos({ top: rect.bottom + 6, left: rect.left });
-    }
+    if (!isOpen && buttonRef.current) placeUnder(buttonRef.current);
     setIsOpen(prev => !prev);
   };
 
@@ -57,7 +55,7 @@ export const AlignDropdownButton = ({ editor }: { editor: TiptapEditor }) => {
         <div
           ref={panelRef}
           className="kebab-panel editor-dropdown-panel"
-          style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 9999 }}
+          style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 'var(--z-popover)' }}
         >
           <button
             type="button"

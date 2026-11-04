@@ -105,9 +105,13 @@ export function normalizeHeadingLevels(md: string): string {
 
 const SCRIPT_OR_STYLE = /<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
 const INLINE_HTML_OK =/^<\/?(sub|sup|u|s|mark|br)\s*\/?>$/i;
+// The URL the browser will follow: it drops tabs and newlines anywhere and control characters or
+// spaces at the ends, so "java\tscript:" is a javascript: link; "\\host" reaches another host like "//host".
 const safeUrl = (href: string, schemes: string[]) => {
-  const m = /^([a-z][a-z0-9+.-]*):/i.exec(href.trim());
-  return m ? schemes.includes(m[1].toLowerCase()) : !href.trim().startsWith('//');
+  // eslint-disable-next-line no-control-regex
+  const url = href.replace(/[\t\n\r]/g, '').replace(/^[\u0000- ]+|[\u0000- ]+$/g, '');
+  const m = /^([a-z][a-z0-9+.-]*):/i.exec(url);
+  return m ? schemes.includes(m[1].toLowerCase()) : !/^[/\\]{2}/.test(url);
 };
 
 const marked = new Marked({
@@ -186,8 +190,12 @@ export function buildBody(finalMarkdown: string, revisionFailed: boolean): strin
   return i < 0 ? warningBanner() + body : body.slice(0, i + 5) + '\n' + warningBanner() + body.slice(i + 5);
 }
 
-// Elements a stored body never needs: code, frames, forms and document-level tags.
-const UNSAFE_ELEMENTS = 'script,style,iframe,frame,frameset,object,embed,applet,link,meta,base,form,input,button,textarea,select,noscript,template';
+// Elements a stored body never needs: code, frames, forms and document-level tags. Inline SVG goes
+// too (its animation can set a javascript: href; formulas are redrawn from data-math). MathML stays,
+// since the Drive export shows formulas through it, without its actions and embedded markup. The
+// raw-text elements and MathML's mglyph/malignmark go too: parsed again they turn markup inside
+// them into live elements (mutation XSS).
+const UNSAFE_ELEMENTS = 'script,style,iframe,frame,frameset,object,embed,applet,link,meta,base,form,input,button,textarea,select,noscript,template,svg,maction,annotation-xml,mglyph,malignmark,xmp,noembed,noframes,plaintext';
 const URL_ATTRIBUTES = ['href', 'src', 'xlink:href', 'action', 'formaction', 'poster', 'background'];
 
 /**
@@ -197,6 +205,18 @@ const URL_ATTRIBUTES = ['href', 'src', 'xlink:href', 'action', 'formaction', 'po
  * handlers go, links keep http(s)/mailto and images also inline data: images. Needs a DOMParser.
  */
 export function sanitizeBodyHtml(html: string): string {
+  // Cleaned until a new parse finds nothing left to clean: what the browser builds when it reads the
+  // result again is what was checked.
+  let clean = cleanOnce(html);
+  for (let pass = 0; pass < 3; pass += 1) {
+    const again = cleanOnce(clean);
+    if (again === clean) return clean;
+    clean = again;
+  }
+  return '';
+}
+
+function cleanOnce(html: string): string {
   const doc = new DOMParser().parseFromString(`<body>${html.replace(SCRIPT_OR_STYLE, '')}</body>`, 'text/html');
   doc.body.querySelectorAll(UNSAFE_ELEMENTS).forEach(element => element.remove());
   doc.body.querySelectorAll('*').forEach(element => {
@@ -207,7 +227,8 @@ export function sanitizeBodyHtml(html: string): string {
       } else if (URL_ATTRIBUTES.includes(name)) {
         const image = element.tagName.toLowerCase() === 'img' && name === 'src';
         const value = attribute.value.trim();
-        const allowed = image && /^data:image\/(?:png|jpe?g|gif|webp|avif|bmp);/i.test(value)
+        // SVG too: the editor keeps it as picked, and as an <img> it runs no script.
+        const allowed = image && /^data:image\/(?:png|jpe?g|gif|webp|avif|bmp|svg\+xml)[;,]/i.test(value)
           ? true
           : safeUrl(value, image ? ['http', 'https'] : ['http', 'https', 'mailto']);
         if (!allowed) element.removeAttribute(attribute.name);

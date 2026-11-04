@@ -43,8 +43,7 @@ test('Docs script shortcuts, buttons, clipboard geometry and saved reopen', asyn
   expect(await editor.locator('.editor-script-caret').evaluate(caret => getComputedStyle(caret, '::after').animationName)).toBe('editor-script-caret-blink');
   await page.screenshot({ path: testInfo.outputPath('caret-apice.png'), clip: { x: 300, y: 52, width: 520, height: 230 } });
   await page.keyboard.press('Control+,');
-  await expect(page.getByRole('button', { name: 'Apice (Ctrl+.)', exact: true })).toHaveAttribute('aria-pressed', 'false');
-  await expect(page.getByRole('button', { name: 'Pedice (Ctrl+,)', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Apice e pedice', exact: true })).toHaveAttribute('data-script', 'subscript');
   const pedice = await cursorMetrics();
   expect(pedice.y).toBeGreaterThan(pedice.normalY);
   expect(pedice.height).toBeLessThan(pedice.normalHeight);
@@ -73,6 +72,8 @@ test('Docs script shortcuts, buttons, clipboard geometry and saved reopen', asyn
   });
   await page.keyboard.press('Control+,');
   await expect(editor.locator('sub')).toHaveText('2');
+  await expect(page.getByRole('button', { name: 'Apice e pedice', exact: true })).toHaveAttribute('data-script', 'subscript');
+  await page.getByRole('button', { name: 'Apice e pedice', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Pedice (Ctrl+,)', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'Apice (Ctrl+.)', exact: true }).click();
   expect(await editor.locator('sub').count()).toBe(0);

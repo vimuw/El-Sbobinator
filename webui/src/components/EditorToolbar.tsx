@@ -1,19 +1,23 @@
 import React, { useRef } from 'react';
+import { AnimatePresence } from 'motion/react';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import {
-  Bold, Italic, List, ListOrdered, ListTree, Quote, Redo,
-  RemoveFormatting, Search, Strikethrough, Superscript, Subscript,
-  Type, Underline as UnderlineIcon, Undo,
+  Baseline, Bold, ChevronDown, ImagePlus, Italic, Link2, List, ListOrdered, Plus, Quote, Redo2,
+  RemoveFormatting, Search, Sigma, SquarePlay, Strikethrough,
+  Underline as UnderlineIcon, Undo2,
 } from 'lucide-react';
 import {
   ColorPickerButton, HighlightPickerButton, FontFamilySelect,
   FontSizeSelect, HeadingSelect, LinkButton, AlignDropdownButton,
   InsertImageButton, InsertMathButton, InsertYoutubeButton,
-  ZoomSelect,
+  ScriptDropdownButton, ZoomSelect,
 } from './EditorToolbarControls';
 import { editorIsBold } from '../editorBold';
 import { shortcutLabel } from '../keyboardLabels';
 import { usePhoneLayout } from '../hooks/usePhoneLayout';
+import { useToolbarOverflow } from '../hooks/useToolbarOverflow';
+import { KebabMenu } from './KebabMenu';
+import { PhoneFormatSheet } from './editor/toolbar/PhoneFormatSheet';
 
 const menuBarStateKey = (editor: TiptapEditor): string => [
   editorIsBold(editor),
@@ -53,6 +57,36 @@ const keepEditorFocus = (event: React.MouseEvent) => {
   if (target.closest('button')) event.preventDefault();
 };
 
+// Marks which edges of the phone's scrolling row hide more tools, for the CSS fades.
+const markRowEdges = (row: HTMLElement) => {
+  row.toggleAttribute('data-more-left', row.scrollLeft > 1);
+  row.toggleAttribute('data-more-right', row.scrollLeft + row.clientWidth < row.scrollWidth - 1);
+};
+
+// Also on mount and whenever the row's width changes (rotation, a resized window).
+const trackRowEdges = (row: HTMLElement | null) => {
+  if (!row) return;
+  markRowEdges(row);
+  if (typeof ResizeObserver === 'undefined') return;
+  const observer = new ResizeObserver(() => markRowEdges(row));
+  observer.observe(row);
+  return () => observer.disconnect();
+};
+
+// Opens the wrapped lines of the tablet toolbar.
+const MoreToolsButton = ({ open, onToggle }: { open: boolean; onToggle: () => void }) => (
+  <button
+    type="button"
+    onClick={onToggle}
+    className={`editor-button editor-more-button${open ? ' is-active' : ''}`}
+    title={open ? 'Nascondi altri strumenti' : 'Altri strumenti'}
+    aria-label="Altri strumenti"
+    aria-expanded={open}
+  >
+    <ChevronDown className="h-4 w-4" />
+  </button>
+);
+
 export const MenuBar = ({
   editor,
   onOpenImagePicker,
@@ -63,8 +97,7 @@ export const MenuBar = ({
   onToggleFindReplace,
   zoomLevel,
   onZoomChange,
-  isTocOpen,
-  onTocToggle,
+  zoomInHeaderMenu = false,
 }: {
   editor: TiptapEditor | null;
   onOpenImagePicker: () => void;
@@ -75,13 +108,27 @@ export const MenuBar = ({
   onToggleFindReplace: () => void;
   zoomLevel?: number;
   onZoomChange?: (level: number) => void;
-  isTocOpen?: boolean;
-  onTocToggle?: () => void;
+  /** Phone: the editor header's "…" menu already offers the zoom (EditorFullPage). */
+  zoomInHeaderMenu?: boolean;
 }) => {
   const [, forceUpdate] = React.useState({});
   const compact = usePhoneLayout();
   const [moreOpen, setMoreOpen] = React.useState(false);
   const prevMenuKeyRef = useRef('');
+  const [groupsRef, overflowing] = useToolbarOverflow();
+  const insertAnchorRef = useRef<HTMLSpanElement>(null);
+  const [formatOpen, setFormatOpen] = React.useState(false);
+  const formatButtonRef = useRef<HTMLButtonElement>(null);
+  const refocusAfterFormatRef = useRef(false);
+  // Once everything fits again the lines close, so the next overflow starts folded.
+  if (moreOpen && !overflowing) setMoreOpen(false);
+  if (formatOpen && !compact) setFormatOpen(false);
+
+  // The keyboard comes back only if it was open when "A" closed it.
+  const closeFormat = React.useCallback((refocus: boolean) => {
+    setFormatOpen(false);
+    if (refocus && refocusAfterFormatRef.current) editor?.commands.focus();
+  }, [editor]);
 
   React.useEffect(() => {
     if (!editor) return;
@@ -115,7 +162,7 @@ export const MenuBar = ({
       className="editor-button"
       title={shortcutLabel('Annulla (Ctrl+Z)')}
     >
-      <Undo className="h-4 w-4" />
+      <Undo2 className="h-4 w-4" />
     </button>
   );
   const redoButton = (
@@ -130,7 +177,7 @@ export const MenuBar = ({
       className="editor-button"
       title={shortcutLabel('Ripeti (Ctrl+Y)')}
     >
-      <Redo className="h-4 w-4" />
+      <Redo2 className="h-4 w-4" />
     </button>
   );
   const zoomSelect = onZoomChange !== undefined && zoomLevel !== undefined
@@ -156,16 +203,6 @@ export const MenuBar = ({
       <Strikethrough className="h-4 w-4" />
     </button>
   );
-  const scriptControls = (
-    <div className="editor-script-controls" role="group" aria-label="Apice e pedice">
-      <button type="button" onClick={() => editor.chain().focus().toggleSuperscript().run()} className={btn(editor.isActive('superscript'))} title={shortcutLabel('Apice (Ctrl+.)')} aria-label={shortcutLabel('Apice (Ctrl+.)')} aria-pressed={editor.isActive('superscript')}>
-        <Superscript className="h-4 w-4" />
-      </button>
-      <button type="button" onClick={() => editor.chain().focus().toggleSubscript().run()} className={btn(editor.isActive('subscript'))} title={shortcutLabel('Pedice (Ctrl+,)')} aria-label={shortcutLabel('Pedice (Ctrl+,)')} aria-pressed={editor.isActive('subscript')}>
-        <Subscript className="h-4 w-4" />
-      </button>
-    </div>
-  );
   const clearFormattingButton = (
     <button
       type="button"
@@ -178,21 +215,21 @@ export const MenuBar = ({
   );
   const insertButtons = (
     <>
-      <InsertImageButton onOpenImagePicker={onOpenImagePicker} />
-      <InsertYoutubeButton onOpenLink={onOpenLink} />
-      <InsertMathButton onOpenMath={onOpenMath} />
       <LinkButton editor={editor} openRequest={linkRequest} />
+      <InsertImageButton onOpenImagePicker={onOpenImagePicker} />
+      <InsertMathButton onOpenMath={onOpenMath} />
+      <InsertYoutubeButton onOpenLink={onOpenLink} />
     </>
   );
-  const listButtons = (
-    <>
-      <button type="button" onClick={() => editor.chain().focus().toggleBulletList().run()} className={btn(editor.isActive('bulletList'))} title="Elenco puntato">
-        <List className="h-4 w-4" />
-      </button>
-      <button type="button" onClick={() => editor.chain().focus().toggleOrderedList().run()} className={btn(editor.isActive('orderedList'))} title="Elenco numerato">
-        <ListOrdered className="h-4 w-4" />
-      </button>
-    </>
+  const bulletListButton = (
+    <button type="button" onClick={() => editor.chain().focus().toggleBulletList().run()} className={btn(editor.isActive('bulletList'))} title="Elenco puntato">
+      <List className="h-4 w-4" />
+    </button>
+  );
+  const orderedListButton = (
+    <button type="button" onClick={() => editor.chain().focus().toggleOrderedList().run()} className={btn(editor.isActive('orderedList'))} title="Elenco numerato">
+      <ListOrdered className="h-4 w-4" />
+    </button>
   );
   const quoteButton = (
     <button type="button" onClick={() => editor.chain().focus().toggleBlockquote().run()} className={btn(editor.isActive('blockquote'))} title="Citazione">
@@ -210,98 +247,157 @@ export const MenuBar = ({
     </button>
   );
 
-  // Phone: one row with what a student uses while reading and fixing a sbobina, like Google Docs
-  // on a phone; "Aa" opens the rest below it. The row scrolls sideways on the narrowest screens.
+  // Phone: like Google Docs on a phone, the row keeps the tools used most while fixing a sbobina
+  // and scrolls sideways when they do not fit; the edge fades while there is more to scroll to.
+  // Undo and redo stay pinned at its start and "A" at its end, so they never scroll away; "A" opens the sheet with the rest (style, font, size, the rarer marks, indent).
+  // "+" lists what can be inserted by name and sits beside "A": both change the text, so they
+  // stay on the toolbar rather than among the header's page actions. Given the header's "…"
+  // menu, the zoom goes there, with the index and search.
   if (compact) {
+    const separator = <div className="editor-separator" />;
+    const toggleFormat = () => {
+      if (formatOpen) {
+        closeFormat(true);
+        return;
+      }
+      // The sheet takes the keyboard's place, as in Docs: blurring the editor puts it away.
+      refocusAfterFormatRef.current = editor.isFocused;
+      (editor.view?.dom as HTMLElement | undefined)?.blur();
+      setFormatOpen(true);
+    };
+    const insertMenu = (
+      <span ref={insertAnchorRef} className="editor-insert-menu">
+        <KebabMenu
+          icon={<Plus className="h-4 w-4" />}
+          ariaLabel="Inserisci"
+          buttonClassName="editor-insert-menu-button"
+          items={[
+            { label: 'Link', icon: <Link2 className="h-4 w-4" />, onClick: onOpenLink },
+            { label: 'Immagine', icon: <ImagePlus className="h-4 w-4" />, onClick: onOpenImagePicker },
+            { label: 'Formula', icon: <Sigma className="h-4 w-4" />, onClick: onOpenMath },
+            { label: 'Video YouTube', icon: <SquarePlay className="h-4 w-4" />, onClick: onOpenLink },
+          ]}
+        />
+      </span>
+    );
     return (
       <div className="editor-toolbar-compact" onMouseDown={keepEditorFocus}>
         <div className="editor-toolbar is-compact">
-          <div className="editor-toolbar-row">
+          <div className="editor-toolbar-pinned is-start">
             {undoButton}
-            <HeadingSelect editor={editor} />
+            {redoButton}
+          </div>
+          <div className="editor-toolbar-row" ref={trackRowEdges} onScroll={event => markRowEdges(event.currentTarget)}>
             {boldButton}
             {italicButton}
-            <HighlightPickerButton editor={editor} />
-            {listButtons}
-          </div>
-          {onTocToggle && (
-            <button
-              type="button"
-              onClick={onTocToggle}
-              className={btn(Boolean(isTocOpen))}
-              title="Indice"
-              aria-label="Indice"
-              aria-pressed={Boolean(isTocOpen)}
-            >
-              <ListTree className="h-4 w-4" />
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setMoreOpen(open => !open)}
-            className={btn(moreOpen)}
-            title="Altri strumenti"
-            aria-label="Altri strumenti"
-            aria-expanded={moreOpen}
-          >
-            <Type className="h-4 w-4" />
-          </button>
-        </div>
-        {moreOpen && (
-          <div className="editor-toolbar editor-toolbar-more" role="group" aria-label="Altri strumenti">
-            {redoButton}
             {underlineButton}
-            {zoomSelect}
-            <FontFamilySelect editor={editor} />
-            <FontSizeSelect editor={editor} />
-            {strikeButton}
-            {scriptControls}
+            <HighlightPickerButton editor={editor} />
             <ColorPickerButton editor={editor} />
-            {clearFormattingButton}
-            {quoteButton}
+            {separator}
+            {bulletListButton}
+            {orderedListButton}
+            {separator}
             <AlignDropdownButton editor={editor} />
-            {insertButtons}
-            {findButton}
+            {!zoomInHeaderMenu && zoomSelect && (
+              <>
+                {separator}
+                {zoomSelect}
+              </>
+            )}
           </div>
-        )}
+          <div className="editor-toolbar-pinned is-end">
+            <button
+              ref={formatButtonRef}
+              type="button"
+              onClick={toggleFormat}
+              className={`editor-button editor-format-button${formatOpen ? ' is-active' : ''}`}
+              title="Formato"
+              aria-label="Formato"
+              aria-expanded={formatOpen}
+            >
+              <Baseline className="h-4 w-4" />
+            </button>
+            {insertMenu}
+          </div>
+          {/* Kept mounted while it slides back down, like the keyboard it gives way to. */}
+          <AnimatePresence>
+            {formatOpen && <PhoneFormatSheet key="format-sheet" editor={editor} anchorRef={formatButtonRef} onClose={closeFormat} />}
+          </AnimatePresence>
+          <LinkButton editor={editor} openRequest={linkRequest} hideButton anchorRef={insertAnchorRef} />
+        </div>
       </div>
     );
   }
 
+  // Tablets and narrow windows: the groups that do not fit on the first line fold behind the
+  // arrow, like Google Docs, instead of pushing the page down with a second and third line.
+  // Each group carries its leading separator, so a group wraps whole. Style, font and size open
+  // the line as in Google Docs; after them the groups run from the tools a student uses most
+  // while fixing a sbobina to the least used, so a narrow window folds those away first.
   return (
-    <div className="editor-toolbar" onMouseDown={keepEditorFocus}>
-      {undoButton}
-      {redoButton}
-
-      {zoomSelect && (
-        <>
+    <div
+      className={`editor-toolbar editor-toolbar-full${moreOpen ? ' is-expanded' : ''}`}
+      onMouseDown={keepEditorFocus}
+    >
+      <div className="editor-toolbar-groups" ref={groupsRef}>
+        <div className="editor-toolbar-group">
+          {undoButton}
+          {redoButton}
+        </div>
+        <div className="editor-toolbar-group">
           <div className="editor-separator" />
-          {zoomSelect}
-        </>
-      )}
-
-      <div className="editor-separator" />
-      <HeadingSelect editor={editor} />
-      <FontFamilySelect editor={editor} />
-      <FontSizeSelect editor={editor} />
-      <div className="editor-separator" />
-      {boldButton}
-      {italicButton}
-      {underlineButton}
-      {strikeButton}
-      {scriptControls}
-      <ColorPickerButton editor={editor} />
-      <HighlightPickerButton editor={editor} />
-      {clearFormattingButton}
-      <div className="editor-separator" />
-      {insertButtons}
-      <div className="editor-separator" />
-      <AlignDropdownButton editor={editor} />
-      <div className="editor-separator" />
-      {listButtons}
-      {quoteButton}
-      <div className="editor-separator" />
-      {findButton}
+          <HeadingSelect editor={editor} />
+        </div>
+        <div className="editor-toolbar-group">
+          <div className="editor-separator" />
+          <FontFamilySelect editor={editor} />
+          <FontSizeSelect editor={editor} />
+        </div>
+        <div className="editor-toolbar-group">
+          <div className="editor-separator" />
+          {boldButton}
+          {italicButton}
+          {underlineButton}
+        </div>
+        {/* Split without a separator: on a portrait iPad bold and italic stay out even when
+            the colours fold. */}
+        <div className="editor-toolbar-group">
+          <HighlightPickerButton editor={editor} />
+          <ColorPickerButton editor={editor} />
+        </div>
+        <div className="editor-toolbar-group">
+          <div className="editor-separator" />
+          {bulletListButton}
+          {orderedListButton}
+        </div>
+        <div className="editor-toolbar-group">
+          <div className="editor-separator" />
+          {findButton}
+        </div>
+        <div className="editor-toolbar-group">
+          <div className="editor-separator" />
+          {insertButtons}
+        </div>
+        <div className="editor-toolbar-group">
+          <div className="editor-separator" />
+          <AlignDropdownButton editor={editor} />
+        </div>
+        {/* The least used text tools; the quote is rare in a sbobina, so it folds with them. */}
+        <div className="editor-toolbar-group">
+          <div className="editor-separator" />
+          {strikeButton}
+          <ScriptDropdownButton editor={editor} />
+          {quoteButton}
+          {clearFormattingButton}
+        </div>
+        {zoomSelect && (
+          <div className="editor-toolbar-group">
+            <div className="editor-separator" />
+            {zoomSelect}
+          </div>
+        )}
+      </div>
+      {overflowing && <MoreToolsButton open={moreOpen} onToggle={() => setMoreOpen(open => !open)} />}
     </div>
   );
 };

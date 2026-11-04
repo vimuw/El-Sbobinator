@@ -291,7 +291,7 @@ export function QueuePage({
             <button
               type="button"
               onClick={handleOpenSettings}
-              className="shrink-0 premium-button-secondary compact-button is-warning flex items-center justify-center gap-2"
+              className="shrink-0 compact-button is-warning flex items-center justify-center gap-2"
             >
               <Settings className="w-4 h-4" />
               Gestisci credenziali

@@ -55,11 +55,34 @@ describe('web host', () => {
     expect(checked.result?.credentials?.[1].operational_status).toBe('unused');
   });
 
-  it('installs the in-page API with web capabilities and announces it', () => {
+  it('says why instead of staying blank when the browser blocks the site data', async () => {
+    // Regression: with cookies and site data blocked, every use of localStorage throws, and the host
+    // stopped while starting (the Gemini usage store reads it): the page stayed blank.
+    const targets = [...new Set<object>([window, globalThis])];
+    const saved = targets.map(target => Object.getOwnPropertyDescriptor(target, 'localStorage'));
+    for (const target of targets) {
+      Object.defineProperty(target, 'localStorage', { configurable: true, get: () => { throw new DOMException('The operation is insecure.', 'SecurityError'); } });
+    }
+    try {
+      await expect(initWebHost()).resolves.toBe(false);
+    } finally {
+      targets.forEach((target, index) => {
+        if (saved[index]) Object.defineProperty(target, 'localStorage', saved[index]!);
+        else delete (target as { localStorage?: Storage }).localStorage;
+      });
+    }
+    expect(window.pywebview).toBeUndefined();
+    const page = document.querySelector('[role="alert"]');
+    expect(page?.textContent).toContain('Il browser blocca i dati di questo sito');
+    expect(page?.querySelector('button')?.textContent).toBe('Ricarica');
+    page?.remove();
+  });
+
+  it('installs the in-page API with web capabilities and announces it', async () => {
     const onReady = vi.fn();
     window.addEventListener('pywebviewready', onReady, { once: true });
 
-    initWebHost();
+    await initWebHost();
 
     expect(onReady).toHaveBeenCalledTimes(1);
     // The touch sizing in index.css applies to the web build only.
@@ -146,6 +169,12 @@ describe('web host', () => {
     expect(await api.get_session_storage_info!()).toEqual({
       ok: true, total_bytes: 0, total_sessions: 0, session_root: expect.stringContaining('il browser può svuotarla'),
       usage_detail: 'Testi delle sbobine 0 KB · audio delle sbobine 0 KB · avanzamento elaborazioni 0 KB · stima del browser 4 KB', persisted: false,
+      usage_breakdown: [
+        { label: 'Testi delle sbobine', bytes: 0 },
+        { label: 'Audio delle sbobine', bytes: 0 },
+        { label: 'Avanzamento elaborazioni', bytes: 0 },
+      ],
+      browser_estimate_bytes: 4096,
     });
     const [file] = await api.upload_browser_files!([new File(['a'], 'Anatomia.m4a')]);
 

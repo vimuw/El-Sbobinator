@@ -46,7 +46,7 @@ export function MoveToFolderModal({ folders, movingFolderId, movingSessions = []
   }, []);
 
   return (
-    <motion.div className="fixed inset-0 z-[60] flex items-center justify-center p-4" exit={{ opacity: 0 }}>
+    <motion.div className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-4" exit={{ opacity: 0 }}>
       <div className="modal-overlay absolute inset-0" />
       <div role="dialog" aria-modal="true" aria-labelledby="move-folder-title" className="modal-card relative w-full max-w-md max-h-[86vh] overflow-hidden flex flex-col">
         <div className="modal-header">

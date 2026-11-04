@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import type { NotificationMessage } from '../NotificationDropdown';
 
 export function getCategoryLabel(category: NotificationMessage['category']) {
@@ -30,35 +31,39 @@ export function getItemTone(
   }
 }
 
+/** A category badge's colours; .notification-category-badge lays --badge-bg (see index.css). */
+export type CategoryBadgeStyle = CSSProperties & { '--badge-bg': string };
+
+/** Returns the badge colours for a notification's category and type. */
 export function getCategoryBadgeStyle(
   category: NotificationMessage['category'],
   type: NotificationMessage['type']
-) {
+): CategoryBadgeStyle {
   if (category === 'update' || type === 'info') {
     return {
-      background: 'var(--accent-subtle)',
+      '--badge-bg': 'var(--accent-subtle)',
       color: 'var(--accent-text)',
     };
   }
   switch (type) {
     case 'success':
       return {
-        background: 'var(--success-subtle)',
+        '--badge-bg': 'var(--success-subtle)',
         color: 'var(--success-text)',
       };
     case 'warning':
       return {
-        background: 'var(--warning-subtle)',
+        '--badge-bg': 'var(--warning-subtle)',
         color: 'var(--warning-text)',
       };
     case 'error':
       return {
-        background: 'var(--error-subtle)',
+        '--badge-bg': 'var(--error-subtle)',
         color: 'var(--error-text)',
       };
     default:
       return {
-        background: 'var(--border-subtle)',
+        '--badge-bg': 'var(--border-subtle)',
         color: 'var(--text-muted)',
       };
   }

@@ -63,18 +63,36 @@ function dosDateTime(timestamp: number): { time: number; date: number } {
  * only slow step (every byte is read once).
  */
 export async function createZip(inputs: ZipInput[], onProgress?: (done: number, total: number) => void): Promise<Blob> {
-  const encoder = new TextEncoder();
   const total = inputs.reduce((sum, input) => sum + input.data.size, 0);
   let done = 0;
+  const crcs: number[] = [];
+  for (const input of inputs) {
+    crcs.push(await crc32(input.data, bytes => {
+      done += bytes;
+      onProgress?.(done, total);
+    }));
+  }
+  return assembleZip(inputs, crcs);
+}
+
+/**
+ * A small in-memory ZIP built synchronously, so a download can start inside the tap that asked
+ * for it (Safari drops a download started after an await).
+ */
+export function createZipSync(inputs: Array<{ name: string; data: Uint8Array<ArrayBuffer> }>, type = 'application/zip'): Blob {
+  const crcs = inputs.map(input => (updateCrc(0xffffffff, input.data) ^ 0xffffffff) >>> 0);
+  const zip = assembleZip(inputs.map(input => ({ name: input.name, data: new Blob([input.data]) })), crcs);
+  return new Blob([zip], { type });
+}
+
+function assembleZip(inputs: ZipInput[], crcs: number[]): Blob {
+  const encoder = new TextEncoder();
   const parts: BlobPart[] = [];
   const central: Uint8Array<ArrayBuffer>[] = [];
   let offset = 0;
-  for (const input of inputs) {
+  for (const [index, input] of inputs.entries()) {
     const name = encoder.encode(input.name) as Uint8Array<ArrayBuffer>;
-    const crc = await crc32(input.data, bytes => {
-      done += bytes;
-      onProgress?.(done, total);
-    });
+    const crc = crcs[index];
     const { time, date } = dosDateTime(input.lastModified ?? Date.now());
     const size = input.data.size;
     if (offset + 30 + name.length + size > MAX_ZIP_BYTES) {
@@ -133,6 +151,31 @@ async function bytesOf(blob: Blob, start: number, end: number): Promise<DataView
   return new DataView(await blob.slice(start, end).arrayBuffer());
 }
 
+// A zip bomb (a few MB that inflate to GBs) would fill the tab's memory. Audio barely deflates and
+// text by a few times, so an entry that grows past both limits is not a backup.
+const MAX_INFLATE_RATIO = 100;
+const INFLATE_RATIO_FROM_BYTES = 16 * 1024 * 1024;
+
+/** A deflated entry, never larger than its declared size, which must itself be plausible. */
+async function inflate(data: Blob, size: number, name: string): Promise<Blob> {
+  const tooLarge = () => new ZipFormatError(`Voce ${name} troppo grande una volta decompressa: il file non è un backup valido.`);
+  if (size > INFLATE_RATIO_FROM_BYTES && size > data.size * MAX_INFLATE_RATIO) throw tooLarge();
+  const reader = data.stream().pipeThrough(new DecompressionStream('deflate-raw')).getReader();
+  const parts: Uint8Array<ArrayBuffer>[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > size) {
+      await reader.cancel().catch(() => undefined);
+      throw tooLarge();
+    }
+    parts.push(value as Uint8Array<ArrayBuffer>);
+  }
+  return new Blob(parts);
+}
+
 /** Entries of a ZIP file, by name. Throws ZipFormatError for a file that is not a readable ZIP. */
 export async function readZip(file: Blob): Promise<Map<string, ZipEntry>> {
   // The end record sits in the last 22 bytes plus an optional comment of up to 64 KB.
@@ -180,9 +223,7 @@ export async function readZip(file: Blob): Promise<Map<string, ZipEntry>> {
         const data = file.slice(start, start + compressedSize);
         if (data.size !== compressedSize) throw new ZipFormatError(`Voce ${name} incompleta nel file ZIP.`);
         if (method === 0) return data;
-        if (method === 8 && typeof DecompressionStream === 'function') {
-          return new Response(data.stream().pipeThrough(new DecompressionStream('deflate-raw'))).blob();
-        }
+        if (method === 8 && typeof DecompressionStream === 'function') return inflate(data, size, name);
         throw new ZipFormatError(`Voce ${name} compressa in un formato non supportato.`);
       },
     });

@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   BOZZA da far rivedere al titolare prima di pubblicarla: non è consulenza legale.
-  Ogni affermazione è stata ricavata dal codice dell'app web il 27-10-2026;
+  Ogni affermazione è stata ricavata dal codice dell'app web il 28-10-2026 (termini Gemini letti lo stesso giorno);
   se l'app cambia (audio, Google Drive), aggiornare il testo e la data.
   Pagina statica, entry della build web (vite.config.ts): niente script tranne il tema, colori e
   font dai token dell'app (src/theme.css), stessa Content-Security-Policy del sito (scritta dalla
@@ -21,28 +21,59 @@
   </head>
   <body>
     <header class="site-header">
-      <a class="brand" href="./">
+      <!-- One way back: the arrow beside the app's name, the whole row a link. -->
+      <a class="brand" href="./" aria-label="Torna a El Sbobinator">
+        <span class="brand-arrow" aria-hidden="true">←</span>
         <img src="./icon.png" alt="" width="32" height="32" />
         <span>El Sbobinator</span>
       </a>
-      <a class="back-button" href="./">← Torna a El Sbobinator</a>
     </header>
     <main>
       <article>
         <h1>Informativa sulla privacy</h1>
-        <p class="updated">Ultimo aggiornamento: 27 ottobre 2026</p>
+        <p class="updated">Ultimo aggiornamento: 28 ottobre 2026</p>
+
+        <nav class="toc" aria-label="In questa pagina">
+          <p>In questa pagina</p>
+          <ol>
+            <li><a href="#in-breve">In breve</a></li>
+            <li><a href="#titolare">Chi è il titolare</a></li>
+            <li><a href="#browser">Cosa resta nel tuo browser</a></li>
+            <li><a href="#gemini">Cosa va a Google Gemini</a></li>
+            <li><a href="#google-drive">Google Drive (facoltativo)</a></li>
+            <li><a href="#sito">Il sito e Cloudflare</a></li>
+            <li><a href="#altri-servizi">Altri servizi, solo se li apri tu</a></li>
+            <li><a href="#sviluppatore">Cosa arriva allo sviluppatore</a></li>
+            <li><a href="#base-giuridica">Basi giuridiche e trasferimenti</a></li>
+            <li><a href="#eta">Età minima</a></li>
+            <li><a href="#diritti">I tuoi diritti</a></li>
+            <li><a href="#modifiche">Modifiche</a></li>
+          </ol>
+        </nav>
 
         <h2 id="in-breve">In breve</h2>
+        <p><strong>El Sbobinator non ha un server suo e non ti chiede un account: lo sviluppatore non riceve le tue sbobine, il tuo audio o le tue chiavi.</strong></p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th scope="col">Cosa</th><th scope="col">Dove sta</th><th scope="col">Chi lo vede</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Sbobine e raccolte</td><td>In questo browser; su Google Drive solo se attivi la sincronizzazione</td><td>Tu</td></tr>
+              <tr><td>Audio della lezione</td><td>In questo browser durante l’elaborazione; dopo solo se scegli di tenerlo</td><td>Tu, e Google Gemini per trascriverlo</td></tr>
+              <tr><td>Chiavi API Gemini</td><td>In questo browser, non cifrate</td><td>Tu, e chi usa questo browser</td></tr>
+              <tr><td>Segnalazioni ed email</td><td>Google Moduli e Gmail dello sviluppatore</td><td>Lo sviluppatore, solo se gli scrivi</td></tr>
+            </tbody>
+          </table>
+        </div>
         <ul>
-          <li>El Sbobinator funziona dentro il tuo browser. Non ha un server suo e non ti chiede un account.</li>
-          <li>Le sbobine restano in questo browser, su questo dispositivo.</li>
-          <li>Se vuoi, puoi sincronizzarle con il tuo Google Drive per averle anche sugli altri dispositivi. È facoltativo.</li>
-          <li>Per trascrivere, il browser manda l’audio della lezione a Google Gemini con la tua chiave API.</li>
-          <li>Il sito non usa cookie e non ha strumenti di statistica.</li>
+          <li>Per trascrivere, il browser manda l’audio della lezione direttamente a Google Gemini con la tua chiave API.</li>
+          <li>Se vuoi, puoi sincronizzare le sbobine con il tuo Google Drive per averle anche sugli altri dispositivi. È facoltativo.</li>
+          <li>Il sito non usa cookie e non ha strumenti di statistica o pubblicità.</li>
         </ul>
 
         <h2 id="titolare">Chi è il titolare</h2>
-        <p>Vimu · <a href="mailto:vimuwijesinghe@gmail.com">vimuwijesinghe@gmail.com</a></p>
+        <p><a href="mailto:vimuwijesinghe@gmail.com">vimuwijesinghe@gmail.com</a></p>
         <p>El Sbobinator è un progetto open source: il codice è su <a href="https://github.com/vimuw/El-Sbobinator">GitHub</a>.</p>
 
         <h2 id="browser">Cosa resta nel tuo browser</h2>
@@ -50,14 +81,14 @@
         <ul>
           <li>le sbobine: testo, titolo, date e modello usato;</li>
           <li>le raccolte in cui le organizzi;</li>
-          <li>una copia dell’audio della lezione, per elaborarla e, se la tieni, per ascoltarla nell’editor;</li>
+          <li>una copia del file della lezione mentre viene elaborata: a sbobina finita si cancella, a meno che nell’editor tu scelga di tenerla per riascoltarla;</li>
           <li>l’avanzamento delle elaborazioni (testi parziali), per riprendere dopo un’interruzione;</li>
           <li>le tue chiavi API Gemini, non cifrate: chi usa questo browser sul tuo dispositivo può vederle;</li>
           <li>preferenze (tema, modello), la coda dei file, le notifiche, la data dell’ultimo backup e il conto delle richieste a Gemini di oggi (con le chiavi mascherate).</li>
         </ul>
         <p>Questi dati non arrivano a El Sbobinator. Ogni indirizzo del sito ha una memoria separata.</p>
-        <p>Il backup (Impostazioni → Archiviazione) è un file che scarichi tu e resta dove lo salvi. Non contiene le chiavi API.</p>
-        <p><strong>Come cancellarli.</strong> Elimina le sbobine dall’archivio dell’app: con loro vanno via anche il loro audio e l’avanzamento. Togli le chiavi da Impostazioni → Generale. Oppure cancella i dati del sito dalle impostazioni del browser: si cancella tutto, sbobine comprese, quindi fai prima un backup. Il browser stesso può cancellarli se manca spazio o se non apri il sito per un po’ (Safari dopo circa 7 giorni).</p>
+        <p>Il backup (Impostazioni → Archiviazione) è un file che scarichi tu e resta dove lo salvi. Contiene le sbobine e, se lo scegli, l’audio delle lezioni che hai tenuto. Non contiene le chiavi API.</p>
+        <p><strong>Come cancellarli.</strong> Elimina le sbobine dall’archivio dell’app: finiscono nel cestino, dove restano 30 giorni con il loro audio e l’avanzamento. Svuotando il cestino, o passati i 30 giorni, vanno via del tutto. Togli le chiavi da Impostazioni → Generale. Oppure cancella i dati del sito dalle impostazioni del browser: si cancella tutto, sbobine comprese, quindi fai prima un backup. Il browser stesso può cancellarli se manca spazio o se non apri il sito per un po’ (Safari dopo circa 7 giorni).</p>
 
         <h2 id="gemini">Cosa va a Google Gemini</h2>
         <p>Quando avvii una sbobina, il tuo browser manda direttamente a Google, con la tua chiave API:</p>
@@ -66,31 +97,22 @@
           <li>i testi trascritti da rivedere e le istruzioni dell’app.</li>
         </ul>
         <p>I pezzi di audio più grandi passano dal servizio file di Gemini. L’app chiede di cancellarli subito dopo l’uso. Secondo la <a href="https://ai.google.dev/gemini-api/docs/files">documentazione di Google</a>, comunque, restano al massimo 48 ore.</p>
-        <p>La chiave è tua: il rapporto per questi dati è tra te e Google. Come Google li usa dipende dai termini della tua chiave, gratuita o a pagamento. Con il livello gratuito Google può usare i contenuti per migliorare i suoi prodotti. Leggi:</p>
+        <p>La chiave è tua: il rapporto per questi dati è tra te e Google, e come Google li usa dipende dai termini della tua chiave.</p>
         <ul>
-          <li><a href="https://ai.google.dev/gemini-api/terms">Termini aggiuntivi dell’API Gemini</a>;</li>
-          <li><a href="https://policies.google.com/privacy">Informativa sulla privacy di Google</a>.</li>
+          <li><strong>Nello Spazio economico europeo (Italia compresa), in Svizzera e nel Regno Unito</strong> i termini di Google applicano a ogni chiave, anche gratuita, le regole del livello a pagamento: Google non usa i contenuti per migliorare i suoi prodotti e li conserva per un periodo limitato, solo per individuare abusi.</li>
+          <li><strong>Negli altri paesi</strong>, con il livello gratuito Google può usare i contenuti per migliorare i suoi prodotti e farli leggere a revisori umani.</li>
         </ul>
-        <p class="note">Se una lezione contiene dati personali di altre persone (per esempio casi clinici con nomi), non trascriverla con una chiave gratuita: i termini di Google sconsigliano di inviare ai servizi gratuiti informazioni personali o riservate.</p>
-
-        <h2 id="sito">Il sito e Cloudflare</h2>
-        <p>Il sito è ospitato da Cloudflare Pages. Come ogni server web, Cloudflare riceve i dati tecnici delle richieste (indirizzo IP, tipo di browser, pagina richiesta) per consegnare il sito e proteggerlo. Vedi l’<a href="https://www.cloudflare.com/privacypolicy/">informativa di Cloudflare</a>.</p>
-        <p>El Sbobinator non usa cookie e non carica strumenti di statistica o pubblicità. La politica di sicurezza del sito (Content-Security-Policy) blocca gli script di altri siti.</p>
-
-        <h2 id="altri-servizi">Altri servizi, solo se li apri tu</h2>
-        <ul>
-          <li>Anteprima YouTube: se in una sbobina apri l’anteprima di un link YouTube, il video si carica da youtube-nocookie.com (Google).</li>
-          <li>“Segnala un problema” apre un modulo Google Moduli. Il link GitHub apre GitHub. I link per ottenere la chiave aprono Google AI Studio.</li>
-          <li>Il report diagnostico lo copi tu e lo mandi solo se vuoi.</li>
-        </ul>
+        <p>Leggi i <a href="https://ai.google.dev/gemini-api/terms">Termini aggiuntivi dell’API Gemini</a> e l’<a href="https://policies.google.com/privacy">Informativa sulla privacy di Google</a>.</p>
+        <p class="note">In ogni caso l’audio esce dal tuo dispositivo e arriva a Google. Se una lezione contiene dati di persone riconoscibili, soprattutto sulla loro salute (per esempio un paziente in un caso clinico), trascrivila solo se puoi farlo e, quando puoi, togli prima i riferimenti che le rendono riconoscibili.</p>
 
         <h2 id="google-drive">Google Drive (facoltativo)</h2>
-        <p>Puoi sincronizzare le sbobine con il tuo Google Drive per averle su più dispositivi. È facoltativo: puoi sempre tenerle solo nel browser. Lo scegli tu, in Impostazioni → Archiviazione → Google Drive.</p>
+        <p>Puoi sincronizzare le sbobine con il tuo Google Drive per averle su più dispositivi. È facoltativo: puoi sempre tenerle solo nel browser. Lo scegli tu, in Impostazioni → Sincronizzazione.</p>
         <ul>
+          <li>Per collegarti accedi con il tuo account sulla pagina di Google (accounts.google.com): Google sa con quale account ti colleghi.</li>
           <li>Se lo attivi, l’app salva una copia in una cartella nascosta dell’app nel tuo Google Drive.</li>
           <li>Per la sincronizzazione chiede solo il permesso <code>drive.appdata</code>: vede soltanto i file che crea lei in quella cartella, non gli altri file del tuo Drive.</li>
           <li>Si sincronizzano i testi e i dati delle sbobine (titolo, date, raccolte). Non si sincronizzano l’audio, le chiavi API e l’avanzamento delle elaborazioni.</li>
-          <li>Una sbobina eliminata va nel cestino per 30 giorni, anche sugli altri dispositivi. Dopo, su Drive resta solo un segno senza testo né titolo, perché un dispositivo rimasto spento non la faccia ricomparire.</li>
+          <li>Una sbobina eliminata va nel cestino per 30 giorni, anche sugli altri dispositivi. Quando svuoti il cestino, o passati i 30 giorni, alla prima sincronizzazione di un dispositivo collegato su Drive resta solo un segno senza testo né titolo, perché un dispositivo rimasto spento non la faccia ricomparire. Fino ad allora testo e titolo restano nella cartella nascosta.</li>
           <li>I dati vanno direttamente dal tuo browser a Google, senza server di El Sbobinator. Lo sviluppatore non li riceve e non può leggerli.</li>
           <li>Il permesso di accesso (token) resta solo nella scheda aperta, al massimo un’ora. Nel browser resta l’indirizzo email dell’account, per ricollegarti con un tocco; “Disconnetti” lo cancella.</li>
         </ul>
@@ -104,8 +126,39 @@
         <p>L’uso e il trasferimento ad altre app delle informazioni ricevute dalle API di Google rispettano le <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, compresi i requisiti di Uso limitato (Limited Use). I dati non vengono venduti, non servono per pubblicità e nessuna persona li legge.</p>
         <p lang="en">El Sbobinator’s use and transfer to any other app of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy#additional_requirements_for_specific_api_scopes">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
 
+        <h2 id="sito">Il sito e Cloudflare</h2>
+        <p>Il sito è ospitato da Cloudflare Pages. Come ogni server web, Cloudflare riceve i dati tecnici delle richieste (indirizzo IP, tipo di browser, pagina richiesta) per consegnare il sito e proteggerlo. Vedi l’<a href="https://www.cloudflare.com/privacypolicy/">informativa di Cloudflare</a>.</p>
+        <p>El Sbobinator non usa cookie e non carica strumenti di statistica o pubblicità. La politica di sicurezza del sito (Content-Security-Policy) blocca gli script di altri siti.</p>
+
+        <h2 id="altri-servizi">Altri servizi, solo se li apri tu</h2>
+        <ul>
+          <li>Anteprima YouTube: se in una sbobina apri l’anteprima di un link YouTube, il video si carica da youtube-nocookie.com (Google).</li>
+          <li>Il link GitHub apre GitHub. I link per ottenere la chiave aprono Google AI Studio.</li>
+        </ul>
+
+        <h2 id="sviluppatore">Cosa arriva allo sviluppatore</h2>
+        <p>Solo quello che gli mandi tu:</p>
+        <ul>
+          <li>le risposte al modulo “Segnala un problema” (Google Moduli): quello che scrivi e, se la lasci, la tua email;</li>
+          <li>le email che scrivi al contatto indicato sopra;</li>
+          <li>il report diagnostico, se lo copi e lo incolli tu nel modulo: dati tecnici (browser, spazio usato, errori recenti dell’app), che puoi rileggere prima di mandarlo.</li>
+        </ul>
+        <p>Servono solo a rispondere e a correggere i problemi. Non vengono venduti né usati per pubblicità. Lo sviluppatore li tiene finché servono a chiudere la segnalazione, e comunque non oltre 12 mesi. Non scrivere nel modulo dati personali che non servono, né le tue chiavi API.</p>
+
+        <h2 id="base-giuridica">Basi giuridiche e trasferimenti</h2>
+        <ul>
+          <li>Sbobine, audio e chiavi nel tuo browser e nel tuo Drive: lo sviluppatore non li tratta, perché non li riceve.</li>
+          <li>Segnalazioni ed email: legittimo interesse a rispondere e a migliorare l’app (art. 6, par. 1, lett. f del GDPR).</li>
+          <li>Dati tecnici del sito: legittimo interesse a consegnarlo e a proteggerlo (art. 6, par. 1, lett. f del GDPR).</li>
+        </ul>
+        <p>Google e Cloudflare sono società statunitensi: i dati possono essere trattati fuori dall’Unione europea. Entrambe aderiscono all’<a href="https://www.dataprivacyframework.gov/">EU-U.S. Data Privacy Framework</a>, che la Commissione europea riconosce come garanzia adeguata.</p>
+
+        <h2 id="eta">Età minima</h2>
+        <p>I termini dell’API Gemini richiedono almeno 18 anni. Per usare El Sbobinator devi quindi essere maggiorenne. Le altre condizioni dei termini Google sono riassunte nel <a href="https://github.com/vimuw/El-Sbobinator/blob/main/DISCLAIMER.md">disclaimer</a>.</p>
+
         <h2 id="diritti">I tuoi diritti</h2>
-        <p>El Sbobinator non ha dati tuoi da mostrarti o cancellare: sono nel tuo browser e, se lo attivi, nel tuo Google Drive. Puoi cancellarli tu come spiegato sopra. Per i dati trattati da Google o da Cloudflare rivolgiti a loro. Per domande scrivi al contatto indicato sopra.</p>
+        <p>Le sbobine, l’audio e le chiavi sono nel tuo browser e, se lo attivi, nel tuo Google Drive: puoi cancellarli tu come spiegato sopra. Per i dati trattati da Google o da Cloudflare rivolgiti a loro.</p>
+        <p>Per le segnalazioni e le email che hai mandato puoi chiedere allo sviluppatore di vederle, correggerle o cancellarle, e opporti al loro uso (artt. 15–21 del GDPR). Scrivi al contatto indicato sopra. Puoi anche presentare reclamo al <a href="https://www.garanteprivacy.it/">Garante per la protezione dei dati personali</a>.</p>
 
         <h2 id="modifiche">Modifiche</h2>
         <p>Se l’app cambia, questa pagina viene aggiornata e cambia la data in alto.</p>

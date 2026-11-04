@@ -44,15 +44,46 @@ describe('StorageSection component', () => {
 
   it('web: speaks of this browser instead of a folder on disk, without the folder cleanup', () => {
     render(<StorageSection {...baseProps} canManageSessionFolder={false} inBrowser sessionInfo={{ ...baseProps.sessionInfo, session_root: 'Memoria di questo browser' }} />);
-    expect(screen.getByText('Spazio in questo browser')).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Le tue sbobine' }).textContent).toContain('salvati in questo browser, su questo dispositivo');
     expect(screen.queryByText('Cartella sessioni')).toBeNull();
     expect(screen.queryByText(/su disco/)).toBeNull();
     expect(screen.queryByRole('button', { name: 'Pulisci elaborazioni incomplete' })).toBeNull();
   });
 
-  it('web: calls the figure a total', () => {
-    render(<StorageSection {...baseProps} canManageSessionFolder={false} inBrowser />);
-    expect(screen.getByTestId('storage-usage').textContent).toBe('3 sbobine · 1,0 MB occupati in totale');
+  it('web: puts the count and the total first, then what takes the space', () => {
+    const sessionInfo = {
+      ...baseProps.sessionInfo,
+      usage_detail: 'Testi delle sbobine 1,0 MB · audio delle sbobine 0 KB · stima del browser 2 KB',
+      usage_breakdown: [{ label: 'Testi delle sbobine', bytes: 1048576 }, { label: 'Audio delle sbobine', bytes: 0 }],
+      browser_estimate_bytes: 2048,
+    };
+    render(<StorageSection {...baseProps} canManageSessionFolder={false} inBrowser sessionInfo={sessionInfo} />);
+    expect(screen.getByTestId('storage-count').textContent).toBe('3');
+    expect(screen.getByTestId('storage-total').textContent).toBe('1,0 MB');
+    expect(screen.getByTestId('storage-usage').textContent).toContain('occupati da 3 sbobine');
+    const rows = screen.getAllByRole('listitem').map(row => row.textContent);
+    expect(rows).toEqual(['Testi delle sbobine1,0 MB', 'Audio delle sbobine0 KB']);
+    // The list replaces the one-line text, so nothing is said twice.
+    expect(screen.queryByTestId('storage-usage-detail')).toBeNull();
+    expect(screen.getByTestId('storage-browser-estimate').textContent).toContain('2 KB');
+  });
+
+  it('web: suggests linking Google Drive when this build has it and no account is linked', () => {
+    const webProps = { ...baseProps, canManageSessionFolder: false, inBrowser: true, sessionInfo: { ...baseProps.sessionInfo, persisted: false } };
+    const { rerender } = render(<StorageSection {...webProps} drive="disconnected" />);
+    const warning = screen.getByTestId('storage-persist-warning');
+    expect(warning.className).toContain('is-warning');
+    expect(warning.textContent).toContain('Attiva la sincronizzazione: le sbobine restano anche nel tuo Google Drive.');
+    // Drive keeps the texts, never the lecture audio.
+    expect(warning.textContent).toContain('non gli audio delle lezioni');
+
+    rerender(<StorageSection {...webProps} drive="connected" />);
+    const note = screen.getByTestId('storage-persist-warning');
+    expect(note.className).toContain('is-info');
+    expect(note.textContent).toContain('copiate nel tuo Google Drive');
+    expect(note.textContent).toContain('Gli audio delle lezioni restano solo qui');
+    expect(screen.getByText('Salvate anche su Drive')).toBeTruthy();
+    expect(screen.queryByText('Non protette')).toBeNull();
   });
 
   it('web: no folder path box, so the browser message is not cut mid-word or said twice', () => {
@@ -80,8 +111,9 @@ describe('StorageSection component', () => {
     const warning = screen.getByTestId('storage-persist-warning');
     expect(warning.textContent).toContain('Il browser può cancellare questi dati');
     expect(warning.textContent).toContain('circa 7');
+    // Without Drive in this build, the backup is the only way to keep a copy.
     expect(warning.textContent).toContain('backup');
-    expect(warning.textContent).toContain('Aggiungi alla schermata Home');
+    expect(warning.textContent).not.toContain('Google Drive');
 
     rerender(<StorageSection {...webProps} sessionInfo={{ ...baseProps.sessionInfo, persisted: true }} />);
     expect(screen.queryByTestId('storage-persist-warning')).toBeNull();

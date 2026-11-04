@@ -5,11 +5,16 @@ import type { FileDescriptor } from '../appState';
 import { DESKTOP_CAPABILITIES, getHostCapabilities, setHostCapabilities } from '../hostCapabilities';
 import { STORAGE_KEYS } from '../storageKeys';
 import { createCheckpointStore } from './checkpointStore';
+import { createDriveApi } from './drive/driveApi';
+import { createFakeDrive } from './drive/fakeDrive';
+import { syncOnce } from './drive/sync';
+import { toSessionFile } from './drive/syncFormat';
 import type { BridgeEventName } from './fakePipeline';
 import { CancelledError } from './pipeline/retry';
 import { defaultSettings, type AudioSource } from './pipeline/run';
 import { fileIdentity, newSession, type CheckpointStore } from './pipeline/session';
 import { createWebPywebviewApi, initWebHost } from './webHost';
+import { createWebArchive } from './webSessions';
 
 // The web host with the real pipeline: Gemini is a scripted fetch, audio work a fake source.
 
@@ -101,11 +106,11 @@ describe('web host with the real pipeline', () => {
     const { fetchMock } = mockGemini([]);
     vi.stubGlobal('indexedDB', database);
     window.elSbobinatorBridge = {} as Window['elSbobinatorBridge'];
-    initWebHost();
+    await initWebHost();
     expect(getHostCapabilities().realPipeline).toBe(true);
 
     window.history.replaceState(null, '', '/?simulazione=1');
-    initWebHost();
+    await initWebHost();
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const [file] = await window.pywebview!.api.upload_browser_files!([new File(['a'], 'Demo.mp3')]);
     expect(await window.pywebview!.api.start_processing!([file], KEY, true, 'gemini-2.5-flash')).toEqual({ ok: true });
@@ -336,6 +341,48 @@ describe('web host with the real pipeline', () => {
       await api.save_html_content!(done.html_path, '<p>Mio testo</p>', 1);
       expect(await api.retry_failed_revision_blocks!(done.session_dir)).toMatchObject({ ok: false, conflict: true });
       expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('refuses to overwrite a text edited on another device and synced from Drive', async () => {
+      // Regression: the text from Drive keeps this device's generation (0), and the retry took it for
+      // never edited, wrote the checkpoint over the phone's edits and sent that to Drive.
+      const { api, done } = await finishedWithWarnings();
+      const drive = createFakeDrive();
+      const driveApi = (token: string) => createDriveApi({ getToken: () => token, fetchImpl: drive.fetch, sleep: async () => {} });
+      await syncOnce({ factory: database, api: driveApi('pc') });
+      const [file] = drive.files();
+      const session = (await createWebArchive(database).get(done.session_dir))!;
+      const editedAt = Date.now();
+      await driveApi('phone').updateJson(file.id, toSessionFile(session, '<p>Appunti presi sul telefono</p>', editedAt, { updated_at: new Date(editedAt + 60_000).toISOString(), device_id: 'phone' }));
+      expect(await syncOnce({ factory: database, api: driveApi('pc') })).toMatchObject({ downloaded: 1, conflicts: 0 });
+
+      const { fetchMock } = mockGemini([]);
+      expect(await api.retry_failed_revision_blocks!(done.session_dir)).toMatchObject({ ok: false, conflict: true });
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect((await api.read_html_content!(done.html_path)).content).toContain('<p>Appunti presi sul telefono</p>');
+    });
+
+    it('keeps a correction saved while the retry runs', async () => {
+      // Regression: the retry checked for edits only before calling Gemini and then wrote its text
+      // over a correction saved during the call, with no "(conflitto)" copy.
+      const { api, done } = await finishedWithWarnings();
+      let answer: () => void = () => {};
+      const answered = new Promise<void>(resolve => { answer = resolve; });
+      let calls = 0;
+      vi.stubGlobal('fetch', vi.fn(async () => {
+        calls += 1;
+        await answered;
+        return new Response(JSON.stringify(okText('## Rivisto\n\nOra rivisto.').json));
+      }));
+      const pending = api.retry_failed_revision_blocks!(done.session_dir);
+      await vi.waitFor(() => expect(calls).toBe(1));
+      await api.save_html_content!(done.html_path, '<p>Correzione</p>', Date.now());
+      answer();
+      expect(await pending).toMatchObject({ ok: false, conflict: true });
+      const content = (await api.read_html_content!(done.html_path)).content!;
+      expect(content).toContain('<p>Correzione</p>');
+      expect(content).not.toContain('Ora rivisto.');
+      expect((await api.get_completed_sessions!()).sessions![0]).toMatchObject({ revision_failed_blocks: [1] });
     });
 
     it('stops without touching the document when the quota runs out and no key is given', async () => {

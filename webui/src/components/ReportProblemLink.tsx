@@ -1,7 +1,9 @@
 import { Bug } from 'lucide-react';
 import { BUG_REPORT_URL } from '../branding';
 import { reportClientError } from '../diagnostics';
+import { ExternalLinkIcon } from './ExternalLinkIcon';
 
+// In the footer it stays a plain link like its neighbours; elsewhere it carries the external-link arrow.
 export function ReportProblemLink({ className = 'footer-link' }: { className?: string }) {
   return (
     <a
@@ -21,6 +23,7 @@ export function ReportProblemLink({ className = 'footer-link' }: { className?: s
     >
       <Bug className="w-3.5 h-3.5" aria-hidden="true" />
       Segnala un problema
+      {className !== 'footer-link' && <ExternalLinkIcon />}
     </a>
   );
 }

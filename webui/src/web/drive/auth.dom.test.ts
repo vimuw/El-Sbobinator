@@ -92,6 +92,46 @@ describe('Drive auth', () => {
     expect(auth.account()).toBe('a@b.it');
   });
 
+  it('keeps a login asked with keep: false only once adopted, for this page and a reloaded one', async () => {
+    const { auth, reply } = setup();
+    const connecting = auth.connect({ keep: false });
+    reply(tokenFields);
+    const token = await connecting;
+    expect(auth.token()).toBeNull();
+    expect(setup().auth.token()).toBeNull();
+    auth.adopt(token);
+    expect(auth.token()).toBe(token.accessToken);
+    expect(setup().auth.token()).toBe(token.accessToken);
+    // Its account is known once bound, also to a page reloaded (or a tab restored) with it.
+    expect(auth.tokenAccount()).toBeNull();
+    auth.setAccount('studente@uniupo.it');
+    expect(auth.tokenAccount()).toBe('studente@uniupo.it');
+    expect(setup().auth.tokenAccount()).toBe('studente@uniupo.it');
+  });
+
+  it('disconnects even when the revoke never answers', async () => {
+    vi.useFakeTimers();
+    try {
+      const hanging = vi.fn((_url: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+      }));
+      const { auth, reply } = setup({ fetchImpl: hanging as unknown as typeof fetch });
+      const connecting = auth.connect();
+      reply(tokenFields);
+      await connecting;
+      auth.setAccount('studente@example.com');
+      let done = false;
+      const disconnecting = auth.disconnect().then(() => { done = true; });
+      expect(auth.token()).toBeNull();
+      await vi.advanceTimersByTimeAsync(10_000);
+      await disconnecting;
+      expect(done).toBe(true);
+      expect(auth.account()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('ignores answers to another login and reports Google errors and blocked windows', async () => {
     const { auth, reply, channel } = setup();
     const connecting = auth.connect();
@@ -140,11 +180,12 @@ describe('Drive auth', () => {
     const exporting = auth.connect({ scope: DRIVE_FILE_SCOPE, keep: false });
     const url = new URL(opened.at(-1)!);
     expect(url.searchParams.get('scope')).toBe(DRIVE_FILE_SCOPE);
-    expect(url.searchParams.get('include_granted_scopes')).toBe('true');
+    // Its token carries drive.file only: the sync's token never gains it.
+    expect(url.searchParams.get('include_granted_scopes')).toBe('false');
     expect(url.searchParams.get('login_hint')).toBe('studente@example.com');
     // Google asks only for the new permission: no account choice forced.
     expect(url.searchParams.has('prompt')).toBe(false);
-    reply({ ...tokenFields, access_token: 'tok-export', scope: `${DRIVE_APPDATA_SCOPE} ${DRIVE_FILE_SCOPE}` });
+    reply({ ...tokenFields, access_token: 'tok-export', scope: DRIVE_FILE_SCOPE });
     await expect(exporting).resolves.toMatchObject({ accessToken: 'tok-export' });
     expect(auth.token()).toBe('tok-1');
     expect(sessionStorage.getItem(STORAGE_KEYS.WEB_DRIVE_TOKEN_V1)).not.toContain('tok-export');
@@ -153,5 +194,29 @@ describe('Drive auth', () => {
     const refused = auth.connect({ scope: DRIVE_FILE_SCOPE, keep: false });
     reply({ ...tokenFields, access_token: 'tok-x', scope: DRIVE_APPDATA_SCOPE });
     await expect(refused).rejects.toMatchObject({ code: 'file_scope_missing', message: expect.stringContaining('permesso di creare file') });
+  });
+
+  it('keeps the account for this page when localStorage is blocked', async () => {
+    const blocked = () => { throw new DOMException('blocked', 'SecurityError'); };
+    const local = { getItem: blocked, setItem: blocked, removeItem: blocked } as unknown as Storage;
+    const { auth, reply } = setup({ local });
+    const connecting = auth.connect();
+    reply(tokenFields);
+    await connecting;
+    auth.setAccount('studente@example.com');
+    expect(auth.account()).toBe('studente@example.com');
+
+    await auth.disconnect();
+    expect(auth.account()).toBeNull();
+  });
+
+  it('keeps the account for this page when localStorage refuses the write', async () => {
+    const local = { getItem: () => null, setItem: () => { throw new DOMException('full', 'QuotaExceededError'); }, removeItem: () => {} } as unknown as Storage;
+    const { auth, reply } = setup({ local });
+    const connecting = auth.connect();
+    reply(tokenFields);
+    await connecting;
+    auth.setAccount('studente@example.com');
+    expect(auth.account()).toBe('studente@example.com');
   });
 });

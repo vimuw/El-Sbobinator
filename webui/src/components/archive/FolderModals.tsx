@@ -51,7 +51,7 @@ export function FolderModal({ state, onClose, onSave, folders = [] }: FolderModa
 
   return (
     <motion.div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-4"
       exit={{ opacity: 0 }}
     >
       <motion.div
@@ -110,7 +110,7 @@ export function FolderModal({ state, onClose, onSave, folders = [] }: FolderModa
                   onClick={() => setColor('')}
                   aria-pressed={!color}
                   title="Usa il colore ereditato o neutro"
-                  className="inline-flex items-center gap-1 h-7 px-1.5 rounded text-xs font-medium cursor-pointer transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-text)]"
+                  className="inline-flex items-center gap-1 h-7 px-1.5 rounded text-xs font-medium cursor-pointer transition-colors hover:bg-[var(--bg-hover)]"
                   style={{ color: !color ? 'var(--text-primary)' : 'var(--text-muted)' }}
                 >
                   <Check className={`w-3 h-3 ${color ? 'invisible' : ''}`} aria-hidden="true" />
@@ -125,12 +125,12 @@ export function FolderModal({ state, onClose, onSave, folders = [] }: FolderModa
                       key={c}
                       type="button"
                       onClick={() => setColor(c)}
-                      className="w-7 h-7 rounded-full transition-transform hover:scale-105 focus:outline-none"
+                      className="w-7 h-7 rounded-full transition-transform hover:scale-105"
                       style={{
                         background: c,
                         border: isSelected ? '3px solid var(--text-primary)' : '3px solid transparent',
-                        outline: isSelected ? `2px solid ${c}` : 'none',
-                        outlineOffset: 2,
+                        // The selection ring is a shadow, so the keyboard focus ring (an outline) still shows.
+                        boxShadow: isSelected ? `0 0 0 2px var(--glass-bg), 0 0 0 4px ${c}` : undefined,
                       }}
                       aria-label={`Colore ${c}`}
                       aria-pressed={isSelected}
@@ -189,7 +189,7 @@ export function DeleteFolderConfirmModal({
   return (
     <motion.div
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-4"
     >
       <motion.div
         initial={{ opacity: 0 }}
@@ -289,7 +289,7 @@ export function DeleteMultipleSessionsConfirmModal({
   return (
     <motion.div
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-4"
     >
       <motion.div
         initial={{ opacity: 0 }}

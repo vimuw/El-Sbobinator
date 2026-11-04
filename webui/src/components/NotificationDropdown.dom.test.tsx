@@ -55,6 +55,51 @@ describe('NotificationDropdown component', () => {
     expect(container?.className).toContain('pointer-events-none');
   });
 
+  it('keeps the closed panel out of the Tab order and away from screen readers', async () => {
+    // Closed at opacity 0, its buttons still took Tab focus and screen readers still read it.
+    const props = {
+      onClose: vi.fn(),
+      notifications: mockNotifications,
+      onMarkAsRead: vi.fn(),
+      onMarkAllAsRead: vi.fn(),
+      onDelete: vi.fn(),
+    };
+    const { rerender } = render(<NotificationDropdown isOpen={false} {...props} />);
+    const panel = () => screen.getByText('Notifiche').closest<HTMLElement>('[role="dialog"]')!;
+    expect(panel().hasAttribute('inert')).toBe(true);
+    expect(panel().style.visibility).toBe('hidden');
+    expect(screen.queryByRole('dialog', { name: 'Notifiche' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Segna come già lette' })).toBeNull();
+
+    rerender(<NotificationDropdown isOpen {...props} />);
+    expect(panel().hasAttribute('inert')).toBe(false);
+    expect(panel().style.visibility).not.toBe('hidden');
+    expect(screen.getByRole('dialog', { name: 'Notifiche' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Segna come già lette' })).toBeTruthy();
+
+    // Closing takes it out at once; it hides only once the exit has played.
+    rerender(<NotificationDropdown isOpen={false} {...props} />);
+    expect(panel().hasAttribute('inert')).toBe(true);
+    await waitFor(() => expect(panel().style.visibility).toBe('hidden'));
+  });
+
+  it('closes on Escape and gives focus back to the button that opened it', () => {
+    // Esc did nothing: only a click outside closed the panel.
+    const onClose = vi.fn();
+    const props = { onClose, notifications: mockNotifications, onMarkAsRead: vi.fn(), onMarkAllAsRead: vi.fn(), onDelete: vi.fn() };
+    const { rerender } = render(<><button type="button">Apri notifiche</button><NotificationDropdown isOpen={false} {...props} /></>);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+
+    const bell = screen.getByRole('button', { name: 'Apri notifiche' });
+    bell.focus();
+    rerender(<><button type="button">Apri notifiche</button><NotificationDropdown isOpen {...props} /></>);
+    screen.getByRole('button', { name: 'Segna come già lette' }).focus();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(document.activeElement).toBe(bell);
+  });
+
   it('renders notifications, unread badge, and handles tab switching', async () => {
     const handleMarkAsRead = vi.fn();
     const handleNotificationClick = vi.fn();
@@ -384,5 +429,43 @@ describe('NotificationDropdown component', () => {
     expect(panel.style.width.startsWith('min(380px, ')).toBe(true);
     expect(panel.style.width).toContain('16px');
     expect(panel.style.bottom).toBe('64px');
+  });
+
+  it('on a phone grows with its rows up to 60% of the screen, instead of a fixed frame', () => {
+    const props = {
+      isOpen: true,
+      onClose: vi.fn(),
+      notifications: mockNotifications.slice(0, 1),
+      onMarkAsRead: vi.fn(),
+      onMarkAllAsRead: vi.fn(),
+      onDelete: vi.fn(),
+      align: 'left' as const,
+      valign: 'bottom' as const,
+    };
+    const { rerender } = render(<NotificationDropdown {...props} />);
+    const panel = screen.getByRole('dialog', { name: 'Notifiche' });
+    expect(panel.style.height.startsWith('clamp(320px, 52vh')).toBe(true);
+
+    rerender(<NotificationDropdown {...props} leftOffset={8} bottomOffset={64} showCaret={false} fitContent />);
+    expect(panel.style.height).toBe('');
+    expect(panel.style.maxHeight.startsWith('min(60vh, ')).toBe(true);
+    expect(panel.style.maxHeight).toContain('80px');
+  });
+
+  it('points the caret at the sidebar bell wherever the buttons below it put it', () => {
+    // The buttons below the bell vary by build (the Drive account sits at the foot).
+    const bell = document.createElement('button');
+    bell.setAttribute('data-sidebar-anchor', 'notifications');
+    bell.getBoundingClientRect = () => ({ top: window.innerHeight - 140, height: 36, bottom: window.innerHeight - 104, left: 9, right: 45, width: 36, x: 9, y: 0, toJSON: () => ({}) });
+    document.body.appendChild(bell);
+    try {
+      render(
+        <NotificationDropdown isOpen onClose={vi.fn()} notifications={mockNotifications} onMarkAsRead={vi.fn()} onMarkAllAsRead={vi.fn()} onDelete={vi.fn()} align="left" valign="bottom" bottomOffset={16} />
+      );
+      // Bell middle 122px above the viewport bottom, panel bottom at 16px: tip 106px up, caret 18px tall.
+      expect(screen.getByTestId('popover-caret').style.bottom).toBe('97px');
+    } finally {
+      bell.remove();
+    }
   });
 });

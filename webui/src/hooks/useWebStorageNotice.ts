@@ -26,9 +26,15 @@ function markShown(): void {
   }
 }
 
+async function driveConnected(): Promise<boolean> {
+  const status = await window.pywebview?.api?.get_drive_status?.().catch(() => null);
+  return Boolean(status?.connected);
+}
+
 /**
  * Web build: once there is a sbobina worth keeping, tells the user once (a notification, not a
  * dialog) that the browser may clear the site's data, unless it promised to keep it.
+ * With Drive connected the sbobine have a copy there: no notice, and it stays unshown for later.
  */
 export function useWebStorageNotice({ apiReady, sessionCount, addNotification }: {
   apiReady: boolean;
@@ -42,7 +48,11 @@ export function useWebStorageNotice({ apiReady, sessionCount, addNotification }:
     const check = window.pywebview?.api?.get_storage_protection;
     if (!check) return;
     checkingRef.current = true;
-    void check().then(result => {
+    void Promise.all([check(), driveConnected()]).then(([result, onDrive]) => {
+      if (onDrive) {
+        checkingRef.current = false;
+        return;
+      }
       if (alreadyShown()) return;
       markShown();
       if (result?.ok && !result.persisted) {

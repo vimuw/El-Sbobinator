@@ -23,6 +23,21 @@ export interface StoredDocument {
   session_dir: string;
   body: string;
   generation: number;
+  /**
+   * Text downloaded from Drive: the generation it had on the device that wrote it (another clock).
+   * The local generation stays for the editor's saves; a backup holding an older text must not
+   * replace this one.
+   */
+  text_at?: number;
+}
+
+/**
+ * How recent a document's text is: the last autosave here or, for a text from Drive, the generation
+ * it had on the device that wrote it. 0: never edited anywhere. Retries, backups and uploads read
+ * this, not the local generation alone, which stays 0 for a text only downloaded.
+ */
+export function textGeneration(document: StoredDocument | null | undefined): number {
+  return Math.max(document?.generation ?? 0, document?.text_at ?? 0);
 }
 
 type LegacyArchive = { sessions?: Array<{ session: ArchiveSession; body: string; generation?: number }>; folders?: ArchiveFolder[] };
@@ -154,6 +169,8 @@ export interface WebStorageUsage {
   queueAudio: number;
   /** Sbobine (metadata + editor document) and folders, counted like the backup's manifest. */
   documents: number;
+  /** Sbobine in the trash, texts and audio: the backup leaves them out. */
+  trash: number;
   /** Pipeline checkpoints (progress of runs, finished or not). */
   checkpoints: number;
   total: number;
@@ -173,21 +190,27 @@ export async function measureWebStorage(factory: IDBFactory | undefined): Promis
     const all = (store: string) => requestValue(transaction.objectStore(store).getAll() as IDBRequest<unknown[]>);
     const [media, documents, sessions, folders, checkpoints] = await Promise.all([all(MEDIA), all(DOCUMENTS), all(SESSIONS), all(FOLDERS), all(CHECKPOINTS)]);
     const sessionDirs = new Set(sessions.map(session => (session as ArchiveSession).session_dir));
+    const trashedDirs = new Set((sessions as ArchiveSession[]).filter(session => session.trashed_at).map(session => session.session_dir));
     let audio = 0;
     let queueAudio = 0;
+    let trash = 0;
     for (const record of media) {
       const { blob, size, sessionDir } = record as { blob?: Blob; size?: number; sessionDir?: string };
       const bytes = blob?.size ?? size ?? 0;
-      if (sessionDir && sessionDirs.has(sessionDir)) audio += bytes;
+      if (sessionDir && trashedDirs.has(sessionDir)) trash += bytes;
+      else if (sessionDir && sessionDirs.has(sessionDir)) audio += bytes;
       else queueAudio += bytes;
     }
     // Same shape as the backup's sessions and folders, so the two figures agree.
     const bodies = new Map((documents as StoredDocument[]).map(document => [document.session_dir, document]));
-    const text = (sessions as ArchiveSession[]).reduce<number>((sum, session) => {
+    let text = folders.reduce<number>((sum, folder) => sum + jsonBytes(folder), 0);
+    for (const session of sessions as ArchiveSession[]) {
       const document = bodies.get(session.session_dir);
-      return sum + jsonBytes({ session, body: document?.body ?? '', generation: document?.generation ?? 0 });
-    }, 0) + folders.reduce<number>((sum, folder) => sum + jsonBytes(folder), 0);
+      const bytes = jsonBytes({ session, body: document?.body ?? '', generation: textGeneration(document) });
+      if (session.trashed_at) trash += bytes;
+      else text += bytes;
+    }
     const progress = checkpoints.reduce<number>((sum, record) => sum + jsonBytes(record), 0);
-    return { audio, queueAudio, documents: text, checkpoints: progress, total: audio + queueAudio + text + progress };
+    return { audio, queueAudio, documents: text, trash, checkpoints: progress, total: audio + queueAudio + text + trash + progress };
   });
 }

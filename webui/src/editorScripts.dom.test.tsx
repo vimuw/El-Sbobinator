@@ -38,6 +38,10 @@ describe('Apice e pedice', () => {
     expect(clipboard.plainText.trim()).toBe('Ciao');
     expect(clipboard.html).not.toContain('editor-script-caret');
     expect(clipboard.html).not.toContain('\u200b');
+    // One toolbar button shows the active style and lists both by name.
+    const scriptButton = screen.getByRole('button', { name: 'Apice e pedice' });
+    expect(scriptButton.getAttribute('data-script')).toBe('none');
+    fireEvent.click(scriptButton);
     expect(screen.getByRole('group', { name: 'Apice e pedice' }).querySelectorAll('button')).toHaveLength(2);
   });
 
@@ -51,14 +55,21 @@ describe('Apice e pedice', () => {
     fireEvent.keyDown(element, { key, ctrlKey: true });
     expect(editor.state.doc.nodeAt(5)?.marks.map(value => value.type.name)).toEqual([mark]);
     expect(editor.getHTML()).toContain(`<${tag}>12</${tag}>`);
+    const scriptButton = () => screen.getByRole('button', { name: 'Apice e pedice' });
+    expect(scriptButton().getAttribute('data-script')).toBe(mark);
+    fireEvent.click(scriptButton());
     expect(screen.getByRole('button', { name: label }).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(scriptButton());
     const styled = editor.getJSON();
     act(() => { editor.commands.undo(); });
     expect(editor.getJSON()).toEqual(original);
     act(() => { editor.commands.redo(); });
     expect(editor.getJSON()).toEqual(styled);
+    fireEvent.click(scriptButton());
     fireEvent.click(screen.getByRole('button', { name: label }));
     expect(editor.getJSON()).toEqual(original);
+    // Picking a style closes the list.
+    expect(screen.queryByRole('group', { name: 'Apice e pedice' })).toBeNull();
   });
 
   it('switches the typing style exclusively while preserving other character formatting', async () => {

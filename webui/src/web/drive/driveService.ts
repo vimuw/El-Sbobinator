@@ -8,8 +8,11 @@ import { syncOnce, type SyncReport } from './sync';
 import { bindAccount, readMeta, resetSyncState } from './syncState';
 
 // When the Drive sync runs: at startup, when the page comes back to the foreground or online, and a
-// few seconds after the last local change. One round at a time; never while a Gemini run works (the
-// round waits for runEnded). Without a token nothing runs: the settings show "tocca per riconnettere".
+// few seconds after the last local change; never while a Gemini run works (the round waits for
+// runEnded). Without a token nothing runs: the settings show "tocca per riconnettere".
+// Rounds, binding the account of a new login and erasing the Drive data run one at a time, in the
+// order asked: none of them ever sees another halfway. One tab of the site runs at a time
+// (activeTab.ts), so this queue is the only one.
 
 export const SYNC_DELAY_MS = 4000;
 
@@ -19,7 +22,8 @@ export interface DriveServiceOptions {
   api: DriveApi;
   /** A Gemini run is active: the round waits for runEnded(). */
   isBusy: () => boolean;
-  isOpenInEditor?: (sessionDir: string) => boolean;
+  /** The editor has this sbobina open: a remote change waits. */
+  isOpenInEditor?: (sessionDir: string) => boolean | Promise<boolean>;
   onReport?: (report: SyncReport) => void;
   /** A round found the login expired (401). */
   onNeedsReconnect?: () => void;
@@ -35,7 +39,7 @@ export interface DriveService {
   status(): DriveStatus;
   /** A local change: a round follows after a short quiet period. */
   schedule(): void;
-  /** A round now, or right after the one in progress; resolves when done. */
+  /** A round now, or right after the operation in progress; resolves when done. */
   syncNow(): Promise<DriveStatus>;
   /** Opens the Google window synchronously: call it inside a tap. */
   connect(): Promise<DriveStatus>;
@@ -73,13 +77,18 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
   // After a silent attempt Google refused, the next tap opens the full account choice.
   let interactiveNext = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
-  let loop: Promise<void> | null = null;
-  let pending = false;
+  // A round asked for during a Gemini run: it runs at runEnded().
   let waitingForRun = false;
   // "Disconnetti" during a round: whatever that round ends with no longer concerns the status.
   let epoch = 0;
-  // While the Drive folder is being emptied no round may write to it.
-  let erasing = false;
+
+  // The operations, one at a time in the order asked.
+  let tail: Promise<unknown> = Promise.resolve();
+  const enqueue = <T,>(operation: () => Promise<T>): Promise<T> => {
+    const result = tail.then(operation);
+    tail = result.catch(() => undefined);
+    return result;
+  };
 
   const status = (): DriveStatus => {
     const email = auth.account();
@@ -95,11 +104,32 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
     };
   };
 
+  // The token must be the one of the account this browser remembers and the database is bound to: a
+  // tab restored with its sessionStorage may hold the token of an account this browser has left,
+  // disconnected or erased since (any tab clears the remembered account then). Checked inside the
+  // queue, where no binding runs at the same time.
+  const ownsToken = async () => {
+    const bound = (await readMeta(factory)).account;
+    const owner = auth.tokenAccount();
+    const remembered = auth.account();
+    // Never bound (a state older than the binding, or just erased): the remembered account decides.
+    if (owner !== null && owner === remembered && (bound === undefined || bound === owner)) return true;
+    auth.expire();
+    // After "Disconnetti" or the erase nothing is to reconnect.
+    if (remembered !== null) options.onNeedsReconnect?.();
+    return false;
+  };
+
   const round = async () => {
-    if (!auth.token() || erasing) return;
+    if (!auth.token()) return;
+    if (options.isBusy()) {
+      waitingForRun = true;
+      return;
+    }
     const started = epoch;
     syncing = true;
     try {
+      if (!await ownsToken()) return;
       const report = await syncOnce({ factory, api, now, isOpenInEditor: options.isOpenInEditor });
       if (started !== epoch) return;
       lastSyncAt = report.syncedAt;
@@ -114,23 +144,14 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
     }
   };
 
+  // Asked for while one waits in the queue: that one serves both.
+  let queuedRound: Promise<void> | null = null;
   const run = (): Promise<void> => {
-    pending = true;
-    loop ??= (async () => {
-      while (pending) {
-        pending = false;
-        if (options.isBusy()) {
-          waitingForRun = true;
-          return;
-        }
-        await round();
-      }
-    })().finally(() => {
-      loop = null;
-      // Asked for while the loop was ending.
-      if (pending && !waitingForRun) void run();
+    queuedRound ??= enqueue(() => {
+      queuedRound = null;
+      return round();
     });
-    return loop;
+    return queuedRound;
   };
 
   const cancelTimer = () => {
@@ -141,7 +162,6 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
   async function disconnect(): Promise<DriveStatus> {
     epoch += 1;
     cancelTimer();
-    pending = false;
     waitingForRun = false;
     syncing = false;
     await auth.disconnect();
@@ -170,17 +190,27 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
 
     connect() {
       const silent = auth.account() !== null && !interactiveNext;
-      // Before any await: the Google window must open inside the tap.
-      const login = auth.connect({ silent });
+      // Before any await: the Google window must open inside the tap. The token is installed only
+      // once its account is bound: a round with it would sync this browser's state for the previous
+      // account with another account's Drive.
+      const login = auth.connect({ silent, keep: false });
       return (async () => {
         try {
-          await login;
+          const token = await login;
           interactiveNext = false;
-          const email = await api.accountEmail();
-          if (email) {
-            auth.setAccount(email);
-            await bindAccount(factory, email);
-          }
+          await enqueue(async () => {
+            auth.adopt(token);
+            try {
+              const email = await api.accountEmail();
+              if (!email) throw new Error('Google Drive non ha indicato l’account collegato.');
+              await bindAccount(factory, email);
+              auth.setAccount(email);
+            } catch (caught) {
+              // The remembered account (if any) stays for the next tap.
+              auth.expire();
+              throw caught;
+            }
+          });
           error = null;
         } catch (caught) {
           if (caught instanceof DriveAuthError && caught.needsInteractiveLogin) interactiveNext = true;
@@ -199,27 +229,33 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
         error = describeDriveError(new DriveError(401, ''));
         return { ...status(), removed: 0 };
       }
-      erasing = true;
       cancelTimer();
       let removed = 0;
       try {
-        // A round already writing finishes first: nothing it sends can be left behind.
-        await loop;
-        for (const file of await api.listChanged(null)) {
-          await api.remove(file.id).catch((caught: { status?: number }) => {
-            if (caught.status !== 404) throw caught;
-          });
-          removed += 1;
+        // Disconnected inside the queue: a round asked for meanwhile finds no token and sends nothing
+        // back to the emptied Drive.
+        const disconnected = await enqueue(async () => {
+          // With another account's token it would empty that account's Drive.
+          if (!await ownsToken()) return null;
+          for (const file of await api.listChanged(null)) {
+            await api.remove(file.id).catch((caught: { status?: number }) => {
+              if (caught.status !== 404) throw caught;
+            });
+            removed += 1;
+          }
+          await resetSyncState(factory);
+          return disconnect();
+        });
+        if (!disconnected) {
+          error = describeDriveError(new DriveError(401, ''));
+          return { ...status(), removed: 0 };
         }
-        await resetSyncState(factory);
+        return { ...disconnected, removed };
       } catch (caught) {
         error = describeDriveError(caught);
         if (caught instanceof DriveError && caught.needsAuthorization) options.onNeedsReconnect?.();
         return { ...status(), removed };
-      } finally {
-        erasing = false;
       }
-      return { ...await disconnect(), removed };
     },
 
     exportAll(onProgress) {

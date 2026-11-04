@@ -17,7 +17,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 function device(drive: FakeDrive, token: string) {
   const factory = new IDBFactory();
   const raw = createWebArchive(factory);
-  const archive = trackArchive(raw, factory, () => {}, now);
+  const archive = trackArchive(factory, () => {}, now);
   const api = createDriveApi({ getToken: () => token, fetchImpl: drive.fetch, sleep: async () => {}, random: () => 0 });
   const sync = () => syncOnce({ factory, api, now });
   const body = async (dir: string) => (await raw.readHtml(webSessionHtmlPath(dir)))?.match(/<body>([\s\S]*)<\/body>/)?.[1] ?? null;

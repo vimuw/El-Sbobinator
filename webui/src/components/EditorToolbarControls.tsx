@@ -18,6 +18,10 @@ export {
 } from './editor/toolbar/AlignDropdownButton';
 
 export {
+  ScriptDropdownButton,
+} from './editor/toolbar/ScriptDropdownButton';
+
+export {
   InsertImageButton,
   InsertMathButton,
   InsertYoutubeButton,

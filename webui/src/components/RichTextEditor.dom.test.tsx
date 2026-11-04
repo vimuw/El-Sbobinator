@@ -36,6 +36,17 @@ describe('RichTextEditor Component', () => {
     expect(html).toContain('Prima pagina di appunti per anatomia');
   });
 
+  it('opens find and replace once for each request from the phone header menu', async () => {
+    const { rerender } = render(<RichTextEditor initialContent="<p>Appunti</p>" />);
+    await waitFor(() => expect(document.querySelector('.tiptap-editor')).toBeTruthy());
+    // Mounting with the current count opens nothing.
+    expect(screen.queryByPlaceholderText('Trova nel documento...')).toBeNull();
+
+    rerender(<RichTextEditor initialContent="<p>Appunti</p>" findRequest={1} />);
+    // The full panel, with its replace field, as the menu item "Trova e sostituisci" promises.
+    await waitFor(() => expect(screen.getByPlaceholderText('Sostituisci con...')).toBeTruthy());
+  });
+
   it('renders table of contents sidebar toggle and responds to zoom', () => {
     const onTocToggle = vi.fn();
 

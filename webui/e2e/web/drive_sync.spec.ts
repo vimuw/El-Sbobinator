@@ -30,7 +30,7 @@ async function fakeGemini(page: Page) {
 
 /**
  * Google for one browser: the login page sends straight back with a token, Drive is the shared fake.
- * Asked for drive.file (the export), the token also covers it, as with include_granted_scopes.
+ * Asked for drive.file (the export), the token carries that scope only, as with include_granted_scopes=false.
  */
 async function fakeGoogle(context: BrowserContext, drive: FakeDrive, device: string) {
   let tokens = 0;
@@ -42,7 +42,7 @@ async function fakeGoogle(context: BrowserContext, drive: FakeDrive, device: str
       access_token: `${device}-${file ? `${FAKE_FILE_TOKEN_MARK}-` : ''}${++tokens}`,
       token_type: 'Bearer',
       expires_in: '3600',
-      scope: file ? `${DRIVE_SCOPE} ${FILE_SCOPE}` : DRIVE_SCOPE,
+      scope: file ? FILE_SCOPE : DRIVE_SCOPE,
     });
     return route.fulfill({ status: 302, headers: { location: `${url.searchParams.get('redirect_uri')}#${fragment.toString()}` } });
   });
@@ -62,7 +62,7 @@ async function startWithKey(page: Page) {
 
 async function openDriveSettings(page: Page) {
   await page.getByRole('button', { name: 'Apri impostazioni', exact: true }).click();
-  await page.getByRole('button', { name: 'Archiviazione' }).click();
+  await page.getByRole('button', { name: 'Sincronizzazione', exact: true }).click();
   const panel = page.getByTestId('web-drive');
   await expect(panel).toBeVisible();
   return panel;
@@ -75,11 +75,11 @@ async function throughGoogle(page: Page, action: () => Promise<void>) {
   await (await popup).waitForEvent('close');
 }
 
-/** A browser without sbobine links Drive from the settings ("Dove tengo le sbobine?"). */
+/** A browser without sbobine links Drive from Impostazioni → Google Drive, in one tap. */
 async function connectDrive(page: Page) {
   const panel = await openDriveSettings(page);
-  await expect(panel.getByTestId('web-drive-local-only')).toContainText('Safari può cancellarle');
-  await throughGoogle(page, () => panel.getByRole('radio', { name: 'In questo browser + Google Drive' }).check());
+  await expect(panel.getByTestId('web-drive-reasons')).toContainText('le ritrovi sugli altri dispositivi');
+  await throughGoogle(page, () => panel.getByRole('button', { name: 'Collega Google Drive' }).click());
   await expect(panel.getByTestId('web-drive-status')).toHaveText('Collegato come studente@example.com');
   await expect(panel.getByTestId('web-drive-last-sync')).toContainText('Ultima sincronizzazione');
   await page.getByRole('button', { name: 'Chiudi finestra' }).click();
@@ -177,6 +177,8 @@ test('the trash and the restore reach the other browser; export and "Elimina tut
 
   // iPad: the next round puts it in the trash there; "Ripristina" brings it back everywhere.
   await syncNow(ipad);
+  // The trash is in Archiviazione, beside the Google Drive page.
+  await ipad.getByRole('button', { name: 'Archiviazione', exact: true }).click();
   const trash = ipad.getByTestId('web-trash');
   await expect(trash).toContainText('Cardiologia');
   await expect(trash).toContainText('Ancora 30 giorni');
@@ -189,17 +191,23 @@ test('the trash and the restore reach the other browser; export and "Elimina tut
   await page.getByRole('button', { name: 'Torna indietro' }).click();
 
   // PC: the export asks for drive.file and writes a visible folder the sync never lists.
-  const panel = await openDriveSettings(page);
-  await throughGoogle(page, () => panel.getByRole('button', { name: 'Esporta tutte le sbobine nel mio Drive' }).click());
-  await expect(panel.getByTestId('web-drive-export-result')).toContainText('1 sbobina esportata in “El Sbobinator – esportazione');
-  await expect(panel.getByRole('link', { name: 'Apri la cartella' })).toHaveAttribute('href', /drive\.google\.com/);
+  // The export is a row of the backup, in Archiviazione.
+  await page.getByRole('button', { name: 'Apri impostazioni', exact: true }).click();
+  await page.getByRole('button', { name: 'Archiviazione', exact: true }).click();
+  const exportCard = page.getByTestId('web-drive-export');
+  await throughGoogle(page, () => exportCard.getByRole('button', { name: 'Esporta tutte le sbobine nel mio Drive' }).click());
+  await expect(exportCard.getByTestId('web-drive-export-result')).toContainText('1 sbobina esportata in “El Sbobinator – esportazione');
+  await expect(exportCard.getByRole('link', { name: 'Apri la cartella' })).toHaveAttribute('href', /drive\.google\.com/);
   expect(drive.visibleFiles().find(file => file.name === 'Cardiologia.html')?.content).toContain('Il cuore pompa il sangue nei vasi.');
   expect(drive.files().some(file => file.name.endsWith('.html'))).toBe(false);
 
   // "Elimina tutti i miei dati da Drive": the hidden folder empties, the sbobina stays here.
-  await panel.getByRole('button', { name: 'Elimina tutti i miei dati da Drive' }).click();
-  await panel.getByRole('button', { name: 'Elimina da Drive' }).click();
-  await expect(panel.getByRole('radio', { name: 'Solo in questo browser' })).toBeChecked();
+  await page.getByRole('button', { name: 'Sincronizzazione', exact: true }).click();
+  const panel = page.getByTestId('web-drive');
+  const eraseCard = page.getByTestId('web-drive-erase');
+  await eraseCard.getByRole('button', { name: 'Elimina tutti i miei dati da Drive' }).click();
+  await eraseCard.getByRole('button', { name: 'Elimina', exact: true }).click();
+  await expect(panel.getByRole('button', { name: 'Collega Google Drive' })).toBeVisible();
   expect(drive.files()).toEqual([]);
   // The export belongs to the user: it stays.
   expect(drive.visibleFiles().some(file => file.name === 'Cardiologia.html')).toBe(true);

@@ -1,9 +1,10 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Check, Copy, FileText, Headphones, Loader2, Moon, Plus, Sun } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Download, FileText, ListTree, Loader2, Moon, MoreHorizontal, Search, Sun, TriangleAlert, X, ZoomIn } from 'lucide-react';
 import type { Heading } from './RichTextEditor';
 import { prepareHtmlForClipboardSync } from '../utils';
 import { createNativeClipboardFormats, writeEditorClipboard } from '../editorClipboard';
+import { downloadDocx } from '../docxExport';
 import { prepareHtmlLineSpacing } from '../editorLineSpacing';
 import { clipboardPlainText } from '../documentFormatting';
 import { reportClientError } from '../diagnostics';
@@ -13,11 +14,17 @@ import { useKeyboardInsets } from '../hooks/useKeyboardInsets';
 import { usePhoneLayout } from '../hooks/usePhoneLayout';
 import { useEditorAutosave, type EditorSaveController } from '../hooks/useEditorAutosave';
 import { STORAGE_KEYS } from '../storageKeys';
-import { getHostCapabilities } from '../hostCapabilities';
+import { getHostCapabilities, isTouchWeb } from '../hostCapabilities';
 import { EditorShortcuts } from './EditorShortcuts';
+import { KebabMenu, type KebabMenuItem } from './KebabMenu';
+import { ZOOM_OPTIONS } from './editor/toolbar/formatOptions';
 // Bundled with the editor page: a lazy player flashed "Caricamento player..." on every first open.
+import { AudioDockEmpty } from './AudioDockEmpty';
+import { AudioDockLoading } from './AudioDockLoading';
+import type { AudioDockKind } from '../editorSessions';
 import { AudioPlayer } from './AudioPlayer';
 import { RichTextEditorChunk } from '../editorPreload';
+import { DURATION, enterTransition } from '../motion';
 
 // Shared with the idle warm-up, so a preloaded editor opens without the Suspense fallback.
 const LazyRichTextEditor = RichTextEditorChunk.Component;
@@ -32,12 +39,20 @@ export interface EditorDocumentProps {
   changedElsewhere?: boolean;
 }
 
+// iPad, phones and Safari give Google Docs only HTML, whose images arrive grey or not at all.
+export const COPY_IMAGES_NOTICE = 'Da iPad, telefono o Safari le immagini non arrivano in Google Docs con la copia. Usa “Scarica .docx” (l’icona di download) e apri il file con Google Docs: testo e immagini arrivano insieme.';
+// On a phone the .docx waits under "…", not behind a header icon.
+export const COPY_IMAGES_NOTICE_PHONE = 'Dal telefono le immagini non arrivano in Google Docs con la copia. Usa “Scarica .docx” dal menu “…” e apri il file con Google Docs: testo e immagini arrivano insieme.';
+export const DOCX_ERROR_NOTICE = 'Non è stato possibile creare il file .docx. Riprova; se succede ancora, usa “Copia documento”.';
+
 export const CHANGED_ELSEWHERE_NOTICE = 'Questa sbobina è stata modificata su un altro dispositivo. La nuova versione arriva quando chiudi l’editor; se intanto la modifichi anche qui, verranno tenute tutte e due (una con “(conflitto)” nel nome).';
 
 export interface EditorAudioProps {
   src: string | null;
   relinkNeeded: boolean;
   loading?: boolean;
+  /** The dock drawn while loading: the one this sbobina showed last time (a player by default). */
+  expected?: AudioDockKind;
   warning?: string;
   onRelink: () => Promise<boolean | undefined>;
   onRemoveAudio?: () => Promise<boolean | undefined> | void;
@@ -45,8 +60,8 @@ export interface EditorAudioProps {
   kept?: boolean;
   size?: number;
   onKeepChange?: (keep: boolean) => Promise<boolean | undefined>;
-  init: { time?: number; playbackRate?: number; volume?: number };
-  onStateChange: (state: { currentTime: number; playbackRate: number; volume: number }) => void;
+  init: { time?: number; duration?: number; playbackRate?: number; volume?: number };
+  onStateChange: (state: { currentTime: number; duration?: number; playbackRate: number; volume: number }) => void;
 }
 
 export interface EditorThemeProps {
@@ -70,12 +85,12 @@ export interface EditorFullPageProps {
   audioRelinkNeeded?: boolean;
   onRelink?: () => Promise<boolean | undefined>;
   onRemoveAudio?: () => Promise<boolean | undefined> | void;
-  previewInitAudio?: { time?: number; playbackRate?: number; volume?: number };
+  previewInitAudio?: { time?: number; duration?: number; playbackRate?: number; volume?: number };
   previewInitScrollTop?: number | undefined;
   initialSearchTerm?: string;
   themeMode?: 'light' | 'dark';
   setThemeMode?: React.Dispatch<React.SetStateAction<'light' | 'dark'>>;
-  onAudioStateChange?: (state: { currentTime: number; playbackRate: number; volume: number }) => void;
+  onAudioStateChange?: (state: { currentTime: number; duration?: number; playbackRate: number; volume: number }) => void;
 }
 
 export function EditorFullPage({
@@ -108,6 +123,7 @@ export function EditorFullPage({
   const audioSrc = audioProp?.src !== undefined ? audioProp.src : (flatAudioSrc ?? null);
   const audioRelinkNeeded = audioProp?.relinkNeeded ?? flatAudioRelinkNeeded ?? false;
   const audioLoading = audioProp?.loading ?? false;
+  const audioExpected = audioProp?.expected ?? 'player';
   const onRelink = audioProp?.onRelink ?? flatOnRelink ?? (() => Promise.resolve(undefined));
   const onRemoveAudio = audioProp?.onRemoveAudio ?? flatOnRemoveAudio;
   const onKeepChange = audioProp?.onKeepChange;
@@ -121,15 +137,19 @@ export function EditorFullPage({
   const themeMode = propThemeMode ?? fallbackTheme.themeMode;
   const setThemeMode = propSetThemeMode ?? fallbackTheme.setThemeMode;
   const [isTocOpen, setIsTocOpen] = useState(false);
+  // Each change opens find and replace in the editor once (the phone header menu).
+  const [findRequest, setFindRequest] = useState(0);
+  // The audio warning is closed per message: a new warning (another relink) shows again.
+  const [dismissedAudioWarning, setDismissedAudioWarning] = useState('');
   const [headings, setHeadings] = useState<Heading[]>([]);
   const [isCopied, setIsCopied] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
   const isCopyingRef = useRef(false);
-  const [relinkSuccess, setRelinkSuccess] = useState(false);
-  const [isRelinking, setIsRelinking] = useState(false);
+  const [exportNotice, setExportNotice] = useState('');
+  // Web only: the desktop app copies images into Docs, and its WebView has no download sheet.
+  const offersDocx = getHostCapabilities().kind === 'web';
   const [isRemovingAudio, setIsRemovingAudio] = useState(false);
   const [showConfirmRemove, setShowConfirmRemove] = useState(false);
-  const relinkTimerRef = useRef<number | null>(null);
   const copiedTimerRef = useRef<number | null>(null);
   const getHtmlRef = useRef<(() => string) | null>(null);
   const showAudioDock = getHostCapabilities().editorAudio;
@@ -177,13 +197,12 @@ export function EditorFullPage({
   useEffect(() => {
     if (copiedTimerRef.current) { window.clearTimeout(copiedTimerRef.current); copiedTimerRef.current = null; }
     setIsCopied(false);
-    setRelinkSuccess(false);
+    setExportNotice('');
     setIsTocOpen(false);
   }, [previewContent]);
 
   useEffect(() => {
     return () => {
-      if (relinkTimerRef.current) window.clearTimeout(relinkTimerRef.current);
       if (copiedTimerRef.current) window.clearTimeout(copiedTimerRef.current);
     };
   }, []);
@@ -244,6 +263,7 @@ export function EditorFullPage({
         formats = { 'text/html': prepareHtmlLineSpacing(clipboardHtml), 'text/plain': clipboardPlainText(temp) };
       }
       await writeEditorClipboard(clipboardHtml, formats['text/plain'], sourceRoot, formats);
+      if (offersDocx && (isTouchWeb() || /Apple/.test(navigator.vendor ?? '')) && /<img[\s>]/i.test(clipboardHtml)) setExportNotice(isPhone ? COPY_IMAGES_NOTICE_PHONE : COPY_IMAGES_NOTICE);
     } catch (error) {
       reportClientError('Clipboard error', error);
       return;
@@ -254,6 +274,18 @@ export function EditorFullPage({
     setIsCopied(true);
     if (copiedTimerRef.current) window.clearTimeout(copiedTimerRef.current);
     copiedTimerRef.current = window.setTimeout(() => setIsCopied(false), 2000);
+  };
+
+  // Synchronous: Safari only lets the download start while the tap is being handled.
+  const handleDownloadDocx = () => {
+    try {
+      const sourceRoot = document.querySelector<HTMLElement>('.tiptap-editor') ?? undefined;
+      downloadDocx(getHtmlRef.current?.() ?? lastPersistedRef.current, previewTitle, sourceRoot);
+      setExportNotice('');
+    } catch (error) {
+      reportClientError('Docx export error', error);
+      setExportNotice(DOCX_ERROR_NOTICE);
+    }
   };
 
   const scrollToHeading = (heading: Heading) => {
@@ -269,6 +301,29 @@ export function EditorFullPage({
     els[occurrencesBefore]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  const toggleTheme = () => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark');
+  // Export first, then the editing tools, then the preference. On a phone the copy is no longer the
+  // whole export (images stay behind), so it sits by name beside the .docx instead of a filled pill.
+  const phoneMenuItems: KebabMenuItem[] = [
+    { label: 'Copia documento', icon: <Copy className="w-4 h-4" />, onClick: () => void handleCopy() },
+    ...(offersDocx ? [{ label: 'Scarica .docx', icon: <Download className="w-4 h-4" />, onClick: handleDownloadDocx }] : []),
+    { separator: true },
+    { label: 'Indice', icon: <ListTree className="w-4 h-4" />, checked: isTocOpen, onClick: () => setIsTocOpen(p => !p) },
+    { label: 'Trova e sostituisci', icon: <Search className="w-4 h-4" />, onClick: () => setFindRequest(n => n + 1) },
+    { separator: true },
+    // A view setting, not a text one: off the toolbar row, which then fits a phone without scrolling.
+    {
+      label: `Zoom ${zoomLevel}%`,
+      icon: <ZoomIn className="w-4 h-4" />,
+      children: ZOOM_OPTIONS.map(level => ({ label: `${level}%`, checked: level === zoomLevel, onClick: () => handleZoomChange(level) })),
+    },
+    {
+      label: themeMode === 'dark' ? 'Tema chiaro' : 'Tema scuro',
+      icon: themeMode === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />,
+      onClick: toggleTheme,
+    },
+  ];
+
   return (
     <AnimatePresence>
       {previewContent !== null && (
@@ -278,7 +333,7 @@ export function EditorFullPage({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.12, ease: 'easeOut' }}
+          transition={enterTransition(DURATION.fast)}
         >
           <div className="editor-fullpage-header">
             <button
@@ -292,6 +347,8 @@ export function EditorFullPage({
 
             <div className="editor-fullpage-title">
               <FileText className="w-4 h-4 shrink-0" style={{ color: 'var(--text-muted)' }} />
+              {/* Phone: cut short beside the editing tools, which keeps the lecture in view and the
+                  header from looking empty; the whole title heads the "…" menu. */}
               <span className="truncate">{previewTitle}</span>
               <span
                 className="editor-autosave-badge shrink-0"
@@ -323,31 +380,64 @@ export function EditorFullPage({
                   <span className="editor-autosave-label">Autosave</span>
                 )}
               </span>
+              {/* The menu closes on the tap, so the phone confirms the copy here, beside the tools
+                  and "…", where the eye still is. The title shortens for it, so they do not move. */}
+              {isPhone && isCopied && (
+                <span role="status" data-testid="editor-copied-toast" className="editor-copied-toast">
+                  <Check className="w-3.5 h-3.5" aria-hidden="true" />
+                  Copiato!
+                </span>
+              )}
             </div>
 
             <div className="editor-fullpage-actions">
-              <button
-                onClick={() => void handleCopy()}
-                className={`settings-pill-button editor-fullpage-copy${isCopied ? ' is-copied' : ''}`}
-                title={isCopied ? 'Copiato!' : 'Copia tutto il documento mantenendo la formattazione, pronto da incollare in Google Docs o Word.'}
-                aria-label="Copia documento"
-                aria-busy={isCopying}
-              >
-                {isCopied ? <Check className="w-4 h-4" /> : isCopying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
-                <span className="editor-fullpage-copy-label">{isCopied ? 'Copiato!' : 'Copia documento'}</span>
-              </button>
-              <div className="editor-fullpage-utilities">
-                {/* Keyboard shortcuts mean nothing on a phone's touch keyboard. */}
-                {!isPhone && <EditorShortcuts audioAvailable={showAudioDock && Boolean(audioSrc)} />}
+              {offersDocx && !isPhone && (
                 <button
-                  onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
-                  className="icon-button theme-toggle-btn"
-                  aria-label={themeMode === 'dark' ? 'Attiva tema chiaro' : 'Attiva tema scuro'}
-                  title={themeMode === 'dark' ? 'Tema chiaro' : 'Tema scuro'}
+                  type="button"
+                  onClick={handleDownloadDocx}
+                  className="icon-button editor-fullpage-docx"
+                  title="Scarica un file Word (.docx) con testo e immagini: aprilo con Google Docs, anche da iPad o telefono."
+                  aria-label="Scarica .docx"
                 >
-                  {themeMode === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                  <Download className="w-4 h-4" />
+                  <span className="editor-fullpage-copy-label">Scarica .docx</span>
                 </button>
-              </div>
+              )}
+              {!isPhone && (
+                <button
+                  onClick={() => void handleCopy()}
+                  className={`settings-pill-button editor-fullpage-copy${isCopied ? ' is-copied' : ''}`}
+                  title={isCopied ? 'Copiato!' : 'Copia tutto il documento mantenendo la formattazione, pronto da incollare in Google Docs o Word.'}
+                  aria-label="Copia documento"
+                  aria-busy={isCopying}
+                >
+                  {isCopied ? <Check className="w-4 h-4" /> : isCopying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
+                  <span className="editor-fullpage-copy-label">{isCopied ? 'Copiato!' : 'Copia documento'}</span>
+                </button>
+              )}
+              {isPhone ? (
+                // Phone: like Google Docs, the actions wait under "…" with their names, under the
+                // whole title the header has to cut.
+                <KebabMenu
+                  items={phoneMenuItems}
+                  heading={previewTitle}
+                  icon={<MoreHorizontal className="w-4 h-4" />}
+                  buttonClassName="editor-fullpage-menu"
+                  ariaLabel="Altre opzioni"
+                />
+              ) : (
+                <div className="editor-fullpage-utilities">
+                  <EditorShortcuts audioAvailable={showAudioDock && Boolean(audioSrc)} />
+                  <button
+                    onClick={toggleTheme}
+                    className="icon-button theme-toggle-btn"
+                    aria-label={themeMode === 'dark' ? 'Attiva tema chiaro' : 'Attiva tema scuro'}
+                    title={themeMode === 'dark' ? 'Tema chiaro' : 'Tema scuro'}
+                  >
+                    {themeMode === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -360,6 +450,43 @@ export function EditorFullPage({
             >
               {CHANGED_ELSEWHERE_NOTICE}
             </p>
+          )}
+
+          {exportNotice && (
+            <div role="status" data-testid="editor-export-notice" className="editor-audio-warning">
+              <TriangleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <p className="min-w-0 flex-1">{exportNotice}</p>
+              <button
+                type="button"
+                className="editor-audio-warning-close"
+                aria-label="Chiudi avviso"
+                title="Chiudi avviso"
+                onClick={() => setExportNotice('')}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Under the header like the notice above, so the player row never carries text over its controls. */}
+          {showAudioDock && audioProp?.warning && audioProp.warning !== dismissedAudioWarning && (
+            <div
+              role="status"
+              data-testid="editor-audio-warning"
+              className="editor-audio-warning"
+            >
+              <TriangleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <p className="min-w-0 flex-1">{audioProp.warning}</p>
+              <button
+                type="button"
+                className="editor-audio-warning-close"
+                aria-label="Chiudi avviso audio"
+                title="Chiudi avviso"
+                onClick={() => setDismissedAudioWarning(audioProp.warning ?? '')}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
           )}
 
           <div className="editor-fullpage-body">
@@ -376,10 +503,12 @@ export function EditorFullPage({
                 onHeadingsChange={setHeadings}
                 isTocOpen={isTocOpen}
                 onTocToggle={() => setIsTocOpen(p => !p)}
+                findRequest={findRequest}
                 tocHeadings={headings}
                 onScrollToHeading={scrollToHeading}
                 zoomLevel={zoomLevel}
                 onZoomChange={handleZoomChange}
+                zoomInHeaderMenu={isPhone}
                 bottomInset={footerHeight}
               />
             </Suspense>
@@ -389,18 +518,15 @@ export function EditorFullPage({
             {showAudioDock && (
             <div ref={footerRef} className="editor-fullpage-footer">
               <div className="editor-player-dock">
-                {audioProp?.warning && (
-                  <p role="status" className="pt-2 text-xs" style={{ color: 'var(--text-secondary)' }}>{audioProp.warning}</p>
-                )}
-                {audioLoading ? (
-                  <div role="status" className="flex items-center gap-2 py-3.5 text-sm" style={{ color: 'var(--text-muted)' }}>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Preparazione audio della sbobina...
-                  </div>
-                ) : audioSrc ? (
+                {/* While the audio gets ready the dock already looks like what it showed last time:
+                    the player's shell, or the empty dock with its buttons on hold. */}
+                {audioLoading && audioExpected === 'player' ? (
+                  <AudioDockLoading initialTime={previewInitAudio.time} initialDuration={previewInitAudio.duration} />
+                ) : audioSrc && !audioLoading ? (
                   <AudioPlayer
                     src={audioSrc}
                     initialTime={previewInitAudio.time}
+                    initialDuration={previewInitAudio.duration}
                     initialPlaybackRate={previewInitAudio.playbackRate}
                     initialVolume={previewInitAudio.volume}
                     onStateChange={onAudioStateChange}
@@ -409,104 +535,16 @@ export function EditorFullPage({
                     onRemoveAudio={audioPicked ? undefined : onRemoveAudio}
                     keep={audioPicked && onKeepChange ? { kept: Boolean(audioProp?.kept), size: audioProp?.size ?? 0, onChange: onKeepChange } : undefined}
                   />
-                ) : audioRelinkNeeded ? (
-                  <div className="flex items-center justify-between gap-3 py-3.5">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{audioPicked ? 'Audio della lezione' : 'Audio non trovato'}</p>
-                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                        {audioPicked
-                          ? 'L’audio non resta salvato nel browser: scegli il file della lezione per ascoltarlo.'
-                          : 'Seleziona di nuovo il file per conservarne una copia nella sbobina.'}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {onRemoveAudio && !audioPicked && (
-                        <button
-                          type="button"
-                          onClick={() => setShowConfirmRemove(true)}
-                          disabled={isRemovingAudio}
-                          className="app-button-secondary is-settings-action"
-                          title="Rimuovi audio dalla sbobina"
-                          aria-label="Rimuovi audio dalla sbobina"
-                        >
-                          {isRemovingAudio ? 'Rimozione...' : 'Rimuovi audio'}
-                        </button>
-                      )}
-                      <button
-                        onClick={async () => {
-                          if (isRelinking) return;
-                          setIsRelinking(true);
-                          try {
-                            const ok = await onRelink();
-                            if (ok) {
-                              if (relinkTimerRef.current) window.clearTimeout(relinkTimerRef.current);
-                              setRelinkSuccess(true);
-                              relinkTimerRef.current = window.setTimeout(() => setRelinkSuccess(false), 3000);
-                            }
-                          } finally { setIsRelinking(false); }
-                        }}
-                        disabled={isRelinking}
-                        className="app-button-secondary is-settings-action"
-                        style={relinkSuccess ? { borderColor: 'var(--success-ring)', color: 'var(--success-text)' } : {}}
-                      >
-                        {relinkSuccess
-                          ? <><Check className="w-3.5 h-3.5" /> {audioPicked ? 'Audio pronto' : 'Ricollegato'}</>
-                          : isRelinking ? 'Selezione...' : audioPicked ? 'Scegli il file audio' : 'Ricollega audio'}
-                      </button>
-                    </div>
-                  </div>
                 ) : (
-                  <div className="flex items-center justify-between gap-3 py-3.5">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div
-                        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                        style={{ background: 'var(--bg-panel)', color: 'var(--text-muted)' }}
-                      >
-                        <Headphones className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium leading-none mb-1" style={{ color: 'var(--text-primary)' }}>Nessun audio collegato</p>
-                        <p className="text-xs leading-none" style={{ color: 'var(--text-muted)' }}>
-                          {audioPicked
-                            ? 'Scegli il file della lezione per ascoltarlo mentre rileggi.'
-                            : 'Aggiungi un file audio: una copia verrà conservata nella sbobina.'}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (isRelinking) return;
-                          setIsRelinking(true);
-                          try {
-                            const ok = await onRelink();
-                            if (ok) {
-                              if (relinkTimerRef.current) window.clearTimeout(relinkTimerRef.current);
-                              setRelinkSuccess(true);
-                              relinkTimerRef.current = window.setTimeout(() => setRelinkSuccess(false), 3000);
-                            }
-                          } finally {
-                            setIsRelinking(false);
-                          }
-                        }}
-                        disabled={isRelinking}
-                        className="settings-pill-button"
-                      >
-                        {isRelinking ? (
-                          <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            <span>Selezione...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>{audioPicked ? 'Scegli il file audio' : 'Aggiungi audio'}</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
+                  <AudioDockEmpty
+                    key={htmlPath}
+                    state={audioLoading ? (audioExpected === 'missing' ? 'missing' : 'none') : audioRelinkNeeded ? 'missing' : 'none'}
+                    audioPicked={audioPicked}
+                    onRelink={onRelink}
+                    onRemove={(audioLoading ? audioExpected === 'missing' : audioRelinkNeeded) && onRemoveAudio && !audioPicked ? () => setShowConfirmRemove(true) : undefined}
+                    isRemoving={isRemovingAudio}
+                    pending={audioLoading}
+                  />
                 )}
               </div>
             </div>

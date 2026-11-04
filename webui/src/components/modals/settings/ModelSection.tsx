@@ -2,6 +2,7 @@ import React, { useMemo, useCallback } from 'react';
 import type { ModelOption } from '../../../bridge';
 import { sortModelsByVersion, DEFAULT_MODEL } from '../../../utils';
 import { CustomSelect } from './CustomSelect';
+import { Cpu } from 'lucide-react';
 import { SettingsSectionHeading } from './SettingsLayout';
 
 interface ModelSectionProps {
@@ -35,10 +36,8 @@ export const ModelSection: React.FC<ModelSectionProps> = React.memo(({
   );
 
   return (
-    <div className="space-y-3">
-      <div className="space-y-1 min-w-0">
-        <SettingsSectionHeading>Modello di trascrizione</SettingsSectionHeading>
-      </div>
+    <div className="space-y-2">
+      <SettingsSectionHeading icon={Cpu}>Modello di trascrizione</SettingsSectionHeading>
 
       <CustomSelect
         value={preferredModel}

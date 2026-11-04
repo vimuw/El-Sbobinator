@@ -14,7 +14,7 @@ interface ArchivePageTitleProps {
 export function ArchivePageTitle({ children, count, className = '' }: ArchivePageTitleProps) {
   return (
     <div className={`flex flex-wrap items-center gap-3 min-w-0 ${className}`}>
-      <h1 className="min-w-0 max-w-full [overflow-wrap:anywhere] text-[1.75rem] font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+      <h1 className="page-title min-w-0 max-w-full [overflow-wrap:anywhere]">
         {children}
       </h1>
       <span className="status-pill is-quiet is-count shrink-0">{count}</span>

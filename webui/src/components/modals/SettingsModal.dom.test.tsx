@@ -238,14 +238,14 @@ describe('SettingsModal — save behavior', () => {
     const input = screen.getByLabelText('Nuova chiave di riserva');
     fireEvent.change(input, { target: { value: addedFallback } });
     fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
-    expect(screen.getByText('Chiave Riserva 2')).toBeTruthy();
+    expect(screen.getByText('Riserva 2')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: /Gemini Primary/i }));
     fireEvent.click(screen.getByRole('option', { name: /Gemini Alternate/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Annulla' }));
     fireEvent.click(screen.getByRole('button', { name: 'Riapri' }));
 
-    expect(screen.queryByText('Chiave Riserva 2')).toBeNull();
+    expect(screen.queryByText('Riserva 2')).toBeNull();
     expect(screen.queryByText('...CCCC')).toBeNull();
     expect(screen.getByRole('button', { name: /Gemini Primary/i })).toBeTruthy();
   });
@@ -947,7 +947,7 @@ describe('SettingsModal — version status display', () => {
     expect(within(notice).getByRole('button', { name: 'Installa aggiornamento' })).toBeTruthy();
     // The check button became the section's only install action, beside the release notes
     expect(within(section).getAllByRole('button')).toHaveLength(1);
-    expect(within(section).getByRole('link', { name: 'Note di rilascio ↗' })).toBeTruthy();
+    expect(within(section).getByRole('link', { name: 'Note di rilascio' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Mostra aggiornamento' })).toBeNull();
 
     const scrollIntoView = vi.fn();
@@ -1257,14 +1257,17 @@ describe('SettingsModal on the web host', () => {
 
     // Same key section as the desktop: rows with a menu and the add field, not a free text box.
     expect(screen.queryByLabelText('Chiavi API Gemini, una per riga')).toBeNull();
-    expect(screen.getByText('Chiave Principale')).toBeTruthy();
+    expect(screen.getByText('Principale')).toBeTruthy();
     expect(screen.getByText('...0123')).toBeTruthy();
-    expect(screen.getByText('Chiave Riserva 1')).toBeTruthy();
+    expect(screen.getByText('Riserva 1')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Opzioni chiave principale' })).toBeTruthy();
     expect(screen.getByLabelText('Nuova chiave di riserva')).toBeTruthy();
     expect(screen.queryByText('Protetta')).toBeNull();
     expect(screen.getByTestId('shared-device-warning').textContent).toContain('solo in questo browser');
-    expect(screen.getByRole('button', { name: 'Rimuovi tutte le chiavi' })).toBeTruthy();
+    // The one-go removal sits in the shared-device notice that explains it, not in the section header.
+    expect(within(screen.getByTestId('shared-device-warning')).getByRole('button', { name: 'Rimuovi tutte le chiavi' })).toBeTruthy();
+    // Beside the text on every width: on a phone it used to wrap alone into the bottom-left corner.
+    expect(screen.getByTestId('shared-device-warning').className).not.toContain('flex-wrap');
     expect(screen.queryByText('Notifiche di sistema')).toBeNull();
     expect(screen.queryByText('Versione e aggiornamenti')).toBeNull();
     // No updater on the web: the version is shown, updates arrive with the next load.
@@ -1281,6 +1284,59 @@ describe('SettingsModal on the web host', () => {
     const link = within(screen.getByTestId('web-version')).getByRole('link', { name: 'informativa sulla privacy' });
     expect(link.getAttribute('href')).toBe('/privacy');
     expect(link.getAttribute('target')).toBe('_blank');
+  });
+
+  it('re-reads the space on Archiviazione when a Drive sync changed the archive, keeping the old figures meanwhile', async () => {
+    let resolveSecond: (value: unknown) => void = () => {};
+    const getInfo = vi.fn()
+      .mockResolvedValueOnce({ ok: true, total_bytes: 2048, total_sessions: 5, session_root: 'browser' })
+      .mockReturnValueOnce(new Promise(resolve => { resolveSecond = resolve; }));
+    setPywebview({ get_session_storage_info: getInfo });
+    const props = makeProps({ isOpen: false });
+    const { rerender } = render(<SettingsModal {...props} storage={{ archiveRevision: 0 }} />);
+    rerender(<SettingsModal {...props} isOpen storage={{ archiveRevision: 0 }} initialTab="storage" />);
+    await vi.waitFor(() => expect(screen.getByTestId('storage-count').textContent).toBe('5'));
+
+    // A sbobina restored on another device arrived with the sync while the page is open.
+    rerender(<SettingsModal {...props} isOpen storage={{ archiveRevision: 1 }} initialTab="storage" />);
+    expect(getInfo).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId('storage-count').textContent).toBe('5');
+    await act(async () => { resolveSecond({ ok: true, total_bytes: 4096, total_sessions: 6, session_root: 'browser' }); });
+    expect(screen.getByTestId('storage-count').textContent).toBe('6');
+  });
+
+  it('reads Archiviazione on opening, so the tab shows at once like the others and keeps its figures on return', async () => {
+    let resolveReturn: (value: unknown) => void = () => {};
+    const getInfo = vi.fn()
+      .mockResolvedValueOnce({ ok: true, total_bytes: 2048, total_sessions: 5, session_root: 'browser', persisted: false })
+      .mockReturnValueOnce(new Promise(resolve => { resolveReturn = resolve; }));
+    const getBackup = vi.fn().mockResolvedValue({ ok: true, sessions: 5, text_bytes: 2048, audio_bytes: 4096, audio_files: 1, last_backup_at: null });
+    const listTrash = vi.fn().mockResolvedValue({ ok: true, sessions: [] });
+    setPywebview({ get_session_storage_info: getInfo, get_web_backup_info: getBackup, list_trash: listTrash });
+    const props = makeProps({ isOpen: false });
+    const { rerender } = render(<SettingsModal {...props} />);
+    rerender(<SettingsModal {...props} isOpen />);
+
+    // Still on Generale: the figures are read already, once each.
+    await vi.waitFor(() => expect(listTrash).toHaveBeenCalled());
+    await act(async () => {});
+    expect(getInfo).toHaveBeenCalledTimes(1);
+    expect(getBackup).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Archiviazione' }));
+    // Shown on the tab's first frame, with what was read, not after a wait.
+    expect(screen.getByTestId('web-storage-page').dataset.revealed).toBe('true');
+    expect(screen.getByTestId('storage-count').textContent).toBe('5');
+    expect(screen.getByRole('switch', { name: 'Includi gli audio delle lezioni nel backup' }).getAttribute('aria-checked')).toBe('true');
+
+    // Back on the tab later: the last figures show while the space is read again.
+    fireEvent.click(screen.getByRole('button', { name: /Generale/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Archiviazione' }));
+    expect(screen.getByTestId('web-storage-page').dataset.revealed).toBe('true');
+    expect(screen.getByTestId('storage-count').textContent).toBe('5');
+    expect(screen.queryByText('Calcolo dello spazio occupato…')).toBeNull();
+    await act(async () => { resolveReturn({ ok: true, total_bytes: 4096, total_sessions: 6, session_root: 'browser', persisted: false }); });
+    expect(screen.getByTestId('storage-count').textContent).toBe('6');
   });
 
   it('opens on Archiviazione when asked, e.g. from the moved-address notice', () => {
@@ -1325,14 +1381,14 @@ describe('SettingsModal on the web host', () => {
 
     expect(await screen.findByText('Esaurita oggi')).toBeTruthy();
     expect(screen.getByText('Attiva')).toBeTruthy();
-    expect(screen.getByTestId('api-key-availability').textContent).toContain('1 di 2 chiavi disponibili oggi');
-    expect(screen.getByText('Reset quote: ore 09:00 (ora italiana / 00:00 PT)')).toBeTruthy();
+    expect(screen.getByTestId('api-key-availability').textContent).toContain('1 di 2 disponibili oggi · si ricaricano alle 09:00');
+    expect(screen.getByTestId('api-key-availability').getAttribute('title')).toContain('Reset quote: ore 09:00 (ora italiana / 00:00 PT)');
     expect(screen.getByRole('table', { name: 'Disponibilità delle chiavi per modello' })).toBeTruthy();
     expect(screen.getByRole('cell', { name: 'Chiave Principale: non disponibile per Gemini 2.5 Flash' })).toBeTruthy();
     expect(screen.getByRole('cell', { name: 'Chiave Principale: disponibile per Gemini 3.6 Flash' })).toBeTruthy();
   });
 
-  it('removes all the keys from the browser right away', async () => {
+  it('removes all the keys from the browser right away, after asking', async () => {
     const saveSettings = vi.fn().mockResolvedValue({ ok: true });
     const setApiKey = vi.fn();
     const setFallbackKeys = vi.fn();
@@ -1340,8 +1396,16 @@ describe('SettingsModal on the web host', () => {
     setPywebview({ save_settings: saveSettings });
     render(<SettingsModal {...makeProps({ apiKey: 'AIzaSyPrimary1234567890123', setApiKey, setFallbackKeys, onSettingsSaved, preferredModel: 'gemini-3.6-flash' })} />);
 
+    // The trash only asks: "Annulla" keeps the key.
+    fireEvent.click(screen.getByRole('button', { name: 'Rimuovi la chiave' }));
+    expect(screen.getByRole('group', { name: 'Rimuovi la chiave' }).textContent).toContain('Rimuovere la chiave da questo browser?');
+    fireEvent.click(within(screen.getByRole('group', { name: 'Rimuovi la chiave' })).getByRole('button', { name: 'Annulla' }));
+    expect(saveSettings).not.toHaveBeenCalled();
+    expect(screen.queryByRole('group', { name: 'Rimuovi la chiave' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rimuovi la chiave' }));
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Rimuovi la chiave' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Rimuovi' }));
     });
 
     expect(saveSettings).toHaveBeenCalledWith('', [], 'gemini-3.6-flash');

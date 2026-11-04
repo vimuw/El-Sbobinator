@@ -65,7 +65,21 @@ describe('WebBackupSection', () => {
 
     expect(await screen.findByText('Nessun audio salvato in questo browser')).toBeTruthy();
     expect(screen.queryByText(/^0 file/)).toBeNull();
-    expect((screen.getByRole('switch', { name: 'Includi gli audio delle lezioni nel backup' }) as HTMLButtonElement).disabled).toBe(true);
+    const audioSwitch = screen.getByRole('switch', { name: 'Includi gli audio delle lezioni nel backup' }) as HTMLButtonElement;
+    expect(audioSwitch.disabled).toBe(true);
+    // Off, not a locked "on" that promises audio the file won't have.
+    expect(audioSwitch.getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('gives each action its own row, with the size and last download in the download row', async () => {
+    render(<WebBackupSection />);
+
+    const prepare = await screen.findByRole('button', { name: 'Prepara backup' });
+    expect(prepare.previousElementSibling?.textContent).toContain('Scarica un backup');
+    expect(prepare.previousElementSibling?.contains(screen.getByTestId('web-backup-estimate'))).toBe(true);
+    expect(prepare.previousElementSibling?.contains(screen.getByTestId('web-backup-last'))).toBe(true);
+    const importButton = screen.getByRole('button', { name: 'Importa backup' });
+    expect(importButton.previousElementSibling?.textContent).toContain('Non elimina niente');
   });
 
   it('prepares the zip, then saves it from a real download link and records the date', async () => {

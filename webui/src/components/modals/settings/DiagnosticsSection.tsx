@@ -8,11 +8,13 @@ import {
   AlertTriangle,
   Copy,
   RefreshCw,
+  FlaskConical,
+  MessageSquareWarning,
 } from 'lucide-react';
 import { ReportProblemLink } from '../../ReportProblemLink';
 import { CustomSelect } from './CustomSelect';
 import type { ValidationResult } from '../../../bridge';
-import { SettingsSectionHeading } from './SettingsLayout';
+import { SettingsRow, SettingsSectionHeading } from './SettingsLayout';
 
 interface DiagnosticsSectionProps {
   isValidatingEnvironment: boolean;
@@ -68,15 +70,24 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
   return (
     <div className="space-y-3 animate-fade-in">
       <section aria-labelledby="diagnostic-support-heading" className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <SettingsSectionHeading id="diagnostic-support-heading">Segnala un problema</SettingsSectionHeading>
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <ReportProblemLink className="app-button-secondary is-settings-action" />
+        <div className="space-y-2">
+          <SettingsSectionHeading icon={MessageSquareWarning} id="diagnostic-support-heading">Segnala un problema</SettingsSectionHeading>
+          <p className="text-xs text-[var(--text-secondary)]">
+            Due passaggi: copia il report e incollalo nel modulo.
+          </p>
+        </div>
+        {/* The two steps in the order they are done, each with its button on the right, like the
+            rows of Archiviazione. The sbobina choice decides what the report holds, so it follows step 1. */}
+        <div>
+          <SettingsRow
+            title="1. Copia il report"
+            description="Errori e log, mai audio, trascrizioni o chiavi API."
+          >
             <button
               type="button"
               onClick={handleCopyReport}
               disabled={isCopying}
-              className="app-button-secondary is-settings-action"
+              className="app-button-secondary is-settings-action shrink-0"
               title={copiedToast ? 'Report copiato!' : 'Copia il report da incollare nel modulo'}
               aria-label="Copia report diagnostico"
             >
@@ -87,36 +98,39 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
               ) : (
                 <Copy className="w-4 h-4" />
               )}
-              <span>{copiedToast ? 'Copiato' : 'Copia report'}</span>
+              <span>{copiedToast ? 'Copiato' : 'Copia'}</span>
             </button>
-          </div>
+          </SettingsRow>
+          {sessions.length > 0 && (
+            <div className="flex flex-col gap-2 pb-2">
+              <label htmlFor="diagnostic-session" className="text-xs text-[var(--text-secondary)]">Sbobina con il problema (facoltativa)</label>
+              <CustomSelect
+                id="diagnostic-session"
+                value={sessionDir}
+                disabled={isCopying}
+                onChange={setSessionDir}
+                options={[
+                  { value: '', label: 'Nessuna in particolare' },
+                  ...sessions.map(session => ({ value: session.path, label: session.label })),
+                ]}
+              />
+            </div>
+          )}
+          <SettingsRow
+            title="2. Apri il modulo"
+            description="Descrivi il problema e incolla il report."
+          >
+            <ReportProblemLink className="app-button-secondary is-settings-action shrink-0" />
+          </SettingsRow>
         </div>
-        <p className="text-xs text-[var(--text-secondary)]">
-          Descrivi il problema nel modulo e incolla il report: contiene errori e log, mai audio, trascrizioni o chiavi API.
-        </p>
-        {sessions.length > 0 && (
-          <div className="flex flex-col gap-2">
-            <label htmlFor="diagnostic-session" className="text-xs text-[var(--text-secondary)]">Sbobina con il problema (facoltativa)</label>
-            <CustomSelect
-              id="diagnostic-session"
-              value={sessionDir}
-              disabled={isCopying}
-              onChange={setSessionDir}
-              options={[
-                { value: '', label: 'Nessuna in particolare' },
-                ...sessions.map(session => ({ value: session.path, label: session.label })),
-              ]}
-            />
-          </div>
-        )}
         {supportError && <p role="alert" className="text-xs text-[var(--error-text)]">{supportError}</p>}
       </section>
 
       {showEnvironmentCheck && (
         <section aria-labelledby="diagnostic-environment-heading" className="space-y-3 border-t border-[var(--border-default)] pt-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="space-y-0.5 min-w-0">
-              <SettingsSectionHeading id="diagnostic-environment-heading">Verifica ambiente</SettingsSectionHeading>
+            <div className="space-y-2 min-w-0">
+              <SettingsSectionHeading icon={FlaskConical} id="diagnostic-environment-heading">Verifica ambiente</SettingsSectionHeading>
               <p className="text-xs text-[var(--text-secondary)]">
                 Controlla chiave API, FFmpeg e cartella sessioni. Non consuma quota.
               </p>

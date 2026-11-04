@@ -75,7 +75,7 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
     <AnimatePresence>
       <motion.div
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+        className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-4"
       >
         <motion.div
           initial={{ opacity: 0 }}
@@ -135,7 +135,7 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
                     background: exportType === 'full' ? 'var(--accent-bg)' : 'transparent',
                   }}
                 >
-                  {exportType === 'full' && <div className="w-2 h-2 rounded-full bg-white" />}
+                  {exportType === 'full' && <div className="w-2 h-2 rounded-full bg-[var(--btn-primary-text)]" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -143,8 +143,8 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
                       Sbobina + Audio (Completo)
                     </span>
                     <span
-                      className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
-                      style={{ background: 'var(--accent-bg)', color: 'var(--btn-primary-text)' }}
+                      className="text-caption font-semibold px-2 py-0.5 rounded-full"
+                      style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-text)' }}
                     >
                       Consigliato
                     </span>
@@ -171,7 +171,7 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
                     background: exportType === 'text_only' ? 'var(--accent-bg)' : 'transparent',
                   }}
                 >
-                  {exportType === 'text_only' && <div className="w-2 h-2 rounded-full bg-white" />}
+                  {exportType === 'text_only' && <div className="w-2 h-2 rounded-full bg-[var(--btn-primary-text)]" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -202,7 +202,7 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
                     background: exportType === 'audio_only' ? 'var(--accent-bg)' : 'transparent',
                   }}
                 >
-                  {exportType === 'audio_only' && <div className="w-2 h-2 rounded-full bg-white" />}
+                  {exportType === 'audio_only' && <div className="w-2 h-2 rounded-full bg-[var(--btn-primary-text)]" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -236,7 +236,7 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
                   <button
                     type="button"
                     onClick={handleOpenFolder}
-                    className="inline-flex items-center gap-1.5 self-start text-xs font-semibold px-3 py-1.5 rounded-full border transition-all cursor-pointer bg-[var(--bg-surface)] border-[var(--border-default)] text-[var(--accent-text)] hover:bg-[var(--bg-hover)]"
+                    className="inline-flex items-center gap-1.5 self-start text-xs font-semibold min-h-[var(--control-height-sm)] px-3.5 rounded-full border transition-all cursor-pointer bg-[var(--bg-surface)] border-[var(--border-default)] text-[var(--accent-text)] hover:bg-[var(--bg-hover)]"
                   >
                     <FolderOpen className="w-3.5 h-3.5" />
                     <span>Apri cartella del pacchetto</span>

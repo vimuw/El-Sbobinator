@@ -5,8 +5,8 @@ import { STORAGE_KEYS } from '../storageKeys';
 import { createCheckpointStore } from './checkpointStore';
 import { defaultSettings } from './pipeline/run';
 import { newSession } from './pipeline/session';
-import { WEB_DB_NAME, WEB_DB_VERSION, openWebDatabase } from './webDatabase';
-import { createWebArchive, requestPersistentStorage, webSessionHtmlPath, type NewArchiveSession } from './webSessions';
+import { SYNC, WEB_DB_NAME, WEB_DB_VERSION, openWebDatabase } from './webDatabase';
+import { TRASH_DAYS, createWebArchive, emptyTrash, purgeExpiredTrash, requestPersistentStorage, webSessionHtmlPath, type NewArchiveSession, type WebArchive } from './webSessions';
 
 const identity = { name: 'Lezione.mp3', size: 10, headHash: 'ab' };
 
@@ -103,6 +103,73 @@ describe('web archive in IndexedDB', () => {
     // The UI sends the whole tree: folders it left out are gone.
     await archive.saveFolders([{ id: 'g', name: 'Altro', color: '#fff', session_dirs: [] }]);
     expect((await archive.loadFolders()).map(folder => folder.id)).toEqual(['g']);
+  });
+
+  it('keeps a sbobina restored while "Svuota cestino" or the trash expiry runs', async () => {
+    // Regression: both listed the trash first and then deleted each listed sbobina, also one that a
+    // Drive round had restored in the meantime (a restore made on another device): it was lost here
+    // and its deletion went to Drive.
+    const factory = new IDBFactory();
+    const archive = createWebArchive(factory);
+    const trashedAt = new Date(Date.parse('2026-10-01T10:00:00Z')).toISOString();
+    const now = new Date(Date.parse(trashedAt) + (TRASH_DAYS + 1) * 24 * 60 * 60 * 1000);
+    const trashed = async (name: string) => {
+      const session = await archive.create(input(name, '2026-09-20T10:00:00Z'), `<p>${name}</p>`);
+      await archive.trash(session.session_dir, trashedAt);
+      return session;
+    };
+    // The first deletion of the loop gives the round its moment to restore the other sbobina.
+    const restoringDuring = (first: string, restored: string): WebArchive => ({
+      ...archive,
+      delete: async (sessionDir, changedAt, since) => {
+        if (sessionDir === first) await archive.restore(restored);
+        return archive.delete(sessionDir, changedAt, since);
+      },
+    });
+
+    for (const run of [
+      (target: WebArchive) => emptyTrash(target),
+      (target: WebArchive) => purgeExpiredTrash(target, now),
+    ]) {
+      const one = await trashed('Uno');
+      const two = await trashed('Due');
+      const [first, other] = (await archive.listTrash()).map(session => session.session_dir);
+      const restored = other === one.session_dir ? one : two;
+      expect(await run(restoringDuring(first, restored.session_dir))).toBe(1);
+      expect(await archive.listTrash()).toEqual([]);
+      expect((await archive.list()).map(session => session.session_dir)).toEqual([restored.session_dir]);
+      expect(await archive.readHtml(restored.html_path)).toContain(`<p>${restored.name}</p>`);
+      await archive.delete(restored.session_dir);
+    }
+  });
+
+  it('writes each change and its sync mark in one transaction: a mark that fails leaves the change undone', async () => {
+    // A Drive round reads the archive between any two transactions: a change it finds without its
+    // mark it takes for an old text and overwrites with Drive's.
+    const factory = new IDBFactory();
+    const plain = createWebArchive(factory);
+    const session = await plain.create(input('Lezione', '2026-10-20T10:00:00Z'), '<p>prima</p>');
+    await plain.saveFolders([{ id: 'f', name: 'Corso', color: '', session_dirs: [] }]);
+    const failing = createWebArchive(factory, {
+      store: SYNC,
+      session: async () => { throw new Error('segno non scritto'); },
+      folders: async () => { throw new Error('segno non scritto'); },
+    });
+
+    await expect(failing.create(input('Nuova', '2026-10-21T10:00:00Z'), '<p>x</p>')).rejects.toThrow();
+    expect(await failing.saveHtml(session.html_path, '<p>dopo</p>', 5)).toMatchObject({ ok: false });
+    await expect(failing.update(session.session_dir, { name: 'Rinominata' })).rejects.toThrow();
+    await expect(failing.trash(session.session_dir, '2026-10-22T10:00:00Z')).rejects.toThrow();
+    await expect(failing.delete(session.session_dir)).rejects.toThrow();
+    await expect(failing.saveFolders([])).rejects.toThrow();
+
+    expect((await plain.list()).map(item => item.name)).toEqual(['Lezione']);
+    expect(await plain.readHtml(session.html_path)).toContain('<p>prima</p>');
+    expect(await plain.loadFolders()).toEqual([{ id: 'f', name: 'Corso', color: '', session_dirs: [] }]);
+
+    await plain.trash(session.session_dir, '2026-10-22T10:00:00Z');
+    await expect(failing.restore(session.session_dir)).rejects.toThrow();
+    expect((await plain.listTrash()).map(item => item.name)).toEqual(['Lezione']);
   });
 
   it('searches the plain text of the documents', async () => {

@@ -182,7 +182,7 @@ test('plays the lecture in the editor; after a reload asks for the file and keep
   await closeEditor(page);
   await page.reload();
   await openFromArchive(page, 'Anatomia');
-  await expect(page.getByText('Audio della lezione')).toBeVisible();
+  await expect(page.getByText('Audio non salvato')).toBeVisible();
   const chooserPromise = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: 'Scegli il file audio' }).click();
   await (await chooserPromise).setFiles({ name: 'Anatomia.mp3', mimeType: 'audio/mpeg', buffer: syntheticMp3(400) });

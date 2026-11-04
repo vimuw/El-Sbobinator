@@ -1,5 +1,5 @@
 import { IDBFactory } from 'fake-indexeddb';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ArchiveSession } from '../bridge';
 import { STORAGE_KEYS } from '../storageKeys';
 import { BACKUP_FORMAT, BACKUP_MANIFEST, BACKUP_VERSION, backupFileName, createBackup, describeBackup, describeImport, importBackup, loadLastBackupAt, saveLastBackupAt, type BackupManifest } from './webBackup';
@@ -40,6 +40,13 @@ async function backupWith(manifest: Partial<BackupManifest>, extra: Array<{ name
   return createZip([{ name: BACKUP_MANIFEST, data: new Blob([JSON.stringify(full)]) }, ...extra]);
 }
 
+// importBackup cleans the bodies with DOMParser, missing in node; jsdom's Blob would break the ZIP
+// reads, so only its parser comes in. The specifier as string: jsdom ships no types.
+beforeEach(async () => {
+  const { JSDOM } = await import('jsdom' as string) as { JSDOM: new () => { window: { DOMParser: typeof DOMParser } } };
+  vi.stubGlobal('DOMParser', new JSDOM().window.DOMParser);
+});
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -64,7 +71,28 @@ describe('web backup', () => {
     // The manifest adds only its own header to the same sessions and folders.
     expect(info.textBytes - usage.documents).toBeGreaterThanOrEqual(0);
     expect(info.textBytes - usage.documents).toBeLessThan(200);
-    expect(usage.total).toBe(usage.audio + usage.queueAudio + usage.documents + usage.checkpoints);
+    expect(usage.total).toBe(usage.audio + usage.queueAudio + usage.documents + usage.trash + usage.checkpoints);
+  });
+
+  it('still agrees with the settings once a sbobina with its audio is in the trash, counted apart', async () => {
+    // Regression: the settings counted the trash as texts and audio of the sbobine, the backup leaves it out.
+    const factory = new IDBFactory();
+    const { archive, media } = await seed(factory);
+    const trashed = await archive.create(sessionInput('Cestinata', '2026-10-22T10:00:00.000Z'), `<p>${'x'.repeat(5_000)}</p>`);
+    await media.save('audio-2', lecture('Cestinata.m4a', 50_000));
+    await media.link('audio-2', trashed.session_dir);
+    const before = await measureWebStorage(factory);
+    await archive.trash(trashed.session_dir, '2026-10-23T10:00:00.000Z');
+    const [info, usage] = await Promise.all([describeBackup(factory), measureWebStorage(factory)]);
+    expect(info).toMatchObject({ sessions: 2, audioBytes: 3_000, audioFiles: 1 });
+    expect(usage.audio).toBe(info.audioBytes);
+    expect(info.textBytes - usage.documents).toBeGreaterThanOrEqual(0);
+    expect(info.textBytes - usage.documents).toBeLessThan(200);
+    expect(usage.trash).toBeGreaterThan(55_000);
+    // Moving to the trash frees nothing: the same bytes on another line, plus the trashed_at date.
+    expect(usage.total - before.total).toBeGreaterThanOrEqual(0);
+    expect(usage.total - before.total).toBeLessThan(100);
+    expect(usage.total).toBe(usage.audio + usage.queueAudio + usage.documents + usage.trash + usage.checkpoints);
   });
 
   it('writes a versioned manifest, the audio as it is and never the API keys', async () => {
@@ -141,6 +169,20 @@ describe('web backup', () => {
     expect(await archive.generation(second.html_path)).toBe(5_000);
   });
 
+  it('lets the editor save a text imported from a device whose clock is ahead', async () => {
+    // Regression: the import wrote the backup's generation (another device's clock) as the local
+    // one, and the editor's saves, numbered from this clock, were refused as stale.
+    const factory = new IDBFactory();
+    const { archive, second } = await seed(factory);
+    const ahead = Date.now() + 10 * 60_000;
+    const backup = await backupWith({ sessions: [{ session: second, body: '<p>Scritto sul PC</p>', generation: ahead }] });
+    expect(await importBackup(factory, backup)).toMatchObject({ replaced: 1 });
+    expect(await archive.generation(second.html_path)).toBe(ahead);
+
+    expect(await archive.saveHtml(second.html_path, '<p>Modificato qui</p>', Date.now())).toEqual({ ok: true, saved: true });
+    expect(await archive.readHtml(second.html_path)).toContain('Modificato qui');
+  });
+
   it('adds the backup audio to a sbobina kept here without one', async () => {
     const factory = new IDBFactory();
     const { second } = await seed(factory);
@@ -193,6 +235,33 @@ describe('web backup', () => {
     saveLastBackupAt('2026-10-22T10:00:00.000Z');
     expect(loadLastBackupAt()).toBe('2026-10-22T10:00:00.000Z');
     expect(backupFileName(new Date(2026, 0, 5))).toBe('El-Sbobinator-backup-2026-01-05.zip');
+  });
+
+  it('cleans the text of a backup made elsewhere before keeping it', async () => {
+    const factory = new IDBFactory();
+    const session = { name: 'Dal compagno', completed_at_iso: '', effective_model: '', input_path: '', session_dir: 'web-session://altro' } as ArchiveSession;
+    const body = '<h1>Lezione</h1><script>alert(1)</script><p onclick="steal()">Testo <a href="java&#9;script:alert(1)">link</a></p><img src="x" onerror="alert(1)">';
+    await importBackup(factory, await backupWith({ sessions: [{ session, body, generation: 0 }] }));
+    const html = await createWebArchive(factory).readHtml(webSessionHtmlPath('web-session://altro'));
+    expect(html).toContain('<h1>Lezione</h1><p>Testo <a>link</a></p><img src="x">');
+    expect(html).not.toMatch(/script|onclick|onerror/i);
+  });
+
+  it('leaves out sbobine of a backup with fields of the wrong type, keeping the archive readable', async () => {
+    const factory = new IDBFactory();
+    await createWebArchive(factory).create({ name: 'Mia', completed_at_iso: '2026-10-27T08:00:00.000Z', effective_model: '', input_path: '' }, '<p>mia</p>');
+    const broken = { name: 'Rotta', completed_at_iso: 5, effective_model: '', input_path: '', session_dir: 'web-session://rotta' } as unknown as ArchiveSession;
+    const good = { name: 'Buona', completed_at_iso: '2026-10-26T08:00:00.000Z', effective_model: '', input_path: 7, input_size: 'tanti', session_dir: 'web-session://buona' } as unknown as ArchiveSession;
+    const summary = await importBackup(factory, await backupWith({
+      sessions: [{ session: broken, body: '<p>x</p>', generation: 0 }, { session: good, body: '<p>y</p>', generation: 0 }],
+      folders: [{ id: 'f', name: 'Raccolta', color: '', parent_id: { no: 1 } as unknown as string, session_dirs: ['web-session://buona'] }],
+    }));
+    expect(summary).toMatchObject({ added: 1, changed: ['web-session://buona'] });
+    const list = await createWebArchive(factory).list();
+    expect(list.map(session => session.name)).toEqual(['Mia', 'Buona']);
+    expect(list[1]).not.toHaveProperty('input_size');
+    expect(list[1].input_path).toBe('');
+    expect((await createWebArchive(factory).loadFolders())[0]).toMatchObject({ parent_id: null, session_dirs: ['web-session://buona'] });
   });
 
   it('gives the imported sbobina its web document path', async () => {

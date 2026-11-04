@@ -51,6 +51,26 @@ describe('useWebStorageNotice', () => {
     expect(addNotification).not.toHaveBeenCalled();
   });
 
+  it('stays quiet while Drive keeps a copy, and can still warn once Drive is disconnected', async () => {
+    const check = installApi(false);
+    let connected = true;
+    const driveStatus = vi.fn(async () => ({ connected }));
+    window.pywebview = { api: { get_storage_protection: check, get_drive_status: driveStatus } as never };
+    const addNotification = vi.fn();
+    // Connecting Drive in an empty browser brings the sbobine in.
+    const { rerender } = renderHook(props => useWebStorageNotice(props), { initialProps: { apiReady: true, sessionCount: 0, addNotification } });
+    rerender({ apiReady: true, sessionCount: 4, addNotification });
+    await waitFor(() => expect(driveStatus).toHaveBeenCalledTimes(1));
+    await Promise.resolve();
+    expect(addNotification).not.toHaveBeenCalled();
+    expect(localStorage.getItem(STORAGE_KEYS.WEB_STORAGE_NOTICE_V1)).toBeNull();
+
+    connected = false;
+    rerender({ apiReady: true, sessionCount: 5, addNotification });
+    await waitFor(() => expect(addNotification).toHaveBeenCalledTimes(1));
+    expect(addNotification).toHaveBeenCalledWith(WEB_STORAGE_NOTICE_TITLE, expect.any(String), 'warning', 'system', expect.any(Object));
+  });
+
   it('never runs on the desktop app', async () => {
     setHostCapabilities(DESKTOP_CAPABILITIES);
     const check = installApi(false);

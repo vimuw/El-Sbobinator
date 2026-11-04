@@ -35,10 +35,13 @@ describe('moved-address notice', () => {
 describe('privacy link', () => {
   it('points to the static page on the web only', () => {
     const { rerender } = render(<PrivacyLink />);
-    expect(screen.queryByRole('link', { name: 'Privacy' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Informativa sulla privacy' })).toBeNull();
 
     setHostCapabilities({ kind: 'web' });
     rerender(<PrivacyLink />);
-    expect(screen.getByRole('link', { name: 'Privacy' }).getAttribute('href')).toBe('/privacy');
+    const link = screen.getByRole('link', { name: 'Informativa sulla privacy' });
+    expect(link.getAttribute('href')).toBe('/privacy');
+    // Same tab: the page links back to the app.
+    expect(link.getAttribute('target')).toBeNull();
   });
 });

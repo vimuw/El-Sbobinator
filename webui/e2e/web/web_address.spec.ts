@@ -58,11 +58,16 @@ test('the privacy page opens from the app under the site policy', async ({ page,
   // Not an old address: no notice.
   await expect(page.getByTestId('moved-address-banner')).toHaveCount(0);
 
-  const popup = context.waitForEvent('page');
-  await page.getByRole('link', { name: 'Privacy' }).first().click();
-  const privacy = await popup;
+  // Opens in the same tab (the page links back to the app); the app is reopened beside it to compare looks.
+  const privacy = page;
+  await page.getByRole('link', { name: 'Informativa sulla privacy' }).first().click();
+  await page.waitForURL(url => url.pathname === '/privacy');
   const violations = trackCspViolations(privacy);
   await privacy.waitForLoadState();
+  // One way back: the arrow and the app's name are a single link.
+  await expect(privacy.locator('.site-header a')).toHaveCount(1);
+  const appPage = await context.newPage();
+  await appPage.goto('/');
 
   expect(new URL(privacy.url()).pathname).toBe('/privacy');
   await expect(privacy.getByRole('heading', { name: 'Informativa sulla privacy', level: 1 })).toBeVisible();
@@ -73,14 +78,14 @@ test('the privacy page opens from the app under the site policy', async ({ page,
   expect(await privacy.evaluate(() => document.documentElement.dataset.theme)).toMatch(/^(light|dark)$/);
   const csp = await privacy.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content');
   expect(csp).toContain("script-src 'self'");
-  await expect(privacy.getByRole('link', { name: 'El Sbobinator', exact: true })).toBeVisible();
+  await expect(privacy.getByRole('link', { name: 'Torna a El Sbobinator', exact: true })).toBeVisible();
 
   // Same look as the app in both themes: its tokens, its accent on links and its Manrope font.
   for (const theme of ['light', 'dark']) {
-    await page.evaluate(value => localStorage.setItem('el-sbobinator.theme.v1', value), theme);
-    await page.reload();
+    await appPage.evaluate(value => localStorage.setItem('el-sbobinator.theme.v1', value), theme);
+    await appPage.reload();
     await privacy.reload();
-    const appTokens = await page.evaluate(readTokens);
+    const appTokens = await appPage.evaluate(readTokens);
     const pageLook = await privacy.evaluate(async names => {
       await document.fonts.ready;
       const root = getComputedStyle(document.documentElement);
@@ -100,7 +105,7 @@ test('the privacy page opens from the app under the site policy', async ({ page,
         bodyFont: getComputedStyle(document.body).fontFamily,
         link: [getComputedStyle(link).color, probe('--accent-text', 'color')],
         background: [getComputedStyle(document.body).backgroundColor, probe('--bg-base', 'backgroundColor')],
-        back: [getComputedStyle(document.querySelector('.back-button')!).backgroundColor, probe('--bg-surface', 'backgroundColor')],
+        card: [getComputedStyle(document.querySelector('article')!).backgroundColor, probe('--bg-surface', 'backgroundColor')],
       };
     }, Object.keys(appTokens));
     expect(pageLook.theme).toBe(theme);
@@ -109,9 +114,12 @@ test('the privacy page opens from the app under the site policy', async ({ page,
     expect(pageLook.bodyFont).toMatch(/^"?Manrope/);
     expect(pageLook.link[0]).toBe(pageLook.link[1]);
     expect(pageLook.background[0]).toBe(pageLook.background[1]);
-    expect(pageLook.back[0]).toBe(pageLook.back[1]);
+    expect(pageLook.card[0]).toBe(pageLook.card[1]);
   }
   expect([...app, ...violations]).toEqual([]);
+
+  await privacy.getByRole('link', { name: 'Torna a El Sbobinator', exact: true }).click();
+  await privacy.waitForURL(url => url.pathname === '/');
 });
 
 function readTokens(): Record<string, string> {

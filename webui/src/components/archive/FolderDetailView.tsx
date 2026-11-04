@@ -25,6 +25,7 @@ import { getFolderColor, getFolderSessionDirs } from '../../archiveFolders';
 import { FolderBreadcrumbs } from './FolderBreadcrumbs';
 import { FolderIndicatorChip } from '../FolderChip';
 import { ArchivePageTitle, ArchiveSectionHeading } from './ArchiveLayout';
+import { DURATION } from '../../motion';
 
 export interface FolderDetailViewProps {
   folder: ArchiveFolder;
@@ -105,6 +106,9 @@ export function FolderDetailView({
     const q = search.trim().toLowerCase();
     return q ? all.filter(s => s.name.toLowerCase().includes(q)) : all;
   }, [scopedDirs, sessionsByDir, search]);
+  // An empty collection has nothing to search: the toolbar comes back with the first lesson
+  // (or stays while a search is still typed, so it can be cleared).
+  const showSearchToolbar = fullTextMode || search.trim().length > 0 || scopedDirs.some(d => sessionsByDir.has(normalizeSessionPath(d)));
 
   useEffect(() => {
     if (selectedFolderSessionDirs.size === 0) return;
@@ -307,7 +311,7 @@ export function FolderDetailView({
       {collectionGrid}
       <div className="flex flex-col gap-3">
         <ArchiveSectionHeading>Lezioni</ArchiveSectionHeading>
-        <div ref={toolbarRef} data-stuck={toolbarStuck} className="archive-sticky-toolbar flex flex-col gap-1.5">
+        {showSearchToolbar && <div ref={toolbarRef} data-stuck={toolbarStuck} className="archive-sticky-toolbar flex flex-col gap-1.5">
           <div className="flex items-center gap-2">
             <div className="search-pill-wrap">
               {isSearching
@@ -330,7 +334,7 @@ export function FolderDetailView({
                     initial={{ opacity: 0, scale: 0.7 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.7 }}
-                    transition={{ duration: 0.1 }}
+                    transition={{ duration: DURATION.fast }}
                     onClick={() => { setSearch(''); folderSearchInputRef.current?.focus(); }}
                     className="search-pill-clear"
                     aria-label="Cancella ricerca"
@@ -344,7 +348,7 @@ export function FolderDetailView({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={{ duration: 0.12 }}
+                    transition={{ duration: DURATION.fast }}
                   >
                     <kbd>/</kbd>
                   </motion.span>
@@ -385,7 +389,7 @@ export function FolderDetailView({
           {fullTextMode && search.trim().length > 0 && search.trim().length < 3 && (
             <span className="search-results-count">Digita almeno 3 caratteri</span>
           )}
-        </div>
+        </div>}
 
         {!fullTextMode ? (
           <DndContext
@@ -398,15 +402,9 @@ export function FolderDetailView({
                 <div className="py-12 text-center flex flex-col items-center justify-center gap-2" style={{ color: 'var(--text-muted)' }}>
                   <FileText className="w-8 h-8 opacity-30" />
                   <p className="text-sm">Nessuna sbobina in questa raccolta.</p>
+                  {/* The header already has "Aggiungi lezioni": a second button here would repeat it. */}
                   {availableToAddAll.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setShowAddModal(true)}
-                      className="archive-action-button is-accent mt-1"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Aggiungi lezioni ({availableToAddAll.length} disponibili)</span>
-                    </button>
+                    <p className="text-xs">Usa «Aggiungi lezioni» in alto per sceglierle dall'Archivio.</p>
                   )}
                 </div>
               )}

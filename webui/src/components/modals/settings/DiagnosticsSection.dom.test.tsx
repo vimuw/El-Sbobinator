@@ -24,8 +24,13 @@ describe('DiagnosticsSection', () => {
     await screen.findByText('Lezione');
 
     const support = within(screen.getByRole('region', { name: 'Segnala un problema' }));
-    expect(support.getByRole('link', { name: 'Segnala un problema' })).toBeTruthy();
+    const formLink = support.getByRole('link', { name: 'Segnala un problema' });
+    const copyButton = support.getByRole('button', { name: 'Copia report diagnostico' });
     expect(support.getByLabelText('Sbobina con il problema (facoltativa)')).toBeTruthy();
+    // Two numbered steps in the order they are done, each button on its own row's right.
+    expect(copyButton.previousElementSibling?.textContent).toContain('1. Copia il report');
+    expect(formLink.previousElementSibling?.textContent).toContain('2. Apri il modulo');
+    expect(copyButton.compareDocumentPosition(formLink) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Esporta diagnostica' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Apri cartella log' })).toBeNull();
 

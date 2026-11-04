@@ -133,7 +133,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         onClick={() => setIsOpen(prev => !prev)}
-        className="custom-select-trigger w-full flex items-center justify-between gap-3 px-3.5 py-2 rounded-lg bg-[var(--bg-input)] border border-[var(--border-strong)] hover:border-[var(--accent-bg)] text-left text-sm font-semibold transition-all duration-180 focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)] disabled:opacity-50 disabled:cursor-not-allowed min-h-[40px]"
+        className="custom-select-trigger w-full flex items-center justify-between gap-3 px-3.5 py-1 rounded-full bg-[var(--bg-input)] border border-[var(--border-strong)] hover:border-[var(--accent-bg)] text-left text-sm font-semibold transition-all duration-180 disabled:opacity-50 disabled:cursor-not-allowed min-h-[var(--control-height-md)]"
       >
         <span className="truncate text-sm text-[var(--text-primary)] font-semibold inline-flex items-center gap-2">
           {selectedOption ? (
@@ -194,7 +194,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
                   opt.disabled
                     ? 'opacity-50 cursor-not-allowed text-[var(--text-secondary)] line-through decoration-[var(--border-strong)]'
                     : isSelected
-                    ? 'bg-[var(--accent-subtle)] text-[var(--accent-text)] font-bold'
+                    ? 'bg-[var(--bg-selected-floating)] text-[var(--accent-text)] font-bold'
                     : 'text-[var(--text-primary)] font-medium hover:bg-[var(--bg-hover)]'
                 }`}
               >
@@ -212,7 +212,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
                   )}
                   {opt.badge && (
                     <span
-                      className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border leading-normal shrink-0 ${
+                      className={`text-caption font-semibold px-2 py-0.5 rounded-full border leading-normal shrink-0 ${
                         isSelected
                           ? 'bg-[var(--bg-surface)] text-[var(--accent-text)] border-[var(--accent-ring)]'
                           : 'bg-[var(--accent-subtle)] text-[var(--accent-text)] border-[var(--accent-ring)]'

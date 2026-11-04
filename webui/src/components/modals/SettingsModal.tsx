@@ -1,19 +1,20 @@
 import { reportClientError } from '../../diagnostics';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Settings, HardDrive, SlidersHorizontal, Loader2, X, LifeBuoy } from 'lucide-react';
+import { Settings, HardDrive, SlidersHorizontal, Loader2, X, LifeBuoy, Tag, Cloud } from 'lucide-react';
 import type { ApiUsageResult, CredentialStorage, ModelOption, ValidationResult } from '../../bridge';
 import { ConfirmActionModal } from './ConfirmActionModal';
 import { ApiKeySection, type DeleteKeyTarget } from './settings/ApiKeySection';
 import { ModelSection } from './settings/ModelSection';
 import { NotificationSection } from './settings/NotificationSection';
 import { StorageSection } from './settings/StorageSection';
-import { WebBackupSection } from './settings/WebBackupSection';
-import { WebDriveSection } from './settings/WebDriveSection';
-import { WebTrashSection } from './settings/WebTrashSection';
+import { WebStoragePage } from './settings/WebStoragePage';
+import { prefetchWebStorage } from './settings/webStorageSnapshot';
+import { WebDrivePage } from './settings/WebDrivePage';
+import { ExternalLinkIcon } from '../ExternalLinkIcon';
 import { DiagnosticsSection } from './settings/DiagnosticsSection';
 import { ApiStatusSection } from './settings/ApiStatusSection';
-import { WebRemoveKeysButton, WebSharedDeviceNotice } from './settings/WebSharedDeviceNotice';
+import { WebSharedDeviceNotice } from './settings/WebSharedDeviceNotice';
 import { UpdaterSection, UpdateNotice, type SettingsUpdateInstallState } from './settings/UpdaterSection';
 import { SettingsDivider, SettingsPageHeader, SettingsSectionHeading } from './settings/SettingsLayout';
 
@@ -23,7 +24,7 @@ import { credentialStorageWarning } from '../../credentialStorage';
 import { getHostCapabilities } from '../../hostCapabilities';
 import { APP_VERSION, WEB_PREVIEW_BUILD, WEB_PRIVACY_PATH } from '../../branding';
 import { STORAGE_KEYS } from '../../storageKeys';
-import { modalCard } from '../../motion';
+import { DURATION, modalCard } from '../../motion';
 
 export type { SettingsUpdateInstallState };
 
@@ -61,6 +62,8 @@ export interface SettingsStorageProps {
   onSessionRootMoved?: (payload?: { oldRoot?: string; newRoot?: string }) => void;
   /** Web build: a backup was imported, the archive must be reloaded. */
   onArchiveImported?: () => void;
+  /** Web build: grows each time a Drive sync changes the archive; an open Archiviazione re-reads the space. */
+  archiveRevision?: number;
 }
 
 export interface SettingsModalProps {
@@ -76,13 +79,18 @@ export interface SettingsModalProps {
   initialTab?: SettingsTab;
 }
 
-export type SettingsTab = 'general' | 'storage' | 'diagnostics';
+// 'drive' exists only in web builds with the Google Drive sync.
+export type SettingsTab = 'general' | 'drive' | 'storage' | 'diagnostics';
 type TabType = SettingsTab;
 
 const TAB_HEADERS: Record<TabType, { title: string; description: string }> = {
   general: {
     title: 'Generale',
     description: 'Chiave API Google Gemini, modello di trascrizione e preferenze di sistema.',
+  },
+  drive: {
+    title: 'Sincronizzazione',
+    description: 'Una copia delle sbobine nel tuo Google Drive, per ritrovarle sugli altri dispositivi.',
   },
   storage: {
     title: 'Archiviazione',
@@ -100,9 +108,13 @@ const WEB_TAB_HEADERS: Record<TabType, { title: string; description: string }> =
     title: 'Generale',
     description: 'Modello di trascrizione e chiavi API Google Gemini salvate in questo browser.',
   },
+  drive: {
+    title: 'Sincronizzazione',
+    description: 'Una copia delle sbobine nel tuo Google Drive, per ritrovarle sugli altri dispositivi.',
+  },
   storage: {
     title: 'Archiviazione',
-    description: 'Spazio occupato in questo browser da sbobine, audio delle lezioni ed elaborazioni.',
+    description: 'Dove sono le tue sbobine, come farne una copia e come recuperare quelle eliminate.',
   },
   diagnostics: {
     title: 'Assistenza',
@@ -175,6 +187,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const { latestVersion, checkForUpdates, isCheckingUpdate, hasChecked, checkFailed, updateInstallState, onInstallUpdate } = updater;
   const onSessionRootMoved = storage?.onSessionRootMoved;
   const hostCapabilities = getHostCapabilities();
+  // Drive sits right under Generale, so the sync is seen as soon as the settings open.
+  const hasDriveTab = hostCapabilities.kind === 'web' && Boolean(window.pywebview?.api?.get_drive_status);
   const [activeTab, setActiveTab] = useState<TabType>(initialTab ?? 'general');
   useEffect(() => {
     if (isOpen && initialTab) setActiveTab(initialTab);
@@ -328,10 +342,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         void fetchApiUsage();
       }
       if (activeTab === 'storage') {
-        void fetchSessionStorageInfo();
+        void fetchSessionStorageInfo({ reuse: true });
       }
     }
   }, [isOpen, activeTab, fetchApiUsage, fetchSessionStorageInfo]);
+
+  // Web build: Archiviazione's figures come from reading this browser's whole archive. They are read
+  // as soon as the settings open, so the tab shows at once like the others instead of waiting for them.
+  const isWebHost = hostCapabilities.kind === 'web';
+  useEffect(() => {
+    if (!isOpen || !isWebHost) return;
+    fetchSessionStorageInfo({ reuse: true });
+    prefetchWebStorage();
+  }, [isOpen, isWebHost, fetchSessionStorageInfo]);
+
+  // A Drive sync changed the archive (a sbobina restored or trashed on another device) while
+  // Archiviazione is open: its figures follow, as the trash list below already does.
+  const archiveRevision = storage?.archiveRevision;
+  const seenArchiveRevisionRef = useRef(archiveRevision);
+  useEffect(() => {
+    if (archiveRevision === seenArchiveRevisionRef.current) return;
+    seenArchiveRevisionRef.current = archiveRevision;
+    if (isOpen && activeTab === 'storage') fetchSessionStorageInfo({ quiet: true });
+  }, [archiveRevision, isOpen, activeTab, fetchSessionStorageInfo]);
 
   useEffect(() => {
     if (isOpen) {
@@ -551,17 +584,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     <>
       <AnimatePresence>
         {isOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[var(--z-dialog)] flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
+              transition={{ duration: DURATION.fast }}
               className="modal-overlay absolute inset-0"
             />
 
             <SettingsCard className="modal-card relative w-full max-w-md md:max-w-4xl h-[85vh] md:h-[80vh] overflow-hidden flex flex-col md:flex-row">
-              <nav aria-label="Sezioni delle impostazioni" className="settings-nav app-scroll">
+              <nav
+                aria-label="Sezioni delle impostazioni"
+                className="settings-nav app-scroll"
+                style={{ '--settings-tab-count': hasDriveTab ? 4 : 3 } as React.CSSProperties}
+              >
                 <div className="hidden md:flex items-center gap-2 px-3 py-2.5 mb-3 border-b border-[var(--border-subtle)]">
                   <Settings className="w-5 h-5 text-[var(--accent-text)] shrink-0" />
                   <span role="heading" aria-level={2} className="font-semibold text-base text-[var(--text-primary)]">
@@ -580,6 +617,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <span className="truncate">Generale</span>
                   </div>
                 </button>
+
+                {hasDriveTab && (
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange('drive')}
+                    aria-current={activeTab === 'drive' ? 'page' : undefined}
+                    aria-label="Sincronizzazione"
+                    className={`settings-nav-item ${activeTab === 'drive' ? 'is-active' : ''}`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Cloud className={`w-4 h-4 shrink-0 transition-colors ${activeTab === 'drive' ? 'text-[var(--accent-text)]' : 'text-[var(--text-secondary)]'}`} />
+                      {/* The phone's tab row fits "Archiviazione" but not "Sincronizzazione". */}
+                      <span className="truncate md:hidden">Sincronizza</span>
+                      <span className="truncate hidden md:inline">Sincronizzazione</span>
+                    </div>
+                  </button>
+                )}
 
                 <button
                   type="button"
@@ -605,8 +659,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                 </button>
 
-                {/* One close button for both layouts (index.css .settings-close): beside the tabs at
-                    the top of the compact card, at the page title's right on the wide one. */}
+              </nav>
+
+              <div className="flex-1 min-h-0 flex flex-col min-w-0 bg-[var(--bg-surface)] relative">
+                {/* One close button for both layouts (index.css .settings-close), over the right end
+                    of the page title, so the tabs of the compact card keep the whole row. */}
                 <button
                   type="button"
                   onClick={handleClose}
@@ -616,12 +673,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 >
                   <X className="w-4 h-4" />
                 </button>
-              </nav>
-
-              <div className="flex-1 min-h-0 flex flex-col min-w-0 bg-[var(--bg-surface)] relative">
-                {/* The page title stays put above the scrolling content; on the wide card it leaves
-                    room for the close button placed over its right end. */}
-                <div className="px-6 md:pl-8 md:pr-16 pt-6 md:pt-8 pb-4 border-b border-[var(--border-subtle)]">
+                {/* The page title stays put above the scrolling content and leaves room for the
+                    close button placed over its right end. */}
+                <div className="pl-6 pr-14 md:pl-8 md:pr-16 pt-6 md:pt-8 pb-4 border-b border-[var(--border-subtle)]">
                   <SettingsPageHeader {...(hostCapabilities.kind === 'web' ? WEB_TAB_HEADERS : TAB_HEADERS)[activeTab]} />
                 </div>
                 <div ref={contentRef} data-testid="settings-content" className="app-scroll flex-1 overflow-y-auto overflow-x-hidden px-6 md:px-8 pt-5 pb-6 md:pb-8 space-y-6 [scrollbar-gutter:stable]">
@@ -661,16 +715,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         onAskDeleteKey={setKeyDeleteTarget}
                         onRefreshUsage={handleRefreshUsage}
                         statusSummary={<ApiStatusSection apiUsage={apiUsage} isLoadingUsage={isLoadingUsage} />}
-                        headerActions={hostCapabilities.keyStorage === 'browser' && (
-                          <WebRemoveKeysButton
-                            keyCount={webKeyCount}
-                            onRemoveKeys={() => void handleRemoveWebKeys()}
-                            disabled={isSaving}
-                          />
-                        )}
                       />
 
-                      {hostCapabilities.keyStorage === 'browser' && <WebSharedDeviceNotice keyCount={webKeyCount} />}
+                      {hostCapabilities.keyStorage === 'browser' && (
+                        <WebSharedDeviceNotice
+                          keyCount={webKeyCount}
+                          onRemoveKeys={() => void handleRemoveWebKeys()}
+                          disabled={isSaving}
+                        />
+                      )}
 
                       {hostCapabilities.osNotifications && (
                         <>
@@ -704,14 +757,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       {hostCapabilities.kind === 'web' && (
                         <>
                           <SettingsDivider />
-                          <div className="space-y-1" data-testid="web-version">
-                            <SettingsSectionHeading>Versione</SettingsSectionHeading>
+                          <div className="space-y-2" data-testid="web-version">
+                            <SettingsSectionHeading icon={Tag}>Versione</SettingsSectionHeading>
                             <p className="text-xs text-[var(--text-secondary)]">
                               {WEB_PREVIEW_BUILD ? `${APP_VERSION} (anteprima)` : APP_VERSION}. Gli aggiornamenti arrivano da soli alla prossima apertura del sito, senza toccare sbobine e chiavi salvate in questo browser.
                             </p>
                             <p className="text-xs text-[var(--text-secondary)]">
                               Cosa resta nel browser e cosa va a Google:{' '}
-                              <a href={WEB_PRIVACY_PATH} target="_blank" rel="noopener" className="underline">informativa sulla privacy</a>.
+                              <a href={WEB_PRIVACY_PATH} target="_blank" rel="noopener" className="underline inline-flex items-center gap-0.5">informativa sulla privacy<ExternalLinkIcon /></a>.
                             </p>
                           </div>
                         </>
@@ -719,8 +772,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                   )}
 
+                  {activeTab === 'drive' && hasDriveTab && (
+                    <div className="space-y-6 animate-fade-in">
+                      <WebDrivePage />
+                    </div>
+                  )}
+
                   {activeTab === 'storage' && (
                     <div className="space-y-6 animate-fade-in">
+                      {hostCapabilities.kind === 'web' ? (
+                        <WebStoragePage
+                          sessionInfo={sessionInfo}
+                          isLoadingSessionInfo={isLoadingSessionInfo}
+                          onOpenDrive={hasDriveTab ? () => handleTabChange('drive') : undefined}
+                          onArchiveChanged={() => {
+                            storage?.onArchiveImported?.();
+                            fetchSessionStorageInfo();
+                          }}
+                        />
+                      ) : (
                       <StorageSection
                         sessionInfo={sessionInfo}
                         isLoadingSessionInfo={isLoadingSessionInfo}
@@ -734,36 +804,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         cleanupResult={cleanupResult}
                         onDismissCleanupResult={handleDismissCleanupResult}
                         canManageSessionFolder={hostCapabilities.nativeFolderPicker && hostCapabilities.openLocalPath}
-                        inBrowser={hostCapabilities.kind === 'web'}
                       />
-                      {hostCapabilities.kind === 'web' && (
-                        <>
-                          <SettingsDivider />
-                          <WebBackupSection
-                            onArchiveImported={() => {
-                              storage?.onArchiveImported?.();
-                              fetchSessionStorageInfo();
-                            }}
-                          />
-                          {/* Previews built with a Google client ID only. */}
-                          {window.pywebview?.api?.get_drive_status && (
-                            <>
-                              <SettingsDivider />
-                              <WebDriveSection />
-                            </>
-                          )}
-                          {window.pywebview?.api?.list_trash && (
-                            <>
-                              <SettingsDivider />
-                              <WebTrashSection
-                                onArchiveChanged={() => {
-                                  storage?.onArchiveImported?.();
-                                  fetchSessionStorageInfo();
-                                }}
-                              />
-                            </>
-                          )}
-                        </>
                       )}
                     </div>
                   )}

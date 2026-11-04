@@ -65,8 +65,8 @@ const isString = (value: unknown): value is string => typeof value === 'string';
 const isNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 const isDate = (value: unknown): value is string => isString(value) && !Number.isNaN(Date.parse(value));
 
-/** Only the known fields, with their types: a file from Drive is not trusted. */
-function syncedSession(value: unknown): SyncedSession | null {
+/** Only the known fields, with their types: a file from Drive (or a backup) is not trusted. */
+export function syncedSession(value: unknown): SyncedSession | null {
   if (typeof value !== 'object' || value === null) return null;
   const raw = value as Record<string, unknown>;
   if (!isString(raw.session_dir) || !isString(raw.name) || !isString(raw.completed_at_iso)) return null;

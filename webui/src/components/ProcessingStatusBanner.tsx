@@ -390,7 +390,7 @@ function StepLabel({ state, label, accentColor, tooltip, live = false, settled =
   const color = state === 'active' ? accentColor : state === 'done' ? 'var(--text-secondary)' : 'var(--text-muted)';
   return (
     <span
-      className="processing-step-label group relative inline-flex min-w-0 focus:outline-none"
+      className="processing-step-label group relative inline-flex min-w-0"
       tabIndex={0}
       aria-label={`${label}. ${tooltip}`}
     >
@@ -406,12 +406,12 @@ function StepLabel({ state, label, accentColor, tooltip, live = false, settled =
       </span>
       <span
         role="tooltip"
-        className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-48 -translate-x-1/2 translate-y-1 rounded-xl border px-3 py-2 text-left text-[11px] leading-snug opacity-0 transition-all duration-150 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100"
+        className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-48 -translate-x-1/2 translate-y-1 rounded-xl border px-3 py-2 text-left text-caption leading-snug opacity-0 transition-all duration-150 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100"
         style={{
-          background: 'var(--bg-elevated)',
-          borderColor: 'var(--border-default)',
+          background: 'var(--bg-floating)',
+          borderColor: 'var(--border-floating)',
           color: 'var(--text-secondary)',
-          boxShadow: 'var(--shadow-strong)',
+          boxShadow: 'var(--shadow-floating)',
         }}
       >
         {tooltip}
@@ -681,13 +681,13 @@ export const ProcessingStatusBanner = memo(function ProcessingStatusBanner({
             )}
             {isStoppable && (
               <button type="button" onClick={onStop} className="processing-stop-button">
-                <Square className="h-3 w-3 fill-current" aria-hidden="true" />
+                <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
                 Interrompi
               </button>
             )}
             {kind === 'cancel' && (
               <button type="button" disabled className="processing-stop-button is-pending">
-                <Loader className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                <Loader className="h-4 w-4 animate-spin" aria-hidden="true" />
                 Annullamento in corso...
               </button>
             )}

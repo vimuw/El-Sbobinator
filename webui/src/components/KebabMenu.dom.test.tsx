@@ -191,6 +191,33 @@ describe('KebabMenu component', () => {
     });
   });
 
+  it('opens a submenu under its item, over the menu, when neither side has room (a phone)', () => {
+    Object.defineProperty(window, 'innerHeight', { writable: true, configurable: true, value: 812 });
+    Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 375 });
+    const rect = (top: number, bottom: number, left: number, right: number) => ({
+      top, bottom, left, right, width: right - left, height: bottom - top, x: left, y: top, toJSON: () => ({}),
+    });
+    // jsdom has no layout: a 210px menu at the right edge, its item 36px tall.
+    const bounds = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.classList.contains('kebab-item')) return rect(100, 136, 157, 367);
+      if (this.classList.contains('kebab-panel')) return rect(50, 300, 157, 367);
+      return rect(0, 0, 0, 0);
+    });
+    try {
+      render(<KebabMenu items={[{ label: 'Zoom 100%', children: [{ label: '125%', onClick: vi.fn() }] }]} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Altre opzioni' }));
+      fireEvent.click(screen.getByText('Zoom 100%'));
+      const submenu = screen.getByText('125%').closest<HTMLElement>('.kebab-panel')!;
+      // Not beside the menu, where 200px would spill off the screen: aligned to its right edge,
+      // just under the item that opened it.
+      expect(submenu.style.right).toBe('8px');
+      expect(submenu.style.left).toBe('');
+      expect(submenu.style.top).toBe('140px');
+    } finally {
+      bounds.mockRestore();
+    }
+  });
+
   it('frames the menu and its submenu with the shared card-like panel', () => {
     const items: KebabMenuItem[] = [
       { label: 'Action 1', onClick: vi.fn() },
