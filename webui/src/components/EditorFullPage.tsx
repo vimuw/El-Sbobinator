@@ -1,6 +1,6 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Check, Copy, Download, FileText, ListTree, Loader2, Moon, MoreHorizontal, Search, Sun, TriangleAlert, X } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Download, FileText, ListTree, Loader2, Moon, MoreHorizontal, Search, Sun, TriangleAlert, X, ZoomIn } from 'lucide-react';
 import type { Heading } from './RichTextEditor';
 import { prepareHtmlForClipboardSync } from '../utils';
 import { createNativeClipboardFormats, writeEditorClipboard } from '../editorClipboard';
@@ -17,10 +17,14 @@ import { STORAGE_KEYS } from '../storageKeys';
 import { getHostCapabilities, isTouchWeb } from '../hostCapabilities';
 import { EditorShortcuts } from './EditorShortcuts';
 import { KebabMenu, type KebabMenuItem } from './KebabMenu';
+import { ZOOM_OPTIONS } from './editor/toolbar/formatOptions';
 // Bundled with the editor page: a lazy player flashed "Caricamento player..." on every first open.
 import { AudioDockEmpty } from './AudioDockEmpty';
+import { AudioDockLoading } from './AudioDockLoading';
+import type { AudioDockKind } from '../editorSessions';
 import { AudioPlayer } from './AudioPlayer';
 import { RichTextEditorChunk } from '../editorPreload';
+import { DURATION, enterTransition } from '../motion';
 
 // Shared with the idle warm-up, so a preloaded editor opens without the Suspense fallback.
 const LazyRichTextEditor = RichTextEditorChunk.Component;
@@ -37,6 +41,8 @@ export interface EditorDocumentProps {
 
 // iPad, phones and Safari give Google Docs only HTML, whose images arrive grey or not at all.
 export const COPY_IMAGES_NOTICE = 'Da iPad, telefono o Safari le immagini non arrivano in Google Docs con la copia. Usa “Scarica .docx” (l’icona di download) e apri il file con Google Docs: testo e immagini arrivano insieme.';
+// On a phone the .docx waits under "…", not behind a header icon.
+export const COPY_IMAGES_NOTICE_PHONE = 'Dal telefono le immagini non arrivano in Google Docs con la copia. Usa “Scarica .docx” dal menu “…” e apri il file con Google Docs: testo e immagini arrivano insieme.';
 export const DOCX_ERROR_NOTICE = 'Non è stato possibile creare il file .docx. Riprova; se succede ancora, usa “Copia documento”.';
 
 export const CHANGED_ELSEWHERE_NOTICE = 'Questa sbobina è stata modificata su un altro dispositivo. La nuova versione arriva quando chiudi l’editor; se intanto la modifichi anche qui, verranno tenute tutte e due (una con “(conflitto)” nel nome).';
@@ -45,6 +51,8 @@ export interface EditorAudioProps {
   src: string | null;
   relinkNeeded: boolean;
   loading?: boolean;
+  /** The dock drawn while loading: the one this sbobina showed last time (a player by default). */
+  expected?: AudioDockKind;
   warning?: string;
   onRelink: () => Promise<boolean | undefined>;
   onRemoveAudio?: () => Promise<boolean | undefined> | void;
@@ -52,8 +60,8 @@ export interface EditorAudioProps {
   kept?: boolean;
   size?: number;
   onKeepChange?: (keep: boolean) => Promise<boolean | undefined>;
-  init: { time?: number; playbackRate?: number; volume?: number };
-  onStateChange: (state: { currentTime: number; playbackRate: number; volume: number }) => void;
+  init: { time?: number; duration?: number; playbackRate?: number; volume?: number };
+  onStateChange: (state: { currentTime: number; duration?: number; playbackRate: number; volume: number }) => void;
 }
 
 export interface EditorThemeProps {
@@ -77,12 +85,12 @@ export interface EditorFullPageProps {
   audioRelinkNeeded?: boolean;
   onRelink?: () => Promise<boolean | undefined>;
   onRemoveAudio?: () => Promise<boolean | undefined> | void;
-  previewInitAudio?: { time?: number; playbackRate?: number; volume?: number };
+  previewInitAudio?: { time?: number; duration?: number; playbackRate?: number; volume?: number };
   previewInitScrollTop?: number | undefined;
   initialSearchTerm?: string;
   themeMode?: 'light' | 'dark';
   setThemeMode?: React.Dispatch<React.SetStateAction<'light' | 'dark'>>;
-  onAudioStateChange?: (state: { currentTime: number; playbackRate: number; volume: number }) => void;
+  onAudioStateChange?: (state: { currentTime: number; duration?: number; playbackRate: number; volume: number }) => void;
 }
 
 export function EditorFullPage({
@@ -115,6 +123,7 @@ export function EditorFullPage({
   const audioSrc = audioProp?.src !== undefined ? audioProp.src : (flatAudioSrc ?? null);
   const audioRelinkNeeded = audioProp?.relinkNeeded ?? flatAudioRelinkNeeded ?? false;
   const audioLoading = audioProp?.loading ?? false;
+  const audioExpected = audioProp?.expected ?? 'player';
   const onRelink = audioProp?.onRelink ?? flatOnRelink ?? (() => Promise.resolve(undefined));
   const onRemoveAudio = audioProp?.onRemoveAudio ?? flatOnRemoveAudio;
   const onKeepChange = audioProp?.onKeepChange;
@@ -254,7 +263,7 @@ export function EditorFullPage({
         formats = { 'text/html': prepareHtmlLineSpacing(clipboardHtml), 'text/plain': clipboardPlainText(temp) };
       }
       await writeEditorClipboard(clipboardHtml, formats['text/plain'], sourceRoot, formats);
-      if (offersDocx && (isTouchWeb() || /Apple/.test(navigator.vendor ?? '')) && /<img[\s>]/i.test(clipboardHtml)) setExportNotice(COPY_IMAGES_NOTICE);
+      if (offersDocx && (isTouchWeb() || /Apple/.test(navigator.vendor ?? '')) && /<img[\s>]/i.test(clipboardHtml)) setExportNotice(isPhone ? COPY_IMAGES_NOTICE_PHONE : COPY_IMAGES_NOTICE);
     } catch (error) {
       reportClientError('Clipboard error', error);
       return;
@@ -293,10 +302,21 @@ export function EditorFullPage({
   };
 
   const toggleTheme = () => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark');
+  // Export first, then the editing tools, then the preference. On a phone the copy is no longer the
+  // whole export (images stay behind), so it sits by name beside the .docx instead of a filled pill.
   const phoneMenuItems: KebabMenuItem[] = [
+    { label: 'Copia documento', icon: <Copy className="w-4 h-4" />, onClick: () => void handleCopy() },
+    ...(offersDocx ? [{ label: 'Scarica .docx', icon: <Download className="w-4 h-4" />, onClick: handleDownloadDocx }] : []),
+    { separator: true },
     { label: 'Indice', icon: <ListTree className="w-4 h-4" />, checked: isTocOpen, onClick: () => setIsTocOpen(p => !p) },
     { label: 'Trova e sostituisci', icon: <Search className="w-4 h-4" />, onClick: () => setFindRequest(n => n + 1) },
-    ...(offersDocx ? [{ label: 'Scarica .docx', icon: <Download className="w-4 h-4" />, onClick: handleDownloadDocx }] : []),
+    { separator: true },
+    // A view setting, not a text one: off the toolbar row, which then fits a phone without scrolling.
+    {
+      label: `Zoom ${zoomLevel}%`,
+      icon: <ZoomIn className="w-4 h-4" />,
+      children: ZOOM_OPTIONS.map(level => ({ label: `${level}%`, checked: level === zoomLevel, onClick: () => handleZoomChange(level) })),
+    },
     {
       label: themeMode === 'dark' ? 'Tema chiaro' : 'Tema scuro',
       icon: themeMode === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />,
@@ -313,7 +333,7 @@ export function EditorFullPage({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.12, ease: 'easeOut' }}
+          transition={enterTransition(DURATION.fast)}
         >
           <div className="editor-fullpage-header">
             <button
@@ -327,6 +347,8 @@ export function EditorFullPage({
 
             <div className="editor-fullpage-title">
               <FileText className="w-4 h-4 shrink-0" style={{ color: 'var(--text-muted)' }} />
+              {/* Phone: cut short beside the editing tools, which keeps the lecture in view and the
+                  header from looking empty; the whole title heads the "…" menu. */}
               <span className="truncate">{previewTitle}</span>
               <span
                 className="editor-autosave-badge shrink-0"
@@ -358,6 +380,14 @@ export function EditorFullPage({
                   <span className="editor-autosave-label">Autosave</span>
                 )}
               </span>
+              {/* The menu closes on the tap, so the phone confirms the copy here, beside the tools
+                  and "…", where the eye still is. The title shortens for it, so they do not move. */}
+              {isPhone && isCopied && (
+                <span role="status" data-testid="editor-copied-toast" className="editor-copied-toast">
+                  <Check className="w-3.5 h-3.5" aria-hidden="true" />
+                  Copiato!
+                </span>
+              )}
             </div>
 
             <div className="editor-fullpage-actions">
@@ -373,19 +403,21 @@ export function EditorFullPage({
                   <span className="editor-fullpage-copy-label">Scarica .docx</span>
                 </button>
               )}
-              <button
-                onClick={() => void handleCopy()}
-                className={`settings-pill-button editor-fullpage-copy${isCopied ? ' is-copied' : ''}`}
-                title={isCopied ? 'Copiato!' : 'Copia tutto il documento mantenendo la formattazione, pronto da incollare in Google Docs o Word.'}
-                aria-label="Copia documento"
-                aria-busy={isCopying}
-              >
-                {isCopied ? <Check className="w-4 h-4" /> : isCopying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
-                <span className="editor-fullpage-copy-label">{isCopied ? 'Copiato!' : 'Copia documento'}</span>
-              </button>
+              {!isPhone && (
+                <button
+                  onClick={() => void handleCopy()}
+                  className={`settings-pill-button editor-fullpage-copy${isCopied ? ' is-copied' : ''}`}
+                  title={isCopied ? 'Copiato!' : 'Copia tutto il documento mantenendo la formattazione, pronto da incollare in Google Docs o Word.'}
+                  aria-label="Copia documento"
+                  aria-busy={isCopying}
+                >
+                  {isCopied ? <Check className="w-4 h-4" /> : isCopying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
+                  <span className="editor-fullpage-copy-label">{isCopied ? 'Copiato!' : 'Copia documento'}</span>
+                </button>
+              )}
               {isPhone ? (
-                // Phone: like Google Docs, the less used actions wait under "…" with their names,
-                // under the whole title the header has to cut. Copy, the point of the app, stays out.
+                // Phone: like Google Docs, the actions wait under "…" with their names, under the
+                // whole title the header has to cut.
                 <KebabMenu
                   items={phoneMenuItems}
                   heading={previewTitle}
@@ -476,6 +508,7 @@ export function EditorFullPage({
                 onScrollToHeading={scrollToHeading}
                 zoomLevel={zoomLevel}
                 onZoomChange={handleZoomChange}
+                zoomInHeaderMenu={isPhone}
                 bottomInset={footerHeight}
               />
             </Suspense>
@@ -485,15 +518,15 @@ export function EditorFullPage({
             {showAudioDock && (
             <div ref={footerRef} className="editor-fullpage-footer">
               <div className="editor-player-dock">
-                {audioLoading ? (
-                  <div role="status" className="flex items-center gap-2 py-3.5 text-sm" style={{ color: 'var(--text-muted)' }}>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Preparazione audio della sbobina...
-                  </div>
-                ) : audioSrc ? (
+                {/* While the audio gets ready the dock already looks like what it showed last time:
+                    the player's shell, or the empty dock with its buttons on hold. */}
+                {audioLoading && audioExpected === 'player' ? (
+                  <AudioDockLoading initialTime={previewInitAudio.time} initialDuration={previewInitAudio.duration} />
+                ) : audioSrc && !audioLoading ? (
                   <AudioPlayer
                     src={audioSrc}
                     initialTime={previewInitAudio.time}
+                    initialDuration={previewInitAudio.duration}
                     initialPlaybackRate={previewInitAudio.playbackRate}
                     initialVolume={previewInitAudio.volume}
                     onStateChange={onAudioStateChange}
@@ -505,11 +538,12 @@ export function EditorFullPage({
                 ) : (
                   <AudioDockEmpty
                     key={htmlPath}
-                    state={audioRelinkNeeded ? 'missing' : 'none'}
+                    state={audioLoading ? (audioExpected === 'missing' ? 'missing' : 'none') : audioRelinkNeeded ? 'missing' : 'none'}
                     audioPicked={audioPicked}
                     onRelink={onRelink}
-                    onRemove={audioRelinkNeeded && onRemoveAudio && !audioPicked ? () => setShowConfirmRemove(true) : undefined}
+                    onRemove={(audioLoading ? audioExpected === 'missing' : audioRelinkNeeded) && onRemoveAudio && !audioPicked ? () => setShowConfirmRemove(true) : undefined}
                     isRemoving={isRemovingAudio}
+                    pending={audioLoading}
                   />
                 )}
               </div>

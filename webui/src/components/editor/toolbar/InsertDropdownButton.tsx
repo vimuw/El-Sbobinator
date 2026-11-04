@@ -1,5 +1,5 @@
 import React from 'react';
-import { ImagePlus, Radical, SquarePlay } from 'lucide-react';
+import { ImagePlus, Sigma, SquarePlay } from 'lucide-react';
 
 export const InsertImageButton = ({ onOpenImagePicker }: { onOpenImagePicker: () => void }) => {
   return (
@@ -22,7 +22,7 @@ export const InsertMathButton = ({ onOpenMath }: { onOpenMath: () => void }) => 
       className="editor-button"
       title="Inserisci formula matematica (LaTeX)"
     >
-      <Radical className="h-4 w-4" />
+      <Sigma className="h-4 w-4" />
     </button>
   );
 };

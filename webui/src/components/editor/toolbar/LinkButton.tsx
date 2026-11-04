@@ -93,7 +93,7 @@ export const LinkButton = ({ editor, openRequest = 0, hideButton = false, anchor
         <div
           ref={panelRef}
           className="link-panel"
-          style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 9999 }}
+          style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 'var(--z-popover)' }}
         >
           <input
             ref={inputRef}

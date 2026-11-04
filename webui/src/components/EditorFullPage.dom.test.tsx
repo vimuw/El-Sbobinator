@@ -27,12 +27,16 @@ vi.mock('./RichTextEditor', () => ({
     bottomInset,
     isTocOpen,
     findRequest,
+    zoomLevel,
+    zoomInHeaderMenu,
   }: {
     onEditorReady?: (getHtml: () => string) => void;
     onChange?: () => void;
     bottomInset?: number;
     isTocOpen?: boolean;
     findRequest?: number;
+    zoomLevel?: number;
+    zoomInHeaderMenu?: boolean;
   }) => {
     React.useEffect(() => {
       onEditorReady?.(() => editorMockState.html);
@@ -42,6 +46,8 @@ vi.mock('./RichTextEditor', () => ({
       'data-bottom-inset': bottomInset,
       'data-toc-open': String(Boolean(isTocOpen)),
       'data-find-request': findRequest ?? 0,
+      'data-zoom': zoomLevel,
+      'data-zoom-in-header-menu': String(Boolean(zoomInHeaderMenu)),
       onClick: () => onChange?.(),
     }, 'Editor');
   },
@@ -75,6 +81,43 @@ it('shows preparation instead of offering to add or relink audio during conversi
   }} />);
   expect(await screen.findByText('Preparazione audio della sbobina...')).toBeTruthy();
   expect(screen.queryByRole('button', { name: /Aggiungi audio|Ricollega audio/ })).toBeNull();
+});
+
+it('keeps a folded player folded while its audio gets ready: the pill, not the open bar', async () => {
+  localStorage.setItem('el-sbobinator.audio-player.v1', JSON.stringify({ collapsed: true, side: 'right' }));
+  const { container } = render(<EditorFullPage {...baseProps} audio={{
+    src: null, relinkNeeded: false, loading: true,
+    onRelink: vi.fn(), init: { time: 30, duration: 60 }, onStateChange: vi.fn(),
+  }} />);
+  expect(await screen.findByRole('button', { name: /Mostra il player audio/ })).toBeTruthy();
+  expect(screen.queryByText('Preparazione audio della sbobina...')).toBeNull();
+  expect(container.querySelector('.editor-player-dock > .audio-player.is-collapsed')).not.toBeNull();
+  const ring = container.querySelector('.player-pill-progress')!;
+  expect(Number(ring.getAttribute('stroke-dashoffset'))).toBeCloseTo(Number(ring.getAttribute('stroke-dasharray')) / 2);
+  localStorage.removeItem('el-sbobinator.audio-player.v1');
+});
+
+it('draws the empty dock while checking a sbobina that had no audio last time, its buttons on hold', async () => {
+  const { container } = render(<EditorFullPage {...baseProps} audio={{
+    src: null, relinkNeeded: false, loading: true, expected: 'none',
+    onRelink: vi.fn(), init: {}, onStateChange: vi.fn(),
+  }} />);
+  expect(await screen.findByText('Nessun audio collegato')).toBeTruthy();
+  expect(screen.queryByText('Preparazione audio della sbobina...')).toBeNull();
+  expect((screen.getByRole('button', { name: /Aggiungi audio/ }) as HTMLButtonElement).disabled).toBe(true);
+  expect(container.querySelector('.editor-player-dock > .audio-dock-empty')).not.toBeNull();
+});
+
+it('keeps the folded empty dock as its headphones pill while checking, not the player pill', async () => {
+  localStorage.setItem('el-sbobinator.audio-player.v1', JSON.stringify({ collapsed: true, side: 'right' }));
+  const { container } = render(<EditorFullPage {...baseProps} audio={{
+    src: null, relinkNeeded: false, loading: true, expected: 'missing',
+    onRelink: vi.fn(), init: {}, onStateChange: vi.fn(),
+  }} />);
+  expect(await screen.findByRole('button', { name: 'Mostra la barra audio (audio non trovato)' })).toBeTruthy();
+  expect(container.querySelector('.audio-dock-pill-badge')).not.toBeNull();
+  expect(container.querySelector('.player-pill-ring')).toBeNull();
+  localStorage.removeItem('el-sbobinator.audio-player.v1');
 });
 
 it('shows an original-file dependency warning under the header, outside the player, until closed', async () => {
@@ -348,7 +391,7 @@ describe('EditorFullPage autosave', () => {
     }
   });
 
-  it('phone: keeps copy in the header and lists index, search, .docx and theme by name under "…"', async () => {
+  it('phone: lists copy, .docx, index, search, zoom and theme by name under "…", export first', async () => {
     vi.stubGlobal('matchMedia', (query: string) => ({
       matches: query === '(max-width: 640px)',
       addEventListener: () => {},
@@ -367,16 +410,31 @@ describe('EditorFullPage autosave', () => {
       // The mocked motion remounts the page on each render: read the editor afresh.
       const editor = () => screen.getByTestId('rich-text-editor');
 
-      // Copy, the point of the app, stays out; the rest left the header.
-      expect(screen.getByRole('button', { name: 'Copia documento' })).toBeTruthy();
+      // The header keeps back and "…" (which takes the zoom from the toolbar); the title stays
+      // between them, cut short. "+" stays on the toolbar beside "A".
+      expect(screen.queryByRole('button', { name: 'Copia documento' })).toBeNull();
       expect(screen.queryByRole('button', { name: 'Scarica .docx' })).toBeNull();
       expect(screen.queryByTitle('Tema chiaro')).toBeNull();
       expect(screen.queryByRole('button', { name: 'Scorciatoie da tastiera' })).toBeNull();
+      const header = document.querySelector('.editor-fullpage-header')!;
+      expect(header.querySelectorAll('button')).toHaveLength(2);
+      expect(editor().getAttribute('data-zoom-in-header-menu')).toBe('true');
+      expect(within(header as HTMLElement).getByText(title).classList.contains('truncate')).toBe(true);
 
       const openMenu = () => fireEvent.click(screen.getByRole('button', { name: 'Altre opzioni' }));
       openMenu();
       // The whole title the header cuts heads the menu.
       expect(document.querySelector('.kebab-heading')?.textContent).toBe(title);
+      // Export, then the editing tools, then the preference, each group apart.
+      const panel = document.querySelector('.kebab-panel')!;
+      expect(Array.from(panel.children, el => el.classList.contains('kebab-separator') ? '—' : el.textContent)).toEqual([
+        title, 'Copia documento', 'Scarica .docx', '—', 'Indice', 'Trova e sostituisci', '—', 'Zoom 100%', 'Tema chiaro',
+      ]);
+      // The zoom left the toolbar row: its levels wait in a submenu.
+      fireEvent.click(screen.getByRole('button', { name: 'Zoom 100%' }));
+      fireEvent.click(screen.getByRole('button', { name: '125%' }));
+      expect(editor().getAttribute('data-zoom')).toBe('125');
+      openMenu();
       fireEvent.click(screen.getByRole('button', { name: 'Indice' }));
       expect(editor().getAttribute('data-toc-open')).toBe('true');
 
@@ -397,6 +455,50 @@ describe('EditorFullPage autosave', () => {
       createObjectURL.mockRestore();
       click.mockRestore();
       vi.unstubAllGlobals();
+    }
+  });
+
+  it('phone: copies from the "…" menu inside the tap and confirms it once the menu closes', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === '(max-width: 640px)',
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+    }));
+    const execDescriptor = Object.getOwnPropertyDescriptor(document, 'execCommand');
+    // iPhone Safari: the copy must start before the tap handler returns.
+    const vendor = vi.spyOn(navigator, 'vendor', 'get').mockReturnValue('Apple Computer, Inc.');
+    const exec = vi.fn(() => {
+      const event = new Event('copy', { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'clipboardData', { value: { setData: vi.fn() } });
+      document.activeElement!.dispatchEvent(event);
+      return true;
+    });
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: exec });
+    setHostCapabilities({ kind: 'web' });
+    try {
+      editorMockState.html = '<p>Testo</p><div data-editor-image="true" data-width="35" data-layout="inline"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" alt="Figura"></div>';
+      render(<EditorFullPage {...baseProps} />);
+      await screen.findByTestId('rich-text-editor');
+      expect(screen.queryByTestId('editor-copied-toast')).toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Altre opzioni' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Copia documento' }));
+      expect(exec).toHaveBeenCalledTimes(1);
+      const toast = await screen.findByTestId('editor-copied-toast');
+      expect(toast.textContent).toContain('Copiato!');
+      // Beside "…", where the eye still is after the tap, not by the player at the bottom.
+      expect(toast.closest('.editor-fullpage-header')).toBeTruthy();
+      await waitFor(() => expect(document.querySelector('.kebab-panel')).toBeNull());
+      // The header has no download icon here: the image notice points to the menu instead.
+      expect(screen.getByTestId('editor-export-notice').textContent).toContain('Scarica .docx” dal menu “…”');
+    } finally {
+      setHostCapabilities(DESKTOP_CAPABILITIES);
+      vendor.mockRestore();
+      vi.unstubAllGlobals();
+      if (execDescriptor) Object.defineProperty(document, 'execCommand', execDescriptor);
+      else Reflect.deleteProperty(document, 'execCommand');
     }
   });
 

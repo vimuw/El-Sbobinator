@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { act, useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { Editor } from '@tiptap/core';
@@ -6,6 +6,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { TextStyle } from '@tiptap/extension-text-style';
 import FontFamily from '@tiptap/extension-font-family';
 import { EditorDocumentStyle } from '../editorDocumentStyle';
+import { FontSize } from '../editorExtensions';
 import { MenuBar } from './EditorToolbar';
 import type { Editor as TiptapEditor } from '@tiptap/core';
 
@@ -62,19 +63,17 @@ describe('EditorToolbar MenuBar', () => {
     const toolbar = container.querySelector('.editor-toolbar');
     expect(toolbar).not.toBeNull();
 
-    // From the most used tools to the least used: a narrow window folds font, size and zoom first.
+    // Style, font and size open the line as in Google Docs; then from the most used tools to the
+    // least used, so a narrow window folds the rare text tools and zoom first.
     const order = [
-      'Annulla (Ctrl+Z)', 'Ripeti (Ctrl+Y)', 'Stile paragrafo', 'Grassetto (Ctrl+B)',
-      'Evidenziatore', 'Elenco puntato', 'Trova e sostituisci (Ctrl+H)', 'Inserisci link (Ctrl+K)',
+      'Annulla (Ctrl+Z)', 'Ripeti (Ctrl+Y)', 'Stile paragrafo', 'Carattere', 'Dimensione carattere',
+      'Grassetto (Ctrl+B)', 'Evidenziatore', 'Elenco puntato', 'Trova e sostituisci (Ctrl+H)', 'Inserisci link (Ctrl+K)',
       'Inserisci immagine', 'Inserisci formula matematica (LaTeX)', 'Inserisci link a un video YouTube',
-      'Allineamento testo', 'Citazione', 'Barrato', 'Rimuovi formattazione (Ctrl+\\)', 'Livello di zoom',
+      'Allineamento testo', 'Barrato', 'Apice e pedice', 'Citazione', 'Rimuovi formattazione (Ctrl+\\)', 'Livello di zoom',
     ].map(title => screen.getByTitle(title));
     order.slice(1).forEach((control, index) => {
       expect(order[index].compareDocumentPosition(control) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
-    const fontFamily = container.querySelector('.font-family-dropdown-btn')!;
-    expect(screen.getByTitle('Barrato').compareDocumentPosition(fontFamily) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(fontFamily.compareDocumentPosition(screen.getByTitle('Livello di zoom')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('opens zoom dropdown and triggers onZoomChange with selected value', () => {
@@ -195,7 +194,7 @@ describe('EditorToolbar MenuBar', () => {
     } finally { editor.destroy(); }
   });
 
-  it('puts every phone tool on one scrolling row in the desktop order, with "+" beside it', () => {
+  it('keeps the most used phone tools on one scrolling row, between pinned undo/redo and "A"', () => {
     vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(max-width: 640px)' }));
     try {
       const { editor } = createMockEditor();
@@ -217,17 +216,29 @@ describe('EditorToolbar MenuBar', () => {
       const row = container.querySelector<HTMLElement>('.editor-toolbar-row')!;
       expect(screen.queryByRole('button', { name: 'Altri strumenti' })).toBeNull();
       const order = [
-        'Annulla (Ctrl+Z)', 'Ripeti (Ctrl+Y)', 'Stile paragrafo', 'Grassetto (Ctrl+B)',
-        'Sottolineato (Ctrl+U)', 'Evidenziatore', 'Elenco puntato', 'Elenco numerato',
-        'Allineamento testo', 'Citazione', 'Barrato', 'Rimuovi formattazione (Ctrl+\\)', 'Livello di zoom',
+        'Grassetto (Ctrl+B)', 'Corsivo (Ctrl+I)',
+        'Sottolineato (Ctrl+U)', 'Evidenziatore', 'Colore testo', 'Elenco puntato', 'Elenco numerato',
+        'Allineamento testo', 'Livello di zoom',
       ].map(title => within(row).getByTitle(title));
+      // Undo and redo are pinned before the row, "A" (and here "+") after it: they never scroll.
+      const start = container.querySelector<HTMLElement>('.editor-toolbar-pinned.is-start')!;
+      const end = container.querySelector<HTMLElement>('.editor-toolbar-pinned.is-end')!;
+      expect(Array.from(start.children, button => button.getAttribute('title'))).toEqual(['Annulla (Ctrl+Z)', 'Ripeti (Ctrl+Y)']);
+      expect(start.nextElementSibling).toBe(row);
+      expect(row.nextElementSibling).toBe(end);
+      expect(within(end).getByRole('button', { name: 'Formato' })).toBeTruthy();
       order.slice(1).forEach((control, index) => {
         expect(order[index].compareDocumentPosition(control) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
       });
-      expect(row.querySelector('.font-family-dropdown-btn')).toBeTruthy();
-      // Search is in the header menu and the inserts under "+", not on the row.
-      expect(within(row).queryByTitle('Trova e sostituisci (Ctrl+H)')).toBeNull();
+      // Like Docs, style, font, size and the rarer marks wait in the "A" sheet; search is in the
+      // header menu and the inserts under "+".
+      for (const title of ['Stile paragrafo', 'Carattere', 'Dimensione carattere', 'Barrato', 'Apice e pedice', 'Citazione', 'Rimuovi formattazione (Ctrl+\\)', 'Trova e sostituisci (Ctrl+H)']) {
+        expect(within(row).queryByTitle(title)).toBeNull();
+      }
       expect(row.querySelector('[title^="Inserisci"]')).toBeNull();
+      const format = screen.getByRole('button', { name: 'Formato' });
+      expect(row.contains(format)).toBe(false);
+      expect(format.compareDocumentPosition(container.querySelector('.editor-insert-menu')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
       // The edge fades only where tools hide (jsdom has no layout: fake the scroller's sizes).
       Object.defineProperties(row, {
@@ -256,6 +267,116 @@ describe('EditorToolbar MenuBar', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Immagine' }));
       expect(onOpenImagePicker).toHaveBeenCalledTimes(1);
     } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('keeps "+" beside "A" on a phone and leaves the zoom to the header menu', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(max-width: 640px)' }));
+    try {
+      const { editor, undoRun } = createMockEditor();
+      const onOpenMath = vi.fn();
+      const { container } = render(
+        <MenuBar
+          editor={editor as unknown as TiptapEditor}
+          onOpenMath={onOpenMath} onOpenImagePicker={vi.fn()}
+          showFindReplace={false}
+          onToggleFindReplace={vi.fn()}
+          onOpenLink={vi.fn()}
+          zoomLevel={100}
+          onZoomChange={vi.fn()}
+          zoomInHeaderMenu
+        />
+      );
+      const row = container.querySelector<HTMLElement>('.editor-toolbar-row')!;
+      // "+" changes the text like "A", so it stays on the toolbar beside it, not in the header.
+      const end = container.querySelector<HTMLElement>('.editor-toolbar-pinned.is-end')!;
+      expect(Array.from(end.querySelectorAll('button'), button => button.getAttribute('aria-label'))).toEqual(['Formato', 'Inserisci']);
+      const start = container.querySelector<HTMLElement>('.editor-toolbar-pinned.is-start')!;
+      expect(within(start).getByTitle('Annulla (Ctrl+Z)')).toBeTruthy();
+      expect(row.firstElementChild?.getAttribute('title')).toBe('Grassetto (Ctrl+B)');
+      expect(within(row).queryByTitle('Livello di zoom')).toBeNull();
+
+      fireEvent.click(within(start).getByTitle('Annulla (Ctrl+Z)'));
+      expect(undoRun).toHaveBeenCalledTimes(1);
+      fireEvent.click(within(end).getByRole('button', { name: 'Inserisci' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Formula' }));
+      expect(onOpenMath).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('formats from the phone "A" sheet without bringing the keyboard back', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(max-width: 640px)' }));
+    const editor = new Editor({
+      extensions: [StarterKit, TextStyle, FontFamily, FontSize, EditorDocumentStyle],
+      content: '<p>Uno due</p><ul><li><p>a</p></li><li><p>b</p></li></ul>',
+    });
+    try {
+      editor.commands.setTextSelection({ from: 1, to: 4 });
+      render(
+        <MenuBar
+          editor={editor}
+          onOpenMath={vi.fn()} onOpenImagePicker={vi.fn()}
+          showFindReplace={false}
+          onToggleFindReplace={vi.fn()}
+          onOpenLink={vi.fn()}
+        />
+      );
+      const blur = vi.spyOn(editor.view.dom, 'blur');
+      const focus = vi.spyOn(editor.view, 'focus');
+      const format = screen.getByRole('button', { name: 'Formato' });
+
+      // "A" puts the keyboard away and opens the sheet on the text tab.
+      fireEvent.click(format);
+      expect(blur).toHaveBeenCalledTimes(1);
+      expect(format.getAttribute('aria-expanded')).toBe('true');
+      const sheet = screen.getByRole('dialog', { name: 'Formato' });
+      expect(within(sheet).getByRole('tab', { name: 'Testo' }).getAttribute('aria-selected')).toBe('true');
+
+      // Its commands act on the selection without focusing the editor.
+      fireEvent.click(within(sheet).getByRole('button', { name: 'Grassetto' }));
+      expect(editor.isActive('bold')).toBe(true);
+      expect(within(sheet).getByRole('button', { name: 'Grassetto' }).getAttribute('aria-pressed')).toBe('true');
+      const size = () => Number(sheet.querySelector('.phone-format-size')!.textContent!.replace(' pt', ''));
+      const before = size();
+      // As in Docs, − and + move one point, not to the next size of the list.
+      fireEvent.click(within(sheet).getByRole('button', { name: 'Aumenta dimensione' }));
+      fireEvent.click(within(sheet).getByRole('button', { name: 'Aumenta dimensione' }));
+      expect(size()).toBe(before + 2);
+      fireEvent.click(within(sheet).getByRole('button', { name: 'Riduci dimensione' }));
+      expect(size()).toBe(before + 1);
+      expect(editor.getAttributes('textStyle').fontSize).toBe(`${before + 1}pt`);
+
+      // Style has a page of its own, with a way back to the tabs.
+      fireEvent.click(within(sheet).getByRole('button', { name: /Stile/ }));
+      fireEvent.click(within(sheet).getByRole('button', { name: 'Titolo 2' }));
+      expect(editor.isActive('heading', { level: 2 })).toBe(true);
+      fireEvent.click(within(sheet).getByRole('button', { name: 'Indietro' }));
+      expect(within(sheet).getByRole('tab', { name: 'Paragrafo' })).toBeTruthy();
+
+      // A phone has no Tab key: the paragraph tab nests a list item.
+      fireEvent.click(within(sheet).getByRole('tab', { name: 'Paragrafo' }));
+      let second = 0;
+      editor.state.doc.descendants((node, pos) => { if (node.text === 'b') second = pos + 1; });
+      act(() => { editor.commands.setTextSelection(second); });
+      fireEvent.click(within(sheet).getByRole('button', { name: 'Aumenta rientro' }));
+      expect(editor.getHTML()).toContain('<li><p>a</p><ul><li><p>b</p></li></ul></li>');
+      expect(focus).not.toHaveBeenCalled();
+
+      // A tap on the page closes it; so does "A" again after reopening. Either way it slides back
+      // down first, so it leaves the page once that is done.
+      fireEvent.pointerDown(document.body);
+      expect(format.getAttribute('aria-expanded')).toBe('false');
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Formato' })).toBeNull());
+      fireEvent.click(format);
+      expect(screen.getByRole('dialog', { name: 'Formato' })).toBeTruthy();
+      fireEvent.click(format);
+      expect(format.getAttribute('aria-expanded')).toBe('false');
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Formato' })).toBeNull());
+    } finally {
+      editor.destroy();
       vi.unstubAllGlobals();
     }
   });

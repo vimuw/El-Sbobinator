@@ -2,30 +2,12 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import { ChevronDown } from 'lucide-react';
-import { DOCUMENT_FORMATTING, pointSize } from '../../../documentFormatting';
 import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
 import { useAnchoredPanel } from './anchoredPanel';
-
-const FONT_FAMILIES = [
-  { label: DOCUMENT_FORMATTING.fontFamily, value: '', cssFamily: `${DOCUMENT_FORMATTING.fontFamily}, sans-serif` },
-  { label: 'Times New Roman', value: '"Times New Roman", serif', cssFamily: '"Times New Roman", serif' },
-  { label: 'Georgia', value: 'Georgia, serif', cssFamily: 'Georgia, serif' },
-  { label: 'Courier New', value: '"Courier New", monospace', cssFamily: '"Courier New", monospace' },
-  { label: 'Verdana', value: 'Verdana, sans-serif', cssFamily: 'Verdana, sans-serif' },
-  { label: 'Trebuchet MS', value: '"Trebuchet MS", sans-serif', cssFamily: '"Trebuchet MS", sans-serif' },
-];
-
-const FONT_SIZES = ['8', '9', '10', '11', '12', '14', '16', '18', '20', '24', '28', '32', '36', '48', '72'];
-
-const HEADING_OPTIONS = [
-  { label: 'Testo normale', value: 'paragraph', level: 0 },
-  { label: 'Titolo 1', value: 'h1', level: 1 },
-  { label: 'Titolo 2', value: 'h2', level: 2 },
-  { label: 'Titolo 3', value: 'h3', level: 3 },
-  { label: 'Titolo 4', value: 'h4', level: 4 },
-  { label: 'Titolo 5', value: 'h5', level: 5 },
-];
-
+import {
+  FONT_FAMILIES, FONT_SIZES, HEADING_OPTIONS, ZOOM_OPTIONS, currentFontFamily, currentFontSize,
+  currentHeading, setFontFamily, setFontSize, setHeading,
+} from './formatOptions';
 
 export const FontFamilySelect = ({ editor }: { editor: TiptapEditor }) => {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -33,10 +15,7 @@ export const FontFamilySelect = ({ editor }: { editor: TiptapEditor }) => {
   const panelRef = React.useRef<HTMLDivElement>(null);
   const { panelPos, placeUnder } = useAnchoredPanel(isOpen, panelRef);
 
-  const blockStyle = editor.getAttributes(editor.isActive('heading') ? 'heading' : 'paragraph').documentStyle;
-  const rawFamily = editor.getAttributes('textStyle').fontFamily ?? blockStyle?.['font-family'] ?? '';
-  const currentFamily = (rawFamily === '' || rawFamily === `${DOCUMENT_FORMATTING.fontFamily}, sans-serif` || rawFamily === DOCUMENT_FORMATTING.fontFamily) ? '' : rawFamily;
-  const currentLabel = FONT_FAMILIES.find(f => f.value === currentFamily)?.label || (currentFamily ? currentFamily.replace(/['"]/g, '') : DOCUMENT_FORMATTING.fontFamily);
+  const { value: currentFamily, label: currentLabel } = currentFontFamily(editor);
 
   const toggleOpen = () => {
     if (!isOpen && buttonRef.current) placeUnder(buttonRef.current);
@@ -70,11 +49,7 @@ export const FontFamilySelect = ({ editor }: { editor: TiptapEditor }) => {
 
   const selectFamily = (value: string) => {
     setIsOpen(false);
-    if (value === '') {
-      editor.chain().focus().unsetFontFamily().clearBlockFontFamily().run();
-    } else {
-      editor.chain().focus().setFontFamily(value).run();
-    }
+    setFontFamily(editor.chain().focus(), value).run();
   };
 
   return (
@@ -93,7 +68,7 @@ export const FontFamilySelect = ({ editor }: { editor: TiptapEditor }) => {
         <div
           ref={panelRef}
           className="kebab-panel editor-dropdown-panel font-family-dropdown-panel"
-          style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 9999, minWidth: '170px' }}
+          style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 'var(--z-popover)', minWidth: '170px' }}
         >
           {FONT_FAMILIES.map(f => {
             const isActive = currentFamily === f.value;
@@ -122,26 +97,7 @@ export const FontSizeSelect = ({ editor }: { editor: TiptapEditor }) => {
   const panelRef = React.useRef<HTMLDivElement>(null);
   const { panelPos, placeUnder } = useAnchoredPanel(isOpen, panelRef);
 
-  const getCurrentSize = (): string => {
-    if (!editor) return String(DOCUMENT_FORMATTING.fontSizePt);
-
-    // 1. Explicit inline fontSize mark
-    const fontSize = editor.getAttributes('textStyle').fontSize;
-    if (fontSize) return String(pointSize(String(fontSize), DOCUMENT_FORMATTING.fontSizePt));
-
-    const blockStyle = editor.getAttributes(editor.isActive('heading') ? 'heading' : 'paragraph').documentStyle;
-    if (blockStyle?.['font-size']) return String(pointSize(blockStyle['font-size'], DOCUMENT_FORMATTING.fontSizePt));
-
-    // 2. Heading level
-    for (let i = 1; i <= 5; i++) {
-      if (editor.isActive('heading', { level: i })) return String(DOCUMENT_FORMATTING.headings[i - 1].fontSizePt);
-    }
-
-    // 3. Default body text uses the same profile as the document.
-    return String(DOCUMENT_FORMATTING.fontSizePt);
-  };
-
-  const currentSize = getCurrentSize();
+  const currentSize = currentFontSize(editor);
 
   const toggleOpen = () => {
     if (!isOpen && buttonRef.current) placeUnder(buttonRef.current);
@@ -176,7 +132,7 @@ export const FontSizeSelect = ({ editor }: { editor: TiptapEditor }) => {
   const selectSize = (size: string) => {
     setIsOpen(false);
     if (size) {
-      editor.chain().focus().setMark('textStyle', { fontSize: `${size}pt` }).run();
+      setFontSize(editor.chain().focus(), size).run();
     }
   };
 
@@ -196,7 +152,7 @@ export const FontSizeSelect = ({ editor }: { editor: TiptapEditor }) => {
         <div
           ref={panelRef}
           className="kebab-panel editor-dropdown-panel font-size-dropdown-panel"
-          style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 9999, minWidth: '64px', maxHeight: '220px', overflowY: 'auto' }}
+          style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 'var(--z-popover)', minWidth: '64px', maxHeight: '220px', overflowY: 'auto' }}
         >
           {FONT_SIZES.map(s => {
             const isActive = currentSize === s;
@@ -205,7 +161,7 @@ export const FontSizeSelect = ({ editor }: { editor: TiptapEditor }) => {
                 key={s}
                 type="button"
                 className={`kebab-item editor-dropdown-item${isActive ? ' is-active' : ''}`}
-                style={{ justifyContent: 'center', padding: '5px 8px', fontSize: '13px' }}
+                style={{ justifyContent: 'center', padding: '5px 8px', fontSize: 'var(--text-label)' }}
                 onClick={() => selectSize(s)}
               >
                 <span>{s}</span>
@@ -225,14 +181,7 @@ export const HeadingSelect = ({ editor }: { editor: TiptapEditor }) => {
   const panelRef = React.useRef<HTMLDivElement>(null);
   const { panelPos, placeUnder } = useAnchoredPanel(isOpen, panelRef);
 
-  const getCurrentHeading = () => {
-    for (let i = 1; i <= 5; i++) {
-      if (editor.isActive('heading', { level: i })) return HEADING_OPTIONS[i];
-    }
-    return HEADING_OPTIONS[0];
-  };
-
-  const current = getCurrentHeading();
+  const current = currentHeading(editor);
 
   const toggleOpen = () => {
     if (!isOpen && buttonRef.current) placeUnder(buttonRef.current);
@@ -266,11 +215,7 @@ export const HeadingSelect = ({ editor }: { editor: TiptapEditor }) => {
 
   const selectHeading = (option: typeof HEADING_OPTIONS[number]) => {
     setIsOpen(false);
-    if (option.value === 'paragraph') {
-      editor.chain().focus().clearBlockFontSize().setParagraph().run();
-    } else {
-      editor.chain().focus().clearBlockFontSize().setHeading({ level: option.level as 1 | 2 | 3 | 4 | 5 }).run();
-    }
+    setHeading(editor.chain().focus(), option.level).run();
   };
 
   return (
@@ -289,7 +234,7 @@ export const HeadingSelect = ({ editor }: { editor: TiptapEditor }) => {
         <div
           ref={panelRef}
           className="kebab-panel editor-dropdown-panel heading-dropdown-panel"
-          style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 9999, minWidth: '150px' }}
+          style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 'var(--z-popover)', minWidth: '150px' }}
         >
           {HEADING_OPTIONS.map(opt => {
             const isActive = current.value === opt.value;
@@ -319,8 +264,6 @@ export const HeadingSelect = ({ editor }: { editor: TiptapEditor }) => {
     </>
   );
 };
-
-const ZOOM_OPTIONS = [50, 75, 90, 100, 125, 150, 175, 200];
 
 export const ZoomSelect = ({
   zoomLevel = 100,
@@ -385,7 +328,7 @@ export const ZoomSelect = ({
         <div
           ref={panelRef}
           className="kebab-panel editor-dropdown-panel zoom-dropdown-panel"
-          style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 9999, minWidth: '72px', maxHeight: '240px', overflowY: 'auto' }}
+          style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 'var(--z-popover)', minWidth: '72px', maxHeight: '240px', overflowY: 'auto' }}
         >
           {ZOOM_OPTIONS.map(lvl => {
             const isActive = zoomLevel === lvl;
@@ -394,7 +337,7 @@ export const ZoomSelect = ({
                 key={lvl}
                 type="button"
                 className={`kebab-item editor-dropdown-item${isActive ? ' is-active' : ''}`}
-                style={{ justifyContent: 'center', padding: '5px 8px', fontSize: '13px' }}
+                style={{ justifyContent: 'center', padding: '5px 8px', fontSize: 'var(--text-label)' }}
                 onClick={() => selectZoom(lvl)}
               >
                 <span>{lvl}%</span>

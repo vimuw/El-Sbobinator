@@ -11,13 +11,15 @@ interface AudioDockEmptyProps {
   /** Asks to drop the missing copy; the editor confirms it. */
   onRemove?: () => void;
   isRemoving?: boolean;
+  /** The audio is still being checked: the dock is drawn, its buttons wait. */
+  pending?: boolean;
 }
 
 /**
  * The audio dock without a player: one row in place of the player, folding into the same corner
  * button, so a sbobina without audio keeps the text as clear as one with a folded player.
  */
-export function AudioDockEmpty({ state, audioPicked, onRelink, onRemove, isRemoving = false }: AudioDockEmptyProps) {
+export function AudioDockEmpty({ state, audioPicked, onRelink, onRemove, isRemoving = false, pending = false }: AudioDockEmptyProps) {
   const [isRelinking, setIsRelinking] = useState(false);
   const [relinkSuccess, setRelinkSuccess] = useState(false);
   const relinkTimerRef = useRef<number | null>(null);
@@ -38,7 +40,7 @@ export function AudioDockEmpty({ state, audioPicked, onRelink, onRemove, isRemov
   const actionLabel = audioPicked ? 'Scegli il file audio' : missing ? 'Ricollega audio' : 'Aggiungi audio';
 
   const handleRelink = async () => {
-    if (isRelinking) return;
+    if (isRelinking || pending) return;
     setIsRelinking(true);
     try {
       const ok = await onRelink();
@@ -97,7 +99,7 @@ export function AudioDockEmpty({ state, audioPicked, onRelink, onRemove, isRemov
         <button
           type="button"
           onClick={onRemove}
-          disabled={isRemoving}
+          disabled={isRemoving || pending}
           className="app-button-secondary is-settings-action audio-dock-empty-action"
           title="Rimuovi audio dalla sbobina"
           aria-label="Rimuovi audio dalla sbobina"
@@ -108,7 +110,7 @@ export function AudioDockEmpty({ state, audioPicked, onRelink, onRemove, isRemov
       <button
         type="button"
         onClick={() => void handleRelink()}
-        disabled={isRelinking}
+        disabled={isRelinking || pending}
         title={hint}
         className={`${missing ? 'app-button-secondary is-settings-action' : 'settings-pill-button'} audio-dock-empty-action`}
         style={relinkSuccess ? { borderColor: 'var(--success-ring)', color: 'var(--success-text)' } : undefined}

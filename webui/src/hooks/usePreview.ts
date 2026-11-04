@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import type { ProcessingAction } from '../appState';
 import type { ArchiveSession } from '../bridge';
-import { loadEditorSession, saveEditorSession, touchEditorSession, type EditorSession } from '../editorSessions';
+import { loadEditorSession, saveEditorSession, touchEditorSession, type AudioDockKind, type EditorSession } from '../editorSessions';
 import { normalizePreviewHtmlContent } from '../previewHtml';
 import { normalizeSessionPath } from '../utils';
 
@@ -15,11 +15,13 @@ export type PreviewState = {
   sessionDir: string;
   audioRelinkNeeded: boolean;
   audioLoading: boolean;
+  /** The dock to draw while the audio gets ready: what this sbobina showed last time, if known. */
+  audioExpected: AudioDockKind;
   audioWarning: string;
   /** Web: the audio playing is a copy kept in this browser; its size in bytes. */
   audioKept: boolean;
   audioSize: number;
-  initAudio: { time?: number; playbackRate?: number; volume?: number };
+  initAudio: { time?: number; duration?: number; playbackRate?: number; volume?: number };
   initScrollTop?: number;
   initialSearchTerm?: string;
   /** Web with Drive sync: the open sbobina changed on another device (applied once closed). */
@@ -36,6 +38,7 @@ export const initialPreviewState: PreviewState = {
   sessionDir: '',
   audioRelinkNeeded: false,
   audioLoading: false,
+  audioExpected: 'player',
   audioWarning: '',
   audioKept: false,
   audioSize: 0,
@@ -70,19 +73,27 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
         session.audioTime !== undefined
         || session.playbackRate !== undefined
         || session.volume !== undefined
-        || session.scrollTop !== undefined;
+        || session.scrollTop !== undefined
+        || session.audioDock !== undefined;
       if (hasData) saveEditorSession(sessionKey, session);
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
 
+  // The dock the audio settled on is kept with the sbobina, so the next opening draws it at once.
+  const settleAudioDock = (dock: AudioDockKind) => {
+    currentEditorSessionRef.current = { ...currentEditorSessionRef.current, audioDock: dock };
+  };
+
   const loadPreviewAudio = useCallback(async (sourcePath?: string, sessionDir?: string) => {
     const request = ++audioRequestRef.current;
     const normalizedSource = String(sourcePath || '').trim();
     const normalizedSessionDir = String(sessionDir || '').trim();
     if ((!normalizedSource && !normalizedSessionDir) || !window.pywebview?.api?.stream_media_file) {
-      setPreview(prev => ({ ...prev, audioSrc: null, audioRelinkNeeded: Boolean(normalizedSource), audioLoading: false, audioWarning: '' }));
+      const dock: AudioDockKind = normalizedSource ? 'missing' : 'none';
+      settleAudioDock(dock);
+      setPreview(prev => ({ ...prev, audioSrc: null, audioRelinkNeeded: Boolean(normalizedSource), audioLoading: false, audioExpected: dock, audioWarning: '' }));
       return false;
     }
     setPreview(prev => ({ ...prev, audioLoading: true, audioWarning: '' }));
@@ -90,11 +101,13 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
       const streamRes = await window.pywebview.api.stream_media_file(normalizedSource, normalizedSessionDir || undefined);
       if (request !== audioRequestRef.current) return false;
       if (streamRes.ok && streamRes.url) {
+        settleAudioDock('player');
         setPreview(prev => ({
           ...prev,
           audioSrc: streamRes.url,
           audioRelinkNeeded: false,
           audioLoading: false,
+          audioExpected: 'player',
           audioWarning: streamRes.warning || '',
           audioKept: Boolean(streamRes.audio_kept),
           audioSize: streamRes.audio_size ?? 0,
@@ -103,11 +116,14 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
         return true;
       }
       const relinkNeeded = streamRes.has_audio !== false;
-      setPreview(prev => ({ ...prev, audioSrc: null, audioRelinkNeeded: relinkNeeded, audioLoading: false }));
+      const dock: AudioDockKind = relinkNeeded ? 'missing' : 'none';
+      settleAudioDock(dock);
+      setPreview(prev => ({ ...prev, audioSrc: null, audioRelinkNeeded: relinkNeeded, audioLoading: false, audioExpected: dock }));
       return false;
     } catch (error) {
       if (request === audioRequestRef.current) {
-        setPreview(prev => ({ ...prev, audioSrc: null, audioRelinkNeeded: true, audioLoading: false }));
+        settleAudioDock('missing');
+        setPreview(prev => ({ ...prev, audioSrc: null, audioRelinkNeeded: true, audioLoading: false, audioExpected: 'missing' }));
       }
       throw error;
     }
@@ -156,10 +172,12 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
           audioSrc: null,
           audioRelinkNeeded: false,
           audioLoading: Boolean(sourcePath || sessionDir),
+          // First opening: a linked file is expected to play.
+          audioExpected: savedSession.audioDock ?? (sourcePath ? 'player' : 'none'),
           audioWarning: '',
           audioKept: false,
           audioSize: 0,
-          initAudio: { time: savedSession.audioTime, playbackRate: savedSession.playbackRate, volume: savedSession.volume },
+          initAudio: { time: savedSession.audioTime, duration: savedSession.audioDuration, playbackRate: savedSession.playbackRate, volume: savedSession.volume },
           initScrollTop: savedSession.scrollTop,
           initialSearchTerm: searchTerm || undefined,
           changedElsewhere: false,
@@ -186,7 +204,8 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
         session.audioTime !== undefined
         || session.playbackRate !== undefined
         || session.volume !== undefined
-        || session.scrollTop !== undefined;
+        || session.scrollTop !== undefined
+        || session.audioDock !== undefined;
       if (hasData) saveEditorSession(sessionKey, session);
     }
     currentEditorSessionRef.current = {};
@@ -241,7 +260,9 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
       if (preview.fileId || preview.sessionDir) {
         dispatch({ type: 'queue/update_source', id: preview.fileId ?? undefined, sessionDir: preview.sessionDir || undefined, path: selectedFile.path, name: selectedFile.name, size: selectedFile.size, duration: selectedFile.duration });
       }
-      setPreview(prev => ({ ...prev, sourcePath: selectedFile.path, audioRelinkNeeded: false }));
+      // Another file has its own length: the player learns it from the file, not from the old one.
+      delete currentEditorSessionRef.current.audioDuration;
+      setPreview(prev => ({ ...prev, sourcePath: selectedFile.path, audioRelinkNeeded: false, initAudio: { ...prev.initAudio, duration: undefined } }));
       const didLoad = await loadPreviewAudio(selectedFile.path, preview.sessionDir);
       if (didLoad) appendConsole(`Audio ricollegato: ${selectedFile.name}`);
       // A file that may not be the lecture is still used: the dock says why the times may not match.
@@ -306,6 +327,8 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
 
       if (currentEditorSessionRef.current) {
         delete currentEditorSessionRef.current.audioTime;
+        delete currentEditorSessionRef.current.audioDuration;
+        currentEditorSessionRef.current.audioDock = 'none';
         if (preview.fileId) {
           saveEditorSession(preview.fileId, currentEditorSessionRef.current);
         }
@@ -318,6 +341,7 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
         audioSrc: null,
         audioRelinkNeeded: false,
         audioLoading: false,
+        audioExpected: 'none',
         audioWarning: '',
         initAudio: {},
       }));
@@ -353,8 +377,14 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
     }
   }, [appendConsole, onArchiveRefresh, preview.sessionDir]);
 
-  const handleAudioStateChange = useCallback(({ currentTime, playbackRate, volume }: { currentTime: number; playbackRate: number; volume: number }) => {
-    currentEditorSessionRef.current = { ...currentEditorSessionRef.current, audioTime: currentTime, playbackRate, volume };
+  const handleAudioStateChange = useCallback(({ currentTime, duration, playbackRate, volume }: { currentTime: number; duration?: number; playbackRate: number; volume: number }) => {
+    currentEditorSessionRef.current = {
+      ...currentEditorSessionRef.current,
+      audioTime: currentTime,
+      ...(duration !== undefined && Number.isFinite(duration) && duration > 0 ? { audioDuration: duration } : {}),
+      playbackRate,
+      volume,
+    };
   }, []);
 
   const handleScrollTopChange = useCallback((scrollTop: number) => {

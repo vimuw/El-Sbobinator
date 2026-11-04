@@ -55,7 +55,7 @@ export const AlignDropdownButton = ({ editor }: { editor: TiptapEditor }) => {
         <div
           ref={panelRef}
           className="kebab-panel editor-dropdown-panel"
-          style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 9999 }}
+          style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 'var(--z-popover)' }}
         >
           <button
             type="button"

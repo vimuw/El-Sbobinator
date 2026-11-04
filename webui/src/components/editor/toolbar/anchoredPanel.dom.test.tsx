@@ -73,6 +73,19 @@ describe('toolbar popovers at the right edge of a phone', () => {
     expect(parseFloat(panel.style.left) + PANEL_WIDTHS['editor-dropdown-panel']).toBeLessThanOrEqual(390 - PANEL_EDGE_GAP_PX);
   });
 
+  it('opens a gap below the toolbar the button sits in, not flush with its bottom border', () => {
+    fakeLayout(390);
+    const { container } = render(<div className="editor-toolbar"><AlignDropdownButton editor={mockEditor()} /></div>);
+    const bar = container.querySelector<HTMLElement>('.editor-toolbar')!;
+    bar.getBoundingClientRect = () => ({ top: 0, bottom: 52, left: 0, right: 390, width: 390, height: 52, x: 0, y: 0, toJSON: () => ({}) });
+    const button = screen.getByTitle('Allineamento testo');
+    placeButton(button, 200);
+    fireEvent.click(button);
+
+    // The button ends at 40px, the bar at 52px: the list starts 6px under the bar, as menus do.
+    expect(document.querySelector<HTMLElement>('.editor-dropdown-panel')!.style.top).toBe('58px');
+  });
+
   it('leaves a panel under its button where there is room', () => {
     fakeLayout(1024);
     render(<ColorPickerButton editor={mockEditor()} />);

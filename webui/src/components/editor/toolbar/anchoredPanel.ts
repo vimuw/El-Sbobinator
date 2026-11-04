@@ -2,6 +2,8 @@ import React from 'react';
 
 // Popovers keep this far from the window edges.
 export const PANEL_EDGE_GAP_PX = 8;
+// And this far below the bar that opened them, as the app's menus float below their trigger.
+const PANEL_BAR_GAP_PX = 6;
 
 /** The left edge that keeps a panel `panelWidth` wide inside the window; a wider one starts at the gap. */
 export const fitPanelLeft = (left: number, panelWidth: number, viewportWidth: number) =>
@@ -17,7 +19,10 @@ export const useAnchoredPanel = (isOpen: boolean, panelRef: React.RefObject<HTML
 
   const placeUnder = (anchor: Element) => {
     const rect = anchor.getBoundingClientRect();
-    setPanelPos({ top: rect.bottom + 6, left: rect.left });
+    // Clear of the bar the button sits in, not just of the button: the toolbar's buttons reach
+    // its bottom edge, where a panel would sit flush against its border.
+    const bar = anchor.closest('.editor-toolbar, .editor-fullpage-header')?.getBoundingClientRect();
+    setPanelPos({ top: Math.max(rect.bottom, bar?.bottom ?? rect.bottom) + PANEL_BAR_GAP_PX, left: rect.left });
   };
 
   React.useLayoutEffect(() => {

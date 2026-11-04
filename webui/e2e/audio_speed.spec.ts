@@ -60,17 +60,25 @@ test('changing playback speed keeps the scrubber and controls in place', async (
     }
   }
 
-  // Phone: the speed lives in the ⋮ menu and opens the same panel there, with a way back.
+  // Phone: the value sits left of the centred play and opens the same panel above the dock.
   await page.setViewportSize({ width: 480, height: 900 });
-  await page.getByRole('button', { name: 'Altri controlli audio' }).click();
-  await page.getByRole('button', { name: /^Velocità di riproduzione: / }).click();
-  const baseline = await geometry(['.custom-scrubber']);
+  await chip.click();
+  await expect(panel).toBeVisible();
+  const baseline = await geometry(['.custom-scrubber', '.player-play-control']);
+  // The buttons' line is on top, so the panel rises from it and never covers the scrubber below.
+  const [scrubberBox, playBox] = baseline;
+  expect(playBox.y + playBox.height).toBeLessThanOrEqual(scrubberBox.y);
+  const bar = (await page.locator('.audio-player').boundingBox())!;
+  const box = (await panel.boundingBox())!;
+  expect(bar.y - (box.y + box.height)).toBeGreaterThanOrEqual(12);
   await preset('2x').click();
   await faster.click();
-  await expect(page.locator('.player-speed-value')).toHaveText('2,05x');
-  expect(await geometry(['.custom-scrubber'])).toEqual(baseline);
-  await page.getByRole('button', { name: 'Torna al menu audio' }).click();
-  await expect(page.getByRole('button', { name: 'Velocità di riproduzione: 2,05x' })).toBeVisible();
+  await expect(chip).toHaveText('2,05x');
+  expect(await geometry(['.custom-scrubber', '.player-play-control'])).toEqual(baseline);
+  const [, play] = baseline;
+  expect(Math.abs(play.x + play.width / 2 - (bar.x + bar.width / 2))).toBeLessThanOrEqual(1);
+  await page.keyboard.press('Escape');
+  await expect(panel).toBeHidden();
   expect(await footer.evaluate(root => root.scrollWidth <= root.clientWidth)).toBe(true);
   await page.screenshot({ path: info.outputPath('speed-phone-480.png') });
 });

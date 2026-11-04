@@ -55,6 +55,8 @@ interface RichTextEditorProps {
   bottomInset?: number;
   /** Each change opens find and replace once (the phone header menu). */
   findRequest?: number;
+  /** Phone: the header's "…" menu offers the zoom, so the toolbar leaves it out. */
+  zoomInHeaderMenu?: boolean;
 }
 
 export function RichTextEditor({
@@ -73,6 +75,7 @@ export function RichTextEditor({
   onZoomChange,
   bottomInset = 0,
   findRequest = 0,
+  zoomInHeaderMenu = false,
 }: RichTextEditorProps) {
   const bottomInsetRef = useRef(bottomInset);
   useEffect(() => { bottomInsetRef.current = bottomInset; }, [bottomInset]);
@@ -212,7 +215,7 @@ export function RichTextEditor({
     editorProps: {
       attributes: {
         // Typography comes from editorTypography.css, not Tailwind's prose classes.
-        class: 'focus:outline-none tiptap-editor',
+        class: 'tiptap-editor',
         spellcheck: 'false',
         style: editorFormattingVariables(),
       },
@@ -458,6 +461,7 @@ export function RichTextEditor({
         onToggleFindReplace={() => setFindMode(p => p ? null : 'find')}
         zoomLevel={zoomLevel}
         onZoomChange={onZoomChange}
+        zoomInHeaderMenu={zoomInHeaderMenu}
       />
       {findMode && editor && (
         <FindReplacePanel editor={editor} onClose={() => setFindMode(null)} initialMode={findMode} focusTrigger={findFocusTrigger} initialFindText={initialSearchTerm} />

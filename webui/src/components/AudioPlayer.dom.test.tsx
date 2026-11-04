@@ -34,6 +34,39 @@ describe('AudioPlayer', () => {
     expect(screen.queryByRole('button', { name: 'Aumenta velocità di riproduzione' })).toBeNull();
   });
 
+  it('opens on the saved position before the file reports its length, so the scrubber does not jump from zero', () => {
+    render(<AudioPlayer src="/audio/test.mp3" initialTime={30} initialDuration={60} />);
+    const scrubber = screen.getByRole('slider', { name: 'Posizione audio' }) as HTMLInputElement;
+    expect(scrubber.max).toBe('60');
+    expect(scrubber.value).toBe('30');
+    expect(scrubber.style.getPropertyValue('--progress')).toBe('50%');
+  });
+
+  it('draws the folded pill ring at the saved position from the first frame', () => {
+    localStorage.setItem('el-sbobinator.audio-player.v1', JSON.stringify({ collapsed: true, side: 'right' }));
+    const { container } = render(<AudioPlayer src="/audio/test.mp3" initialTime={30} initialDuration={60} />);
+    const ring = container.querySelector('.player-pill-progress')!;
+    const length = Number(ring.getAttribute('stroke-dasharray'));
+    expect(Number(ring.getAttribute('stroke-dashoffset'))).toBeCloseTo(length / 2);
+  });
+
+  it('starts at zero when only the position was saved: it cannot be placed without the length', () => {
+    render(<AudioPlayer src="/audio/test.mp3" initialTime={30} />);
+    const scrubber = screen.getByRole('slider', { name: 'Posizione audio' }) as HTMLInputElement;
+    expect(scrubber.value).toBe('0');
+    expect(scrubber.max).toBe('100');
+  });
+
+  it('reports the length with the position, for the next opening', () => {
+    const onStateChange = vi.fn();
+    const { container } = render(<AudioPlayer src="/audio/test.mp3" onStateChange={onStateChange} />);
+    const audio = container.querySelector('audio')!;
+    Object.defineProperty(audio, 'duration', { configurable: true, value: 60 });
+    audio.currentTime = 12;
+    fireEvent.timeUpdate(audio);
+    expect(onStateChange).toHaveBeenLastCalledWith(expect.objectContaining({ currentTime: 12, duration: 60 }));
+  });
+
   it('names both sliders and announces unknown duration and initial volume', () => {
     render(<AudioPlayer src="/audio/test.mp3" />);
     expect(screen.getByRole('slider', { name: 'Posizione audio' }).getAttribute('aria-valuetext')).toBe('0 secondi; durata non disponibile');
@@ -52,46 +85,43 @@ describe('AudioPlayer', () => {
     }
   });
 
-  it('keeps one row on a phone and moves speed and the audio options into the menu', () => {
+  it('lays the phone player on two lines: play centred between the skips on top, the scrubber alone below', () => {
     vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(max-width: 640px)' }));
     try {
       const onStateChange = vi.fn();
-      render(<AudioPlayer src="/audio/test.mp3" onRelink={vi.fn()} onStateChange={onStateChange} />);
-      expect(screen.getByRole('button', { name: 'Avvia riproduzione' })).toBeTruthy();
-      expect(screen.getByRole('button', { name: 'Indietro di 10 secondi' })).toBeTruthy();
-      expect(screen.getByRole('slider', { name: 'Posizione audio' })).toBeTruthy();
-      expect(screen.getByText('00:00 / 00:00')).toBeTruthy();
-      expect(screen.queryByRole('button', { name: /^Velocità di riproduzione/ })).toBeNull();
-      expect(screen.queryByRole('button', { name: 'Opzioni audio collegato' })).toBeNull();
+      const { container } = render(<AudioPlayer src="/audio/test.mp3" onRelink={vi.fn()} onStateChange={onStateChange} />);
+      // The scrubber sits between the time heard and the length, on a line with no buttons,
+      // so it is not squeezed between them.
+      const seek = container.querySelector<HTMLElement>('.player-phone-seek')!;
+      expect(Array.from(seek.children, child => child.getAttribute('aria-label') ?? child.textContent)).toEqual(['00:00', 'Posizione audio', '00:00']);
+      expect(seek.querySelector('button')).toBeNull();
+      expect(screen.queryByText('00:00 / 00:00')).toBeNull();
+      // Above it, so their menus rise from the buttons and not over the scrubber: three cells
+      // around a centre column, the speed, the skips with play in the middle, the audio options
+      // and the chevron.
+      const controls = seek.previousElementSibling as HTMLElement;
+      expect(controls.classList.contains('player-phone-controls')).toBe(true);
+      expect(controls.classList.contains('grid-cols-[1fr_auto_1fr]')).toBe(true);
+      const [left, centre, right] = Array.from(controls.children) as HTMLElement[];
+      expect(within(left).getByRole('button', { name: 'Velocità di riproduzione: 1x' })).toBeTruthy();
+      expect(Array.from(centre.children, button => button.getAttribute('aria-label'))).toEqual(['Indietro di 10 secondi', 'Avvia riproduzione', 'Avanti di 10 secondi']);
+      expect(Array.from(right.querySelectorAll('button'), button => button.getAttribute('aria-label'))).toEqual(['Opzioni audio collegato', 'Riduci il player a icona']);
       expect(screen.queryByLabelText("Torna all'inizio")).toBeNull();
 
-      fireEvent.click(screen.getByRole('button', { name: 'Altri controlli audio' }));
-      expect(screen.getByRole('button', { name: 'Altri controlli audio' }).getAttribute('aria-expanded')).toBe('true');
-      // The speed row shows the value and opens the speed panel inside the menu, with a way back.
+      // The speed opens the same panel as on desktop, straight from the bar.
       fireEvent.click(screen.getByRole('button', { name: 'Velocità di riproduzione: 1x' }));
-      const slider = screen.getByRole('slider', { name: 'Velocità di riproduzione' });
-      expect(document.activeElement).toBe(slider);
-      expect(screen.queryByText('Sostituisci file audio...')).toBeNull();
-      // The menu spans the dock outside the kebab's wrapper: pressing inside it must not close it.
-      fireEvent.pointerDown(slider);
-      fireEvent.click(screen.getByRole('button', { name: '1,5x' }));
+      const panel = screen.getByRole('dialog', { name: 'Velocità di riproduzione' });
+      expect(document.activeElement).toBe(within(panel).getByRole('slider', { name: 'Velocità di riproduzione' }));
+      fireEvent.click(within(panel).getByRole('button', { name: '1,5x' }));
       expect(onStateChange).toHaveBeenLastCalledWith(expect.objectContaining({ playbackRate: 1.5 }));
-      fireEvent.click(screen.getByRole('button', { name: 'Aumenta velocità di riproduzione' }));
-      expect(onStateChange).toHaveBeenLastCalledWith(expect.objectContaining({ playbackRate: 1.55 }));
-      fireEvent.click(screen.getByRole('button', { name: 'Torna al menu audio' }));
-      expect(screen.getByRole('button', { name: 'Velocità di riproduzione: 1,55x' })).toBeTruthy();
       fireEvent.pointerDown(document.body);
-      expect(screen.queryByRole('button', { name: /^Velocità di riproduzione/ })).toBeNull();
-      // Reopening starts from the menu, not from the speed panel left open last time.
-      fireEvent.click(screen.getByRole('button', { name: 'Altri controlli audio' }));
-      fireEvent.click(screen.getByRole('button', { name: 'Velocità di riproduzione: 1,55x' }));
-      fireEvent.pointerDown(document.body);
-      fireEvent.click(screen.getByRole('button', { name: 'Altri controlli audio' }));
-      expect(screen.getByRole('button', { name: 'Velocità di riproduzione: 1,55x' })).toBeTruthy();
-      expect(screen.queryByRole('button', { name: "Torna all'inizio" })).toBeNull();
-      expect(screen.queryByRole('button', { name: 'Riduci a icona' })).toBeNull();
-      expect(screen.getByText('Sostituisci file audio...')).toBeTruthy();
+      expect(screen.queryByRole('dialog', { name: 'Velocità di riproduzione' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Velocità di riproduzione: 1,5x' })).toBeTruthy();
 
+      // ⋮ keeps only the audio actions, as on desktop.
+      fireEvent.click(screen.getByRole('button', { name: 'Opzioni audio collegato' }));
+      expect(screen.getByText('Sostituisci file audio...')).toBeTruthy();
+      expect(within(document.querySelector<HTMLElement>('.player-more-panel')!).queryByText('Velocità')).toBeNull();
       const editorClose = vi.fn();
       window.addEventListener('keydown', editorClose);
       fireEvent.keyDown(document.body, { key: 'Escape' });
@@ -103,50 +133,55 @@ describe('AudioPlayer', () => {
     }
   });
 
-  it('puts the phone volume in the bar as a button that opens a vertical slider', () => {
+  it('leaves the phone volume to the phone keys: full volume there, the desktop level kept', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(max-width: 640px)' || query === '(pointer: coarse)' }));
+    try {
+      const onStateChange = vi.fn();
+      const { unmount } = render(<AudioPlayer src="/audio/test.mp3" initialVolume={0.4} onStateChange={onStateChange} />);
+      expect(screen.queryByRole('button', { name: 'Volume' })).toBeNull();
+      expect(screen.queryByRole('slider', { name: 'Volume' })).toBeNull();
+      expect(document.querySelector('audio')!.volume).toBe(1);
+      // The arrows would only change a level that never plays there.
+      fireEvent.keyDown(document.body, { code: 'ArrowDown' });
+      expect(onStateChange).not.toHaveBeenCalledWith(expect.objectContaining({ volume: expect.closeTo(0.35, 5) }));
+      // With no audio actions there is no ⋮ to open.
+      expect(screen.queryByRole('button', { name: 'Opzioni audio collegato' })).toBeNull();
+      expect(onStateChange).not.toHaveBeenCalledWith(expect.objectContaining({ volume: 1 }));
+      unmount();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    render(<AudioPlayer src="/audio/test.mp3" initialVolume={0.4} />);
+    expect(document.querySelector('audio')!.volume).toBe(0.4);
+    expect(screen.getByRole('slider', { name: 'Volume' }).getAttribute('aria-valuetext')).toBe('40%');
+  });
+
+  it('keeps the saved volume in a narrow desktop window, where no hardware keys own it, and lets the arrows change it', () => {
     vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(max-width: 640px)' }));
     try {
       const onStateChange = vi.fn();
-      render(<AudioPlayer src="/audio/test.mp3" onStateChange={onStateChange} />);
-      expect(screen.queryByRole('slider', { name: 'Livello volume' })).toBeNull();
-      const button = screen.getByRole('button', { name: 'Volume' });
-      fireEvent.click(button);
-      expect(button.getAttribute('aria-expanded')).toBe('true');
-
-      const slider = screen.getByRole('slider', { name: 'Livello volume' });
-      expect(slider.getAttribute('aria-orientation')).toBe('vertical');
-      fireEvent.pointerDown(slider);
-      fireEvent.change(slider, { target: { value: '0.4' } });
-      expect(onStateChange).toHaveBeenLastCalledWith(expect.objectContaining({ volume: 0.4 }));
-      expect(slider.getAttribute('aria-valuetext')).toBe('40%');
-
-      // Opening the menu closes the volume, and the menu holds no second volume slider.
-      fireEvent.click(screen.getByRole('button', { name: 'Altri controlli audio' }));
-      expect(screen.queryByRole('slider', { name: 'Livello volume' })).toBeNull();
-      expect(screen.queryByRole('slider', { name: 'Volume' })).toBeNull();
-
-      fireEvent.click(screen.getByRole('button', { name: 'Volume' }));
-      const editorClose = vi.fn();
-      window.addEventListener('keydown', editorClose);
-      fireEvent.keyDown(document.body, { key: 'Escape' });
-      window.removeEventListener('keydown', editorClose);
-      expect(screen.queryByRole('slider', { name: 'Livello volume' })).toBeNull();
-      expect(editorClose).not.toHaveBeenCalled();
+      render(<AudioPlayer src="/audio/test.mp3" initialVolume={0.3} onStateChange={onStateChange} />);
+      const audio = document.querySelector('audio')!;
+      expect(audio.volume).toBe(0.3);
+      fireEvent.keyDown(document.body, { code: 'ArrowUp' });
+      expect(audio.volume).toBeCloseTo(0.35);
+      expect(onStateChange).toHaveBeenLastCalledWith(expect.objectContaining({ volume: expect.closeTo(0.35, 5) }));
     } finally {
       vi.unstubAllGlobals();
     }
   });
 
-  it('leaves the phone volume button out where volume stays on the hardware buttons (iPhone)', () => {
+  it('leaves the arrows to the page where the browser keeps volume on the hardware buttons (iPad)', () => {
     const volume = Object.getOwnPropertyDescriptor(window.HTMLMediaElement.prototype, 'volume')!;
     Object.defineProperty(window.HTMLMediaElement.prototype, 'volume', { configurable: true, get: () => 1, set: () => {} });
-    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(max-width: 640px)' }));
     try {
-      render(<AudioPlayer src="/audio/test.mp3" />);
-      expect(screen.queryByRole('button', { name: 'Volume' })).toBeNull();
-      expect(screen.getByRole('button', { name: 'Altri controlli audio' })).toBeTruthy();
+      const onStateChange = vi.fn();
+      render(<AudioPlayer src="/audio/test.mp3" initialVolume={0.4} onStateChange={onStateChange} />);
+      const event = new KeyboardEvent('keydown', { code: 'ArrowUp', bubbles: true, cancelable: true });
+      document.body.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+      expect(onStateChange).not.toHaveBeenCalled();
     } finally {
-      vi.unstubAllGlobals();
       Object.defineProperty(window.HTMLMediaElement.prototype, 'volume', volume);
     }
   });
@@ -155,11 +190,12 @@ describe('AudioPlayer', () => {
     vi.useFakeTimers();
     vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(max-width: 640px)' }));
     try {
-      const { container } = render(<AudioPlayer src="/audio/test.mp3" />);
+      const { container } = render(<AudioPlayer src="/audio/test.mp3" onRelink={vi.fn()} />);
       const tab = screen.getByRole('button', { name: 'Riduci il player a icona' });
       expect(tab.classList.contains('is-right')).toBe(true);
-      // The chevron closes the row on the pill's side: after the menu, at the right edge.
-      expect(tab.previousElementSibling?.contains(screen.getByRole('button', { name: 'Altri controlli audio' }))).toBe(true);
+      // The chevron closes the buttons' line on the pill's side: after the menu, at the right edge.
+      expect(tab.previousElementSibling?.contains(screen.getByRole('button', { name: 'Opzioni audio collegato' }))).toBe(true);
+      expect(tab.nextElementSibling).toBeNull();
 
       fireEvent.click(tab);
       expect(container.querySelector('.audio-player.is-folding')).not.toBeNull();
@@ -185,7 +221,9 @@ describe('AudioPlayer', () => {
       const { container } = render(<AudioPlayer src="/audio/test.mp3" />);
       const tab = screen.getByRole('button', { name: 'Riduci il player a icona' });
       expect(tab.classList.contains('is-left')).toBe(true);
-      expect(container.querySelector('.audio-player > button')).toBe(tab);
+      // First on the buttons' line, before the speed.
+      expect(container.querySelector('.player-phone-controls > div')!.firstElementChild).toBe(tab);
+      expect(tab.nextElementSibling?.contains(screen.getByRole('button', { name: /^Velocità di riproduzione/ }))).toBe(true);
 
       const play = screen.getByRole('button', { name: 'Avvia riproduzione' });
       // A swipe away from the pill's corner leaves the bar open; toward it folds.
@@ -536,6 +574,21 @@ describe('AudioPlayer', () => {
     audio.currentTime = 30;
     fireEvent.click(screen.getByLabelText('Avanti di 10 secondi'));
     expect(audio.currentTime).toBe(40);
+  });
+
+  it('colours the played part of the scrubber up to its thumb, with or without a known duration', () => {
+    const { container } = render(<AudioPlayer src="/audio/test.mp3" />);
+    const audio = container.querySelector('audio') as HTMLAudioElement;
+    const scrubber = screen.getByRole('slider', { name: 'Posizione audio' }) as HTMLInputElement;
+    // No duration yet (or an audio that never says it): +10 s moved the thumb over an empty track.
+    fireEvent.click(screen.getByLabelText('Avanti di 10 secondi'));
+    expect(scrubber.value).toBe('10');
+    expect(scrubber.max).toBe('100');
+    expect(scrubber.style.getPropertyValue('--progress')).toBe('10%');
+
+    Object.defineProperty(audio, 'duration', { value: 200, configurable: true });
+    fireEvent.loadedMetadata(audio);
+    expect(scrubber.style.getPropertyValue('--progress')).toBe('5%');
   });
 
   it('volume slider change updates volume', () => {

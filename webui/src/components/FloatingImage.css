@@ -4,9 +4,9 @@
 }
 
 .editor-image-node .editor-image-toolbar {
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   max-width: none;
-  line-height: 1.4;
+  line-height: var(--leading-snug);
   flex-wrap: wrap;
   width: max-content;
   max-width: min(360px, 80vw);
@@ -16,7 +16,8 @@
   display: block;
   margin-top: 8px;
   line-height: 1.4;
-  font-size: 12px;
+  /* The document's caption size (document_formatting.json), in points like the page. */
+  font-size: 9pt;
   color: var(--text-secondary);
 }
 
@@ -30,12 +31,6 @@
 
 .editor-image-surface {
   z-index: 2;
-}
-
-.image-layout-divider {
-  width: 1px;
-  height: 20px;
-  background: var(--border-default);
 }
 
 .tiptap-editor :is(p, h1, h2, h3, h4, h5, h6) {
@@ -57,7 +52,7 @@
   position: fixed;
   left: 0;
   top: 0;
-  z-index: 1000;
+  z-index: var(--z-drag);
   opacity: 0.5;
   pointer-events: none;
   user-select: none;
@@ -92,7 +87,7 @@
 .editor-image-alignment-guide {
   position: fixed;
   width: 1px;
-  z-index: 1001;
+  z-index: calc(var(--z-drag) + 1);
   background: #ef4444;
   pointer-events: none;
   user-select: none;
@@ -108,7 +103,7 @@
 .editor-image-drag-preview .editor-image-caption {
   display: block;
   margin-top: 8px;
-  font-size: 12px;
+  font-size: 9pt;
   line-height: 1.4;
   color: var(--text-secondary);
 }

@@ -1,11 +1,12 @@
 import { reportClientError } from '../diagnostics';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AudioLines, ChevronLeft, ChevronRight, Gauge, HardDrive, Minus, MoreVertical, Pause, Play, Plus, RefreshCw, RotateCcw, RotateCw, Unlink, Volume1, Volume2, VolumeX } from 'lucide-react';
+import { AudioLines, ChevronLeft, ChevronRight, HardDrive, Minus, MoreVertical, Pause, Play, Plus, RefreshCw, RotateCcw, RotateCw, Unlink, Volume1, Volume2, VolumeX } from 'lucide-react';
 import { ConfirmActionModal } from './modals/ConfirmActionModal';
 import { useDockFold } from '../hooks/useDockFold';
 import { usePhoneLayout } from '../hooks/usePhoneLayout';
 import { formatSize } from '../utils';
+import { PlayerPillRing } from './PlayerPillRing';
 
 /** Web: whether this browser keeps a copy of the lecture for the sbobina (otherwise it is picked each time). */
 export interface AudioKeepControl {
@@ -17,9 +18,11 @@ export interface AudioKeepControl {
 interface AudioPlayerProps {
   src: string;
   initialTime?: number;
+  /** The length saved with `initialTime`: with both, the bar opens on the saved position at once. */
+  initialDuration?: number;
   initialPlaybackRate?: number;
   initialVolume?: number;
-  onStateChange?: (state: { currentTime: number; playbackRate: number; volume: number }) => void;
+  onStateChange?: (state: { currentTime: number; duration?: number; playbackRate: number; volume: number }) => void;
   onRelink?: () => Promise<boolean | undefined>;
   onRemoveAudio?: () => Promise<boolean | undefined> | void;
   keep?: AudioKeepControl;
@@ -50,10 +53,14 @@ function canSetMediaVolume(): boolean {
   }
 }
 
+// A touch-first device (phone, tablet): read at render, so it is checked again whenever the
+// phone layout switches on or off.
+function isCoarsePointer(): boolean {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+}
+
 // Every player menu floats this far above the bar's top edge (13px clear of the dock border).
 const MENU_GAP_PX = 14;
-const PILL_RING_RADIUS = 19;
-const PILL_RING_LENGTH = 2 * Math.PI * PILL_RING_RADIUS;
 
 const INTERACTIVE_ARIA_ROLES = new Set([
   'button', 'link', 'menuitem', 'menuitemcheckbox', 'menuitemradio',
@@ -71,36 +78,45 @@ const isEditableTarget = (target: EventTarget | null): boolean => {
   return role !== null && INTERACTIVE_ARIA_ROLES.has(role);
 };
 
-export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolume, onStateChange, onRelink, onRemoveAudio, keep }: AudioPlayerProps) {
+// Until the file reports its length, the bar shows the saved position on the saved length, so a
+// reopened sbobina does not draw the scrubber at zero and then jump. Without a saved length the
+// position cannot be placed on the scrubber, so it starts at zero as before.
+const restoredPosition = (time?: number, duration?: number) => {
+  const length = duration !== undefined && Number.isFinite(duration) && duration > 0 ? duration : 0;
+  return { time: length > 0 ? Math.min(Math.max(time ?? 0, 0), length) : 0, duration: length };
+};
+
+export function AudioPlayer({ src, initialTime, initialDuration, initialPlaybackRate, initialVolume, onStateChange, onRelink, onRemoveAudio, keep }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(() => restoredPosition(initialTime, initialDuration).time);
+  const [duration, setDuration] = useState(() => restoredPosition(initialTime, initialDuration).duration);
   const [playbackRate, setPlaybackRate] = useState(initialPlaybackRate ?? 1);
   const [volume, setVolume] = useState(initialVolume ?? 1);
   const [showVolume] = useState(canSetMediaVolume);
-  // A phone keeps one row over the text: speed, restart and the audio options move into the menu.
+  // A phone puts the scrubber on a line of its own above the buttons, and leaves the volume to
+  // the phone's own keys, as Spotify does: there the audio plays at full volume, whatever the
+  // desktop slider keeps. A narrow window alone is not a phone: with a mouse and no hardware keys
+  // (a desktop browser made narrow) the saved level still plays, and the arrow keys still set it.
   const isPhone = usePhoneLayout();
+  const hardwareVolume = !showVolume || (isPhone && isCoarsePointer());
+  const elementVolume = hardwareVolume ? 1 : volume;
+  const hardwareVolumeRef = useRef(hardwareVolume);
+  useEffect(() => { hardwareVolumeRef.current = hardwareVolume; }, [hardwareVolume]);
   const [isSpeedOpen, setIsSpeedOpen] = useState(false);
   const [speedPanelPos, setSpeedPanelPos] = useState({ bottom: 0, left: 0 });
   const speedBtnRef = useRef<HTMLButtonElement>(null);
   const speedPanelRef = useRef<HTMLDivElement>(null);
   const speedSliderRef = useRef<HTMLInputElement>(null);
-  // Phone: the ⋮ menu swaps its list for the speed panel, with a back arrow.
-  const [menuView, setMenuView] = useState<'main' | 'speed'>('main');
   const [isRelinking, setIsRelinking] = useState(false);
   const [showAudioMenu, setShowAudioMenu] = useState(false);
-  // Phone: the volume sits in the bar as an icon that opens a vertical slider above it.
-  const [showVolumePopover, setShowVolumePopover] = useState(false);
-  const volumePopoverRef = useRef<HTMLDivElement>(null);
   const [showConfirmRemove, setShowConfirmRemove] = useState(false);
   const audioMenuRef = useRef<HTMLDivElement>(null);
-  // The phone menu spans the whole dock, so it lives outside the kebab's wrapper.
+  // The menu is anchored to the whole bar, so it lives outside the kebab's wrapper.
   const audioMenuPanelRef = useRef<HTMLDivElement>(null);
   // Folding closes whatever menu the bar has open.
   const { fold, setCollapsed, collapseBtnRef, pillProps, barTouchProps, foldClassName } = useDockFold(() => {
     setShowAudioMenu(false);
-    setShowVolumePopover(false);
     setIsSpeedOpen(false);
   });
   const pendingInitialTimeRef = useRef<number | null>(initialTime ?? null);
@@ -113,16 +129,17 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
 
   useEffect(() => {
     if (!audioRef.current) return;
-    audioRef.current.volume = volume;
+    audioRef.current.volume = elementVolume;
     audioRef.current.playbackRate = playbackRate;
-  }, [volume, playbackRate]);
+  }, [elementVolume, playbackRate]);
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
     setIsPlaying(false);
-    setCurrentTime(0);
-    setDuration(0);
+    const restored = restoredPosition(initialTime, initialDuration);
+    setCurrentTime(restored.time);
+    setDuration(restored.duration);
     audio.pause();
     audio.currentTime = 0;
     pendingInitialTimeRef.current = initialTime ?? null;
@@ -137,7 +154,7 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
     syncDuration();
     const timeoutId = window.setTimeout(syncDuration, 300);
     return () => window.clearTimeout(timeoutId);
-  }, [initialTime, src]);
+  }, [initialDuration, initialTime, src]);
 
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
@@ -171,7 +188,6 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
     const newVol = Math.max(0, Math.min(1, volumeRef.current + delta));
     volumeRef.current = newVol;
     setVolume(newVol);
-    if (audioRef.current) audioRef.current.volume = newVol;
     onStateChangeRef.current?.({ currentTime: audioRef.current?.currentTime ?? 0, playbackRate: playbackRateRef.current, volume: newVol });
   }, []);
 
@@ -201,10 +217,14 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
         case 'ArrowRight':
           if (!e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); skipRef.current(10); }
           break;
+        // Where the hardware keys own the volume, the arrows would only change a level that never
+        // plays: they are left to the page.
         case 'ArrowUp':
+          if (hardwareVolumeRef.current) break;
           if (!e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); adjustVolumeRef.current(0.05); }
           break;
         case 'ArrowDown':
+          if (hardwareVolumeRef.current) break;
           if (!e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); adjustVolumeRef.current(-0.05); }
           break;
       }
@@ -235,28 +255,10 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
     };
   }, [showAudioMenu]);
 
-  useEffect(() => {
-    if (!showVolumePopover) return;
-    const handler = (e: PointerEvent) => {
-      if (!volumePopoverRef.current?.contains(e.target as Node)) setShowVolumePopover(false);
-    };
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      e.stopPropagation();
-      setShowVolumePopover(false);
-    };
-    document.addEventListener('pointerdown', handler);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', handler);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [showVolumePopover]);
-
-  // Phone and desktop place the menus differently: a resize or rotation closes them.
+  // Phone and desktop lay the bar out differently: a resize or rotation closes its menus.
   useEffect(() => {
     setShowAudioMenu(false);
-    setShowVolumePopover(false);
+    setIsSpeedOpen(false);
   }, [isPhone]);
 
   // The speed list rises from the bar's top edge like the other player menus, not from the
@@ -305,8 +307,8 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
 
   // Keyboard users land on the slider, where the arrows change the speed.
   useEffect(() => {
-    if (isSpeedOpen || menuView === 'speed') speedSliderRef.current?.focus();
-  }, [isSpeedOpen, menuView]);
+    if (isSpeedOpen) speedSliderRef.current?.focus();
+  }, [isSpeedOpen]);
 
   useEffect(() => {
     if (!isSpeedOpen) return;
@@ -347,13 +349,13 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
     if (isFinite(audioRef.current.duration) && audioRef.current.duration > 0) {
       setDuration(audioRef.current.duration);
     }
-    onStateChangeRef.current?.({ currentTime: t, playbackRate: playbackRateRef.current, volume: volumeRef.current });
+    onStateChangeRef.current?.({ currentTime: t, duration: audioRef.current.duration, playbackRate: playbackRateRef.current, volume: volumeRef.current });
   };
 
   const handleLoadedMetadata = () => {
     if (!audioRef.current) return;
     audioRef.current.playbackRate = playbackRate;
-    audioRef.current.volume = volume;
+    audioRef.current.volume = elementVolume;
     if (isFinite(audioRef.current.duration)) {
       setDuration(audioRef.current.duration);
     }
@@ -454,6 +456,7 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
   const hasAudioActions = Boolean(onRelink || onRemoveAudio || keep);
   const timeLabel = `${formatTime(currentTime)} / ${formatTime(duration)}`;
   const progress = duration > 0 ? Math.min(1, currentTime / duration) : 0;
+  const scrubberMax = duration || 100;
 
   const audioElement = (
     <audio
@@ -471,7 +474,7 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
     />
   );
 
-  /* Portaled: the glass dock's backdrop-filter would otherwise trap the fixed overlay inside it. */
+  /* Portaled to the body like the app's other dialogs, so it covers the whole window above the editor. */
   const confirmRemoveModal = createPortal(
     <ConfirmActionModal
       isOpen={showConfirmRemove}
@@ -499,17 +502,7 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
           aria-label={`Mostra il player audio (${isPlaying ? 'in riproduzione' : 'in pausa'}, ${formatAccessibleTime(currentTime)} di ${formatAccessibleTime(duration)})`}
           title="Mostra il player (trascinalo per spostarlo)"
         >
-          <svg className="player-pill-ring" viewBox="0 0 44 44" aria-hidden="true">
-            <circle className="player-pill-track" cx="22" cy="22" r={PILL_RING_RADIUS} />
-            <circle
-              className="player-pill-progress"
-              cx="22"
-              cy="22"
-              r={PILL_RING_RADIUS}
-              strokeDasharray={PILL_RING_LENGTH}
-              strokeDashoffset={PILL_RING_LENGTH * (1 - progress)}
-            />
-          </svg>
+          <PlayerPillRing progress={progress} />
           {isPlaying ? <AudioLines className="h-4 w-4" /> : <Play className="h-4 w-4 fill-current" />}
         </button>
         {confirmRemoveModal}
@@ -586,11 +579,9 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
     </button>
   );
 
-  // `back` puts the phone menu's return arrow beside the value, so the panel needs no title row.
-  const renderSpeedPanel = (back?: React.ReactNode) => (
+  const speedPanel = (
     <>
       <div className="player-speed-value-row">
-        {back}
         <p className="player-speed-value" aria-hidden="true">{playbackRate.toFixed(2).replace('.', ',')}x</p>
       </div>
       <div className="player-speed-slider-row">
@@ -665,6 +656,152 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
     </div>
   );
 
+  const playButton = (
+    <button
+      type="button"
+      onClick={togglePlay}
+      className={`player-control player-play-control ${isPlaying ? 'is-active' : ''}`}
+      aria-label={isPlaying ? 'Metti in pausa' : 'Avvia riproduzione'}
+      title={isPlaying ? 'Metti in pausa (F4)' : 'Avvia riproduzione (F4)'}
+    >
+      {isPlaying ? <Pause className="h-4 w-4" strokeWidth={2.2} /> : <Play className="h-4 w-4 fill-current" strokeWidth={2.2} />}
+    </button>
+  );
+  const backButton = (
+    <button type="button" onClick={() => skip(-10)} className="player-control" aria-label="Indietro di 10 secondi" title="Indietro di 10 secondi">
+      <span className="relative inline-flex h-5 w-5 items-center justify-center" aria-hidden="true">
+        <RotateCcw className="h-5 w-5" />
+        <span className="absolute mt-0.5 text-[8px] font-bold leading-none">10</span>
+      </span>
+    </button>
+  );
+  const forwardButton = (
+    <button type="button" onClick={() => skip(10)} className="player-control" aria-label="Avanti di 10 secondi" title="Avanti di 10 secondi">
+      <span className="relative inline-flex h-5 w-5 items-center justify-center" aria-hidden="true">
+        <RotateCw className="h-5 w-5" />
+        <span className="absolute mt-0.5 text-[8px] font-bold leading-none">10</span>
+      </span>
+    </button>
+  );
+
+  const scrubber = (
+    <input
+      type="range"
+      min={0}
+      max={scrubberMax}
+      step={0.1}
+      value={currentTime}
+      onChange={handleSeek}
+      aria-label="Posizione audio"
+      aria-valuetext={duration > 0
+        ? `${formatAccessibleTime(currentTime)} di ${formatAccessibleTime(duration)}`
+        : `${formatAccessibleTime(currentTime)}; durata non disponibile`}
+      className="custom-scrubber min-w-0 flex-1"
+      // The played part ends at the thumb, on the same scale: also before the duration is known.
+      style={{ '--progress': `${Math.min(100, (currentTime / scrubberMax) * 100)}%` } as React.CSSProperties}
+    />
+  );
+  const timeText = (text: string, className: string) => (
+    <span className={`shrink-0 whitespace-nowrap font-semibold tabular-nums ${className}`} style={{ color: 'var(--text-muted)' }}>
+      {text}
+    </span>
+  );
+
+  // Only the value sits in the bar; it opens the speed panel above the whole bar.
+  const speedControl = (
+    <div className="player-speed-wrap relative">
+      <button
+        ref={speedBtnRef}
+        type="button"
+        onClick={toggleSpeedOpen}
+        className={`player-speed-btn${isSpeedOpen ? ' is-active' : ''}`}
+        aria-label={`Velocità di riproduzione: ${formatRate(playbackRate)}`}
+        title="Velocità di riproduzione"
+        aria-haspopup="dialog"
+        aria-expanded={isSpeedOpen}
+      >
+        {formatRate(playbackRate)}
+      </button>
+      {isSpeedOpen && createPortal(
+        <div
+          ref={speedPanelRef}
+          role="dialog"
+          aria-label="Velocità di riproduzione"
+          className="kebab-panel player-menu player-speed-panel"
+          style={{
+            position: 'fixed',
+            bottom: `${speedPanelPos.bottom}px`,
+            left: `${speedPanelPos.left}px`,
+            zIndex: 'var(--z-popover)',
+          }}
+        >
+          {speedPanel}
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+
+  const audioMenuButton = hasAudioActions && (
+    <div className="relative" ref={audioMenuRef}>
+      <button
+        type="button"
+        className={`player-control ${showAudioMenu ? 'is-active' : ''}`}
+        aria-label="Opzioni audio collegato"
+        title="Gestisci audio collegato"
+        aria-haspopup="true"
+        aria-expanded={showAudioMenu}
+        onClick={() => setShowAudioMenu(v => !v)}
+      >
+        <MoreVertical className="h-4 w-4" />
+      </button>
+    </div>
+  );
+  // Anchored to the whole bar, not the kebab, so it clears the dock's top edge.
+  const audioMenuPanel = showAudioMenu && (
+    <div ref={audioMenuPanelRef} className={`kebab-panel player-menu player-more-panel${isPhone ? '' : ' is-desktop'}`}>
+      {audioActions}
+    </div>
+  );
+
+  if (isPhone) {
+    // Two lines. On top play sits in the very middle, between the skips, with the speed on its left
+    // and the audio options on its right, so their menus rise straight from the button pressed
+    // and never cover the scrubber. Below, the scrubber spans the dock between the time heard and
+    // the length, near the thumb, so a three-hour lecture can be scrubbed with a finger.
+    return (
+      <div
+        className={`${foldClassName} relative flex w-full flex-col gap-0.5 px-0.5 py-1.5`}
+        style={{ background: 'transparent' }}
+        {...barTouchProps}
+      >
+        {audioElement}
+        <div className="player-phone-controls grid w-full grid-cols-[1fr_auto_1fr] items-center">
+          <div className="flex items-center justify-self-start gap-1">
+            {fold.side === 'left' && foldTab}
+            {speedControl}
+          </div>
+          <div className="flex items-center gap-1">
+            {backButton}
+            {playButton}
+            {forwardButton}
+          </div>
+          <div className="flex items-center justify-self-end gap-1">
+            {audioMenuButton}
+            {fold.side === 'right' && foldTab}
+          </div>
+        </div>
+        <div className="player-phone-seek flex w-full min-w-0 items-center gap-2">
+          {timeText(formatTime(currentTime), 'text-caption')}
+          {scrubber}
+          {timeText(formatTime(duration), 'text-caption')}
+        </div>
+        {audioMenuPanel}
+        {confirmRemoveModal}
+      </div>
+    );
+  }
+
   return (
     <div
       className={`${foldClassName} relative flex w-full flex-wrap items-center gap-2 px-0.5 py-1.5`}
@@ -676,207 +813,27 @@ export function AudioPlayer({ src, initialTime, initialPlaybackRate, initialVolu
       {fold.side === 'left' && foldTab}
 
       <div className="flex items-center gap-1 shrink-0">
-        <button
-          type="button"
-          onClick={togglePlay}
-          className={`player-control player-play-control ${isPlaying ? 'is-active' : ''}`}
-          aria-label={isPlaying ? 'Metti in pausa' : 'Avvia riproduzione'}
-          title={isPlaying ? 'Metti in pausa (F4)' : 'Avvia riproduzione (F4)'}
-        >
-          {isPlaying ? <Pause className="h-4 w-4" strokeWidth={2.2} /> : <Play className="h-4 w-4 fill-current" strokeWidth={2.2} />}
-        </button>
-        <button type="button" onClick={() => skip(-10)} className="player-control" aria-label="Indietro di 10 secondi" title="Indietro di 10 secondi">
-          <span className="relative inline-flex h-5 w-5 items-center justify-center" aria-hidden="true">
-            <RotateCcw className="h-5 w-5" />
-            <span className="absolute mt-0.5 text-[8px] font-bold leading-none">10</span>
-          </span>
-        </button>
-        <button type="button" onClick={() => skip(10)} className="player-control" aria-label="Avanti di 10 secondi" title="Avanti di 10 secondi">
-          <span className="relative inline-flex h-5 w-5 items-center justify-center" aria-hidden="true">
-            <RotateCw className="h-5 w-5" />
-            <span className="absolute mt-0.5 text-[8px] font-bold leading-none">10</span>
-          </span>
-        </button>
+        {playButton}
+        {backButton}
+        {forwardButton}
       </div>
 
-      <div className={`flex ${isPhone ? 'min-w-0 gap-2' : 'min-w-48 gap-3'} flex-1 items-center`}>
-        <input
-          type="range"
-          min={0}
-          max={duration || 100}
-          step={0.1}
-          value={currentTime}
-          onChange={handleSeek}
-          aria-label="Posizione audio"
-          aria-valuetext={duration > 0
-            ? `${formatAccessibleTime(currentTime)} di ${formatAccessibleTime(duration)}`
-            : `${formatAccessibleTime(currentTime)}; durata non disponibile`}
-          className="custom-scrubber min-w-0 flex-1"
-          style={{ '--progress': duration ? `${(currentTime / duration) * 100}%` : '0%' } as React.CSSProperties}
-        />
-        <span
-          className={`shrink-0 whitespace-nowrap font-semibold tabular-nums ${isPhone ? 'text-[11px]' : 'pr-0.5 text-xs'}`}
-          style={{ color: 'var(--text-muted)' }}
-        >
-          {timeLabel}
-        </span>
+      <div className="flex min-w-48 flex-1 items-center gap-3">
+        {scrubber}
+        {timeText(timeLabel, 'pr-0.5 text-xs')}
       </div>
 
-      {isPhone ? (
-        <>
-        {showVolume && (
-          <div className="relative shrink-0" ref={volumePopoverRef}>
-            <button
-              type="button"
-              className={`player-control ${showVolumePopover ? 'is-active' : ''}`}
-              aria-label="Volume"
-              title="Volume"
-              aria-haspopup="true"
-              aria-expanded={showVolumePopover}
-              onClick={() => {
-                setShowAudioMenu(false);
-                setShowVolumePopover(v => !v);
-              }}
-            >
-              <VolumeIcon className="h-4 w-4" />
-            </button>
-            {showVolumePopover && (
-              <div className="kebab-panel player-menu player-volume-popover">
-                <span className="player-volume-value" aria-hidden="true">{Math.round(volume * 100)}</span>
-                <div className="player-volume-vertical">
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    value={volume}
-                    onChange={handleVolume}
-                    aria-label="Livello volume"
-                    aria-orientation="vertical"
-                    aria-valuetext={`${Math.round(volume * 100)}%`}
-                    className="custom-volume"
-                    style={{ '--progress': `${volume * 100}%` } as React.CSSProperties}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-        <div className="relative shrink-0" ref={audioMenuRef}>
-          <button
-            type="button"
-            className={`player-control ${showAudioMenu ? 'is-active' : ''}`}
-            aria-label="Altri controlli audio"
-            title="Velocità e altri controlli"
-            aria-haspopup="true"
-            aria-expanded={showAudioMenu}
-            onClick={() => {
-              setShowVolumePopover(false);
-              setMenuView('main');
-              setShowAudioMenu(v => !v);
-            }}
-          >
-            <MoreVertical className="h-4 w-4" />
-          </button>
-        </div>
-        {showAudioMenu && (
-          <div ref={audioMenuPanelRef} className="kebab-panel player-menu player-more-panel">
-            {menuView === 'speed' ? (
-              <>
-                {renderSpeedPanel(
-                  <button
-                    type="button"
-                    className="player-round-btn is-plain player-speed-back"
-                    aria-label="Torna al menu audio"
-                    onClick={() => setMenuView('main')}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </button>,
-                )}
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  className="kebab-item player-menu-item"
-                  aria-label={`Velocità di riproduzione: ${formatRate(playbackRate)}`}
-                  onClick={() => setMenuView('speed')}
-                >
-                  <Gauge className="player-menu-icon" />
-                  <span>Velocità</span>
-                  <span className="player-menu-end player-menu-value">{formatRate(playbackRate)}</span>
-                  <ChevronRight className="player-menu-icon" />
-                </button>
-                {hasAudioActions && <div className="kebab-separator" />}
-                {audioActions}
-              </>
-            )}
-          </div>
-        )}
-        </>
-      ) : (
       <div className="flex items-center gap-2">
-        {/* Only the value sits in the bar; it opens the speed panel above the bar. */}
-        <div className="player-speed-wrap relative">
-          <button
-            ref={speedBtnRef}
-            type="button"
-            onClick={toggleSpeedOpen}
-            className={`player-speed-btn${isSpeedOpen ? ' is-active' : ''}`}
-            aria-label={`Velocità di riproduzione: ${formatRate(playbackRate)}`}
-            title="Velocità di riproduzione"
-            aria-haspopup="dialog"
-            aria-expanded={isSpeedOpen}
-          >
-            {formatRate(playbackRate)}
-          </button>
-          {isSpeedOpen && createPortal(
-            <div
-              ref={speedPanelRef}
-              role="dialog"
-              aria-label="Velocità di riproduzione"
-              className="kebab-panel player-menu player-speed-panel"
-              style={{
-                position: 'fixed',
-                bottom: `${speedPanelPos.bottom}px`,
-                left: `${speedPanelPos.left}px`,
-                zIndex: 9999,
-              }}
-            >
-              {renderSpeedPanel()}
-            </div>,
-            document.body
-          )}
-        </div>
+        {speedControl}
         {volumeSlider}
         <div className="flex items-center">
-          {hasAudioActions && (
-            <div className="relative" ref={audioMenuRef}>
-              <button
-                type="button"
-                className={`player-control ${showAudioMenu ? 'is-active' : ''}`}
-                aria-label="Opzioni audio collegato"
-                title="Gestisci audio collegato"
-                aria-haspopup="true"
-                aria-expanded={showAudioMenu}
-                onClick={() => setShowAudioMenu(v => !v)}
-              >
-                <MoreVertical className="h-4 w-4" />
-              </button>
-            </div>
-          )}
+          {audioMenuButton}
         </div>
       </div>
-      )}
 
       {fold.side === 'right' && foldTab}
 
-      {/* Anchored to the whole bar, not the kebab, so it clears the dock's top edge like the phone menu. */}
-      {!isPhone && showAudioMenu && (
-        <div ref={audioMenuPanelRef} className="kebab-panel player-menu player-more-panel is-desktop">
-          {audioActions}
-        </div>
-      )}
+      {audioMenuPanel}
 
       {confirmRemoveModal}
     </div>

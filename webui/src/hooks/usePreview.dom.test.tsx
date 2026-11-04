@@ -218,6 +218,57 @@ describe('usePreview', () => {
     expect(result.current.preview.content).toBeNull();
   });
 
+  it('saves the audio length with the position, and offers both when the sbobina opens again', async () => {
+    setPywebview({
+      read_html_content: vi.fn().mockResolvedValue({ ok: true, content: '<body><p>hi</p></body>' }),
+      stream_media_file: vi.fn().mockResolvedValue({ ok: true, url: '/media/lezione.mp3' }),
+    });
+    const { result } = renderHook(() => usePreview(makeOptions()));
+    await act(async () => {
+      await result.current.openPreview('/file.html', 'test', '/audio.mp3', 'len-1', '/session');
+    });
+    act(() => {
+      result.current.handleAudioStateChange({ currentTime: 30, duration: 60, playbackRate: 1, volume: 1 });
+      // A position reported before the file knows its length keeps the length already saved.
+      result.current.handleAudioStateChange({ currentTime: 31, duration: Number.NaN, playbackRate: 1, volume: 1 });
+    });
+    act(() => { result.current.closePreview(); });
+    expect(loadAllEditorSessions()['len-1']).toMatchObject({ audioTime: 31, audioDuration: 60 });
+
+    await act(async () => {
+      await result.current.openPreview('/file.html', 'test', '/audio.mp3', 'len-1', '/session');
+    });
+    expect(result.current.preview.initAudio).toMatchObject({ time: 31, duration: 60 });
+  });
+
+  it('remembers which dock the audio settled on and expects it again while the next opening checks', async () => {
+    const stream = vi.fn().mockResolvedValue({ ok: false, has_audio: false });
+    setPywebview({
+      read_html_content: vi.fn().mockResolvedValue({ ok: true, content: '<body><p>hi</p></body>' }),
+      stream_media_file: stream,
+    });
+    const { result } = renderHook(() => usePreview(makeOptions()));
+    // First opening with a linked file: a player is expected.
+    let opening: Promise<boolean> | undefined;
+    stream.mockReturnValueOnce(new Promise(() => {}));
+    act(() => { opening = result.current.openPreview('/file.html', 'test', '/audio.mp3', 'dock-1', '/session'); });
+    await vi.waitFor(() => expect(result.current.preview.audioLoading).toBe(true));
+    expect(result.current.preview.audioExpected).toBe('player');
+    void opening;
+
+    await act(async () => {
+      await result.current.openPreview('/file.html', 'test', '', 'dock-1', '/session');
+    });
+    expect(result.current.preview.audioExpected).toBe('none');
+    act(() => { result.current.closePreview(); });
+    expect(loadAllEditorSessions()['dock-1']).toMatchObject({ audioDock: 'none' });
+
+    stream.mockReturnValueOnce(new Promise(() => {}));
+    act(() => { void result.current.openPreview('/file.html', 'test', '', 'dock-1', '/session'); });
+    await vi.waitFor(() => expect(result.current.preview.audioLoading).toBe(true));
+    expect(result.current.preview.audioExpected).toBe('none');
+  });
+
   it('handleScrollTopChange updates scroll without re-rendering', () => {
     const { result } = renderHook(() => usePreview(makeOptions()));
     act(() => {

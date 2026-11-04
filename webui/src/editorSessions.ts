@@ -3,8 +3,15 @@ import { STORAGE_KEYS } from './storageKeys';
 export const EDITOR_SESSION_STORAGE_KEY = STORAGE_KEYS.EDITOR_SESSIONS_V1;
 const EDITOR_SESSION_TTL_DAYS = 30;
 
+/** What the audio dock showed: a player, the audio this device cannot find, or no audio at all. */
+export type AudioDockKind = 'player' | 'missing' | 'none';
+
 export type EditorSession = {
   audioTime?: number;
+  /** The lecture's length, so a reopened player draws the saved position before the file loads. */
+  audioDuration?: number;
+  /** The dock at the last closing, drawn again while the audio gets ready on the next opening. */
+  audioDock?: AudioDockKind;
   playbackRate?: number;
   volume?: number;
   scrollTop?: number;
@@ -19,6 +26,7 @@ const hasSessionState = (session: EditorSession): boolean =>
   || session.playbackRate !== undefined
   || session.volume !== undefined
   || session.scrollTop !== undefined
+  || session.audioDock !== undefined
   || session.openedAt !== undefined;
 
 export const normalizeEditorSessions = (
@@ -34,6 +42,8 @@ export const normalizeEditorSessions = (
       }
       const cleanSession: EditorSession = {
         ...(session.audioTime !== undefined ? { audioTime: session.audioTime } : {}),
+        ...(session.audioDuration !== undefined ? { audioDuration: session.audioDuration } : {}),
+        ...(session.audioDock === 'player' || session.audioDock === 'missing' || session.audioDock === 'none' ? { audioDock: session.audioDock } : {}),
         ...(session.playbackRate !== undefined ? { playbackRate: session.playbackRate } : {}),
         ...(session.volume !== undefined ? { volume: session.volume } : {}),
         ...(session.scrollTop !== undefined ? { scrollTop: session.scrollTop } : {}),

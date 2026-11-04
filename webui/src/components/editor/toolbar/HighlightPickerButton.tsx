@@ -6,16 +6,7 @@ import { getLastHighlightColor, setLastHighlightColor } from '../../../editorUti
 import { HighlightIcon } from '../../HighlightIcon';
 import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
 import { useAnchoredPanel } from './anchoredPanel';
-
-const HIGHLIGHT_COLORS = [
-  { label: 'Giallo', color: '#fef08a' },
-  { label: 'Verde', color: '#bbf7d0' },
-  { label: 'Azzurro', color: '#bae6fd' },
-  { label: 'Rosa', color: '#fecdd3' },
-  { label: 'Arancione', color: '#fed7aa' },
-  { label: 'Viola', color: '#e9d5ff' },
-  { label: 'Nessuno', color: '#ffffff' },
-];
+import { HIGHLIGHT_COLORS } from './formatOptions';
 
 export const HighlightPickerButton = ({ editor }: { editor: TiptapEditor }) => {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -63,7 +54,7 @@ export const HighlightPickerButton = ({ editor }: { editor: TiptapEditor }) => {
         <div
           ref={panelRef}
           className="color-picker-panel"
-          style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 9999 }}
+          style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 'var(--z-popover)' }}
         >
           <div className="color-row" style={{ flexWrap: 'wrap', gap: 5 }}>
             {HIGHLIGHT_COLORS.map(({ label, color }) => (
@@ -81,7 +72,7 @@ export const HighlightPickerButton = ({ editor }: { editor: TiptapEditor }) => {
                   setIsOpen(false);
                 }}
                 className={`color-swatch${currentColor === color ? ' is-selected' : ''}`}
-                style={{ background: color, border: color === '#ffffff' ? '1px solid #ccc' : undefined }}
+                style={{ background: color, border: color === '#ffffff' ? '1px solid var(--border-strong)' : undefined }}
                 title={label}
               />
             ))}
