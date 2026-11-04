@@ -12,12 +12,13 @@ const componentSources = readdirSync(new URL('./components', import.meta.url), {
   .filter(file => file.endsWith('.tsx') && !file.includes('.test.'))
   .map(file => ({ file, source: readFileSync(new URL(`./components/${file.replace(/\\/g, '/')}`, import.meta.url), 'utf8') }));
 
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const token = (block: string, name: string) => block.match(new RegExp(`${name}:\\s*([^;]+);`))?.[1].trim();
 const lightTheme = theme.slice(0, theme.indexOf(':root[data-theme="dark"]'));
 const darkTheme = theme.slice(theme.indexOf(':root[data-theme="dark"]'));
 // The first top-level rule for a selector; `indent` reaches one nested in a media query.
 const rule = (selector: string, indent = '') =>
-  index.match(new RegExp(`(?:^|\\n)${indent}${selector.replace(/[.[\]'=]/g, '\\$&')} \\{([^}]*)\\}`))?.[1];
+  index.match(new RegExp(`(?:^|\\n)${indent}${escapeRegExp(selector)} \\{([^}]*)\\}`))?.[1];
 
 // WCAG relative luminance contrast between two #rrggbb colours.
 const contrast = (a: string, b: string) => {
@@ -486,7 +487,7 @@ describe('app surfaces', () => {
     expect(['xs', 'sm', 'md', 'lg'].map(size => token(lightTheme, `--icon-button-${size}`))).toEqual(['28px', '32px', '36px', '42px']);
     expect(token(lightTheme, '--button-weight')).toBe('600');
     // Every top-level rule for a selector, since a class may be set in several places.
-    const rules = (selector: string) => [...index.matchAll(new RegExp(`(?:^|\\n)${selector.replace(/[.[\]'=]/g, '\\$&')} \\{([^}]*)\\}`, 'g'))]
+    const rules = (selector: string) => [...index.matchAll(new RegExp(`(?:^|\\n)${escapeRegExp(selector)} \\{([^}]*)\\}`, 'g'))]
       .map(([, body]) => body).join(';');
 
     for (const button of [

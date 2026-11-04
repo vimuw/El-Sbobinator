@@ -2,8 +2,9 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const index = readFileSync(new URL('./index.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const rule = (selector: string, css = index) =>
-  css.match(new RegExp(`(?:^|\\n)\\s*${selector.replace(/[.()>:]/g, '\\$&')} \\{([^}]*)\\}`))?.[1];
+  css.match(new RegExp(`(?:^|\\n)\\s*${escapeRegExp(selector)} \\{([^}]*)\\}`))?.[1];
 
 describe('editor audio dock width', () => {
   it('fills narrow windows but stops at a fixed width on large monitors', () => {
