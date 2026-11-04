@@ -21,8 +21,7 @@ interface WebStorageSnapshot {
 
 const snapshots = new WeakMap<object, WebStorageSnapshot>();
 
-export function webStorageSnapshot(): WebStorageSnapshot {
-  const api = window.pywebview?.api;
+function snapshotOf(api: object | undefined): WebStorageSnapshot {
   if (!api) return {};
   let snapshot = snapshots.get(api);
   if (!snapshot) {
@@ -32,8 +31,15 @@ export function webStorageSnapshot(): WebStorageSnapshot {
   return snapshot;
 }
 
+export function webStorageSnapshot(): WebStorageSnapshot {
+  return snapshotOf(window.pywebview?.api);
+}
+
+// Each read keeps its answer for the host it asked, taken before the await: by the time the answer
+// arrives the window may hold another host, or none (a page or test torn down meanwhile).
 export async function readBackupFigures(): Promise<WebBackupFigures | null> {
-  const result = await window.pywebview?.api?.get_web_backup_info?.().catch(() => null);
+  const api = window.pywebview?.api;
+  const result = await api?.get_web_backup_info?.().catch(() => null);
   if (!result?.ok) return null;
   const figures: WebBackupFigures = {
     sessions: result.sessions ?? 0,
@@ -42,21 +48,23 @@ export async function readBackupFigures(): Promise<WebBackupFigures | null> {
     audioFiles: result.audio_files ?? 0,
     lastBackupAt: result.last_backup_at ?? null,
   };
-  webStorageSnapshot().backup = figures;
+  snapshotOf(api).backup = figures;
   return figures;
 }
 
 export async function readTrash(): Promise<{ sessions: ArchiveSession[] } | { error: string }> {
-  const result = await window.pywebview?.api?.list_trash?.().catch(() => null);
+  const api = window.pywebview?.api;
+  const result = await api?.list_trash?.().catch(() => null);
   if (!result?.ok) return { error: result?.error ?? 'Cestino non leggibile.' };
   const sessions = result.sessions ?? [];
-  webStorageSnapshot().trash = sessions;
+  snapshotOf(api).trash = sessions;
   return { sessions };
 }
 
 export async function readDriveStatus(): Promise<DriveStatus | null> {
-  const status = await window.pywebview?.api?.get_drive_status?.().catch(() => null);
-  if (status) webStorageSnapshot().drive = status;
+  const api = window.pywebview?.api;
+  const status = await api?.get_drive_status?.().catch(() => null);
+  if (status) snapshotOf(api).drive = status;
   return status ?? null;
 }
 
