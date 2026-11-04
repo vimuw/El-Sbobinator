@@ -61,12 +61,18 @@ export function toWebIndexHtml(html: string, drive = false): string {
 
 /**
  * The web dev server keeps the permissive desktop policy (HMR needs inline scripts and websockets)
- * but must still reach Gemini, or every request fails as "Failed to fetch".
+ * but must still reach Gemini, or every request fails as "Failed to fetch", and play the audio the
+ * user picks, which the web build hands the player as a blob: URL. Without it the player never
+ * learns the duration and its ±10 s buttons move the thumb over an empty track.
  */
 export function toWebDevIndexHtml(html: string, drive = false): string {
   const connectPattern = /(connect-src\s[^;"]*)/i;
+  const mediaPattern = /(media-src\s[^;"]*)/i;
   if (!connectPattern.test(html)) throw new Error('index.html has no connect-src directive to extend.');
-  return html.replace(connectPattern, `$1 ${GEMINI_ORIGIN}${drive ? ` ${DRIVE_ORIGINS}` : ''}`);
+  if (!mediaPattern.test(html)) throw new Error('index.html has no media-src directive to extend.');
+  return html
+    .replace(connectPattern, `$1 ${GEMINI_ORIGIN}${drive ? ` ${DRIVE_ORIGINS}` : ''}`)
+    .replace(mediaPattern, '$1 blob:');
 }
 
 // Static pages of the site besides the app: webui/<name>.html, extra entries of the web build only

@@ -33,6 +33,10 @@ describe('web build page policy', () => {
     const connect = directive(csp.replace(/\s+/g, ' '), 'connect-src');
     expect(connect).toContain('https://generativelanguage.googleapis.com');
     expect(connect).toContain('ws://localhost:*');
+    // The picked audio plays from a blob: URL, as on the site; the desktop's local server stays.
+    const media = directive(csp.replace(/\s+/g, ' '), 'media-src');
+    expect(media).toBe('media-src http://127.0.0.1:* blob:');
+    expect(directive(WEB_CSP, 'media-src')).toBe("media-src 'self' blob:");
   });
 
   it('sends the same policy as a header, without cross-origin isolation', () => {
