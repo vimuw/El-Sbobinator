@@ -556,6 +556,25 @@ describe('app surfaces', () => {
     expect(offenders).toEqual([]);
   });
 
+  it('spaces the stop button as far from the queue as from the run details, its label centred', () => {
+    // It sat 24px under the run details and 44px over the queue (the hero's 12px plus the page's
+    // 32px gap): both are now the page's 32px.
+    const px = (value: string) => Number(value.match(/^(-?[\d.]+)rem$/)?.[1]) * 16;
+    const source = (name: string) => componentSources.find(({ file }) => file.endsWith(name))!.source;
+    const tailwindGap = (className: string) => Number(className.match(/\bgap-(\d+)\b/)?.[1]) * 4;
+    const stop = rule('.processing-stop-button')!;
+    // The group that holds the run details and, under them, the button.
+    const detailsGroup = source('ProcessingStatusBanner.tsx').match(/className="([^"]*\bgap-\d+[^"]*)">\s*\{metaItems\.length > 0 &&/)![1];
+    const above = tailwindGap(detailsGroup) + px(token(stop, 'margin-top')!);
+    const heroBottom = token(rule('.processing-hero')!, 'padding')!.split(/\s+/)[2];
+    const pageGap = tailwindGap(source('QueuePage.tsx').match(/'my-auto'\} ([^`]*\bgap-\d+[^`]*)`/)![1]);
+    const below = (heroBottom === '0' ? 0 : px(heroBottom)) + pageGap;
+    expect([above, below]).toEqual([32, 32]);
+    // Manrope's lowercase sits low in a centred line box: the label rides 1px above centre.
+    expect(token(stop, 'padding')).toBe('calc(0.375rem - 1px) 1.125rem calc(0.375rem + 1px)');
+    expect(token(theme, '--button-padding-lg')).toBe('0.375rem 1.125rem');
+  });
+
   it('shows keyboard focus with the one ring of theme.css, in both themes', () => {
     // Four focus styles had drifted apart: 3px halos in two greens (at 18-32% opacity, under 3:1
     // on every surface), 2px outlines in two other greens, red, amber and processing halos, and
