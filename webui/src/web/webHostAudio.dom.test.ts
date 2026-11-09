@@ -240,6 +240,33 @@ describe('audio kept in the browser by the web host', () => {
     expect(await (await media.forSession(old.session_dir))!.text()).toBe('altro');
   });
 
+  it('marks each sbobina in the archive with the size of the audio it keeps, as Archiviazione counts it', async () => {
+    const archive = createWebArchive(database);
+    const media = createWebMediaStore(database);
+    const kept = await archive.create({ name: 'Con audio', completed_at_iso: '2026-11-02T10:00:00Z', effective_model: 'gemini-2.5-flash', input_path: 'local://a/A.mp3' }, '<p>a</p>');
+    const plain = await archive.create({ name: 'Senza audio', completed_at_iso: '2026-11-03T10:00:00Z', effective_model: 'gemini-2.5-flash', input_path: 'local://b/B.mp3' }, '<p>b</p>');
+    const trashed = await archive.create({ name: 'Nel cestino', completed_at_iso: '2026-11-01T10:00:00Z', effective_model: 'gemini-2.5-flash', input_path: 'local://c/C.mp3' }, '<p>c</p>');
+    await media.save('a', lecture('A.mp3', 'audio a'));
+    await media.link('a', kept.session_dir);
+    await media.save('c', lecture('C.mp3', 'audio del cestino'));
+    await media.link('c', trashed.session_dir);
+    await archive.trash(trashed.session_dir, '2026-11-04T10:00:00Z');
+    // A queue copy belongs to no sbobina.
+    await media.save('q', lecture('Q.mp3', 'in coda'));
+
+    const { api } = host();
+    const sessions = (await api.get_completed_sessions!()).sessions!;
+    expect(sessions.map(session => [session.name, session.kept_audio_bytes])).toEqual([['Senza audio', undefined], ['Con audio', 7]]);
+    expect(await measureWebStorage(database)).toMatchObject({ audio: 7 });
+    // The size is read, never written into the sbobina.
+    expect(await archive.get(kept.session_dir)).not.toHaveProperty('kept_audio_bytes');
+    expect(plain.session_dir).toBe(sessions[0].session_dir);
+
+    // Audio that can't be read leaves the archive listed, unmarked.
+    const broken = host({ ...media, sizesBySession: vi.fn(async () => { throw new Error('letto male'); }) });
+    expect((await broken.api.get_completed_sessions!()).sessions!.map(session => session.kept_audio_bytes)).toEqual([undefined, undefined]);
+  });
+
   it('refuses an unsupported file for the editor', async () => {
     const { api, named } = host();
     pickNextFile(lecture('Lezione.wav'));

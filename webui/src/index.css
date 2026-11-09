@@ -1778,9 +1778,10 @@ button {
 /* ═══ STATUS BANNER ═══ */
 
 /* Processing hero: sits on the page, no card. Step title, a large figure, one segmented track. */
-/* The stop button sits close to the queue below, as the banner's own parts sit close to each other. */
+/* The hero ends on the stop button, so the page's 32px gap to the queue below matches the
+   button's 32px from the run details above. */
 .processing-hero {
-  padding: 2.5rem 0 0.75rem;
+  padding: 2.5rem 0 0;
 }
 
 .processing-hero-icon-wrap {
@@ -1869,14 +1870,16 @@ button {
 }
 
 /* Quiet: the run is the focus, stopping is one deliberate click away. The size of the queue's
-   start pill, set apart from the details above it. */
+   start pill, set apart from the details above it. Centring the line box leaves the lowercase
+   label (x-height, the descender of its p) about 1.5px low in Manrope, so its content sits 1px
+   higher. */
 .processing-stop-button {
   display: inline-flex;
   min-height: var(--control-height-lg);
   align-items: center;
   gap: 0.5rem;
-  margin-top: 0.5rem;
-  padding: var(--button-padding-lg);
+  margin-top: 1rem;
+  padding: calc(0.375rem - 1px) 1.125rem calc(0.375rem + 1px);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-pill);
   background: transparent;
@@ -4974,6 +4977,68 @@ input::-webkit-contacts-auto-fill-button {
   background: color-mix(in srgb, var(--folder-color, var(--accent-bg)) 12%, transparent);
   color: color-mix(in srgb, var(--folder-color, var(--accent-bg)) 75%, #000000);
   border: 1px solid color-mix(in srgb, var(--folder-color, var(--accent-bg)) 28%, transparent);
+}
+
+/* Web: the audio a sbobina keeps in this browser, at the card's right edge (SessionCard). Quiet,
+   like the meta line: it marks the card without competing with the name. */
+.kept-audio-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-default);
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  line-height: var(--leading-none);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.kept-audio-badge.is-icon {
+  width: 22px;
+  padding: 0;
+  justify-content: center;
+}
+
+/* Web: the archive filtered to the sbobine with kept audio, from "Vedi quali" in Archiviazione.
+   A pill over the list instead of a toolbar button: it exists only while the filter is on. */
+.kept-audio-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  height: 28px;
+  padding: 0 4px 0 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--accent-text);
+  background: var(--accent-subtle);
+  color: var(--accent-text);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.kept-audio-filter-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-pill);
+  color: inherit;
+  cursor: pointer;
+  transition: background var(--duration-state) var(--ease-out);
+}
+
+.kept-audio-filter-clear:hover {
+  background: color-mix(in srgb, var(--accent-text) 16%, transparent);
 }
 
 .folder-indicator-chip > span:last-child {

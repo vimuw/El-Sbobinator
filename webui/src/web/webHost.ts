@@ -107,7 +107,7 @@ function audioSupport(): string {
 function usageBreakdown(usage: WebStorageUsage): StorageUsagePart[] {
   return [
     { label: 'Testi delle sbobine', bytes: usage.documents },
-    { label: 'Audio delle sbobine', bytes: usage.audio },
+    { label: 'Audio delle sbobine', bytes: usage.audio, kind: 'session_audio' },
     ...(usage.queueAudio > 0 ? [{ label: 'Audio in coda', bytes: usage.queueAudio }] : []),
     ...(usage.trash > 0 ? [{ label: 'Sbobine nel cestino', bytes: usage.trash }] : []),
     { label: 'Avanzamento elaborazioni', bytes: usage.checkpoints },
@@ -728,9 +728,15 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
       }
     },
 
+    // Each sbobina carries the size of the audio it keeps, so the archive shows which ones make up
+    // "Audio delle sbobine" in Archiviazione. Audio that can't be read leaves the list unmarked.
     get_completed_sessions: async limit => {
       try {
-        const sessions = await archive.list();
+        const [listed, audioSizes] = await Promise.all([archive.list(), media.sizesBySession().catch(() => new Map<string, number>())]);
+        const sessions = listed.map(session => {
+          const bytes = audioSizes.get(session.session_dir);
+          return bytes ? { ...session, kept_audio_bytes: bytes } : session;
+        });
         return { ok: true, sessions: typeof limit === 'number' && limit > 0 ? sessions.slice(0, limit) : sessions, total: sessions.length };
       } catch (error) {
         return { ok: false, error: `Archivio del browser non leggibile: ${error instanceof Error ? error.message : String(error)}` };

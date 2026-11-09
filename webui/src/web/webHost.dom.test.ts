@@ -171,7 +171,7 @@ describe('web host', () => {
       usage_detail: 'Testi delle sbobine 0 KB · audio delle sbobine 0 KB · avanzamento elaborazioni 0 KB · stima del browser 4 KB', persisted: false,
       usage_breakdown: [
         { label: 'Testi delle sbobine', bytes: 0 },
-        { label: 'Audio delle sbobine', bytes: 0 },
+        { label: 'Audio delle sbobine', bytes: 0, kind: 'session_audio' },
         { label: 'Avanzamento elaborazioni', bytes: 0 },
       ],
       browser_estimate_bytes: 4096,

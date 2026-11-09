@@ -166,6 +166,9 @@ export interface ArchiveSession {
   input_identity?: FileIdentity;
   /** Web previews with the trash: when the sbobina was moved to the trash (gone for good 30 days later). */
   trashed_at?: string;
+  /** Web: bytes of the lecture audio kept in this browser for the sbobina, counted when the archive
+   *  is read and never stored; absent when it keeps none (and on desktop, whose audio stays on disk). */
+  kept_audio_bytes?: number;
 }
 
 export interface SearchSnippet {
@@ -217,6 +220,8 @@ export interface SaveHtmlResult {
 export interface StorageUsagePart {
   label: string;
   bytes: number;
+  /** Web: 'session_audio' marks the audio kept by the sbobine, which the archive can list. */
+  kind?: 'session_audio';
 }
 
 export interface DriveStatus {

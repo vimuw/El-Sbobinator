@@ -33,6 +33,8 @@ interface StorageSectionProps {
   drive?: 'unavailable' | 'disconnected' | 'connected';
   /** Web build: opens Impostazioni → Sincronizzazione from the warning. */
   onOpenDrive?: () => void;
+  /** Web build: "Vedi quali" on the sbobine's audio opens the archive on the sbobine that keep it. */
+  onShowKeptAudio?: () => void;
 }
 
 export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
@@ -51,8 +53,9 @@ export const StorageSection: React.FC<StorageSectionProps> = React.memo(({
   inBrowser = false,
   drive,
   onOpenDrive,
+  onShowKeptAudio,
 }) => {
-  if (inBrowser) return <WebSpacePanel sessionInfo={sessionInfo} isLoadingSessionInfo={isLoadingSessionInfo} drive={drive} onOpenDrive={onOpenDrive} />;
+  if (inBrowser) return <WebSpacePanel sessionInfo={sessionInfo} isLoadingSessionInfo={isLoadingSessionInfo} drive={drive} onOpenDrive={onOpenDrive} onShowKeptAudio={onShowKeptAudio} />;
   return (
     <div className="space-y-6">
       {/* 1. Posizione cartella e spazio occupato */}
@@ -230,7 +233,7 @@ StorageSection.displayName = 'StorageSection';
 // Web build: everything lives in this browser's storage, not in a folder on disk, and there is no
 // folder to open, move or clean. The count and the total come first, then what takes that space.
 // Drive keeps the texts but never the lecture audio (web/drive/syncFormat.ts), and the warning says so.
-function WebSpacePanel({ sessionInfo, isLoadingSessionInfo, drive = 'unavailable', onOpenDrive }: Pick<StorageSectionProps, 'sessionInfo' | 'isLoadingSessionInfo' | 'drive' | 'onOpenDrive'>) {
+function WebSpacePanel({ sessionInfo, isLoadingSessionInfo, drive = 'unavailable', onOpenDrive, onShowKeptAudio }: Pick<StorageSectionProps, 'sessionInfo' | 'isLoadingSessionInfo' | 'drive' | 'onOpenDrive' | 'onShowKeptAudio'>) {
   const ready = !isLoadingSessionInfo && sessionInfo;
   const onDrive = drive === 'connected';
   return (
@@ -251,7 +254,7 @@ function WebSpacePanel({ sessionInfo, isLoadingSessionInfo, drive = 'unavailable
             : <StatusBadge tone="warning"><AlertTriangle className="w-3 h-3" aria-hidden="true" />Non protette</StatusBadge>
           : undefined}
     >
-      {ready ? <WebUsageSummary info={sessionInfo} /> : (
+      {ready ? <WebUsageSummary info={sessionInfo} onShowKeptAudio={onShowKeptAudio} /> : (
         <p data-testid="storage-usage" className="text-xs text-[var(--text-secondary)]">
           {isLoadingSessionInfo ? 'Calcolo dello spazio occupato…' : 'Spazio occupato non disponibile.'}
         </p>
@@ -311,7 +314,7 @@ type WebSessionInfo = NonNullable<StorageSectionProps['sessionInfo']>;
 const PART_COLORS = ['var(--storage-part-1)', 'var(--storage-part-2)', 'var(--storage-part-3)', 'var(--storage-part-4)', 'var(--storage-part-5)'];
 const partColor = (index: number) => PART_COLORS[index % PART_COLORS.length];
 
-function WebUsageSummary({ info }: { info: WebSessionInfo }) {
+function WebUsageSummary({ info, onShowKeptAudio }: { info: WebSessionInfo; onShowKeptAudio?: () => void }) {
   const parts = info.usage_breakdown ?? [];
   const used = parts.reduce((sum, part) => sum + part.bytes, 0);
   return (
@@ -338,6 +341,9 @@ function WebUsageSummary({ info }: { info: WebSessionInfo }) {
               <span className="flex items-center gap-2 text-[var(--text-secondary)] min-w-0">
                 <span aria-hidden="true" className="w-2 h-2 rounded-full shrink-0" style={{ background: partColor(index) }} />
                 {part.label}
+                {part.kind === 'session_audio' && part.bytes > 0 && onShowKeptAudio && (
+                  <button type="button" onClick={onShowKeptAudio} className="settings-inline-link shrink-0">Vedi quali</button>
+                )}
               </span>
               <span className="font-semibold text-[var(--text-primary)] tabular-nums shrink-0">{formatSize(part.bytes)}</span>
             </li>

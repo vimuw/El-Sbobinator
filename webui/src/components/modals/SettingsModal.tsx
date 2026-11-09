@@ -64,6 +64,8 @@ export interface SettingsStorageProps {
   onArchiveImported?: () => void;
   /** Web build: grows each time a Drive sync changes the archive; an open Archiviazione re-reads the space. */
   archiveRevision?: number;
+  /** Web build: "Vedi quali" on the sbobine's audio: the archive, filtered to the sbobine that keep it. */
+  onShowKeptAudio?: () => void;
 }
 
 export interface SettingsModalProps {
@@ -785,6 +787,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           sessionInfo={sessionInfo}
                           isLoadingSessionInfo={isLoadingSessionInfo}
                           onOpenDrive={hasDriveTab ? () => handleTabChange('drive') : undefined}
+                          onShowKeptAudio={storage?.onShowKeptAudio}
                           onArchiveChanged={() => {
                             storage?.onArchiveImported?.();
                             fetchSessionStorageInfo();

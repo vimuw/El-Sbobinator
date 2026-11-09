@@ -23,6 +23,8 @@ export interface WebMediaStore {
   get(id: string): Promise<File | null>;
   has(id: string): Promise<boolean>;
   forSession(sessionDir: string): Promise<File | null>;
+  /** Bytes of audio kept per sbobina, for the records linked to one (queue copies are left out). */
+  sizesBySession(): Promise<Map<string, number>>;
   /** Makes id the audio of sessionDir (replacing any other); false when id is not stored. */
   link(id: string, sessionDir: string): Promise<boolean>;
   /** Removes the audio of sessionDir. */
@@ -80,6 +82,18 @@ export function createWebMediaStore(factory: IDBFactory | undefined = globalThis
     async forSession(sessionDir) {
       const records = await inTransaction(factory, MEDIA, 'readonly', transaction => sessionRecords(transaction, sessionDir));
       return records.length ? asFile(records[0]) : null;
+    },
+
+    async sizesBySession() {
+      // The index holds only the records that carry a sessionDir: queue copies are never read.
+      const records = await inTransaction(factory, MEDIA, 'readonly', transaction =>
+        requestValue(transaction.objectStore(MEDIA).index(MEDIA_BY_SESSION).getAll() as IDBRequest<StoredMedia[]>));
+      const sizes = new Map<string, number>();
+      for (const record of records) {
+        if (!record.sessionDir) continue;
+        sizes.set(record.sessionDir, (sizes.get(record.sessionDir) ?? 0) + (record.blob?.size ?? record.size ?? 0));
+      }
+      return sizes;
     },
 
     async link(id, sessionDir) {

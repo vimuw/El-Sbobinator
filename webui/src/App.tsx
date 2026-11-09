@@ -96,6 +96,8 @@ export default function App() {
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab | undefined>();
+  // "Vedi quali" in Archiviazione: the archive opens filtered to the sbobine that keep their audio.
+  const [showKeptAudioRequest, setShowKeptAudioRequest] = useState(false);
   // Counts the archive changes a Drive sync brought in: an open Archiviazione re-reads its figures.
   const [archiveRevision, setArchiveRevision] = useState(0);
   const [isConsoleExpanded, setIsConsoleExpanded] = useState(false);
@@ -549,6 +551,14 @@ export default function App() {
     setIsSettingsOpen(true);
   }, [setIsSettingsOpen]);
 
+  const handleShowKeptAudio = useCallback(() => {
+    setIsSettingsOpen(false);
+    setSettingsInitialTab(undefined);
+    setActivePage('archive');
+    setShowKeptAudioRequest(true);
+  }, [setIsSettingsOpen]);
+  const handleShowKeptAudioHandled = useCallback(() => setShowKeptAudioRequest(false), []);
+
   // Removing from Recenti keeps the sbobina in the Archivio, so it needs no confirmation.
   const handleRemoveDoneFile = useCallback((id: string) => {
     const f = filesRef.current.find(item => item.id === id);
@@ -678,6 +688,8 @@ export default function App() {
                   onLoadAll={handleLoadAll}
                   onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
                   onNotification={addNotification}
+                  showKeptAudioRequest={showKeptAudioRequest}
+                  onShowKeptAudioHandled={handleShowKeptAudioHandled}
                 />
               </React.Suspense>
             </div>
@@ -771,6 +783,7 @@ export default function App() {
               onSessionRootMoved: handleSessionRootMoved,
               onArchiveImported: () => void handleSessionRootMoved(),
               archiveRevision,
+              onShowKeptAudio: handleShowKeptAudio,
             }}
           />
         </React.Suspense>

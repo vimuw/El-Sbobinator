@@ -50,6 +50,29 @@ describe('StorageSection component', () => {
     expect(screen.queryByRole('button', { name: 'Pulisci elaborazioni incomplete' })).toBeNull();
   });
 
+  it('web: links the audio of the sbobine to the archive of the sbobine that keep it, only while there is some', () => {
+    const onShowKeptAudio = vi.fn();
+    const breakdown = (audio: number) => ({
+      ...baseProps.sessionInfo,
+      usage_breakdown: [
+        { label: 'Testi delle sbobine', bytes: 1048576 },
+        { label: 'Audio delle sbobine', bytes: audio, kind: 'session_audio' as const },
+        { label: 'Audio in coda', bytes: 2048 },
+      ],
+    });
+    const { rerender } = render(<StorageSection {...baseProps} canManageSessionFolder={false} inBrowser sessionInfo={breakdown(400 * 1024 * 1024)} onShowKeptAudio={onShowKeptAudio} />);
+    const link = screen.getByRole('button', { name: 'Vedi quali' });
+    expect(link.closest('li')?.textContent).toContain('Audio delle sbobine');
+    expect(screen.getAllByRole('button', { name: 'Vedi quali' })).toHaveLength(1);
+    fireEvent.click(link);
+    expect(onShowKeptAudio).toHaveBeenCalledTimes(1);
+
+    rerender(<StorageSection {...baseProps} canManageSessionFolder={false} inBrowser sessionInfo={breakdown(0)} onShowKeptAudio={onShowKeptAudio} />);
+    expect(screen.queryByRole('button', { name: 'Vedi quali' })).toBeNull();
+    rerender(<StorageSection {...baseProps} canManageSessionFolder={false} inBrowser sessionInfo={breakdown(4096)} />);
+    expect(screen.queryByRole('button', { name: 'Vedi quali' })).toBeNull();
+  });
+
   it('web: puts the count and the total first, then what takes the space', () => {
     const sessionInfo = {
       ...baseProps.sessionInfo,
