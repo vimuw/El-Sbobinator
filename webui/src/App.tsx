@@ -294,7 +294,14 @@ export default function App() {
     refreshArchiveSessions,
   });
 
-  const { preview, openPreview, closePreview, markChangedElsewhere, relinkPreviewAudio, removePreviewAudio, setPreviewAudioKept, handleAudioStateChange, handleScrollTopChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed, onArchiveRefresh: refreshArchiveSessions });
+  const { preview, openPreview, closePreview, markChangedElsewhere, setPreviewTitle, relinkPreviewAudio, removePreviewAudio, setPreviewAudioKept, handleAudioStateChange, handleScrollTopChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed, onArchiveRefresh: refreshArchiveSessions });
+
+  // The editor's title renames the sbobina like "Rinomina" in the archive (only the title changes).
+  const renamePreview = useCallback(async (name: string) => {
+    const sessionDir = preview.sessionDir;
+    const title = await handleRenameSession(sessionDir, name);
+    setPreviewTitle(sessionDir, title);
+  }, [handleRenameSession, preview.sessionDir, setPreviewTitle]);
 
   // Web: the screen lives in the URL, so Back/Forward and a reload keep it (editor included).
   const openEditorForSession = useCallback(async (sessionDir: string) => {
@@ -789,6 +796,7 @@ export default function App() {
               initScrollTop: preview.initScrollTop,
               initialSearchTerm: preview.initialSearchTerm,
               changedElsewhere: preview.changedElsewhere,
+              onRename: preview.sessionDir ? renamePreview : undefined,
             }}
             audio={{
               src: preview.audioSrc,

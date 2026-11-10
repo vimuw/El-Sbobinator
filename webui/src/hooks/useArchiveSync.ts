@@ -111,6 +111,7 @@ export function useArchiveSync({
     setArchiveSessions(prev => prev.map(session => normalizeSessionDir(session.session_dir) === key ? { ...session, name: title } : session));
     prevSessionDirsRef.current.set(key, title);
     dispatch({ type: 'queue/rename_session', sessionDir, title });
+    return title;
   }, [dispatch, normalizeSessionDir]);
 
   const handleLoadAll = useCallback(() => {

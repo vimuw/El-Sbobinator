@@ -6,7 +6,7 @@ import { modalCard } from '../../motion';
 
 export function RenameSessionModal({ session, onSave, onClose }: {
   session: ArchiveSession;
-  onSave: (sessionDir: string, name: string) => Promise<void>;
+  onSave: (sessionDir: string, name: string) => Promise<unknown>;
   onClose: () => void;
 }) {
   const [name, setName] = useState(session.name);

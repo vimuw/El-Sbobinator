@@ -4582,6 +4582,61 @@ input::-webkit-contacts-auto-fill-button {
   margin-left: auto;
 }
 
+/* As in Google Docs, the title is the name field: a click edits it in place. Button and field share
+   their box, so the text keeps its place when the field opens. */
+.editor-fullpage-title-button,
+.editor-fullpage-title-input,
+.editor-fullpage-title-field::after {
+  min-width: 0;
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  font: inherit;
+  color: inherit;
+}
+
+.editor-fullpage-title-button {
+  flex: 0 1 auto;
+  margin-left: -4px;
+  background: transparent;
+  text-align: left;
+  cursor: text;
+  transition: border-color var(--duration-state) var(--ease-out);
+}
+
+.editor-fullpage-title-button:hover {
+  border-color: var(--border-default);
+}
+
+/* The field is as wide as the name, as the button was, and grows with the typing up to 480px:
+   a hidden copy of the name (plus a space for the caret) sizes the cell the field fills.
+   A narrow header shortens it and the name scrolls inside. */
+.editor-fullpage-title-field {
+  display: inline-grid;
+  grid-template-columns: minmax(0, max-content);
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 480px;
+  margin-left: -4px;
+}
+
+.editor-fullpage-title-field::after {
+  content: attr(data-value) ' ';
+  grid-area: 1 / 1;
+  overflow: hidden;
+  white-space: pre;
+  visibility: hidden;
+}
+
+/* Focus shows with the shared :focus-visible ring. */
+.editor-fullpage-title-input {
+  grid-area: 1 / 1;
+  width: 100%;
+  background: var(--bg-input);
+  border-color: var(--border-default);
+}
+
 .editor-shortcuts-dialog {
   width: min(820px, calc(100vw - 32px));
   max-height: min(720px, 80dvh);
