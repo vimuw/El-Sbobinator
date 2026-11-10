@@ -527,7 +527,8 @@ export function ArchivePage({
             </div>
             <button
               type="button"
-              onClick={() => { setFullTextMode(m => !m); setSearch(''); setAudioOnly(false); }}
+              // The typed text stays: switching mode searches the same words by name or in the content.
+              onClick={() => { setFullTextMode(m => !m); setAudioOnly(false); }}
               className="filter-chip w-9 p-0 flex items-center justify-center group/ft"
               style={fullTextMode ? { color: 'var(--accent-text)', borderColor: 'var(--accent-text)', background: 'var(--accent-subtle)' } : undefined}
               title={fullTextMode ? 'Testo completo (Attivo - Clicca per disattivare)' : 'Testo completo (Ricerca nel contenuto)'}

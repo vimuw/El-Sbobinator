@@ -660,6 +660,30 @@ describe('ArchivePage', () => {
     expect(await screen.findByText('Più occorrenze')).toBeTruthy();
   });
 
+  it('keeps the typed search when switching to full text and back', async () => {
+    const mockSearchSessions = vi.fn().mockResolvedValue({ ok: true, results: [], total: 0 });
+    (window as unknown as { pywebview: { api: { search_sessions: unknown } } }).pywebview = {
+      api: { search_sessions: mockSearchSessions },
+    };
+
+    renderArchive({ sessions: [makeSession('s1', 'Istologia 1')] });
+
+    act(() => {
+      fireEvent.change(screen.getByPlaceholderText('Cerca per nome...'), { target: { value: 'epitelio' } });
+    });
+    act(() => {
+      fireEvent.click(screen.getByTitle('Testo completo (Ricerca nel contenuto)'));
+    });
+
+    expect((screen.getByPlaceholderText('Cerca nel contenuto...') as HTMLInputElement).value).toBe('epitelio');
+    await waitFor(() => expect(mockSearchSessions).toHaveBeenCalledWith('epitelio', 100));
+
+    act(() => {
+      fireEvent.click(screen.getByTitle('Testo completo (Attivo - Clicca per disattivare)'));
+    });
+    expect((screen.getByPlaceholderText('Cerca per nome...') as HTMLInputElement).value).toBe('epitelio');
+  });
+
   it('calls onNotification when importing sbobina package fails with error', async () => {
     const onNotification = vi.fn();
     (window as unknown as { pywebview: { api: { import_sbobina_package: unknown } } }).pywebview = {
