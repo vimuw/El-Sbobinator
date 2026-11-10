@@ -1,7 +1,9 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DRIVE_EXPIRED_ERROR } from '../bridge';
 import { DRIVE_WAITING_FOR_RUN } from '../hooks/useDriveStatus';
+import { DriveAuthError } from '../web/drive/auth';
 import { STORAGE_KEYS } from '../storageKeys';
 import { createDriveApi } from '../web/drive/driveApi';
 import { createFakeAuth, createFakeDrive, type FakeDrive } from '../web/drive/fakeDrive';
@@ -110,6 +112,33 @@ describe('SidebarAccount', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Riconnetti' }));
     expect(login.calls).toEqual(['link']);
     await screen.findByRole('button', { name: 'Sincronizza ora' });
+  });
+
+  it('a "Riconnetti" that fails says why in the menu, still to reconnect', async () => {
+    const drive = createFakeDrive();
+    const { login } = setup(drive, { email: 'studente@example.com' });
+    // The server could not trade Google's code (a wrong client secret, say).
+    login.failures.push(new DriveAuthError('login_failed'));
+    render(<SidebarAccount onOpenStorageSettings={() => {}} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Account Google: studente@example.com (Da riconnettere)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Riconnetti' }));
+
+    const menu = screen.getByRole('dialog', { name: 'Account Google Drive' });
+    expect((await within(menu).findByRole('alert')).textContent).toBe('Accesso a Google non riuscito: riprova.');
+    expect(menu.textContent).toContain('L’accesso è scaduto');
+    expect(within(menu).getByRole('button', { name: 'Riconnetti' })).toBeTruthy();
+  });
+
+  it('to reconnect after a 401, the menu does not repeat "scaduto" as an error', async () => {
+    window.pywebview = { api: { get_drive_status: async () => ({
+      available: true, connected: true, email: 'studente@example.com', needs_reconnect: true, syncing: false,
+      last_sync_at: null, error: DRIVE_EXPIRED_ERROR,
+    }) } };
+    render(<SidebarAccount onOpenStorageSettings={() => {}} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Account Google: studente@example.com (Da riconnettere)' }));
+    const menu = screen.getByRole('dialog', { name: 'Account Google Drive' });
+    expect(menu.textContent).toContain('L’accesso è scaduto');
+    expect(within(menu).queryByRole('alert')).toBeNull();
   });
 
   it('"Sincronizza ora" during an elaborazione says it waits for its end', async () => {

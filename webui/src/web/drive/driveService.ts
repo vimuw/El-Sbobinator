@@ -1,4 +1,4 @@
-import type { DriveExportResult, DriveStatus } from '../../bridge';
+import { DRIVE_EXPIRED_ERROR, type DriveExportResult, type DriveStatus } from '../../bridge';
 import type { WebArchive } from '../webSessions';
 import { DriveAuthError, type DriveAuth } from './auth';
 import { DriveError, type DriveApi } from './driveApi';
@@ -61,7 +61,7 @@ export function describeDriveError(error: unknown): string {
     return error.needsInteractiveLogin ? 'Google chiede di confermare l’accesso: tocca di nuovo il pulsante per scegliere l’account.' : error.message;
   }
   if (error instanceof DriveError) {
-    if (error.needsAuthorization) return 'Accesso a Google Drive scaduto: tocca per riconnettere.';
+    if (error.needsAuthorization) return DRIVE_EXPIRED_ERROR;
     if (error.offline) return 'Google Drive non raggiungibile: le modifiche partiranno quando torna la connessione.';
     if (error.reason === 'storageQuotaExceeded') return 'Spazio su Google Drive esaurito: le sbobine restano comunque in questo browser.';
     return error.message;

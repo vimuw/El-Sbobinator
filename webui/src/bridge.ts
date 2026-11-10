@@ -239,6 +239,9 @@ export interface DriveStatus {
   error: string | null;
 }
 
+/** DriveStatus.error for a login Drive refused (401): what needs_reconnect already says, in other words. */
+export const DRIVE_EXPIRED_ERROR = 'Accesso a Google Drive scaduto: tocca per riconnettere.';
+
 /** Outcome of "Esporta tutte le sbobine nel mio Drive". */
 export interface DriveExportResult {
   ok: boolean;

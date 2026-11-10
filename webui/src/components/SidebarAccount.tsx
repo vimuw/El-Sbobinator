@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { ChevronRight, Cloud, EyeOff, Loader2, LogOut, MonitorSmartphone, RefreshCw, Settings, ShieldCheck, UserRound } from 'lucide-react';
+import { DRIVE_EXPIRED_ERROR } from '../bridge';
 import { DRIVE_HEALTH_LABEL, DRIVE_WAITING_FOR_RUN, driveHealth, formatLastSync, useDriveStatus, type DriveHealth } from '../hooks/useDriveStatus';
 import { usePhoneLayout } from '../hooks/usePhoneLayout';
 import { popoverVariants } from '../motion';
@@ -167,7 +168,9 @@ export function SidebarAccount({ onOpenStorageSettings }: SidebarAccountProps) {
                       </p>
                     </div>
                   </div>
-                  {status?.error && health !== 'reconnect' && (
+                  {/* To reconnect, the 401's "scaduto" repeats the line above; any other error (a
+                      "Riconnetti" that failed) says why the tap did not work. */}
+                  {status?.error && !(health === 'reconnect' && status.error === DRIVE_EXPIRED_ERROR) && (
                     <p role="alert" className="text-xs text-[var(--error-text)]">{status.error}</p>
                   )}
                   {withSettings(health === 'reconnect' ? (
