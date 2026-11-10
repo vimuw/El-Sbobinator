@@ -315,15 +315,22 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
     });
   };
   const storedInBrowser = async (id: string) => (await pendingSaves.get(id)) ?? media.has(id).catch(() => false);
-  // The file behind a local:// path: in this page, or copied in IndexedDB before a reload.
+  // The file behind a local:// path. The copy in IndexedDB comes first: the File picked in
+  // this page only points to the file on disk, and the browser can no longer read it once the user
+  // moves, renames or edits the original (NotFoundError). The picked File is the fallback for a copy
+  // that could not be saved, and serves while the copy is still being written: a lecture weighs
+  // hundreds of MB and the run must not wait for it. The page keeps its File for the editor's player:
+  // the copy goes when the sbobina is archived.
   const resolveFile = async (path: string): Promise<File | undefined> => {
-    const inPage = getWebFile(path);
-    if (inPage) return inPage;
     const id = webFileId(path);
-    const stored = id ? await media.get(id).catch(() => null) : null;
-    if (!stored) return undefined;
-    restoreWebFile(path, stored);
-    return stored;
+    const inPage = getWebFile(path);
+    const useStored = id && (!inPage || (!pendingSaves.has(id) && await media.has(id).catch(() => false)));
+    const stored = useStored ? await media.get(id).catch(() => null) : null;
+    if (stored) {
+      if (!inPage) restoreWebFile(path, stored);
+      return stored;
+    }
+    return inPage;
   };
   // Copies the queue no longer lists go; copies linked to a sbobina stay with it.
   const pruneMedia = () => {

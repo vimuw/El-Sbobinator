@@ -39,12 +39,12 @@ const noSleep = async (_secs: number, signal: AbortSignal) => {
 let database: IDBFactory;
 let urls: Map<string, Blob>;
 
-function host(media?: WebMediaStore) {
+function host(media?: WebMediaStore, createAudio: (file: Blob) => AudioSource & { dispose(): void } = fakeAudio) {
   const events: Array<{ name: BridgeEventName; payload: unknown }> = [];
   const api = createWebPywebviewApi((name, payload) => { events.push({ name, payload }); }, {
     database,
     media,
-    createAudio: fakeAudio,
+    createAudio,
     createPage: page,
     sleep: noSleep,
   });
@@ -66,6 +66,15 @@ function pickNextFile(file: File) {
 }
 
 const lecture = (name = 'Fisiologia.mp3', text = 'audio della lezione') => new File([text], name, { type: '' });
+
+/** A media store that tells when the first copy is written and the host has seen it. */
+function watchedSave() {
+  const stored = createWebMediaStore(database);
+  let done!: () => void;
+  const written = new Promise<void>(resolve => { done = resolve; });
+  const media: WebMediaStore = { ...stored, save: async (id, file, now) => { await stored.save(id, file, now); done(); } };
+  return { media, saved: written.then(() => new Promise(resolve => setTimeout(resolve))) };
+}
 
 beforeEach(() => {
   // fake-indexeddb clones with Node's structuredClone, which keeps Node files but not jsdom's.
@@ -104,6 +113,49 @@ describe('audio kept in the browser by the web host', () => {
     expect(await second.api.start_processing!([queued], KEY, true, 'gemini-2.5-flash')).toEqual({ ok: true });
     await second.finished();
     expect(second.named('fileDone')).toHaveLength(1);
+  });
+
+  it('runs from the copy in this browser, so moving the original file on disk does not stop it', async () => {
+    mockGemini();
+    let read: Blob | undefined;
+    const { media, saved } = watchedSave();
+    const { api, finished, named } = host(media, file => { read = file; return fakeAudio(); });
+    const picked = lecture();
+    const [queued] = await api.upload_browser_files!([picked]);
+    await saved;
+    // What the browser does once the picked file is moved or renamed: every read fails.
+    const gone = () => { throw new DOMException('A requested file or directory could not be found', 'NotFoundError'); };
+    Object.assign(picked, { slice: gone, arrayBuffer: gone, text: gone, stream: gone });
+
+    expect(await api.start_processing!([queued], KEY, true, 'gemini-2.5-flash')).toEqual({ ok: true });
+    await finished();
+    expect(named('fileFailed')).toEqual([]);
+    expect(named('fileDone')).toHaveLength(1);
+    expect(read).not.toBe(picked);
+    expect(await read!.text()).toBe('audio della lezione');
+  });
+
+  it('starts a large file right away from the one picked while its copy is still being written', async () => {
+    mockGemini();
+    let release!: () => void;
+    const writing = new Promise<void>(resolve => { release = resolve; });
+    const stored = createWebMediaStore(database);
+    const slow: WebMediaStore = { ...stored, save: async (id, file, now) => { await writing; await stored.save(id, file, now); } };
+    let read: Blob | undefined;
+    const { api, finished, named } = host(slow, file => { read = file; return fakeAudio(); });
+    const picked = lecture();
+    const [queued] = await api.upload_browser_files!([picked]);
+
+    const started = await Promise.race([
+      api.start_processing!([queued], KEY, true, 'gemini-2.5-flash'),
+      new Promise(resolve => setTimeout(() => resolve('in attesa della copia'), 200)),
+    ]);
+    expect(started).toEqual({ ok: true });
+    // Archiving the sbobina waits for the copy, to remove it afterwards.
+    release();
+    await finished();
+    expect(named('fileDone')).toHaveLength(1);
+    expect(read).toBe(picked);
   });
 
   it('drops the temporary copy when the sbobina is done: the editor plays the file in this page, after a reload it asks for it', async () => {
