@@ -1,6 +1,6 @@
 import { type Dispatch, useEffect, useLayoutEffect, useRef } from 'react';
 import type React from 'react';
-import { createBridge, type ElSbobinatorBridge, type UpdateDownloadProgressPayload } from '../bridge';
+import { createBridge, type ElSbobinatorBridge, type PreferredModelChangedPayload, type UpdateDownloadProgressPayload } from '../bridge';
 import type { AppStatus, FileDescriptor, FileDonePayload, FileItem, ProcessDonePayload, ProcessingAction } from '../appState';
 import { getHostCapabilities } from '../hostCapabilities';
 import { errorLabel, isPausedError, shortModelName } from '../utils';
@@ -46,6 +46,8 @@ export function useBridgeCallbacks(options: {
   onArchiveChangedRemotely?: () => void;
   onDocumentChangedElsewhere?: (data: { session_dir: string }) => void;
   onDriveNeedsReconnect?: () => void;
+  // Web: a run saved another model because the main key lacks the chosen one.
+  onPreferredModelChanged?: (data: PreferredModelChangedPayload) => void;
 }) {
   const {
     dispatch,
@@ -78,6 +80,7 @@ export function useBridgeCallbacks(options: {
   const onArchiveChangedRemotelyRef = useRef(options.onArchiveChangedRemotely);
   const onDocumentChangedElsewhereRef = useRef(options.onDocumentChangedElsewhere);
   const onDriveNeedsReconnectRef = useRef(options.onDriveNeedsReconnect);
+  const onPreferredModelChangedRef = useRef(options.onPreferredModelChanged);
 
   useLayoutEffect(() => {
     dispatchRef.current = dispatch;
@@ -97,6 +100,7 @@ export function useBridgeCallbacks(options: {
     onArchiveChangedRemotelyRef.current = options.onArchiveChangedRemotely;
     onDocumentChangedElsewhereRef.current = options.onDocumentChangedElsewhere;
     onDriveNeedsReconnectRef.current = options.onDriveNeedsReconnect;
+    onPreferredModelChangedRef.current = options.onPreferredModelChanged;
   });
 
   useEffect(() => {
@@ -107,6 +111,7 @@ export function useBridgeCallbacks(options: {
       onArchiveChangedRemotely: () => { onArchiveChangedRemotelyRef.current?.(); },
       onDocumentChangedElsewhere: data => { onDocumentChangedElsewhereRef.current?.(data); },
       onDriveNeedsReconnect: () => { onDriveNeedsReconnectRef.current?.(); },
+      onPreferredModelChanged: data => { onPreferredModelChangedRef.current?.(data); },
       onRegenerate: data => {
         setRegeneratePromptRef.current(data);
         if (!document.hasFocus()) {

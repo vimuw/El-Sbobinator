@@ -304,6 +304,13 @@ export interface BridgeCallbacks {
   documentChangedElsewhere?: (data: { session_dir: string }) => void;
   /** A sync found the Drive login expired. */
   driveNeedsReconnect?: () => void;
+  /** Web: the main key lacks the saved model, so the run saved the one it moved to instead. */
+  preferredModelChanged?: (data: PreferredModelChangedPayload) => void;
+}
+
+export interface PreferredModelChangedPayload {
+  from: string;
+  to: string;
 }
 
 export interface PywebviewApi {
@@ -476,6 +483,7 @@ export function createBridge(options: {
   onArchiveChangedRemotely?: () => void;
   onDocumentChangedElsewhere?: (data: { session_dir: string }) => void;
   onDriveNeedsReconnect?: () => void;
+  onPreferredModelChanged?: (data: PreferredModelChangedPayload) => void;
 }): BridgeCallbacks {
   const {
     dispatch,
@@ -495,6 +503,7 @@ export function createBridge(options: {
     onArchiveChangedRemotely,
     onDocumentChangedElsewhere,
     onDriveNeedsReconnect,
+    onPreferredModelChanged,
   } = options;
   let lastPhaseMessage = '';
 
@@ -538,5 +547,6 @@ export function createBridge(options: {
     archiveChangedRemotely: () => { onArchiveChangedRemotely?.(); },
     documentChangedElsewhere: data => { onDocumentChangedElsewhere?.(data); },
     driveNeedsReconnect: () => { onDriveNeedsReconnect?.(); },
+    preferredModelChanged: data => { onPreferredModelChanged?.(data); },
   };
 }

@@ -1,5 +1,7 @@
 import type { FileDescriptor, FileFailedPayload } from '../appState';
 import type { ArchiveSession } from '../bridge';
+import { profileModel, sanitizeModelName } from '../generationProfile';
+import { INVALID_KEY_MESSAGE, modelUnavailableMessage } from '../keyProblemMessages';
 import { phaseText } from '../phaseLabels';
 import type { EmitBridgeEvent } from './fakePipeline';
 import { createScreenWakeLock, type ScreenWakeLock } from './pageLifecycle';
@@ -47,6 +49,14 @@ export interface WebRunOptions {
   askNewKey: () => Promise<string | null | 'timeout'>;
   saveArchive: (session: Omit<ArchiveSession, 'session_dir' | 'html_path'>, body: string) => Promise<ArchiveSession>;
   archiveExists: (sessionDir: string) => Promise<boolean>;
+  /** Models the main key is known not to have on this device. */
+  unavailableModels?: string[];
+  /**
+   * The main key answered "model not found": remember it so later runs skip that model.
+   * `replacement` is the model this run moved to, or null when the chosen model stays (the 404 came
+   * from the model a busy first block had switched to).
+   */
+  onModelUnavailable?: (model: string, replacement: string | null) => void;
   sleep?: PipelineEnv['sleep'];
   now?: () => number;
   wakeLock?: ScreenWakeLock;
@@ -84,7 +94,13 @@ export function bridgeReporter(emit: EmitBridgeEvent): PipelineReporter {
 const detail = (error: unknown) => (error instanceof Error ? `${error.name}: ${error.message}` : String(error)).replace(/\s+/g, ' ').slice(0, 400);
 
 /** The fileFailed payload the desktop would send for this error (keys known to utils.errorLabel). */
-export function failurePayload(error: unknown, state: SessionState | null, base: { index: number; id: string }, now = Date.now()): FileFailedPayload {
+export function failurePayload(
+  error: unknown,
+  state: SessionState | null,
+  base: { index: number; id: string },
+  now = Date.now(),
+  missingModels: readonly string[] = [],
+): FileFailedPayload {
   const stage = state?.stage ?? 'phase1';
   const chunk = (state?.chunkTexts.length ?? 0) + 1;
   if (error instanceof QuotaDailyLimitError) {
@@ -95,9 +111,12 @@ export function failurePayload(error: unknown, state: SessionState | null, base:
     };
   }
   if (error instanceof InvalidKeyError) {
-    return { ...base, error: 'Chiave API non valida: controlla di averla copiata per intero da Google AI Studio (Impostazioni → Chiave API).' };
+    return { ...base, error: INVALID_KEY_MESSAGE };
   }
-  if (error instanceof ModelNotFoundError) return { ...base, error: 'Modello non disponibile per questa chiave: scegline un altro nelle impostazioni.' };
+  // Names only the models this run tried and found missing (the automatic switch: webRun.fallbackModel).
+  if (error instanceof ModelNotFoundError) {
+    return { ...base, error: modelUnavailableMessage(missingModels.map(modelLabel)) };
+  }
   if (error instanceof DegenerateOutputError) return { ...base, error: 'phase1_degenerate_output', error_detail: detail(error) };
   if (error instanceof FileMismatchError) return { ...base, error: error.message };
   if (isLostFileError(error)) return { ...base, error: LOST_FILE_MESSAGE };
@@ -119,6 +138,42 @@ export function failurePayload(error: unknown, state: SessionState | null, base:
   return { ...base, error: 'processing_failed', error_detail: detail(error) };
 }
 
+// The most reliable model (fewest 503s) and the one to use instead: a session switches between them
+// only before its first block is done, so a sbobina is always written by a single model.
+export const RELIABLE_MODEL = 'gemini-2.5-flash';
+export const ALTERNATE_MODEL = 'gemini-3.6-flash';
+export const MODEL_SWITCH_WARNING_CODE = 'web_model_switched';
+
+// The models a run may move to, in order: 2.5 and 3.6 Flash replace each other, any other model
+// (e.g. 3.8 Flash) moves to 2.5 Flash first and to 3.6 Flash when 2.5 is missing too.
+function switchCandidates(model: string): string[] {
+  if (model === RELIABLE_MODEL) return [ALTERNATE_MODEL];
+  if (model === ALTERNATE_MODEL) return [RELIABLE_MODEL];
+  return [RELIABLE_MODEL, ALTERNATE_MODEL];
+}
+const modelLabel = (model: string) => profileModel(model).label;
+
+/** A 404 about the model itself (not a missing uploaded file): this key's project lacks it. */
+export const isModelAccessError = (error: unknown): boolean => error instanceof ModelNotFoundError && error.message.includes('model');
+
+/** The model a fresh run starts with: the chosen one, unless the key is known not to have it. */
+export function startModel(preferred: string, unavailable: readonly string[]): string {
+  const model = sanitizeModelName(preferred);
+  if (!unavailable.includes(model)) return model;
+  return switchCandidates(model).find(other => !unavailable.includes(other)) ?? model;
+}
+
+/**
+ * The model to start the sbobina again with after `error` on its first block, or null to fail:
+ * the key lacks the model, or another model than the reliable one stayed busy through every attempt.
+ * `excluded` holds the models known missing for the key and those this run already used.
+ */
+export function fallbackModel(error: unknown, model: string, excluded: readonly string[]): string | null {
+  const busy = error instanceof CircuitBreakerExhaustedError && model !== RELIABLE_MODEL;
+  if (!isModelAccessError(error) && !busy) return null;
+  return switchCandidates(model).find(next => !excluded.includes(next)) ?? null;
+}
+
 export type WebRunOutcome = 'completed' | 'completed_with_warnings' | 'cancelled' | 'failed' | 'paused';
 
 export async function runWebFile(options: WebRunOptions): Promise<WebRunOutcome> {
@@ -131,6 +186,8 @@ export async function runWebFile(options: WebRunOptions): Promise<WebRunOutcome>
   let state: SessionState | null = null;
   let audio: (AudioSource & { dispose(): void }) | null = null;
   let quotaExhausted = false;
+  // The models this run found missing for a key, for the failure message.
+  const missingModels: string[] = [];
   let outcome: WebRunOutcome = 'failed';
 
   emit('appendConsole', `File 1/1: ${descriptor.name}`);
@@ -166,11 +223,16 @@ export async function runWebFile(options: WebRunOptions): Promise<WebRunOutcome>
       await store.delete(state.id);
       state = null;
     }
-    state ??= newSession(crypto.randomUUID(), identity, defaultSettings(options.model));
+    const unavailable = [...(options.unavailableModels ?? [])];
+    const chosen = startModel(options.model, unavailable);
+    state ??= newSession(crypto.randomUUID(), identity, defaultSettings(chosen));
     // Like the desktop (pipeline_session): before the first chunk the current model choice wins,
     // with its chunk length (the cut is planned again); afterwards the session keeps its model.
-    if (state.stage === 'phase1' && state.chunkTexts.length === 0) {
-      state.settings = defaultSettings(options.model);
+    if (isFresh(state)) {
+      if (chosen !== sanitizeModelName(options.model)) {
+        emit('appendConsole', `ℹ La tua chiave non ha accesso a ${modelLabel(options.model)}: uso ${modelLabel(chosen)}.`);
+      }
+      state.settings = defaultSettings(chosen);
       state.plan = undefined;
     }
     emit('updateModel', state.settings.model);
@@ -198,7 +260,60 @@ export async function runWebFile(options: WebRunOptions): Promise<WebRunOutcome>
       },
       reporter: bridgeReporter(emit),
     };
-    await runPipeline(state, env);
+    // Nothing was written yet: the session starts over with the given model's settings.
+    const restartWith = async (session: SessionState, model: string) => {
+      session.settings = defaultSettings(model);
+      session.plan = undefined;
+      session.prevMemory = '';
+      await store.save(session);
+      emit('updateModel', model);
+    };
+    // The busy model and its error, once the session moved away from it.
+    let switchedFrom: { model: string; error: unknown } | null = null;
+    const tried: string[] = [];
+    for (;;) {
+      try {
+        await runPipeline(state, env);
+        break;
+      } catch (error) {
+        const model = state.settings.model;
+        tried.push(model);
+        const noAccess = isModelAccessError(error);
+        if (noAccess && !missingModels.includes(model)) missingModels.push(model);
+        const mainKey = noAccess && ((error as ModelNotFoundError).keyIndex ?? 0) === 0;
+        if (switchedFrom) {
+          // The model a busy first block moved to is missing for this key too: the busy model's
+          // pause stands, and the main key skips the missing one next time.
+          if (!noAccess || signal.aborted || !isFresh(state)) throw error;
+          if (mainKey) {
+            unavailable.push(model);
+            options.onModelUnavailable?.(model, null);
+          }
+          emit('appendConsole', `⚠ La tua chiave non può usare ${modelLabel(model)}: resto su ${modelLabel(switchedFrom.model)}.`);
+          emit('processingWarning', { code: MODEL_SWITCH_WARNING_CODE, message: null });
+          await restartWith(state, switchedFrom.model);
+          throw switchedFrom.error;
+        }
+        // A missing model moves on to the next candidate; a busy one gets a single switch.
+        const next = !signal.aborted && isFresh(state) ? fallbackModel(error, model, [...unavailable, ...tried]) : null;
+        if (!next) throw error;
+        if (!noAccess) switchedFrom = { model, error };
+        // A reserve key's project may lack a model the main key has: switch for this run only.
+        if (mainKey) {
+          unavailable.push(model);
+          options.onModelUnavailable?.(model, next);
+        }
+        const keyNumber = noAccess && !mainKey ? (error as ModelNotFoundError).keyIndex! + 1 : 0;
+        const message = !noAccess
+          ? `${modelLabel(model)} è sovraccarico e non ha risposto al primo blocco: ricomincio con ${modelLabel(next)}`
+          : mainKey
+            ? `La tua chiave non può usare ${modelLabel(model)}: sbobino con ${modelLabel(next)} (lo ricorderò su questo dispositivo)`
+            : `La chiave di riserva ${keyNumber} non può usare ${modelLabel(model)}: per questa sbobina uso ${modelLabel(next)}`;
+        emit('appendConsole', `⚠ ${message}`);
+        emit('processingWarning', { code: MODEL_SWITCH_WARNING_CODE, message });
+        await restartWith(state, next);
+      }
+    }
 
     if (!state.archiveSessionDir || !await options.archiveExists(state.archiveSessionDir)) {
       const failed = (state.failedBlocks ?? []).map(index => index + 1);
@@ -227,7 +342,7 @@ export async function runWebFile(options: WebRunOptions): Promise<WebRunOutcome>
       outcome = 'cancelled';
       return outcome;
     }
-    const payload = failurePayload(error, state, base);
+    const payload = failurePayload(error, state, base, Date.now(), missingModels);
     quotaExhausted = error instanceof QuotaDailyLimitError;
     emit('appendConsole', `❌ ${payload.error}${payload.error_detail ? ` — ${payload.error_detail}` : ''}`);
     emit('fileFailed', payload);
@@ -246,6 +361,11 @@ export async function runWebFile(options: WebRunOptions): Promise<WebRunOutcome>
       total: 1,
       ...(quotaExhausted ? { quota_exhausted: true } : {}),
     });
+  }
+
+  /** Before the first block is written the session can still take another model. */
+  function isFresh(session: SessionState): boolean {
+    return session.stage === 'phase1' && session.chunkTexts.length === 0;
   }
 
   function finish(done: SessionState, sessionDir: string): WebRunOutcome {

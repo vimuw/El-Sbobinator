@@ -25,6 +25,8 @@ export class InvalidKeyError extends Error {
 }
 export class ModelNotFoundError extends Error {
   name = 'ModelNotFoundError';
+  /** Position in the run's key ring of the key that got the 404 (0 = main key), set by withKeyRotation. */
+  keyIndex?: number;
 }
 export class CircuitBreakerExhaustedError extends Error {
   name = 'CircuitBreakerExhaustedError';
@@ -214,6 +216,8 @@ export async function withKeyRotation<T>(
       const quota = error instanceof QuotaDailyLimitError;
       // An invalid main key is the user's mistake to fix; an invalid fallback key is skipped.
       const badFallback = error instanceof InvalidKeyError && ring.index > 0;
+      // Only the main key's missing models are remembered (webRun): a reserve key's project may differ.
+      if (error instanceof ModelNotFoundError) error.keyIndex ??= ring.index;
       if (!quota && !badFallback) throw error;
       if (ring.index + 1 >= ring.keys.length) {
         const added = quota && requestNewKey ? (await requestNewKey())?.trim() : null;

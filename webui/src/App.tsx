@@ -462,6 +462,9 @@ export default function App() {
       'system',
       { dedupeKey: 'drive-reconnect', actionType: 'open_settings' },
     ),
+    // Settings would otherwise keep showing (and Salva write back) the model the key lacks. A model
+    // picked meanwhile in an open Settings stays.
+    onPreferredModelChanged: ({ from, to }) => setPreferredModel(current => (current === from ? to : current)),
   });
   useBodyScrollLock(isSettingsOpen || regeneratePrompt !== null || preview.content !== null || askNewKeyPrompt || confirmAction !== null || duplicatePrompt !== null || regenDirtyConfirm !== null);
 

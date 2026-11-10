@@ -1,7 +1,15 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { STORAGE_KEYS } from '../storageKeys';
-import { SPIKE_KEYS_STORAGE_KEY, WEB_MODEL_OPTIONS, adoptSpikeKeys, loadWebKeys, parseKeyLines } from './webSettings';
+import {
+  SPIKE_KEYS_STORAGE_KEY,
+  WEB_MODEL_OPTIONS,
+  adoptSpikeKeys,
+  loadUnavailableModels,
+  loadWebKeys,
+  parseKeyLines,
+  rememberUnavailableModel,
+} from './webSettings';
 
 function stubStorage(initial: Record<string, string>) {
   const values = new Map(Object.entries(initial));
@@ -46,5 +54,23 @@ describe('web settings', () => {
     adoptSpikeKeys();
     expect(loadWebKeys()).toEqual(['AIzaSyAppKey12345678901234']);
     expect(values.has(SPIKE_KEYS_STORAGE_KEY)).toBe(false);
+  });
+
+  it('remembers a missing model for the main key only, never storing the key', () => {
+    const values = stubStorage({});
+    const key = 'AIzaSyMainKey1234567890123';
+    rememberUnavailableModel(key, 'gemini-2.5-flash');
+    rememberUnavailableModel(key, 'gemini-2.5-flash');
+
+    expect(loadUnavailableModels(key)).toEqual(['gemini-2.5-flash']);
+    expect(values.get(STORAGE_KEYS.WEB_UNAVAILABLE_MODELS_V1)).not.toContain(key);
+    // A new main key may belong to a project that has the model.
+    expect(loadUnavailableModels('AIzaSyOtherKey123456789012')).toEqual([]);
+    expect(loadUnavailableModels('')).toEqual([]);
+  });
+
+  it('ignores a damaged unavailable-models entry', () => {
+    stubStorage({ [STORAGE_KEYS.WEB_UNAVAILABLE_MODELS_V1]: '{broken' });
+    expect(loadUnavailableModels('AIzaSyMainKey1234567890123')).toEqual([]);
   });
 });

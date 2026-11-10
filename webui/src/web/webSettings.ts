@@ -2,6 +2,7 @@ import type { ModelOption } from '../bridge';
 import { PROFILE_MODEL_OPTIONS } from '../generationProfile';
 import { STORAGE_KEYS } from '../storageKeys';
 import { DEFAULT_MODEL } from '../utils';
+import { hashKey } from './apiUsage';
 
 // Same list as the desktop registry: both read el_sbobinator/generation_profile.json.
 export const WEB_MODEL_OPTIONS: ModelOption[] = PROFILE_MODEL_OPTIONS.map(option => ({
@@ -67,4 +68,32 @@ export function loadWebModel(): string {
 
 export function saveWebModel(model: string): boolean {
   return write(STORAGE_KEYS.WEB_MODEL_V1, WEB_MODEL_OPTIONS.some(option => option.id === model) ? model : DEFAULT_MODEL);
+}
+
+// Models the main key answered "not found" for (Google gives older models only to older projects).
+// Tied to that key: with another main key the list starts empty, since its project may have them.
+interface UnavailableModels {
+  key: string;
+  models: string[];
+}
+
+function readUnavailable(): UnavailableModels | null {
+  try {
+    const parsed = JSON.parse(read(STORAGE_KEYS.WEB_UNAVAILABLE_MODELS_V1) || 'null') as UnavailableModels | null;
+    return parsed && typeof parsed.key === 'string' && Array.isArray(parsed.models) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function loadUnavailableModels(mainKey: string): string[] {
+  const stored = readUnavailable();
+  return mainKey && stored?.key === hashKey(mainKey) ? stored.models.filter(model => typeof model === 'string') : [];
+}
+
+export function rememberUnavailableModel(mainKey: string, model: string): void {
+  if (!mainKey) return;
+  const models = loadUnavailableModels(mainKey);
+  if (models.includes(model)) return;
+  write(STORAGE_KEYS.WEB_UNAVAILABLE_MODELS_V1, JSON.stringify({ key: hashKey(mainKey), models: [...models, model] }));
 }

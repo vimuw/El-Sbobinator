@@ -1551,3 +1551,41 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
     });
   });
 });
+
+describe('App — model saved by a web run', () => {
+  it('shows the replacement in Settings without a reload, and Salva keeps it', async () => {
+    const models = [
+      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: '', default_chunk_minutes: 12 },
+      { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: '', default_chunk_minutes: 15 },
+      { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', summary: '', default_chunk_minutes: 15 },
+    ];
+    let bridgeOptions: Parameters<typeof useBridgeCallbacks>[0] | undefined;
+    vi.mocked(useBridgeCallbacks).mockImplementation(options => { bridgeOptions = options; });
+    vi.mocked(useApiReady).mockImplementation(() => {
+      const [preferredModel, setPreferredModel] = React.useState('gemini-2.5-flash');
+      return { ...mockApiReadyWithKey, preferredModel, setPreferredModel, availableModels: models };
+    });
+    const saveSettings = vi.fn().mockResolvedValue({ ok: true });
+    setPywebview({
+      get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [] }),
+      get_archive_folders: vi.fn().mockResolvedValue({ ok: true, folders: [] }),
+      save_settings: saveSettings,
+    });
+    await act(async () => { render(<App />); });
+
+    // The main key lacks 2.5 Flash: the run saved 3.6 Flash in this browser.
+    act(() => { bridgeOptions?.onPreferredModelChanged?.({ from: 'gemini-2.5-flash', to: 'gemini-3.6-flash' }); });
+    // A report about a model no longer chosen leaves the choice alone.
+    act(() => { bridgeOptions?.onPreferredModelChanged?.({ from: 'gemini-2.5-flash', to: 'gemini-3.8-flash' }); });
+
+    await act(async () => { fireEvent.click(screen.getByLabelText('Apri impostazioni')); });
+    await screen.findByRole('heading', { name: /Impostazioni/ }, { timeout: 5000 });
+    await act(async () => { fireEvent.click(screen.getAllByText('Generale')[0].closest('button')!); });
+    expect(screen.getByRole('button', { name: /Gemini 3\.6 Flash/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Gemini 2\.5 Flash/ })).toBeNull();
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Salva e Chiudi' })); });
+    expect(saveSettings).toHaveBeenCalledTimes(1);
+    expect(saveSettings.mock.calls[0][2]).toBe('gemini-3.6-flash');
+  });
+});

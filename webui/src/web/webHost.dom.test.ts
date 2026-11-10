@@ -5,7 +5,8 @@ import { DESKTOP_CAPABILITIES, getHostCapabilities, setHostCapabilities } from '
 import { STORAGE_KEYS } from '../storageKeys';
 import type { BridgeEventName } from './fakePipeline';
 import { createApiUsageStore } from './apiUsage';
-import { createBridgeEmitter, createWebPywebviewApi, initWebHost } from './webHost';
+import { createBridgeEmitter, createWebPywebviewApi, initWebHost, mainKeyModelUnavailable } from './webHost';
+import { loadUnavailableModels, loadWebModel, saveWebModel } from './webSettings';
 
 function recorder() {
   const events: Array<{ name: BridgeEventName; payload: unknown }> = [];
@@ -100,6 +101,23 @@ describe('web host', () => {
     expect(api?.export_sbobina_package).toBeUndefined();
     expect(api?.download_and_install_update).toBeUndefined();
     expect(api?.export_diagnostics).toBeUndefined();
+  });
+
+  it('tells the app when a main-key 404 changes the saved model, so Settings shows it', () => {
+    const { events, emit } = recorder();
+    saveWebModel('gemini-2.5-flash');
+    const onModelUnavailable = mainKeyModelUnavailable('AIzaSyMain12345678901234567', emit);
+
+    onModelUnavailable('gemini-2.5-flash', 'gemini-3.6-flash');
+    expect(loadWebModel()).toBe('gemini-3.6-flash');
+    expect(loadUnavailableModels('AIzaSyMain12345678901234567')).toEqual(['gemini-2.5-flash']);
+    expect(events).toEqual([{ name: 'preferredModelChanged', payload: { from: 'gemini-2.5-flash', to: 'gemini-3.6-flash' } }]);
+
+    // No replacement, or a saved model other than the missing one: the saved choice stays, nothing to tell.
+    onModelUnavailable('gemini-3.6-flash', null);
+    onModelUnavailable('gemini-3.8-flash', 'gemini-2.5-flash');
+    expect(loadWebModel()).toBe('gemini-3.6-flash');
+    expect(events).toHaveLength(1);
   });
 
   it('keeps keys one per line in localStorage and never validates them online', async () => {

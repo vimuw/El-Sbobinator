@@ -16,6 +16,7 @@ import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../../hostCapabilitie
 import { IDBFactory } from 'fake-indexeddb';
 import { createApiUsageStore } from '../../web/apiUsage';
 import { WEB_CAPABILITIES, createWebPywebviewApi } from '../../web/webHost';
+import { MODEL_25_ACCESS_NOTE, MODEL_25_ACCESS_NOTE_WEB } from './settings/ModelSection';
 import { APP_VERSION } from '../../branding';
 
 const motionCache = new Map<string, React.ForwardRefExoticComponent<React.PropsWithoutRef<Record<string, unknown>> & React.RefAttributes<unknown>>>();
@@ -883,7 +884,7 @@ describe('SettingsModal — model section', () => {
     expect(screen.queryByRole('option', { name: /Gemini 3\.5 Flash|Gemini 3\.7 Flash/i })).toBeNull();
     const legacyOption = screen.getByRole('option', { name: /Gemini 2.5 Flash/i });
     expect(legacyOption.textContent).not.toContain('Default');
-    const accessNote = 'Google consente l’uso solo a chi ha già usato questo modello. Se è la prima volta che lo usi, potrebbe non funzionare.';
+    const accessNote = MODEL_25_ACCESS_NOTE;
     expect(legacyOption.querySelector('[title]')?.getAttribute('title')).toBe(accessNote);
     expect(screen.queryByText(accessNote)).toBeNull();
     fireEvent.click(trigger);
@@ -891,6 +892,21 @@ describe('SettingsModal — model section', () => {
     const legacyTrigger = screen.getByRole('button', { name: /Gemini 2.5 Flash/i });
     expect(legacyTrigger.querySelector('[title]')?.getAttribute('title')).toBe(accessNote);
     expect(screen.queryByText('Fast and capable')).toBeNull();
+  });
+
+  it('tells web users that a key without 2.5 Flash moves to 3.6 Flash by itself', async () => {
+    setHostCapabilities(WEB_CAPABILITIES);
+    onTestFinished(() => setHostCapabilities(DESKTOP_CAPABILITIES));
+    const models = [
+      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: '', default_chunk_minutes: 15 },
+      { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: '', default_chunk_minutes: 15 },
+    ];
+    render(<SettingsModal {...makeProps({ availableModels: models, preferredModel: 'gemini-2.5-flash' })} />);
+    await act(async () => {
+      fireEvent.click(screen.getAllByText('Generale')[0].closest('button')!);
+    });
+    const trigger = screen.getByRole('button', { name: /Gemini 2.5 Flash/i });
+    expect(trigger.querySelector('[title]')?.getAttribute('title')).toBe(MODEL_25_ACCESS_NOTE_WEB);
   });
 
   it('calls setPreferredModel when another model is selected', async () => {
