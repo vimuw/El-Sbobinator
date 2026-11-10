@@ -10,6 +10,7 @@
     "build": "vite build",
     "build:web": "node ../scripts/verify_node_dependencies.mjs && vite build --config vite.web.config.ts",
     "dev:web": "vite --config vite.web.config.ts --port=3001",
+    "dev:web:drive": "node -e \"process.env.EL_SBOBINATOR_GOOGLE_CLIENT_ID ||= '862127820930-p6gkbh1ea3qajddbn3nfeoi5nri4hltu.apps.googleusercontent.com'; require('child_process').spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--config', 'vite.web.config.ts', '--port=3001', '--strictPort'], { stdio: 'inherit' }).on('exit', code => process.exit(code ?? 0))\"",
     "dev:web:lan": "python ../scripts/dev_https_cert.py && vite --config vite.web.lan.config.ts --port=3001 --strictPort",
     "preview:web": "vite preview --config vite.web.config.ts --port=4173 --strictPort",
     "preview": "vite preview",
