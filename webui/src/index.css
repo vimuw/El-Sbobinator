@@ -76,11 +76,6 @@
   opacity: 0.7;
 }
 
-:root:not([data-theme="dark"]) footer span {
-  color: var(--text-secondary);
-  opacity: 0.5;
-}
-
 :root[data-theme="dark"] footer a {
   color: var(--text-secondary);
   opacity: 1;
@@ -5590,10 +5585,24 @@ input::-webkit-contacts-auto-fill-button {
   white-space: nowrap;
 }
 
+/* Long labels on wide screens, short ones on a phone, so the links keep one row there instead
+   of stacking one per line (AppFooterLinks, PrivacyLink). */
+.footer-label-short {
+  display: none;
+}
+
 @media (max-width: 540px) {
   .app-footer-links {
-    flex-direction: column;
-    gap: 12px;
+    column-gap: 16px;
+    row-gap: 8px;
+  }
+
+  .footer-label-long {
+    display: none;
+  }
+
+  .footer-label-short {
+    display: inline;
   }
 }
 

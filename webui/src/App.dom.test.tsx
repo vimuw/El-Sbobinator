@@ -207,7 +207,7 @@ describe('App', () => {
 
   it('renders footer with GitHub link', async () => {
     await act(async () => { render(<App />); });
-    expect(screen.getByText(/GitHub/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Progetto Open-Source — GitHub' })).toBeTruthy();
   });
 
   it('shows no moved-address notice unless the web start-up asked for it', async () => {
@@ -548,7 +548,7 @@ describe('App — ready-empty mode (valid API key, no files)', () => {
 
   it('footer links are visible', async () => {
     await act(async () => { render(<App />); });
-    expect(screen.getByText(/GitHub/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Progetto Open-Source — GitHub' })).toBeTruthy();
     expect(screen.queryByText(/caffè/)).toBeNull();
   });
 
