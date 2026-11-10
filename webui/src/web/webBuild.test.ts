@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { SESSION_COOKIE, SESSION_MAX_AGE_S } from './drive/server/driveServer';
 import { WEB_CSP, WEB_STATIC_PAGES, driveClientId, toWebDevIndexHtml, toWebDevStaticPageHtml, toWebIndexHtml, webBuildVersion, webCsp, webHeadersFile, webStaticPages } from './webBuild';
 
 function directive(csp: string, name: string): string {
@@ -113,8 +114,37 @@ describe('privacy page of the web site', () => {
     expect(drive).toContain('l’app non la rilegge e non la modifica');
     expect(drive).toContain('cestino per 30 giorni');
     expect(drive).toContain('Gestisci app → El Sbobinator → Opzioni → Elimina dati app nascosti');
-    // The token is kept by the tab (sessionStorage) for at most an hour, not "never saved".
-    expect(drive).toContain('resta solo nella scheda aperta, al massimo un’ora');
+    // The token is kept in the tab's memory for at most an hour, not "never saved".
+    expect(drive).toContain('resta solo nella memoria della scheda aperta, al massimo un’ora');
+  });
+
+  it('says what the site\'s login service keeps (an encrypted cookie, no copy) and that the sbobine skip it', () => {
+    const drive = html.slice(html.indexOf('id="google-drive"'), html.indexOf('id="diritti"'));
+    expect(drive).toContain('non passano da server di El Sbobinator');
+    expect(drive).toContain('lo cifra e lo salva in un cookie nel tuo browser, che le pagine del sito non possono leggere');
+    expect(drive).toContain('niente database e nessun registro dei permessi');
+    expect(drive).toContain('“Disconnetti” revoca il permesso presso Google');
+    // Not when the service does not answer: the cookie stays until the retry (auth.ts).
+    expect(drive).toContain('ritenta di revocarlo e cancellarlo appena torna la connessione o alla visita successiva');
+    // Cookies are no longer "none": only the Drive link's technical ones.
+    expect(html).not.toContain('non usa cookie');
+    expect(html.slice(html.indexOf('id="sito"'))).toContain('uno temporaneo di dieci minuti mentre accedi');
+  });
+
+  it('keeps the summary true to the login service: no "no server" claim, a row for the Drive cookie', () => {
+    const summary = html.slice(html.indexOf('id="in-breve"'), html.indexOf('id="titolare"'));
+    // The Drive login does go through a service of the site: the summary must not deny it.
+    expect(summary).not.toMatch(/non ha (?:un )?server/i);
+    expect(summary).toContain('non passano da un server suo');
+    expect(summary).toContain('Solo il collegamento facoltativo a Google Drive passa da un piccolo servizio del sito');
+    const rows = [...summary.matchAll(/<tr><td>([^<]+)<\/td><td>([^<]+)<\/td><td>([^<]+)<\/td><\/tr>/g)].map(([, what, where]) => [what, where]);
+    expect(rows).toContainEqual([
+      'Collegamento a Google Drive (permesso di rinnovo ed email dell’account)',
+      expect.stringContaining('in un cookie cifrato in questo browser'),
+    ]);
+    // Same lifetime as the server's session cookie (server/driveServer.ts SESSION_MAX_AGE_S).
+    expect(SESSION_MAX_AGE_S).toBe(180 * 24 * 3600);
+    expect(summary).toContain('fino a sei mesi dall’ultimo uso');
   });
 
   it('describes Drive as available and optional, not coming soon', () => {
@@ -136,6 +166,12 @@ describe('privacy page of the web site', () => {
   it('names what reaches the developer, the legal bases, the minimum age and the Garante', () => {
     expect(html.slice(html.indexOf('id="sviluppatore"'), html.indexOf('id="base-giuridica"'))).toContain('Segnala un problema');
     expect(html).toContain('Data Privacy Framework');
+    // The site's Drive login service processes the refresh permission and the email: it needs a basis too.
+    const bases = html.slice(html.indexOf('id="base-giuridica"'), html.indexOf('id="eta"'));
+    expect(bases).toMatch(/<li>Collegamento a Google Drive: [^<]*permesso di rinnovo e l’email dell’account[^<]*\(art\. 6, par\. 1, lett\. b del GDPR\)/);
+    expect(SESSION_COOKIE).toBe('__Host-drive');
+    expect(bases).toContain(`I cookie del collegamento (<code>${SESSION_COOKIE}</code> e quello temporaneo dell’accesso) sono tecnici e strettamente necessari`);
+    expect(bases).toContain('non serve il tuo consenso (art. 122 del Codice privacy)');
     expect(html.slice(html.indexOf('id="eta"'), html.indexOf('id="diritti"'))).toContain('almeno 18 anni');
     expect(html.slice(html.indexOf('id="diritti"'))).toContain('https://www.garanteprivacy.it/');
   });
@@ -189,9 +225,9 @@ describe('privacy page of the web site', () => {
 describe('Drive sync in the web build', () => {
   const clientId = '123456789-abc123def.apps.googleusercontent.com';
 
-  it('reaches only the Drive API and token revocation, with no Google script or frame', () => {
+  it('reaches only the Drive API (the token comes from the site), with no Google script or frame', () => {
     const csp = webCsp(true);
-    expect(directive(csp, 'connect-src')).toBe("connect-src 'self' https://generativelanguage.googleapis.com https://www.googleapis.com https://oauth2.googleapis.com");
+    expect(directive(csp, 'connect-src')).toBe("connect-src 'self' https://generativelanguage.googleapis.com https://www.googleapis.com");
     expect(directive(csp, 'script-src')).toBe("script-src 'self'");
     expect(directive(csp, 'frame-src')).toBe(directive(WEB_CSP, 'frame-src'));
     expect(csp).not.toContain('accounts.google.com');

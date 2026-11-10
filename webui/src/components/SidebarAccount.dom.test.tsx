@@ -92,7 +92,7 @@ describe('SidebarAccount', () => {
     expect(menu.textContent).toContain('le ritrovi sugli altri dispositivi');
     expect(menu.textContent).toContain('Più dettagli in Impostazioni');
     fireEvent.click(screen.getAllByRole('button', { name: 'Collega Google Drive' }).find(item => menu.contains(item))!);
-    expect(login.calls).toEqual([{ silent: false }]);
+    expect(login.calls).toEqual(['link']);
     expect(localStorage.getItem(STORAGE_KEYS.WEB_STORAGE_CHOICE_V1)).toBe('drive');
     await waitFor(() => expect(screen.getByTestId('sidebar-account-email').textContent).toBe('studente@example.com'));
     expect(screen.getByRole('button', { name: /^Account Google: studente@example\.com/ }).textContent).toBe('S');
@@ -108,7 +108,7 @@ describe('SidebarAccount', () => {
     fireEvent.click(button);
     expect(screen.getByRole('dialog', { name: 'Account Google Drive' }).textContent).toContain('L’accesso è scaduto');
     fireEvent.click(screen.getByRole('button', { name: 'Riconnetti' }));
-    expect(login.calls).toEqual([{ silent: true }]);
+    expect(login.calls).toEqual(['link']);
     await screen.findByRole('button', { name: 'Sincronizza ora' });
   });
 

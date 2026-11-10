@@ -3,18 +3,20 @@ import type { WebArchive } from '../webSessions';
 import { DriveAuthError, type DriveAuth } from './auth';
 import { DriveError, type DriveApi } from './driveApi';
 import { ExportError, exportToDrive } from './exportDrive';
-import { DRIVE_FILE_SCOPE } from './oauth';
 import { syncOnce, type SyncReport } from './sync';
 import { bindAccount, readMeta, resetSyncState } from './syncState';
 
 // When the Drive sync runs: at startup, when the page comes back to the foreground or online, and a
 // few seconds after the last local change; never while a Gemini run works (the round waits for
-// runEnded). Without a token nothing runs: the settings show "tocca per riconnettere".
+// runEnded). Each round asks the site's server for a fresh token (auth.ts): the login lasts until
+// "Disconnetti". Only when the server has lost it (revoked from the Google account, six months
+// unused) nothing runs, and the settings show "tocca per riconnettere".
 // Rounds, binding the account of a new login and erasing the Drive data run one at a time, in the
 // order asked: none of them ever sees another halfway. One tab of the site runs at a time
 // (activeTab.ts), so this queue is the only one.
 
 export const SYNC_DELAY_MS = 4000;
+export const DISCONNECT_PENDING_MESSAGE = 'Disconnessione da completare: verrà ritentata appena possibile.';
 
 export interface DriveServiceOptions {
   factory: IDBFactory | undefined;
@@ -74,8 +76,6 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
   let syncing = false;
   let lastSyncAt: string | null = null;
   let error: string | null = null;
-  // After a silent attempt Google refused, the next tap opens the full account choice.
-  let interactiveNext = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
   // A round asked for during a Gemini run: it runs at runEnded().
   let waitingForRun = false;
@@ -97,17 +97,18 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
       available: true,
       connected: Boolean(email || token),
       email,
-      needs_reconnect: Boolean(email) && !token,
+      needs_reconnect: Boolean(email) && auth.needsReconnect(),
       syncing,
       waiting_for_run: waitingForRun,
       last_sync_at: lastSyncAt,
-      error,
+      // A "Disconnetti" the server has not confirmed: the settings must not just say "disconnected".
+      error: error ?? (auth.disconnectPending() ? DISCONNECT_PENDING_MESSAGE : null),
     };
   };
 
-  // The token must be the one of the account this browser remembers and the database is bound to: a
-  // tab restored with its sessionStorage may hold the token of an account this browser has left,
-  // disconnected or erased since (any tab clears the remembered account then). Checked inside the
+  // The token must be the one of the account this browser remembers and the database is bound to:
+  // the server's login may be another account's (a link whose binding failed), or the browser may
+  // have left this account since (any tab clears the remembered account then). Checked inside the
   // queue, where no binding runs at the same time.
   const ownsToken = async () => {
     const bound = (await readMeta(factory)).account;
@@ -115,14 +116,18 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
     const remembered = auth.account();
     // Never bound (a state older than the binding, or just erased): the remembered account decides.
     if (owner !== null && owner === remembered && (bound === undefined || bound === owner)) return true;
-    auth.expire();
-    // After "Disconnetti" or the erase nothing is to reconnect.
+    // After "Disconnetti" or the erase nothing is to reconnect; otherwise only a new link helps.
+    auth.expire(remembered !== null);
     if (remembered !== null) options.onNeedsReconnect?.();
     return false;
   };
 
   const round = async () => {
-    if (!auth.token()) return;
+    // A "Disconnetti" the server never confirmed goes first: every round runs at startup, back
+    // online and in the foreground, and none uses the cookie's login while it is pending (auth.ts).
+    if (auth.disconnectPending()) await auth.finishDisconnect();
+    // Never linked, disconnected, or a lost login waiting for "Riconnetti": nothing to do.
+    if (auth.needsReconnect() || (!auth.account() && !auth.token())) return;
     if (options.isBusy()) {
       waitingForRun = true;
       return;
@@ -130,6 +135,11 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
     const started = epoch;
     syncing = true;
     try {
+      // Renewed here, when the round really starts: after a long elaborazione the hour may be over.
+      if (!await auth.freshToken()) {
+        if (started === epoch && auth.needsReconnect()) options.onNeedsReconnect?.();
+        return;
+      }
       if (!await ownsToken()) return;
       const report = await syncOnce({ factory, api, now, isOpenInEditor: options.isOpenInEditor });
       if (started !== epoch) return;
@@ -168,7 +178,6 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
     await auth.disconnect();
     lastSyncAt = null;
     error = null;
-    interactiveNext = false;
     return status();
   }
 
@@ -190,15 +199,13 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
     },
 
     connect() {
-      const silent = auth.account() !== null && !interactiveNext;
-      // Before any await: the Google window must open inside the tap. The token is installed only
+      // Before any await: the login window must open inside the tap. The token is installed only
       // once its account is bound: a round with it would sync this browser's state for the previous
       // account with another account's Drive.
-      const login = auth.connect({ silent, keep: false });
+      const login = auth.connect();
       return (async () => {
         try {
           const token = await login;
-          interactiveNext = false;
           await enqueue(async () => {
             auth.adopt(token);
             try {
@@ -214,7 +221,6 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
           });
           error = null;
         } catch (caught) {
-          if (caught instanceof DriveAuthError && caught.needsInteractiveLogin) interactiveNext = true;
           error = describeDriveError(caught);
           return status();
         }
@@ -226,7 +232,15 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
     disconnect,
 
     async erase() {
-      if (!auth.token()) {
+      let token: string | null;
+      try {
+        token = await auth.freshToken();
+      } catch (caught) {
+        // Offline or the login service failing: the login itself is fine, so no "riconnetti".
+        error = describeDriveError(caught);
+        return { ...status(), removed: 0 };
+      }
+      if (!token) {
         error = describeDriveError(new DriveError(401, ''));
         return { ...status(), removed: 0 };
       }
@@ -261,7 +275,7 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
 
     exportAll(onProgress) {
       // Before any await: the Google window must open inside the tap. The token stays with the export.
-      const login = auth.connect({ scope: DRIVE_FILE_SCOPE, keep: false });
+      const login = auth.connectExport();
       return (async (): Promise<DriveExportResult> => {
         let token: string;
         try {

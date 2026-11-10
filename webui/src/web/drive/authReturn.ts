@@ -1,7 +1,9 @@
 import { OAUTH_CHANNEL, isOAuthFragment, type OAuthReturnMessage } from './oauth';
 
-// Script of drive-auth.html. Google sends the login answer here in the fragment; the window hands
-// it to the app tab that opened it and closes. The app checks the state: this page trusts nothing.
+// Script of drive-auth.html. The login answer arrives here in the fragment: the site's server's
+// (#state=…&result=ok, after "Collega Google Drive") or Google's token (the export's drive.file).
+// The window hands it to the app tab that opened it and closes. The app checks the state: this
+// page trusts nothing.
 
 function deliver(fragment: string): boolean {
   const message: OAuthReturnMessage = { type: 'el-sbobinator-oauth', fragment };

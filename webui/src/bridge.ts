@@ -230,7 +230,7 @@ export interface DriveStatus {
   /** An account is linked (remembered across reloads), even if its token expired. */
   connected: boolean;
   email: string | null;
-  /** The token is gone (new tab, an hour passed, 401): a tap on "Drive: tocca per riconnettere". */
+  /** The site's server lost the login (revoked from the Google account, six months unused): a tap on "Drive: tocca per riconnettere". */
   needs_reconnect: boolean;
   syncing: boolean;
   /** A round was asked for during a Gemini run: it starts when the run ends. */

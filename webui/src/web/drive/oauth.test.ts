@@ -8,6 +8,7 @@ import {
   newState,
   oauthErrorMessage,
   parseOAuthFragment,
+  parseServerReturn,
   redirectUriFor,
 } from './oauth';
 
@@ -49,6 +50,18 @@ describe('Drive OAuth', () => {
       .toMatchObject({ kind: 'error', error: 'invalid_response' });
     expect(parseOAuthFragment(answer({ error: 'admin_policy_enforced', state: 's1' }), 's1', 0))
       .toEqual({ kind: 'error', error: 'admin_policy_enforced', description: undefined });
+  });
+
+  it('reads the site server\'s answer for its own state only, with no token in it', () => {
+    expect(parseServerReturn('#state=s1&result=ok', 's1')).toEqual({ kind: 'ok' });
+    expect(parseServerReturn('#state=s1&error=login_expired', 's1')).toEqual({ kind: 'error', error: 'login_expired' });
+    expect(parseServerReturn('#state=s2&result=ok', 's1')).toMatchObject({ kind: 'error', error: 'state_mismatch' });
+    expect(parseServerReturn('#state=s1&result=ok', null)).toMatchObject({ kind: 'error', error: 'state_mismatch' });
+    expect(parseServerReturn('#state=s1&result=forse', 's1')).toMatchObject({ kind: 'error', error: 'invalid_response' });
+    expect(parseServerReturn('#foo=1', 's1')).toEqual({ kind: 'none' });
+    expect(isOAuthFragment('#state=s1&result=ok')).toBe(true);
+    expect(oauthErrorMessage('cookie_blocked')).toContain('cookie');
+    expect(oauthErrorMessage('server_not_configured')).toContain('non è ancora attivo');
   });
 
   it('explains blocked accounts and silent failures in Italian', () => {

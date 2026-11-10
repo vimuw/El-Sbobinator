@@ -32,10 +32,13 @@ export const STORAGE_KEYS = {
   WEB_API_USAGE_V1: 'el-sbobinator.web.api-usage.v1',
   // M0 archive: copied once into IndexedDB by the M2 upgrade, then removed.
   WEB_M0_SESSIONS_V1: 'el-sbobinator.web.m0-sessions.v1',
-  // Drive sync (drive/auth.ts): the Google access token in sessionStorage only, with its expiry,
-  // and the connected account's email in localStorage for a silent reconnect.
+  // Drive sync (drive/auth.ts): the connected account's email in localStorage. The token key is
+  // only cleared now: the token stays in memory, renewed by the site's server.
   WEB_DRIVE_TOKEN_V1: 'el-sbobinator.web.drive-token.v1',
   WEB_DRIVE_ACCOUNT_V1: 'el-sbobinator.web.drive-account.v1',
+  // Set by "Disconnetti" until the server confirms it cleared the login cookie (auth.ts): while it
+  // stays, the cookie's login is never used and the disconnect is retried.
+  WEB_DRIVE_DISCONNECT_PENDING_V1: 'el-sbobinator.web.drive-disconnect-pending.v1',
   WEB_STORAGE_CHOICE_V1: 'el-sbobinator.web.storage-choice.v1',
 } as const;
 

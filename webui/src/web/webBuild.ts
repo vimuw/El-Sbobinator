@@ -3,9 +3,10 @@
 // No COOP/COEP: nothing needs SharedArrayBuffer and require-corp would break the YouTube previews.
 
 const GEMINI_ORIGIN = 'https://generativelanguage.googleapis.com';
-// Drive sync (drive/): the REST API and token revocation. The login itself is a window to
-// accounts.google.com, so no Google script, frame or connect is needed for it.
-const DRIVE_ORIGINS = 'https://www.googleapis.com https://oauth2.googleapis.com';
+// Drive sync (drive/): the REST API. The login is a window (the site's /api/drive, then
+// accounts.google.com) and its token comes from 'self', so no Google script, frame or other
+// connect is needed for it.
+const DRIVE_ORIGINS = 'https://www.googleapis.com';
 
 const webCspDirectives = (drive: boolean): Array<[string, string]> => [
   ['default-src', "'self'"],

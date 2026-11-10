@@ -168,45 +168,107 @@ export function createFakeDrive(options: FakeDriveOptions = {}): FakeDrive {
   };
 }
 
-/** A Google login that answers at once, for the tests of what sits above auth.ts. */
-export function createFakeAuth(device: string, initial: { token?: boolean; email?: string | null } = {}) {
+export interface FakeAuthInitial {
+  /** A token in hand already (a page that linked Drive earlier in this visit). */
+  token?: boolean;
+  /** The account this browser remembers. */
+  email?: string | null;
+  /** The site's server still holds the login (default: with a token). Without it a remembered account must reconnect. */
+  server?: boolean;
+}
+
+/**
+ * The login of auth.ts with its server, answering at once, for the tests of what sits above it.
+ * Like the real one, a lost token comes back renewed while the server holds the login.
+ */
+export function createFakeAuth(device: string, initial: FakeAuthInitial = {}) {
   let count = 0;
   let token: string | null = initial.token ? `${device}-0` : null;
   let remembered = initial.email ?? null;
   let owner = token ? remembered : null;
-  const calls: Array<{ silent: boolean; scope?: string }> = [];
+  // The server's login (its cookie): the account it renews tokens for; '' once linked, until bound.
+  let server: string | null = (initial.server ?? Boolean(initial.token)) ? remembered : null;
+  let lost = Boolean(remembered) && server === null;
+  let linking = false;
+  const calls: Array<'link' | 'export'> = [];
   const failures: DriveAuthError[] = [];
   const disconnects: string[] = [];
+  let refreshes = 0;
+  let stopped = false;
   const auth: DriveAuth = {
-    token: () => token,
+    token: () => (stopped ? null : token),
+    freshToken: async () => {
+      if (stopped) return null;
+      if (token) return token;
+      if (lost || linking || !remembered) return null;
+      refreshes += 1;
+      // As auth.ts: a login of another account than the remembered one gives no token.
+      if (server === null || server !== remembered) {
+        lost = true;
+        return null;
+      }
+      token = `${device}-${++count}`;
+      owner = server || null;
+      return token;
+    },
     account: () => remembered,
     setAccount: value => {
       remembered = value;
       if (token) owner = value;
+      if (server === '') server = value;
     },
     tokenAccount: () => (token ? owner : null),
-    connect: ({ silent = false, scope, keep = true } = {}) => {
-      calls.push({ silent, ...(scope ? { scope } : {}) });
+    needsReconnect: () => lost,
+    connect: () => {
+      calls.push('link');
       const failure = failures.shift();
       if (failure) return Promise.reject(failure);
-      const issued = scope === DRIVE_FILE_SCOPE ? `${device}-${FAKE_FILE_TOKEN_MARK}-${++count}` : `${device}-${++count}`;
-      if (keep) {
-        token = issued;
-        owner = null;
-      }
-      // Only the scope asked for: the login does not carry the ones granted before (oauth.ts).
-      return Promise.resolve({ accessToken: issued, expiresAt: Date.now() + 3_600_000, scopes: [scope ?? DRIVE_APPDATA_SCOPE] });
+      linking = true;
+      server = '';
+      return Promise.resolve({ accessToken: `${device}-${++count}`, expiresAt: Date.now() + 3_600_000, scopes: [DRIVE_APPDATA_SCOPE] });
+    },
+    connectExport: () => {
+      calls.push('export');
+      const failure = failures.shift();
+      if (failure) return Promise.reject(failure);
+      // Only drive.file: the export's token never serves the sync (oauth.ts).
+      return Promise.resolve({ accessToken: `${device}-${FAKE_FILE_TOKEN_MARK}-${++count}`, expiresAt: Date.now() + 3_600_000, scopes: [DRIVE_FILE_SCOPE] });
     },
     adopt: issued => {
       token = issued.accessToken;
       owner = null;
+      lost = false;
+      linking = false;
     },
-    expire: () => { token = null; },
+    expire: (needsReconnect = false) => {
+      token = null;
+      linking = false;
+      if (needsReconnect) lost = true;
+    },
+    stop: () => {
+      stopped = true;
+      token = null;
+      linking = false;
+    },
+    // As auth.ts when the server confirms at once: nothing stays pending.
+    disconnectPending: () => false,
+    finishDisconnect: async () => true,
     disconnect: async () => {
       disconnects.push(token ?? '');
       token = null;
       remembered = null;
+      server = null;
+      lost = false;
+      linking = false;
     },
   };
-  return { auth, calls, failures, disconnects };
+  return {
+    auth,
+    calls,
+    failures,
+    disconnects,
+    /** Revoked from the Google account (or six months unused): the server's next renewal fails. */
+    revokeServerLogin: () => { server = null; },
+    refreshes: () => refreshes,
+  };
 }

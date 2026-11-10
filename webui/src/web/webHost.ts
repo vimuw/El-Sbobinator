@@ -267,8 +267,9 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
   const driveConnection = options.drive === undefined ? createDriveConnection() : options.drive;
   stopHost = () => {
     activeRun?.abort();
-    // Also from memory: the page keeps running a moment before the reload.
-    driveConnection?.auth.expire();
+    // Also from memory, and for good: the page keeps running a moment before the reload, and a
+    // renewal through the server's cookie (still valid, the other tab uses it) would bring it back.
+    driveConnection?.auth.stop();
   };
   // The sbobina open in the editor: Drive's changes to it wait until the editor closes. One tab of
   // the site runs at a time (activeTab.ts), so this tab's editor is the only one.
@@ -298,9 +299,11 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
   drive?.start();
   const trashEnabled = options.trash ?? driveConnection !== null;
   // Sbobine in the trash for more than 30 days go for good (on Drive too: a mark without text, dated
-  // when they went to the trash, so a restore made since on another device wins over it). One already
-  // on Drive waits for a round of this page while one can run, to merge such a restore first and keep
-  // the sbobina here with its audio; without a token (a new visit) it goes now, not at the next login.
+  // when they went to the trash, so a restore made since on another device wins over it). While an
+  // account is linked and its login not lost, one already on Drive waits for this page's first sync
+  // round (the server renews the token without a tap, so that round runs even on a new visit), to
+  // merge such a restore first and keep the sbobina here with its audio. Without a linked account, or
+  // with a lost login waiting for "Riconnetti", it goes now, not at the next login.
   const purgeTrash = () => {
     if (!trashEnabled) return Promise.resolve(0);
     const linked = drive?.status();

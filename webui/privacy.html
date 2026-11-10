@@ -31,7 +31,7 @@
     <main>
       <article>
         <h1>Informativa sulla privacy</h1>
-        <p class="updated">Ultimo aggiornamento: 28 ottobre 2026</p>
+        <p class="updated">Ultimo aggiornamento: 10 novembre 2026</p>
 
         <nav class="toc" aria-label="In questa pagina">
           <p>In questa pagina</p>
@@ -52,7 +52,7 @@
         </nav>
 
         <h2 id="in-breve">In breve</h2>
-        <p><strong>El Sbobinator non ha un server suo e non ti chiede un account: lo sviluppatore non riceve le tue sbobine, il tuo audio o le tue chiavi.</strong></p>
+        <p><strong>El Sbobinator non ti chiede un account e le tue sbobine, il tuo audio e le tue chiavi non passano da un server suo: lo sviluppatore non li riceve.</strong> Solo il collegamento facoltativo a Google Drive passa da un piccolo servizio del sito, che non tiene dati: il permesso di Google resta cifrato in un cookie nel tuo browser.</p>
         <div class="table-wrap">
           <table>
             <thead>
@@ -62,6 +62,7 @@
               <tr><td>Sbobine e raccolte</td><td>In questo browser; su Google Drive solo se attivi la sincronizzazione</td><td>Tu</td></tr>
               <tr><td>Audio della lezione</td><td>In questo browser durante l’elaborazione; dopo solo se scegli di tenerlo</td><td>Tu, e Google Gemini per trascriverlo</td></tr>
               <tr><td>Chiavi API Gemini</td><td>In questo browser, non cifrate</td><td>Tu, e chi usa questo browser</td></tr>
+              <tr><td>Collegamento a Google Drive (permesso di rinnovo ed email dell’account)</td><td>Solo se colleghi Drive: in un cookie cifrato in questo browser, che le pagine del sito non leggono, fino a sei mesi dall’ultimo uso</td><td>Google, e il servizio del sito solo per chiedere un nuovo accesso, senza tenerne copia</td></tr>
               <tr><td>Segnalazioni ed email</td><td>Google Moduli e Gmail dello sviluppatore</td><td>Lo sviluppatore, solo se gli scrivi</td></tr>
             </tbody>
           </table>
@@ -69,7 +70,7 @@
         <ul>
           <li>Per trascrivere, il browser manda l’audio della lezione direttamente a Google Gemini con la tua chiave API.</li>
           <li>Se vuoi, puoi sincronizzare le sbobine con il tuo Google Drive per averle anche sugli altri dispositivi. È facoltativo.</li>
-          <li>Il sito non usa cookie e non ha strumenti di statistica o pubblicità.</li>
+          <li>Il sito non ha strumenti di statistica o pubblicità. Usa un cookie tecnico solo se colleghi Google Drive, per tenerti collegato.</li>
         </ul>
 
         <h2 id="titolare">Chi è il titolare</h2>
@@ -113,8 +114,9 @@
           <li>Per la sincronizzazione chiede solo il permesso <code>drive.appdata</code>: vede soltanto i file che crea lei in quella cartella, non gli altri file del tuo Drive.</li>
           <li>Si sincronizzano i testi e i dati delle sbobine (titolo, date, raccolte). Non si sincronizzano l’audio, le chiavi API e l’avanzamento delle elaborazioni.</li>
           <li>Una sbobina eliminata va nel cestino per 30 giorni, anche sugli altri dispositivi. Quando svuoti il cestino, o passati i 30 giorni, alla prima sincronizzazione di un dispositivo collegato su Drive resta solo un segno senza testo né titolo, perché un dispositivo rimasto spento non la faccia ricomparire. Fino ad allora testo e titolo restano nella cartella nascosta.</li>
-          <li>I dati vanno direttamente dal tuo browser a Google, senza server di El Sbobinator. Lo sviluppatore non li riceve e non può leggerli.</li>
-          <li>Il permesso di accesso (token) resta solo nella scheda aperta, al massimo un’ora. Nel browser resta l’indirizzo email dell’account, per ricollegarti con un tocco; “Disconnetti” lo cancella.</li>
+          <li>Le sbobine vanno direttamente dal tuo browser a Google Drive e non passano da server di El Sbobinator. Lo sviluppatore non le riceve e non può leggerle.</li>
+          <li>Per non chiederti di ricollegarti ogni ora, il collegamento passa da un piccolo servizio del sito, su Cloudflare come il sito stesso. Quando ti colleghi, Google gli dà un permesso di rinnovo: il servizio lo cifra e lo salva in un cookie nel tuo browser, che le pagine del sito non possono leggere. Con quel permesso chiede a Google un nuovo permesso di accesso (token) quando serve. Il servizio non ne tiene copie: niente database e nessun registro dei permessi.</li>
+          <li>Il token resta solo nella memoria della scheda aperta, al massimo un’ora. Nel browser restano il cookie e l’indirizzo email dell’account. “Disconnetti” revoca il permesso presso Google e cancella entrambi. Se in quel momento il servizio non risponde (per esempio senza connessione), l’indirizzo email si cancella subito, l’app non usa più il cookie e ritenta di revocarlo e cancellarlo appena torna la connessione o alla visita successiva. Se togli l’accesso dal tuo account Google, o non usi l’app per sei mesi, ti viene chiesto di ricollegarti.</li>
         </ul>
         <p><strong>Esportazione nel tuo Drive (solo se la chiedi):</strong> con “Esporta tutte le sbobine nel mio Drive” l’app chiede in quel momento anche il permesso <code>drive.file</code>, che vale solo per i file creati da lei. Crea nel tuo Drive una cartella visibile “El Sbobinator – esportazione” con la data, un file HTML per ogni sbobina e una sottocartella per ogni raccolta. Quella cartella è tua: l’app non la rilegge e non la modifica; se non ti serve più la cancelli da Drive.</p>
         <p><strong>Come cancellare i dati da Drive:</strong></p>
@@ -128,7 +130,7 @@
 
         <h2 id="sito">Il sito e Cloudflare</h2>
         <p>Il sito è ospitato da Cloudflare Pages. Come ogni server web, Cloudflare riceve i dati tecnici delle richieste (indirizzo IP, tipo di browser, pagina richiesta) per consegnare il sito e proteggerlo. Vedi l’<a href="https://www.cloudflare.com/privacypolicy/">informativa di Cloudflare</a>.</p>
-        <p>El Sbobinator non usa cookie e non carica strumenti di statistica o pubblicità. La politica di sicurezza del sito (Content-Security-Policy) blocca gli script di altri siti.</p>
+        <p>El Sbobinator non carica strumenti di statistica o pubblicità. Usa cookie solo se colleghi Google Drive, e solo tecnici: quello del collegamento descritto sopra, finché resti collegato, e uno temporaneo di dieci minuti mentre accedi. La politica di sicurezza del sito (Content-Security-Policy) blocca gli script di altri siti.</p>
 
         <h2 id="altri-servizi">Altri servizi, solo se li apri tu</h2>
         <ul>
@@ -148,6 +150,7 @@
         <h2 id="base-giuridica">Basi giuridiche e trasferimenti</h2>
         <ul>
           <li>Sbobine, audio e chiavi nel tuo browser e nel tuo Drive: lo sviluppatore non li tratta, perché non li riceve.</li>
+          <li>Collegamento a Google Drive: il servizio del sito usa il permesso di rinnovo e l’email dell’account solo per darti l’accesso a Drive che chiedi collegandolo (art. 6, par. 1, lett. b del GDPR). I cookie del collegamento (<code>__Host-drive</code> e quello temporaneo dell’accesso) sono tecnici e strettamente necessari a questo servizio: non serve il tuo consenso (art. 122 del Codice privacy).</li>
           <li>Segnalazioni ed email: legittimo interesse a rispondere e a migliorare l’app (art. 6, par. 1, lett. f del GDPR).</li>
           <li>Dati tecnici del sito: legittimo interesse a consegnarlo e a proteggerlo (art. 6, par. 1, lett. f del GDPR).</li>
         </ul>

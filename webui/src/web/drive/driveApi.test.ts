@@ -129,4 +129,32 @@ describe('Drive API', () => {
 
     await expect(setup(null).api.listChanged(null)).rejects.toMatchObject({ status: 401 });
   });
+
+  it('tries once more with a token renewed after a 401, never in a loop', async () => {
+    const drive = createFakeDrive();
+    let token = 'tok-1';
+    const onUnauthorized = vi.fn(() => { if (token === 'tok-1') token = 'tok-2'; });
+    const api = createDriveApi({ getToken: async () => token, fetchImpl: drive.fetch, sleep: async () => {}, onUnauthorized });
+    await api.createJson('sbobina-a.json', {});
+    drive.expireTokens();
+    // An upload too: Drive refused it, so it never happened.
+    await expect(api.createJson('sbobina-b.json', {})).resolves.toMatchObject({ name: 'sbobina-b.json' });
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+    expect(drive.files()).toHaveLength(2);
+
+    drive.expireTokens();
+    await expect(api.listChanged(null)).rejects.toMatchObject({ status: 401 });
+    expect(onUnauthorized).toHaveBeenCalledTimes(2);
+  });
+
+  it('never retries a renewal the login service failed with a 5xx: that is no Drive server error', async () => {
+    const drive = createFakeDrive();
+    const sleep = vi.fn(async () => {});
+    const getToken = vi.fn(async () => { throw new DriveError(503, 'Il collegamento a Google Drive non è ancora attivo su questo sito.', 'server_not_configured'); });
+    const api = createDriveApi({ getToken, fetchImpl: drive.fetch, sleep });
+    await expect(api.listChanged(null)).rejects.toMatchObject({ status: 503, reason: 'server_not_configured' });
+    expect(getToken).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
+    expect(drive.requests).toHaveLength(0);
+  });
 });

@@ -59,7 +59,7 @@ describe('WebDriveSection', () => {
     expect(screen.queryByRole('button', { name: 'Elimina tutti i miei dati da Drive' })).toBeNull();
 
     fireEvent.click(linkButton);
-    expect(login.calls).toEqual([{ silent: false }]);
+    expect(login.calls).toEqual(['link']);
     expect(choice()).toBe('drive');
     await waitFor(() => expect(screen.getByTestId('web-drive-status').textContent).toBe('Collegato come studente@example.com'));
     await waitFor(() => expect(screen.getByTestId('web-drive-last-sync').textContent).toMatch(/^Ultima sincronizzazione: /));
@@ -78,7 +78,7 @@ describe('WebDriveSection', () => {
     expect(expired.className).toContain('--warning-text');
     expect(screen.queryByRole('button', { name: 'Sincronizza ora' })).toBeNull();
     fireEvent.click(reconnect);
-    expect(login.calls).toEqual([{ silent: true }]);
+    expect(login.calls).toEqual(['link']);
     await screen.findByRole('button', { name: 'Sincronizza ora' });
   });
 
@@ -182,7 +182,7 @@ describe('WebDriveSection', () => {
     await archive.create(input('Cuore'), '<p>valvole</p>');
     render(<DriveCards />);
     fireEvent.click(await screen.findByRole('button', { name: 'Esporta tutte le sbobine nel mio Drive' }));
-    expect(login.calls).toEqual([{ silent: false, scope: 'https://www.googleapis.com/auth/drive.file' }]);
+    expect(login.calls).toEqual(['export']);
     const result = await screen.findByTestId('web-drive-export-result');
     expect(result.textContent).toMatch(/^2 sbobine esportate in “El Sbobinator – esportazione \d{4}-\d{2}-\d{2}”\./);
     expect(screen.getByRole('link', { name: 'Apri la cartella' }).getAttribute('href')).toContain('drive.google.com');
