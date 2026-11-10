@@ -70,13 +70,15 @@
   --bg-hover: rgba(0, 0, 0, 0.10);
   /* Rows inside floating surfaces (menus, popovers, the notification panel, the Settings
      selects) lighten towards white instead, as the dark theme's do: the black hover made a
-     dark, heavy band on the menus' beige. 65% white moves the beige as far in lightness as the
-     dark hover moves its menus (a weaker one barely shows), and still reads cream, not as a hole
-     cut to the white page. Selected rows take a pale green and the danger row (Elimina) a pale
-     rose, each as far from the beige as its dark counterpart. index.css hands them down. */
-  --bg-hover-floating: rgba(255, 255, 255, 0.65);
-  --bg-selected-floating: #ecf2e6;
-  --bg-danger-hover-floating: #fdf3f0;
+     dark, heavy band on the menus' beige. 55% white moves the beige about three quarters as far
+     in lightness as the dark hover moves its menus: a light veil on beige shows more than the
+     same step on dark grey, and the full step (72%) turned the row near-white, a hole cut to the
+     white page rather than a cream highlight. Selected rows take a pale green and the danger row
+     (Elimina) a pale rose, each as far from the beige as its dark counterpart. index.css hands
+     them down. */
+  --bg-hover-floating: rgba(255, 255, 255, 0.55);
+  --bg-selected-floating: #eef4e8;
+  --bg-danger-hover-floating: #fef7f4;
   --bg-overlay: rgba(28, 25, 23, 0.40);
 
   /* Hover and the three borders separate as much as their dark counterparts do: the same
@@ -249,12 +251,14 @@
      lighter than the header, the page white, and menus, popovers and the player a step darker
      than the header, so they stand out from the page and from both bars. */
   --editor-toolbar-bg: #f6f4ef;
-  /* Everything that floats over the page (menus, popovers, tooltips, the player, the selection
-     bar) shares these three. The dark theme separates them with a lighter grey and a deep
-     shadow; on a light page a tone step alone barely shows, so the frame carries the same
-     separation here. The shadow only lifts: a wide, dark one reads as a halo on the beige. */
-  --bg-floating: #e4dfd5;
-  --border-floating: rgba(120, 113, 108, 0.36);
+  /* Everything that floats over the page (menus, popovers, tooltips, the player) shares these
+     three; the selection bar keeps the frame but takes the toolbar's tone (index.css). The dark
+     theme separates them with a lighter grey and a deep shadow; on a light page a tone step
+     alone barely shows, so the frame carries the same separation here. #e4dfd5 read heavy
+     (2026-11-09): the tone moved a half step up and the hairline darkened to keep the menus
+     apart from the header. The shadow only lifts: a wide, dark one reads as a halo on the beige. */
+  --bg-floating: #e7e2d9;
+  --border-floating: rgba(120, 113, 108, 0.46);
   --shadow-floating: 0 1px 3px rgba(28, 25, 18, 0.07), 0 8px 20px -6px rgba(28, 25, 18, 0.16);
   /* The same, cast upwards, for the player's menus that open above the dock. */
   --shadow-floating-up: 0 -1px 3px rgba(28, 25, 18, 0.07), 0 -8px 20px -6px rgba(28, 25, 18, 0.16);

@@ -2204,7 +2204,9 @@ button {
   align-items: center;
   gap: 3px;
   padding: 4px 6px;
-  background: var(--bg-floating);
+  /* The selection bar takes the toolbar's tone and hover, not the menus' (light theme), and keeps
+     the floating frame so it still lifts off the page. */
+  background: var(--editor-toolbar-bg);
   border: 1px solid var(--border-floating);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-floating);
@@ -2533,14 +2535,21 @@ button {
   position: relative;
 }
 
+/* "Trova" sits on the field's top border, half over the dialog and half over the field: each half
+   takes the colour it covers, so the notch shows no box around the word. Its 16px box, centred on
+   top: -8px, puts the split exactly on the border, which the lower half hides. */
 .find-replace-dialog-label {
   position: absolute;
   top: -8px;
   left: 14px;
+  display: flex;
+  align-items: center;
+  height: 16px;
   font-size: var(--text-caption);
   font-weight: 600;
+  line-height: var(--leading-none);
   color: var(--accent-bg);
-  background: var(--bg-elevated);
+  background: linear-gradient(to bottom, var(--bg-floating) 50%, var(--bg-input) 50%);
   padding: 0 4px;
   z-index: 1;
   pointer-events: none;
@@ -3813,9 +3822,10 @@ input::-webkit-contacts-auto-fill-button {
    same hover as elsewhere. Handing the token down covers every row, button and Tailwind
    hover:bg-[var(--bg-hover)] inside them. Docked bars (the player, the pinned Archive bar) sit
    in the page and keep the page hover, as does the editor's index while it is a column beside
-   the page (on a phone it floats: see its sheet). Selected rows use --bg-selected-floating where
-   they are styled. */
-:is(.kebab-panel, .context-menu, .color-picker-panel, .editor-bubble-menu, .link-panel,
+   the page (on a phone it floats: see its sheet), and so does the selection bar, which takes the
+   toolbar's tone in the light theme. Selected rows use --bg-selected-floating where they are
+   styled. */
+:is(.kebab-panel, .context-menu, .color-picker-panel, .link-panel,
   .editor-link-card, .editor-video-preview, .editor-image-toolbar, .sidebar-account-menu,
   .sidebar-tooltip, .select-dropdown, .notification-dropdown-panel, .archive-selection-bar,
   .find-bar-float, .find-replace-dialog, .folder-name-tooltip, .phone-format-sheet) {
