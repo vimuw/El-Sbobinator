@@ -104,6 +104,16 @@ describe('retryWithQuota', () => {
     await expect(retryWithQuota(failing(new DegenerateOutputError('ripetuto')), fakeEnv().env, 30, 'x')).rejects.toBeInstanceOf(DegenerateOutputError);
   });
 
+  it('fails at once when the browser can no longer read the picked file', async () => {
+    for (const name of ['NotFoundError', 'NotReadableError']) {
+      const { env, sleeps } = fakeEnv();
+      const fn = failing(new DOMException('A requested file or directory could not be found', name));
+      await expect(retryWithQuota(fn, env, 30, 'x')).rejects.toMatchObject({ name });
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(sleeps).toEqual([]);
+    }
+  });
+
   it('retries other errors after retrySleepSec, up to 4 attempts', async () => {
     const { env, sleeps, phases } = fakeEnv();
     const fn = failing(new Error('Risposta vuota dal modello (text=None)'));

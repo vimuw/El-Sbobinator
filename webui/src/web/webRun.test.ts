@@ -3,7 +3,7 @@ import type { FileDescriptor } from '../appState';
 import { CancelledError, CircuitBreakerExhaustedError, DegenerateOutputError, InvalidKeyError, QuotaDailyLimitError } from './pipeline/retry';
 import { FileMismatchError, defaultSettings, type AudioSource } from './pipeline/run';
 import { fileIdentity, newSession, sameFile, type CheckpointStore, type SessionState } from './pipeline/session';
-import { failurePayload, runWebFile, type WebRunOptions } from './webRun';
+import { LOST_FILE_MESSAGE, failurePayload, runWebFile, type WebRunOptions } from './webRun';
 
 type Reply = { status?: number; json: unknown };
 const okText = (text: string): Reply => ({ json: { candidates: [{ content: { parts: [{ text }] }, finishReason: 'STOP' }] } });
@@ -122,6 +122,7 @@ describe('failurePayload', () => {
     expect(failurePayload(new DegenerateOutputError('loop'), state('phase1'), base).error).toBe('phase1_degenerate_output');
     expect(failurePayload(new FileMismatchError('Non è lo stesso audio.'), state('phase1'), base).error).toBe('Non è lo stesso audio.');
     expect(failurePayload(new DOMException('full', 'QuotaExceededError'), state('phase1'), base).error).toContain('Spazio del browser esaurito');
+    expect(failurePayload(new DOMException('gone', 'NotFoundError'), state('phase1', 1), base)).toEqual({ ...base, error: LOST_FILE_MESSAGE });
     expect(failurePayload(new Error('boom'), state('phase2'), base)).toMatchObject({ error: 'processing_failed', error_detail: 'Error: boom' });
     expect(failurePayload(new Error('boom'), state('phase1', 1), base).error).toBe('phase1_chunk_failed_2');
   });

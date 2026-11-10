@@ -11,6 +11,7 @@ import {
   ModelNotFoundError,
   PermanentError,
   QuotaDailyLimitError,
+  isLostFileError,
 } from './pipeline/retry';
 import { FileMismatchError, defaultSettings, runPipeline, type AudioSource, type PageState, type PipelineEnv, type PipelineReporter } from './pipeline/run';
 import { webSessionHtmlPath } from './webSessions';
@@ -26,6 +27,7 @@ export const KEEP_PAGE_OPEN_WARNING = {
 export const REGENERATE_TIMEOUT_MS = 120_000;
 export const NEW_KEY_TIMEOUT_MS = 120_000;
 const PAUSE_RECOMMENDATION_MS = 30 * 60_000;
+export const LOST_FILE_MESSAGE = 'Il browser non riesce più a leggere il file audio: è stato spostato, rinominato o modificato dopo averlo scelto. Rimuovilo dalla coda e aggiungilo di nuovo.';
 
 export type RegenerateAnswer = boolean | null | 'timeout';
 
@@ -98,6 +100,7 @@ export function failurePayload(error: unknown, state: SessionState | null, base:
   if (error instanceof ModelNotFoundError) return { ...base, error: 'Modello non disponibile per questa chiave: scegline un altro nelle impostazioni.' };
   if (error instanceof DegenerateOutputError) return { ...base, error: 'phase1_degenerate_output', error_detail: detail(error) };
   if (error instanceof FileMismatchError) return { ...base, error: error.message };
+  if (isLostFileError(error)) return { ...base, error: LOST_FILE_MESSAGE };
   if (error instanceof PermanentError && stage === 'phase1') return { ...base, error: 'bad_request_phase1', error_detail: detail(error) };
   if (error instanceof CircuitBreakerExhaustedError) {
     return {

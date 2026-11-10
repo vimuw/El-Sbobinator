@@ -14,7 +14,7 @@ export type AudioReply =
   | { id: number; type: 'cut'; result: CutResult }
   | { id: number; type: 'prepare'; result: PreparedAudio }
   | { id: number; type: 'base64'; result: string }
-  | { id: number; type: 'error'; message: string };
+  | { id: number; type: 'error'; message: string; name?: string };
 
 export async function blobToBase64(blob: Blob): Promise<string> {
   const bytes = new Uint8Array(await blob.arrayBuffer());
@@ -56,7 +56,9 @@ export function createAudioTasks(encoder: { canEncode: () => Promise<boolean>; e
       }
       return { id: request.id, type: 'base64', result: await blobToBase64(request.blob) };
     } catch (error) {
-      return { id: request.id, type: 'error', message: error instanceof Error ? error.message : String(error) };
+      // The name crosses to the page too: a NotFoundError means the picked file is gone (retry.ts).
+      if (error instanceof Error) return { id: request.id, type: 'error', message: error.message, name: error.name };
+      return { id: request.id, type: 'error', message: String(error) };
     }
   }
 

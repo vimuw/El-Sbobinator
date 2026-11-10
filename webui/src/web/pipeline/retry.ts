@@ -42,6 +42,12 @@ export const RATE_LIMIT_SLEEP_SEC = 65;
 // Free retries for requests the browser dropped while the page was in the background.
 export const MAX_HIDDEN_PAGE_RETRIES = 3;
 
+// The browser lost the audio file the user picked: it was moved, renamed or changed on disk after
+// it was chosen. Every later read fails the same way, so no attempt is worth repeating.
+const LOST_FILE_ERRORS = new Set(['NotFoundError', 'NotReadableError']);
+export const isLostFileError = (error: unknown): boolean =>
+  typeof error === 'object' && error !== null && LOST_FILE_ERRORS.has(String((error as { name?: unknown }).name));
+
 export function errorText(error: unknown): string {
   if (error instanceof GeminiHttpError) return `${error.status} ${error.apiStatus} ${error.apiMessage} ${error.rawBody}`.toLowerCase();
   return (error instanceof Error ? `${error.name}: ${error.message}` : String(error)).toLowerCase();
@@ -138,7 +144,7 @@ export async function retryWithQuota<T>(fn: (call: number) => Promise<T>, env: R
       return await fn(++calls);
     } catch (error) {
       if (env.signal.aborted || isAbortError(error)) throw new CancelledError('annullato');
-      if (error instanceof DegenerateOutputError || error instanceof CancelledError) throw error;
+      if (error instanceof DegenerateOutputError || error instanceof CancelledError || isLostFileError(error)) throw error;
       const text = errorText(error);
       const code = errorCode(error);
 
