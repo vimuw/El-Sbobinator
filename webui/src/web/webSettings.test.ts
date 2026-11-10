@@ -7,8 +7,10 @@ import {
   adoptSpikeKeys,
   loadUnavailableModels,
   loadWebKeys,
+  loadWebModel,
   parseKeyLines,
   rememberUnavailableModel,
+  saveWebModel,
 } from './webSettings';
 
 function stubStorage(initial: Record<string, string>) {
@@ -67,6 +69,41 @@ describe('web settings', () => {
     // A new main key may belong to a project that has the model.
     expect(loadUnavailableModels('AIzaSyOtherKey123456789012')).toEqual([]);
     expect(loadUnavailableModels('')).toEqual([]);
+  });
+
+  it('gives a fresh browser the default model', () => {
+    stubStorage({});
+    expect(loadWebModel()).toBe('gemini-2.5-flash');
+  });
+
+  it('moves a 3.6 Flash saved as the old default to 2.5 Flash once', () => {
+    stubStorage({ [STORAGE_KEYS.WEB_MODEL_V1]: 'gemini-3.6-flash' });
+    expect(loadWebModel()).toBe('gemini-2.5-flash');
+    expect(loadWebModel()).toBe('gemini-2.5-flash');
+
+    // Picked again by hand after the move: the migration never runs twice.
+    expect(saveWebModel('gemini-3.6-flash')).toBe(true);
+    expect(loadWebModel()).toBe('gemini-3.6-flash');
+    expect(loadWebModel()).toBe('gemini-3.6-flash');
+  });
+
+  it('keeps a model chosen before the first read', () => {
+    stubStorage({ [STORAGE_KEYS.WEB_MODEL_V1]: 'gemini-3.6-flash' });
+    saveWebModel('gemini-3.6-flash');
+    expect(loadWebModel()).toBe('gemini-3.6-flash');
+  });
+
+  it('leaves other saved models where they are', () => {
+    stubStorage({ [STORAGE_KEYS.WEB_MODEL_V1]: 'gemini-3.8-flash' });
+    expect(loadWebModel()).toBe('gemini-3.8-flash');
+    expect(loadWebModel()).toBe('gemini-3.8-flash');
+  });
+
+  it('keeps 3.6 Flash for a main key already known to lack 2.5 Flash', () => {
+    const key = 'AIzaSyMainKey1234567890123';
+    stubStorage({ [STORAGE_KEYS.WEB_GEMINI_KEYS_V1]: key, [STORAGE_KEYS.WEB_MODEL_V1]: 'gemini-3.6-flash' });
+    rememberUnavailableModel(key, 'gemini-2.5-flash');
+    expect(loadWebModel()).toBe('gemini-3.6-flash');
   });
 
   it('ignores a damaged unavailable-models entry', () => {

@@ -18,7 +18,10 @@ export const STORAGE_KEYS = {
   CONSOLE_HINT_V1: 'el-sbobinator.console-hint.v1',
   // Web build only: Gemini keys (one per line) and model, kept in this browser.
   WEB_GEMINI_KEYS_V1: 'el-sbobinator.web.gemini-keys.v1',
+  // v1 saved 3.6 Flash for everyone who set up while it was the default: read once by
+  // loadWebModel (webSettings.ts), moved to v2 with 3.6 Flash turned into 2.5 Flash, then removed.
   WEB_MODEL_V1: 'el-sbobinator.web.model.v1',
+  WEB_MODEL_V2: 'el-sbobinator.web.model.v2',
   // Models the main Gemini key turned out not to have (webSettings.ts): the key's hash, never the key.
   WEB_UNAVAILABLE_MODELS_V1: 'el-sbobinator.web.unavailable-models.v1',
   // When this browser last downloaded a backup of its sbobine (ISO date).
