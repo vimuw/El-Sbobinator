@@ -96,10 +96,13 @@ describe('Drive sync service', () => {
     const pc = device(drive, 'pc', { token: true, email: 'studente@example.com' });
     pc.setBusy(true);
     await pc.archive.create(input('Chimica'), '<p>due</p>');
-    await pc.service.syncNow();
+    expect(pc.service.status().waiting_for_run).toBe(false);
+    // The tap is kept, and the status says so: the settings and the sidebar tell it to the user.
+    expect(await pc.service.syncNow()).toMatchObject({ syncing: false, waiting_for_run: true });
     expect(drive.requests).toEqual([]);
     pc.setBusy(false);
     pc.service.runEnded();
+    expect(pc.service.status().waiting_for_run).toBe(false);
     await vi.waitFor(() => expect(drive.files()).toHaveLength(1));
   });
 

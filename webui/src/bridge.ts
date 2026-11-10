@@ -233,6 +233,8 @@ export interface DriveStatus {
   /** The token is gone (new tab, an hour passed, 401): a tap on "Drive: tocca per riconnettere". */
   needs_reconnect: boolean;
   syncing: boolean;
+  /** A round was asked for during a Gemini run: it starts when the run ends. */
+  waiting_for_run?: boolean;
   last_sync_at: string | null;
   error: string | null;
 }

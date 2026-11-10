@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DRIVE_WAITING_FOR_RUN } from '../hooks/useDriveStatus';
 import { STORAGE_KEYS } from '../storageKeys';
 import { createDriveApi } from '../web/drive/driveApi';
 import { createFakeAuth, createFakeDrive, type FakeDrive } from '../web/drive/fakeDrive';
@@ -109,6 +110,23 @@ describe('SidebarAccount', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Riconnetti' }));
     expect(login.calls).toEqual([{ silent: true }]);
     await screen.findByRole('button', { name: 'Sincronizza ora' });
+  });
+
+  it('"Sincronizza ora" during an elaborazione says it waits for its end', async () => {
+    let waiting = false;
+    const status = () => ({
+      available: true, connected: true, email: 'studente@example.com', needs_reconnect: false, syncing: false,
+      waiting_for_run: waiting, last_sync_at: '2026-11-10T08:00:00.000Z', error: null,
+    });
+    window.pywebview = { api: { get_drive_status: async () => status(), sync_drive_now: async () => { waiting = true; return status(); } } };
+    render(<SidebarAccount onOpenStorageSettings={() => {}} />);
+    fireEvent.click(await screen.findByRole('button', { name: /^Account Google: studente@example\.com/ }));
+    const sync = await screen.findByRole('button', { name: 'Sincronizza ora' });
+    fireEvent.click(sync);
+    const menu = screen.getByRole('dialog', { name: 'Account Google Drive' });
+    await waitFor(() => expect(menu.textContent).toContain(DRIVE_WAITING_FOR_RUN));
+    expect(menu.textContent).not.toContain('Ultima sincronizzazione');
+    expect((sync as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('"Esci dall’account" unlinks this browser from the menu and keeps the copy on Drive', async () => {

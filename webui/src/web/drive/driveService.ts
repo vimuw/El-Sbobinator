@@ -99,6 +99,7 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
       email,
       needs_reconnect: Boolean(email) && !token,
       syncing,
+      waiting_for_run: waitingForRun,
       last_sync_at: lastSyncAt,
       error,
     };

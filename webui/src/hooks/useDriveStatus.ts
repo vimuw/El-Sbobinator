@@ -121,6 +121,9 @@ export const DRIVE_HEALTH_LABEL: Record<DriveHealth, string> = {
   error: 'Errore di sincronizzazione',
 };
 
+/** In place of the last sync while a round waits for the Gemini run: the tap was not lost. */
+export const DRIVE_WAITING_FOR_RUN = 'In attesa: si sincronizza appena finisce l’elaborazione.';
+
 export function formatLastSync(iso: string | null): string {
   const date = iso ? new Date(iso) : null;
   if (!date || Number.isNaN(date.getTime())) return 'Non ancora sincronizzato da questo browser.';

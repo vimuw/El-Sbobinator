@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { ChevronRight, Cloud, EyeOff, Loader2, LogOut, MonitorSmartphone, RefreshCw, Settings, ShieldCheck, UserRound } from 'lucide-react';
-import { DRIVE_HEALTH_LABEL, driveHealth, formatLastSync, useDriveStatus, type DriveHealth } from '../hooks/useDriveStatus';
+import { DRIVE_HEALTH_LABEL, DRIVE_WAITING_FOR_RUN, driveHealth, formatLastSync, useDriveStatus, type DriveHealth } from '../hooks/useDriveStatus';
 import { usePhoneLayout } from '../hooks/usePhoneLayout';
 import { popoverVariants } from '../motion';
 import { DriveAvatar } from './modals/settings/WebDriveSection';
@@ -161,7 +161,9 @@ export function SidebarAccount({ onOpenStorageSettings }: SidebarAccountProps) {
                           ? 'L’accesso è scaduto: le sbobine restano in questo browser finché non ti riconnetti.'
                           : health === 'syncing'
                             ? 'Sincronizzazione in corso…'
-                            : formatLastSync(status?.last_sync_at ?? null)}
+                            : status?.waiting_for_run
+                              ? DRIVE_WAITING_FOR_RUN
+                              : formatLastSync(status?.last_sync_at ?? null)}
                       </p>
                     </div>
                   </div>
@@ -173,7 +175,7 @@ export function SidebarAccount({ onOpenStorageSettings }: SidebarAccountProps) {
                       {busy === 'connect' ? spinner : <RefreshCw className="w-4 h-4" />}<span>Riconnetti</span>
                     </button>
                   ) : (
-                    <button type="button" onClick={drive.syncNow} disabled={busy !== null || Boolean(status?.syncing)} className="app-button-secondary is-settings-action w-full justify-center">
+                    <button type="button" onClick={drive.syncNow} disabled={busy !== null || Boolean(status?.syncing || status?.waiting_for_run)} className="app-button-secondary is-settings-action w-full justify-center">
                       {busy === 'sync' ? spinner : <RefreshCw className="w-4 h-4" />}<span>Sincronizza ora</span>
                     </button>
                   ))}
