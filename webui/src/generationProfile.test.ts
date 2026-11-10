@@ -43,7 +43,7 @@ describe('generation profile', () => {
 
   it('keeps the model defaults of the desktop registry', () => {
     expect(PROFILE_MODEL_OPTIONS.map(option => option.id)).toEqual(['gemini-2.5-flash', 'gemini-3.6-flash', 'gemini-3.8-flash']);
-    expect(PROFILE_DEFAULT_MODEL).toBe('gemini-3.6-flash');
+    expect(PROFILE_DEFAULT_MODEL).toBe('gemini-2.5-flash');
     expect(DEFAULT_MODEL).toBe(PROFILE_DEFAULT_MODEL);
     expect(profileModel('gemini-2.5-flash').phase1_thinking_budget).toBe(16384);
     expect(profileModel('gemini-3.8-flash').phase1_thinking_budget).toBeUndefined();

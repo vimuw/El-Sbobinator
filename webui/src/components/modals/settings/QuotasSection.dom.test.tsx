@@ -71,8 +71,8 @@ describe('QuotasSection', () => {
     expect(Array.from(container.querySelectorAll('summary')).map(el => el.textContent?.trim()))
       .toEqual(['Quote per modello']);
     expect(container.querySelector('details')?.open).toBe(false);
-    const selectedModel = screen.getByText('Gemini 3.6 Flash');
-    expect(screen.getByText('Gemini 2.5 Flash')).toBeTruthy();
+    const selectedModel = screen.getByText('Gemini 2.5 Flash');
+    expect(screen.getByText('Gemini 3.6 Flash')).toBeTruthy();
     expect(screen.getByText('Gemini 3.8 Flash')).toBeTruthy();
     expect(screen.queryByText('Gemini 3.5 Flash')).toBeNull();
     expect(screen.queryByText('Gemini 3.7 Flash')).toBeNull();

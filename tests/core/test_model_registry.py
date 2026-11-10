@@ -37,7 +37,7 @@ class SupportedModelsTests(unittest.TestCase):
             ("gemini-2.5-flash", "gemini-3.6-flash", "gemini-3.8-flash"),
         )
         self.assertEqual(tuple(opt["id"] for opt in MODEL_OPTIONS), SUPPORTED_MODELS)
-        self.assertEqual(DEFAULT_MODEL, "gemini-3.6-flash")
+        self.assertEqual(DEFAULT_MODEL, "gemini-2.5-flash")
         self.assertEqual(
             [opt["id"] for opt in MODEL_OPTIONS if opt.get("is_default")],
             [DEFAULT_MODEL],

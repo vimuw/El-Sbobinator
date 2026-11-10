@@ -856,7 +856,7 @@ describe('SettingsModal — session folder and cleanup', () => {
 });
 
 describe('SettingsModal — model section', () => {
-  it('shows the 3.6 Flash default badge and the 2.5 Flash access tooltip', async () => {
+  it('shows the 2.5 Flash default badge and its access tooltip', async () => {
     const models = [
       { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: '', default_chunk_minutes: 12 },
       { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: '', default_chunk_minutes: 15 },
@@ -878,12 +878,12 @@ describe('SettingsModal — model section', () => {
     // The closed select shows only the choice; the Default badge appears while choosing
     expect(trigger.textContent).not.toContain('Default');
     fireEvent.click(trigger);
-    const defaultOption = screen.getByRole('option', { name: /Gemini 3.6 Flash.*Default/i });
-    expect(defaultOption.getAttribute('aria-selected')).toBe('true');
+    const selectedOption = screen.getByRole('option', { name: /Gemini 3.6 Flash/i });
+    expect(selectedOption.getAttribute('aria-selected')).toBe('true');
+    expect(selectedOption.textContent).not.toContain('Default');
     expect(screen.getAllByRole('option')).toHaveLength(3);
     expect(screen.queryByRole('option', { name: /Gemini 3\.5 Flash|Gemini 3\.7 Flash/i })).toBeNull();
-    const legacyOption = screen.getByRole('option', { name: /Gemini 2.5 Flash/i });
-    expect(legacyOption.textContent).not.toContain('Default');
+    const legacyOption = screen.getByRole('option', { name: /Gemini 2.5 Flash.*Default/i });
     const accessNote = MODEL_25_ACCESS_NOTE;
     expect(legacyOption.querySelector('[title]')?.getAttribute('title')).toBe(accessNote);
     expect(screen.queryByText(accessNote)).toBeNull();
