@@ -2393,17 +2393,15 @@ button {
 }
 
 /* Tablet widths (iPad portrait 744–834 px, landscape up to 1180 px) and narrow desktop windows:
-   the A4 page shrinks to the space left instead of scrolling sideways. From about 922 px with the
-   index closed it is back to its fixed 794 px, so wide windows look the same. */
+   with the index closed the A4 page shrinks to the editor instead of scrolling sideways. From about
+   922 px it is back to its fixed 794 px, so wide windows look the same. Its width never follows the
+   index (as in Google Docs): RichTextEditor measures --editor-page-fit with the index closed, and
+   opening the index pushes the page right, scrolling sideways when there is no room. */
 @media (max-width: 1180px) {
-  .editor-page-center,
   .editor-page {
     min-width: 0;
-  }
-
-  /* The open index keeps its left column; the matching spacer on the right would starve the page. */
-  .editor-toc-open .editor-toc-spacer {
-    display: none;
+    width: var(--editor-page-fit, 794px);
+    flex-shrink: 0;
   }
 }
 
@@ -2895,8 +2893,11 @@ button {
   padding-right: 8px;
 }
 
+/* The right mirror of the index column keeps the page centred while there is room; it gives way
+   first, so an open index moves the page right before the editor scrolls sideways (Google Docs). */
 .editor-toc-spacer {
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 0;
   transition: width var(--duration-base) var(--ease-out);
 }
 
@@ -5971,6 +5972,7 @@ input::-webkit-contacts-auto-fill-button {
 
   .editor-page,
   :root[data-theme="dark"] .editor-page {
+    width: 100%;
     min-width: 0;
     max-width: none;
     box-shadow: none;
