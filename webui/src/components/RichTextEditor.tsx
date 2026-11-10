@@ -19,6 +19,7 @@ import { MenuBar } from './EditorToolbar';
 import { getWordRangeAtPos } from '../editorUtils';
 import { EditorBubbleMenu } from './EditorBubbleMenu';
 import { FindReplacePanel } from './EditorFindReplace';
+import { EditorScrollPercent } from './EditorScrollPercent';
 import { useEditorImageDrop } from '../hooks/useEditorImageDrop';
 import { useTocScrollSpy } from '../hooks/useTocScrollSpy';
 import { usePhoneLayout } from '../hooks/usePhoneLayout';
@@ -526,6 +527,7 @@ export function RichTextEditor({
           <div className="editor-toc-spacer" style={{ width: isTocOpen ? 260 : 44 }} />
         </div>
       </div>
+      <EditorScrollPercent containerRef={scrollContainerRef} bottomInset={bottomInset} />
 
       <EditorContextMenu
         contextMenu={contextMenu}
