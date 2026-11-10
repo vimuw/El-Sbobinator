@@ -161,6 +161,14 @@ def test_web_staging_is_manual_and_never_deploys_production():
     assert "--branch=main" not in staging
     # A staging build must carry no web-v* version, so the site labels itself a preview.
     assert "EL_SBOBINATOR_WEB_VERSION" not in staging
+    # With Drive, so its login (the /api/drive Function) can be tried before production.
+    build = staging.split("- name: Build the static site", 1)[1].split(
+        "\n      - name:", 1
+    )[0]
+    assert (
+        "EL_SBOBINATOR_GOOGLE_CLIENT_ID: ${{ vars.EL_SBOBINATOR_GOOGLE_CLIENT_ID }}"
+        in build
+    )
     order = [
         staging.index("npm run typecheck"),
         staging.index("npm test"),
