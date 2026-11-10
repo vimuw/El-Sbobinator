@@ -55,13 +55,14 @@ declare global {
 }
 
 export default function App() {
-  const [{ files, structuralVersion, appState, currentPhase, currentModel, activeProgress, workTotals, workDone, processingWarnings }, dispatch] = useReducer(
+  const [{ files, structuralVersion, appState, currentPhase, currentModel, activeProgress, workTotals, workDone, processingWarnings, runOutcome }, dispatch] = useReducer(
     processingReducer,
     undefined,
     () => createInitialProcessingState(loadPersistedQueue()),
   );
 
   const { consoleLogs, appendConsole } = useConsole();
+  const handleDismissRunOutcome = useCallback(() => dispatch({ type: 'outcome/clear' }), []);
   const { themeMode, setThemeMode } = useTheme();
   const { updateAvailable, latestVersion, isCheckingUpdate, hasChecked, checkFailed, checkForUpdates, dismissUpdate } = useUpdateChecker(
     getHostCapabilities().updateInstallation,
@@ -620,6 +621,7 @@ export default function App() {
               batchCompleted,
               batchTotal,
               completionFlash,
+              runOutcome,
             }}
             auth={{
               apiReady,
@@ -663,6 +665,8 @@ export default function App() {
               handleOpenSettings,
               handleRemoveDoneFile,
               handleRetryFailedRevisionBlocks,
+              handleDismissRunOutcome,
+              handleOpenStorageSettings: handleOpenBackupSettings,
             }}
             autoContinue={autoContinue}
             setAutoContinue={setAutoContinue}

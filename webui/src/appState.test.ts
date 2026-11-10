@@ -633,6 +633,69 @@ describe('processingReducer', () => {
     });
   });
 
+  describe('run outcome', () => {
+    type State = ReturnType<typeof createInitialProcessingState>;
+    const run = (state: State, ...actions: ProcessingAction[]) => actions.reduce(processingReducer, state);
+    const start = (id: string): ProcessingAction => ({ type: 'bridge/set_current_file', data: { id, index: 0, total: 1 } });
+    const warn = (code: string, message: string): ProcessingAction => ({ type: 'bridge/processing_warning', data: { code, message } });
+    const busy: ProcessingAction = { type: 'bridge/file_failed', data: { id: 'a', index: 0, error: 'phase1_chunk_failed_2', retryable: true, retry_reason: 'circuit_breaker_paused' } };
+    const queued = () => createInitialProcessingState([makeFile({ id: 'a', name: 'a.mp3' }), makeFile({ id: 'b', name: 'b.mp3' })]);
+
+    it('keeps a stopped file with the run warnings, without the run-only ones', () => {
+      const state = run(queued(), start('a'), warn('web_keep_page_open', 'Tieni la pagina aperta'), warn('fallback_key_in_use', 'Quota della chiave 1 esaurita'), busy);
+      expect(state.runOutcome).toMatchObject({
+        kind: 'paused',
+        fileId: 'a',
+        fileName: 'a.mp3',
+        error: 'phase1_chunk_failed_2',
+        retryReason: 'circuit_breaker_paused',
+        warnings: [{ code: 'fallback_key_in_use', message: 'Quota della chiave 1 esaurita' }],
+      });
+    });
+
+    it('treats the timeouts that keep the session as a pause', () => {
+      const state = run(queued(), start('a'), { type: 'bridge/file_failed', data: { id: 'a', index: 0, error: 'regenerate_prompt_timeout' } });
+      expect(state.runOutcome?.kind).toBe('paused');
+    });
+
+    it('keeps the most serious outcome of the batch and survives a later clean file', () => {
+      const failed: ProcessingAction = { type: 'bridge/file_failed', data: { id: 'b', index: 1, error: 'Chiave API non valida' } };
+      let state = run(queued(), start('a'), busy, start('b'), failed);
+      expect(state.runOutcome).toMatchObject({ kind: 'error', fileId: 'b' });
+      state = run(state, { type: 'queue/add', files: [makeFile({ id: 'c' })] }, start('c'), { type: 'bridge/file_done', data: { id: 'c', index: 2 } });
+      expect(state.runOutcome).toMatchObject({ kind: 'error', fileId: 'b' });
+    });
+
+    it('drops the outcome when its file is retried, restarted or removed, or when dismissed', () => {
+      const stopped = run(queued(), start('a'), busy);
+      expect(run(stopped, { type: 'queue/retry_one', id: 'a' }).runOutcome).toBeNull();
+      expect(run(stopped, { type: 'queue/retry_failed' }).runOutcome).toBeNull();
+      expect(run(stopped, start('a')).runOutcome).toBeNull();
+      expect(run(stopped, { type: 'queue/remove', id: 'a' }).runOutcome).toBeNull();
+      expect(run(stopped, { type: 'outcome/clear' }).runOutcome).toBeNull();
+      expect(run(stopped, { type: 'queue/retry_one', id: 'b' }).runOutcome).not.toBeNull();
+    });
+
+    it('keeps a finished sbobina only when it left something to check', () => {
+      const done = (blocks: number[]): ProcessingAction => ({ type: 'bridge/file_done', data: { id: 'a', index: 0, html_path: 'web-session://s1/sbobina.html', session_dir: 'web-session://s1', revision_failed_blocks: blocks } });
+      expect(run(queued(), start('a'), warn('fallback_key_in_use', 'Quota esaurita'), done([])).runOutcome).toBeNull();
+
+      const truncated = run(queued(), start('a'), warn('truncated_output', 'Gemini ha troncato il testo del blocco 2'), warn('fallback_key_in_use', 'Quota esaurita'), done([]));
+      expect(truncated.runOutcome).toMatchObject({
+        kind: 'warning',
+        htmlPath: 'web-session://s1/sbobina.html',
+        sessionDir: 'web-session://s1',
+        warnings: [{ code: 'truncated_output', message: 'Gemini ha troncato il testo del blocco 2' }],
+      });
+
+      const unrevised = run(queued(), start('a'), warn('unrevised_blocks', '1 sezione inclusa senza revisione (sezione 3)'), done([2]));
+      expect(unrevised.runOutcome).toMatchObject({ kind: 'warning', revisionFailedBlocks: [2] });
+      // The sections revised again later: nothing left to check.
+      const revisedAgain = run(unrevised, { type: 'queue/update_revision_failed_blocks', fileId: 'a', sessionDir: 'web-session://s1', blocks: [] });
+      expect(revisedAgain.runOutcome).toBeNull();
+    });
+  });
+
   describe('createInitialProcessingState', () => {
     it('initializes with default empty files when no arguments provided', () => {
       const state = createInitialProcessingState();

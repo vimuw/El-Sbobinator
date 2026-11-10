@@ -1,4 +1,4 @@
-import { normalizeSessionPath } from './utils';
+import { isPausedError, normalizeSessionPath } from './utils';
 
 export type FileItem = {
   id: string;
@@ -117,6 +117,36 @@ export type ProcessingWarning = {
   message: string;
 };
 
+/**
+ * How the last batch left a file that needs the user: stopped (paused or error) or finished with
+ * warnings. Shown in place of the processing banner until dismissed, the file is retried or
+ * removed, or a new batch starts. Within a batch the most serious one is kept.
+ */
+export type RunOutcome = {
+  kind: 'error' | 'paused' | 'warning';
+  fileId: string;
+  fileName: string;
+  error?: string;
+  errorDetail?: string;
+  retryReason?: string;
+  recommendedRetryAt?: string;
+  htmlPath?: string;
+  sessionDir?: string;
+  revisionFailedBlocks?: number[];
+  /** The run's lasting warnings at the moment it ended. */
+  warnings: ProcessingWarning[];
+};
+
+// Only about the run in progress: meaningless once it has ended.
+const RUN_ONLY_WARNING_CODES = new Set(['web_keep_page_open']);
+// Still worth reading after a sbobina is done (the rest only explain how the run went).
+const AFTER_DONE_WARNING_CODES = new Set(['truncated_output', 'unrevised_blocks', 'fallback_key_invalid']);
+const OUTCOME_RANK: Record<RunOutcome['kind'], number> = { warning: 1, paused: 2, error: 3 };
+
+function keepOutcome(current: RunOutcome | null, next: RunOutcome): RunOutcome {
+  return current && OUTCOME_RANK[current.kind] > OUTCOME_RANK[next.kind] ? current : next;
+}
+
 export type WorkTotalsPayload = {
   chunks?: number | null;
   macro?: number | null;
@@ -146,6 +176,7 @@ export type ProcessingState = {
     macro: number;
   };
   processingWarnings: ProcessingWarning[];
+  runOutcome: RunOutcome | null;
 };
 
 export type ProcessingAction =
@@ -163,6 +194,7 @@ export type ProcessingAction =
   | { type: 'queue/set_retrying_blocks'; id: string; value: boolean }
   | { type: 'queue/clear_all' }
   | { type: 'app/set_status'; status: AppStatus }
+  | { type: 'outcome/clear' }
   | { type: 'bridge/update_progress'; value: number }
   | { type: 'bridge/update_phase'; text: string }
   | { type: 'bridge/processing_warning'; data: ProcessingWarningPayload }
@@ -194,13 +226,14 @@ export function createInitialProcessingState(initialFiles: FileItem[] = []): Pro
       macro: 0,
     },
     processingWarnings: [],
+    runOutcome: null,
   };
 }
 
 export const initialProcessingState: ProcessingState = createInitialProcessingState();
 
 export function processingReducer(state: ProcessingState, action: ProcessingAction): ProcessingState {
-  const next = reduceProcessing(state, action);
+  const next = withOutcome(state, reduceProcessing(state, action), action);
   if (next.files === state.files) return next;
   const files = keepRecentDone(next.files);
   if (files === next.files) return next;
@@ -209,6 +242,70 @@ export function processingReducer(state: ProcessingState, action: ProcessingActi
     files,
     structuralVersion: next.structuralVersion === state.structuralVersion ? next.structuralVersion + 1 : next.structuralVersion,
   };
+}
+
+/** Sets or drops runOutcome; `prev` is the state before the action, `next` after it. */
+function withOutcome(prev: ProcessingState, next: ProcessingState, action: ProcessingAction): ProcessingState {
+  const outcome = nextOutcome(prev, next, action);
+  return outcome === next.runOutcome ? next : { ...next, runOutcome: outcome };
+}
+
+function nextOutcome(prev: ProcessingState, next: ProcessingState, action: ProcessingAction): RunOutcome | null {
+  const current = next.runOutcome;
+  const name = (id: string) => {
+    const file = prev.files.find(item => item.id === id);
+    return file?.title || file?.name || '';
+  };
+  const runWarnings = prev.processingWarnings.filter(warning => !RUN_ONLY_WARNING_CODES.has(warning.code));
+  switch (action.type) {
+    case 'outcome/clear':
+      return null;
+    case 'bridge/file_failed': {
+      const data = action.data;
+      // Same split as the failure notification (useBridgeCallbacks): progress kept, nothing to fix.
+      const paused = data.retry_reason === 'circuit_breaker_paused' || Boolean(data.retryable) || isPausedError(data.error, data.error_detail);
+      return keepOutcome(current, {
+        kind: paused ? 'paused' : 'error',
+        fileId: data.id,
+        fileName: name(data.id),
+        error: data.error || undefined,
+        errorDetail: data.error_detail || undefined,
+        retryReason: data.retry_reason,
+        recommendedRetryAt: data.recommended_retry_at ?? undefined,
+        warnings: runWarnings,
+      });
+    }
+    case 'bridge/file_done': {
+      const data = action.data;
+      const failedBlocks = Array.isArray(data.revision_failed_blocks) ? data.revision_failed_blocks : [];
+      const warnings = runWarnings.filter(warning => AFTER_DONE_WARNING_CODES.has(warning.code));
+      if (current?.fileId === data.id && !warnings.length && !failedBlocks.length) return null;
+      if (!warnings.length && !failedBlocks.length && data.completion_status !== 'completed_with_warnings') return current;
+      return keepOutcome(current, {
+        kind: 'warning',
+        fileId: data.id,
+        fileName: name(data.id),
+        htmlPath: data.output_html || data.html_path,
+        sessionDir: data.output_dir || data.session_dir,
+        revisionFailedBlocks: failedBlocks,
+        warnings,
+      });
+    }
+    default:
+      break;
+  }
+  if (!current) return null;
+  const target = next.files.find(file => file.id === current.fileId);
+  // The file was removed, retried, restarted or (for a finished one) had its sections revised again.
+  if (!target) return null;
+  if (current.kind !== 'warning' && target.status !== 'error' && target.status !== 'paused') return null;
+  if (current.kind === 'warning' && (target.status !== 'done' || target.isRetryingBlocks)) return null;
+  if (action.type === 'queue/update_revision_failed_blocks' && current.kind === 'warning') {
+    const blocks = target.revisionFailedBlocks ?? [];
+    if (!blocks.length && !current.warnings.some(warning => warning.code !== 'unrevised_blocks')) return null;
+    return { ...current, revisionFailedBlocks: blocks, warnings: blocks.length ? current.warnings : current.warnings.filter(warning => warning.code !== 'unrevised_blocks') };
+  }
+  return current;
 }
 
 function reduceProcessing(state: ProcessingState, action: ProcessingAction): ProcessingState {

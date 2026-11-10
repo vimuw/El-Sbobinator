@@ -1936,6 +1936,109 @@ button {
   margin-top: 0.15rem;
 }
 
+/* What the last run left to do, where the processing banner was (RunOutcomeBanner.tsx). */
+.run-outcome {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 1rem 2.75rem 1rem 1rem;
+  border: 1px solid var(--warning-ring);
+  border-radius: var(--radius-xl);
+  background: var(--warning-subtle);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+}
+
+.run-outcome.is-error {
+  border-color: var(--error-ring);
+  background: var(--error-subtle);
+}
+
+.run-outcome-icon {
+  display: flex;
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 0.05rem;
+  color: var(--warning-text);
+}
+
+.run-outcome-body {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.run-outcome.is-error .run-outcome-icon,
+.run-outcome.is-error .run-outcome-title {
+  color: var(--error-text);
+}
+
+.run-outcome-title {
+  font-weight: 600;
+  color: var(--warning-text);
+}
+
+.run-outcome-file {
+  margin-top: 0.1rem;
+  overflow: hidden;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-outcome-message {
+  margin-top: 0.45rem;
+  overflow-wrap: anywhere;
+}
+
+.run-outcome-warnings {
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+  list-style: disc;
+  color: var(--text-secondary);
+}
+
+.run-outcome-warnings li + li {
+  margin-top: 0.2rem;
+}
+
+/* Actions sit to the right of the text, stacked and of equal width when there are two. */
+.run-outcome-actions {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+/* A phone has no room beside the text: the actions move under it, aligned with the text. */
+@media (max-width: 639px) {
+  .run-outcome {
+    flex-wrap: wrap;
+  }
+
+  .run-outcome-actions {
+    flex-basis: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding-left: calc(1.25rem + 0.85rem);
+  }
+}
+
+.run-outcome .app-button-secondary.is-settings-action {
+  background: transparent;
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.run-outcome-close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+}
+
 .phase-segment {
   position: relative;
   flex: 1 1 0;

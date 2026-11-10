@@ -1,5 +1,5 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
 import { QueuePage, type QueuePageProps } from './QueuePage';
 import { credentialStorageWarning } from '../credentialStorage';
@@ -181,6 +181,38 @@ describe('QueuePage Component', () => {
     // The swapped content only fades; the shared slot owns the single height change.
     expect(bannerSlot.style.height).toBe('');
     expect(screen.getByTestId('processing-slot').contains(bannerSlot)).toBe(true);
+  });
+
+  it('shows what the last run left above the dropzone, gives way to a new run and closes', async () => {
+    const pausedFile: FileItem = { ...queuedFile, status: 'paused', errorText: 'phase1_chunk_failed_2' };
+    const handleQueueRetry = vi.fn();
+    const handleDismissRunOutcome = vi.fn();
+    const runOutcome = { kind: 'paused' as const, fileId: pausedFile.id, fileName: pausedFile.name, error: 'phase1_chunk_failed_2', retryReason: 'circuit_breaker_paused', warnings: [] };
+    const props = {
+      ...defaultProps,
+      files: [pausedFile],
+      progress: { ...defaultProps.progress, runOutcome },
+      actions: { ...defaultProps.actions, handleQueueRetry, handleDismissRunOutcome },
+    };
+    const { rerender } = render(<QueuePage {...props} />);
+
+    const banner = screen.getByTestId('run-outcome-banner');
+    expect(screen.getByTestId('processing-slot').contains(banner)).toBe(true);
+    expect(screen.getByRole('button', { name: 'Aggiungi file audio o video' })).toBeTruthy();
+    fireEvent.click(within(banner).getByRole('button', { name: 'Riprendi' }));
+    expect(handleQueueRetry).toHaveBeenCalledWith(pausedFile.id);
+    fireEvent.click(within(banner).getByRole('button', { name: 'Chiudi avviso' }));
+    expect(handleDismissRunOutcome).toHaveBeenCalled();
+
+    rerender(
+      <QueuePage
+        {...props}
+        files={[{ ...pausedFile, status: 'processing', startedAt: Date.now() }]}
+        progress={{ ...props.progress, appState: 'processing', currentPhase: 'Fase 1/3: trascrizione (chunk 2/4)' }}
+      />,
+    );
+    await screen.findByTestId('processing-banner-slot');
+    await waitFor(() => expect(screen.queryByTestId('run-outcome-banner')).toBeNull());
   });
 
   it('stops the run from the processing banner and links recent transcripts to the archive', () => {

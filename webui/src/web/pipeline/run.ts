@@ -73,6 +73,32 @@ export interface PipelineReporter {
   progress(fraction: number): void;
   totals(chunks: number, macro: number | null): void;
   workDone(kind: 'chunks' | 'macro', done: number, total: number): void;
+  /** A lasting problem shown in the processing banner until the file ends (null clears it). */
+  warning?(code: string, message: string | null): void;
+}
+
+// Banner warning codes, shared with the desktop where it has the same warning (generation_service.py,
+// revision_service.py).
+export const RUN_WARNING = {
+  fallbackKey: 'fallback_key_in_use',
+  invalidFallbackKey: 'fallback_key_invalid',
+  truncated: 'truncated_output',
+  unrevised: 'unrevised_blocks',
+} as const;
+
+const numberList = (numbers: number[]) => numbers.join(', ');
+
+/** revision_service.unrevised_blocks_message, with 1-based section numbers. */
+export function unrevisedBlocksMessage(sections: number[]): string {
+  return sections.length === 1
+    ? `1 sezione inclusa senza revisione (sezione ${sections[0]})`
+    : `${sections.length} sezioni incluse senza revisione (sezioni ${numberList(sections)})`;
+}
+
+export function truncatedBlocksMessage(blocks: number[]): string {
+  return blocks.length === 1
+    ? `Gemini ha troncato il testo del blocco ${blocks[0]}: potrebbe mancarne la parte finale`
+    : `Gemini ha troncato il testo dei blocchi ${numberList(blocks)}: potrebbe mancarne la parte finale`;
 }
 
 export interface PageState {
@@ -177,12 +203,22 @@ function createPipeline(state: SessionState, env: PipelineEnv) {
     log: line => reporter.console(line),
     signal,
   };
+  const truncatedBlocks: number[] = [];
+  const invalidKeys: number[] = [];
   const withKeys = <T>(run: () => Promise<T>) => withKeyRotation(ring, run, (from, to, why) => {
     client = new GeminiClient(ring.keys[to], env.geminiBase, env.usage);
     state.keyRotations += 1;
-    reporter.console(why === 'quota'
-      ? `⚠ Quota giornaliera della chiave ${from + 1} esaurita: continuo con la chiave ${to + 1}/${ring.keys.length}.`
-      : `⚠ Chiave di riserva ${from + 1} non valida: continuo con la chiave ${to + 1}/${ring.keys.length}.`);
+    const keyLabel = `la chiave ${to + 1} di ${ring.keys.length}`;
+    if (why === 'quota') {
+      reporter.console(`⚠ Quota giornaliera della chiave ${from + 1} esaurita: continuo con la chiave ${to + 1}/${ring.keys.length}.`);
+      reporter.warning?.(RUN_WARNING.fallbackKey, `Quota giornaliera della chiave ${from + 1} esaurita: continuo con ${keyLabel}`);
+    } else {
+      reporter.console(`⚠ Chiave di riserva ${from + 1} non valida: continuo con la chiave ${to + 1}/${ring.keys.length}.`);
+      invalidKeys.push(from + 1);
+      reporter.warning?.(RUN_WARNING.invalidFallbackKey, invalidKeys.length === 1
+        ? `La chiave di riserva ${invalidKeys[0]} non è valida: l’ho saltata. Controllala nelle impostazioni`
+        : `Le chiavi di riserva ${numberList(invalidKeys)} non sono valide: le ho saltate. Controllale nelle impostazioni`);
+    }
   }, env.requestNewKey);
 
   return { run, retrySections };
@@ -362,9 +398,13 @@ function createPipeline(state: SessionState, env: PipelineEnv) {
           throwIfCancelled();
           reporter.console(`Risposta Gemini per il ${label} in ${seconds(env.now() - startedAt)}: ${result.text.length} caratteri.`);
           if (!result.text) throw new Error('Risposta vuota dal modello (text=None)');
-          if (result.finishReason === 'MAX_TOKENS') reporter.console(`⚠ Risposta troncata per il ${label} (MAX_TOKENS).`);
           const degenerate = detectDegenerateOutput(result.text);
           if (degenerate) throw new DegenerateOutputError(degenerate);
+          if (result.finishReason === 'MAX_TOKENS') {
+            reporter.console(`⚠ Risposta troncata per il ${label} (MAX_TOKENS).`);
+            if (!truncatedBlocks.includes(index + 1)) truncatedBlocks.push(index + 1);
+            reporter.warning?.(RUN_WARNING.truncated, truncatedBlocksMessage(truncatedBlocks));
+          }
           return result;
         } catch (error) {
           const text = errorText(error);
@@ -443,6 +483,8 @@ function createPipeline(state: SessionState, env: PipelineEnv) {
     } finally {
       state.phaseMs.phase2 += env.now() - started;
     }
+    const unrevised = (state.failedBlocks ?? []).map(i => i + 1);
+    if (unrevised.length) reporter.warning?.(RUN_WARNING.unrevised, unrevisedBlocksMessage(unrevised));
     state.stage = 'done';
     await save();
   }

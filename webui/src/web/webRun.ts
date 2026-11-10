@@ -88,6 +88,7 @@ export function bridgeReporter(emit: EmitBridgeEvent): PipelineReporter {
     progress: value => emit('updateProgress', value),
     totals: (chunks, macro) => emit('setWorkTotals', { chunks, macro }),
     workDone: (kind, done, total) => emit('updateWorkDone', { kind, done, total }),
+    warning: (code, message) => emit('processingWarning', { code, message }),
   };
 }
 
