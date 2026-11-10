@@ -139,6 +139,41 @@ describe('useQueueIngest', () => {
     });
   });
 
+  it('web: recognizes the same audio picked again despite its fresh local:// path and unknown duration', () => {
+    const picked = (id: string, uuid: string, status: FileItem['status'] = 'queued'): FileItem => ({
+      id, name: 'Lezione 3.mp3', path: `local://${uuid}/Lezione 3.mp3`, size: 48_123_456, duration: 0,
+      status, progress: 0, phase: 0,
+    });
+    const archived: ArchiveSession = {
+      name: 'Lezione 3', completed_at_iso: '2026-11-01T10:00:00Z', html_path: 'web:/s1/lezione.html',
+      effective_model: 'gemini', input_path: 'local://old-uuid/Lezione 3.mp3', input_name: 'Lezione 3.mp3',
+      input_size: 48_123_456, duration_sec: 5400, session_dir: 'web:/s1',
+    };
+    const filesRef = { current: [picked('q1', 'uuid-a')] };
+    const archiveSessionsRef = { current: [archived] };
+    const { result } = renderHook(() =>
+      useQueueIngest({
+        filesRef, archiveSessionsRef, pendingArchiveReplacementsRef: { current: new Map() },
+        setArchiveSessions, setArchiveTotal, dispatch, appState: 'idle', appStateRef: { current: 'idle' },
+        apiReady: true, appendConsole,
+      }),
+    );
+
+    act(() => { result.current.enqueueUniqueFiles([picked('q2', 'uuid-b')]); });
+    expect(result.current.duplicatePrompt).toEqual({ kind: 'in-queue', filenames: ['Lezione 3.mp3'] });
+
+    act(() => { result.current.setDuplicatePrompt(null); });
+    filesRef.current = [];
+    const incoming = picked('q3', 'uuid-c');
+    act(() => { result.current.enqueueUniqueFiles([incoming]); });
+    expect(dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'queue/add' }));
+    expect(result.current.duplicatePrompt).toEqual({
+      kind: 'already-processed',
+      matches: [{ source: 'archive', sessions: [archived], incoming }],
+      alsoInQueue: undefined,
+    });
+  });
+
   it('notifies onFilesAddedToBatch when new files are enqueued during processing', () => {
     const filesRef = { current: [] as FileItem[] };
     const archiveSessionsRef = { current: [] };
@@ -371,5 +406,56 @@ describe('useQueueIngest', () => {
     expect(replacement.sessions).toEqual([archiveMatch]);
     expect(setArchiveSessions).not.toHaveBeenCalled();
     expect(setArchiveTotal).not.toHaveBeenCalled();
+  });
+  describe('web: picks that never join the queue free their browser copy', () => {
+    const picked = (id: string, uuid: string, status: FileItem['status'] = 'queued'): FileItem => ({
+      id, name: 'Lezione 3.mp3', path: `local://${uuid}/Lezione 3.mp3`, size: 48_123_456, duration: 0,
+      status, progress: 0, phase: 0,
+    });
+    const setup = (queued: FileItem[]) => {
+      const release = vi.fn().mockResolvedValue({ ok: true });
+      (window as unknown as { pywebview: unknown }).pywebview = { api: { release_queue_file: release } };
+      const filesRef = { current: queued };
+      const { result } = renderHook(() =>
+        useQueueIngest({
+          filesRef, archiveSessionsRef: { current: [] }, pendingArchiveReplacementsRef: { current: new Map() },
+          setArchiveSessions, setArchiveTotal, dispatch, appState: 'idle', appStateRef: { current: 'idle' },
+          apiReady: true, appendConsole,
+        }),
+      );
+      return { release, result };
+    };
+
+    it('releases a duplicate already in the queue, never the queued copy', () => {
+      const { release, result } = setup([picked('q1', 'uuid-a')]);
+      act(() => { result.current.enqueueUniqueFiles([picked('q2', 'uuid-b')]); });
+      expect(release).toHaveBeenCalledTimes(1);
+      expect(release).toHaveBeenCalledWith('local://uuid-b/Lezione 3.mp3');
+    });
+
+    it('releases files picked while a duplicate prompt is open', () => {
+      const { release, result } = setup([picked('d1', 'uuid-a', 'done')]);
+      act(() => { result.current.enqueueUniqueFiles([picked('q2', 'uuid-b')]); });
+      expect(result.current.duplicatePrompt?.kind).toBe('already-processed');
+      expect(release).not.toHaveBeenCalled();
+      const other: FileItem = { ...picked('q3', 'uuid-c'), name: 'Lezione 4.mp3', path: 'local://uuid-c/Lezione 4.mp3' };
+      act(() => { result.current.enqueueUniqueFiles([other]); });
+      expect(release).toHaveBeenCalledWith('local://uuid-c/Lezione 4.mp3');
+    });
+
+    it('releases an already-processed match on dismiss, not on "add again"', async () => {
+      const { release, result } = setup([picked('d1', 'uuid-a', 'done')]);
+      act(() => { result.current.enqueueUniqueFiles([picked('q2', 'uuid-b')]); });
+      act(() => { result.current.handleDuplicateDismiss(); });
+      expect(result.current.duplicatePrompt).toBeNull();
+      expect(release).toHaveBeenCalledWith('local://uuid-b/Lezione 3.mp3');
+
+      release.mockClear();
+      act(() => { result.current.enqueueUniqueFiles([picked('q3', 'uuid-c')]); });
+      const prompt = result.current.duplicatePrompt;
+      if (prompt?.kind !== 'already-processed') throw new Error('expected an already-processed prompt');
+      await act(async () => { await result.current.handleDuplicateAddAgain(prompt.matches); });
+      expect(release).not.toHaveBeenCalled();
+    });
   });
 });

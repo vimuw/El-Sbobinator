@@ -210,10 +210,10 @@ export default function App() {
 
   const {
     duplicatePrompt,
-    setDuplicatePrompt,
     isDragging,
     enqueueUniqueFiles,
     handleDuplicateAddAgain,
+    handleDuplicateDismiss,
     handleBrowseClick,
     handleDragOver,
     handleDragLeave,
@@ -720,7 +720,7 @@ export default function App() {
       />
       <DuplicateFileModal
         prompt={duplicatePrompt}
-        onDismiss={() => setDuplicatePrompt(null)}
+        onDismiss={handleDuplicateDismiss}
         onAddAgain={handleDuplicateAddAgain}
       />
       <ConfirmActionModal
