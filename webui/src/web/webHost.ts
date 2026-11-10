@@ -236,6 +236,8 @@ let stopHost: () => void = () => {};
 
 export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOptions = {}): PywebviewApi {
   let activeRun: AbortController | null = null;
+  // The file the active run reads: leaving the queue does not take its copy away mid-run.
+  let runningPath: string | null = null;
   // Leaving or reloading the page stops the run: the browser asks first while one is active.
   const confirmLeave = (event: BeforeUnloadEvent) => {
     if (tabLeft) return;
@@ -526,6 +528,16 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
       const id = webFileId(path);
       return { ok: true, exists: hasWebFile(path) || (id !== null && await storedInBrowser(id)) };
     },
+    // Without this the copy waited for the next page load past MEDIA_PRUNE_GRACE_MS, still listed
+    // as "Audio in coda". A copy already linked to a sbobina stays (media.remove skips it).
+    release_queue_file: async path => {
+      const id = webFileId(path);
+      if (!id || (activeRun && runningPath === path)) return { ok: true };
+      // A copy still being written would come back after the removal.
+      await pendingSaves.get(id);
+      await media.remove(id).catch(() => {});
+      return { ok: true };
+    },
 
     start_processing: async (files, apiKey, _resume, preferredModel) => {
       if (activeRun) return { ok: false, error: 'Un’elaborazione è già in corso.' };
@@ -534,6 +546,7 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
       if (!apiKey.trim()) return { ok: false, error: 'Inserisci una chiave API Gemini nelle impostazioni.' };
       const run = new AbortController();
       setActiveRun(run);
+      runningPath = file.path ?? null;
       if (!options.simulation) {
         const blob = file.path ? await resolveFile(file.path) : undefined;
         if (!blob) {

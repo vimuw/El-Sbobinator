@@ -371,6 +371,8 @@ export interface PywebviewApi {
   sync_drive_now?: () => Promise<DriveStatus>;
   /** The editor closed this document: changes from Drive may now be applied to it. */
   release_html_content?: (path: string) => Promise<{ ok: boolean }>;
+  /** Web build only: the file left the queue, so the browser's copy of its audio goes now. */
+  release_queue_file?: (path: string) => Promise<{ ok: boolean }>;
   /** Removes every file of the hidden Drive folder and the local sync state, then disconnects. */
   erase_drive_data?: () => Promise<DriveStatus & { removed?: number }>;
   /** One-way copy of the sbobine as HTML in a visible Drive folder; opens the Google window: call it inside a tap. */

@@ -358,4 +358,52 @@ describe('audio kept in the browser by the web host', () => {
     await vi.waitFor(async () => expect(await media.has('removed')).toBe(false));
     expect(await media.has('kept')).toBe(true);
   });
+
+  it('drops the copy of a file removed from the queue at once, not after a later reload', async () => {
+    const { media, saved } = watchedSave();
+    const { api } = host(media);
+    const [queued] = await api.upload_browser_files!([lecture()]);
+    await saved;
+    expect(await measureWebStorage(database)).toMatchObject({ queueAudio: 19 });
+
+    expect(await api.release_queue_file!(queued.path!)).toEqual({ ok: true });
+    expect(await media.has(queued.id)).toBe(false);
+    expect(await measureWebStorage(database)).toMatchObject({ queueAudio: 0 });
+  });
+
+  it('waits for a copy still being written before dropping it, so it does not come back', async () => {
+    let release!: () => void;
+    const writing = new Promise<void>(resolve => { release = resolve; });
+    const stored = createWebMediaStore(database);
+    const slow: WebMediaStore = { ...stored, save: async (id, file, now) => { await writing; await stored.save(id, file, now); } };
+    const { api } = host(slow);
+    const [queued] = await api.upload_browser_files!([lecture()]);
+
+    const releasing = api.release_queue_file!(queued.path!);
+    release();
+    await releasing;
+    expect(await stored.has(queued.id)).toBe(false);
+  });
+
+  it('keeps the copy the running elaborazione reads', async () => {
+    let finish!: () => void;
+    const held = new Promise<void>(resolve => { finish = resolve; });
+    // Holds the run on its first Gemini call, after it took the file.
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+      await held;
+      if (init?.signal?.aborted) throw new DOMException('aborted', 'AbortError');
+      return new Response(JSON.stringify(okText('## Argomento\n\nTesto.')), { status: 200 });
+    }));
+    const { media, saved } = watchedSave();
+    const { api, finished } = host(media);
+    const [queued] = await api.upload_browser_files!([lecture()]);
+    await saved;
+    expect(await api.start_processing!([queued], KEY, true, 'gemini-2.5-flash')).toEqual({ ok: true });
+
+    await api.release_queue_file!(queued.path!);
+    expect(await media.has(queued.id)).toBe(true);
+    await api.stop_processing!();
+    finish();
+    await finished();
+  });
 });
