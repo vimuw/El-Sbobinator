@@ -14,6 +14,8 @@ export const STORAGE_KEYS = {
   THEME_V1: 'el-sbobinator.theme.v1',
   CONFIG_RECOVERY_PREFIX: 'el-sbobinator.config-recovery-dismissed.v1:',
   LAST_SEEN_APP_VERSION_V1: 'el-sbobinator.last-seen-app-version.v1',
+  // How many runs have shown the "open the console" hint, or "done" once it is retired.
+  CONSOLE_HINT_V1: 'el-sbobinator.console-hint.v1',
   // Web build only: Gemini keys (one per line) and model, kept in this browser.
   WEB_GEMINI_KEYS_V1: 'el-sbobinator.web.gemini-keys.v1',
   WEB_MODEL_V1: 'el-sbobinator.web.model.v1',

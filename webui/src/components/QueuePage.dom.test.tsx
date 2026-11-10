@@ -1,9 +1,10 @@
-import { describe, it, expect, vi } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { QueuePage, type QueuePageProps } from './QueuePage';
 import { credentialStorageWarning } from '../credentialStorage';
 import type { FileItem } from '../appState';
+import { STORAGE_KEYS } from '../storageKeys';
 
 vi.mock('../branding', async importOriginal => ({
   ...await importOriginal<typeof import('../branding')>(),
@@ -203,6 +204,107 @@ describe('QueuePage Component', () => {
     expect(screen.getByText('fatta-2.mp3')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: "Apri l'Archivio" }));
     expect(onOpenArchive).toHaveBeenCalledTimes(1);
+  });
+
+  describe('console hint', () => {
+    const running = (overrides: Partial<QueuePageProps> = {}) => (
+      <QueuePage
+        {...defaultProps}
+        files={[{ ...queuedFile, status: 'processing', startedAt: Date.now() }]}
+        progress={{ ...defaultProps.progress, appState: 'processing', currentPhase: 'Fase 1/3: trascrizione (chunk 1/4)', activeProgress: 12 }}
+        {...overrides}
+      />
+    );
+    const idle = (overrides: Partial<QueuePageProps> = {}) => <QueuePage {...defaultProps} files={[queuedFile]} {...overrides} />;
+    // One run: idle, then processing, then idle again.
+    const startRun = async (rerender: (ui: React.ReactElement) => void, overrides: Partial<QueuePageProps> = {}) => {
+      rerender(running(overrides));
+      await screen.findByTestId('processing-banner-slot');
+    };
+
+    beforeEach(() => localStorage.clear());
+
+    it('tells what the console shows when a run starts with it closed, and opens it', async () => {
+      const setShowConsole = vi.fn();
+      const props = { console: { ...defaultProps.console, setShowConsole } };
+      const { rerender } = render(idle(props));
+      expect(screen.queryByTestId('console-hint')).toBeNull();
+
+      await startRun(rerender, props);
+      expect(await screen.findByText(/La console mostra ogni blocco, le attese e gli avvisi/)).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Apri console' }));
+      expect(setShowConsole).toHaveBeenCalledWith(true);
+      expect(localStorage.getItem(STORAGE_KEYS.SHOW_CONSOLE)).toBe('true');
+
+      // Once the console is open, the hint is gone for good.
+      rerender(running({ console: { ...props.console, showConsole: true } }));
+      await waitFor(() => expect(screen.queryByTestId('console-hint')).toBeNull());
+      expect(localStorage.getItem(STORAGE_KEYS.CONSOLE_HINT_V1)).toBe('done');
+    });
+
+    it('shows on the first three runs only, and never after the close button', async () => {
+      const { rerender } = render(idle());
+      for (let run = 1; run <= 3; run += 1) {
+        await startRun(rerender);
+        expect(await screen.findByTestId('console-hint')).toBeTruthy();
+        rerender(idle());
+        await waitFor(() => expect(screen.queryByTestId('console-hint')).toBeNull());
+      }
+      await startRun(rerender);
+      expect(screen.queryByTestId('console-hint')).toBeNull();
+
+      localStorage.clear();
+      rerender(idle());
+      await startRun(rerender);
+      fireEvent.click(await screen.findByRole('button', { name: 'Chiudi e non mostrare più' }));
+      await waitFor(() => expect(screen.queryByTestId('console-hint')).toBeNull());
+      rerender(idle());
+      await startRun(rerender);
+      expect(screen.queryByTestId('console-hint')).toBeNull();
+    });
+
+    it('counts a batch of files as one run and stays put between its files', async () => {
+      const batch = (batchCompleted: number, batchTotal = 3) => ({ progress: { ...defaultProps.progress, appState: 'processing' as const, batchCompleted, batchTotal } });
+      // Between auto-continued files the app is idle for a moment, with the batch still counted.
+      const between = (batchCompleted: number) => idle({ progress: { ...defaultProps.progress, batchCompleted, batchTotal: 3 } });
+      const { rerender } = render(idle());
+      await startRun(rerender, batch(0));
+      expect(await screen.findByTestId('console-hint')).toBeTruthy();
+      for (const completed of [0, 1]) {
+        rerender(between(completed));
+        expect(screen.getByTestId('console-hint')).toBeTruthy();
+        await startRun(rerender, batch(completed + 1));
+        expect(screen.getByTestId('console-hint')).toBeTruthy();
+      }
+      expect(localStorage.getItem(STORAGE_KEYS.CONSOLE_HINT_V1)).toBe('1');
+
+      rerender(idle());
+      await waitFor(() => expect(screen.queryByTestId('console-hint')).toBeNull());
+      await startRun(rerender, batch(0, 1));
+      expect(await screen.findByTestId('console-hint')).toBeTruthy();
+      expect(localStorage.getItem(STORAGE_KEYS.CONSOLE_HINT_V1)).toBe('2');
+    });
+
+    it('stays quiet when the console is already open or the run was already going', async () => {
+      const { rerender, unmount } = render(idle({ console: { ...defaultProps.console, showConsole: true } }));
+      await startRun(rerender, { console: { ...defaultProps.console, showConsole: true } });
+      expect(screen.queryByTestId('console-hint')).toBeNull();
+      unmount();
+
+      localStorage.clear();
+      // Back from the archive mid-run: not a new start.
+      render(running());
+      await screen.findByTestId('processing-banner-slot');
+      expect(screen.queryByTestId('console-hint')).toBeNull();
+    });
+  });
+
+  it('keeps the footer links whole for screen readers while a phone shows short labels', () => {
+    render(<QueuePage {...defaultProps} />);
+    const github = screen.getByRole('link', { name: 'Progetto Open-Source — GitHub' });
+    expect(github.querySelector('.footer-label-long')?.textContent).toBe('Progetto Open-Source — GitHub');
+    expect(github.querySelector('.footer-label-short')?.textContent).toBe('GitHub');
+    expect(github.closest('footer')?.className).toContain('app-footer-links');
   });
 
   describe('full-window drop overlay', () => {

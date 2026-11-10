@@ -1,9 +1,11 @@
 import { credentialStorageWarning } from '../credentialStorage';
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { type DragEndEvent, type SensorDescriptor, type SensorOptions } from '@dnd-kit/core';
 import { AlertTriangle, Loader2, Settings } from 'lucide-react';
 import { AppFooterLinks } from './AppFooterLinks';
+import { ConsoleHint } from './ConsoleHint';
+import { useConsoleHint } from '../hooks/useConsoleHint';
 import type { ArchiveFolder, ArchiveSession } from '../bridge';
 import { type AppStatus, type FileItem, type ProcessingWarning, getDoneFiles, getPendingFiles } from '../appState';
 import { GEMINI_KEY_PATTERN } from '../utils';
@@ -250,6 +252,20 @@ export function QueuePage({
     };
   }, [isDragging, handleDragLeave]);
 
+  const consoleHint = useConsoleHint(appState === 'processing', appState === 'idle' && batchTotal > 0, showConsole);
+  // Opened from the hint, the console (at the bottom of the column) is brought into view.
+  const revealConsoleRef = useRef(false);
+  const openConsoleFromHint = useCallback(() => {
+    revealConsoleRef.current = true;
+    setShowConsole(true);
+    localStorage.setItem(STORAGE_KEYS.SHOW_CONSOLE, 'true');
+  }, [setShowConsole]);
+  useEffect(() => {
+    if (!showConsole || !revealConsoleRef.current) return;
+    revealConsoleRef.current = false;
+    document.querySelector('.console-shell')?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+  }, [showConsole]);
+
   useEffect(() => {
     if (isConsoleDisabled && showConsole) {
       setShowConsole(false);
@@ -360,6 +376,7 @@ export function QueuePage({
                       warnings={processingWarnings}
                       onStop={handleQueueStop}
                     />
+                    <ConsoleHint visible={consoleHint.visible} onOpen={openConsoleFromHint} onDismiss={consoleHint.dismiss} />
                   </motion.div>
                 ) : (
                   <motion.div key="dropzone" {...fade}>
