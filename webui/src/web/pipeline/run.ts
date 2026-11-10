@@ -103,6 +103,9 @@ export interface PipelineEnv {
 
 const PHASE1_SPAN: [number, number] = [0.05, 0.7];
 const PHASE2_SPAN: [number, number] = [0.7, 0.95];
+// The overall fraction once `done` of `total` steps have finished. It is sent again as each step
+// ends, with its counter, so the percent never lags the step bar (filled by workDone) by a step.
+const spanAt = ([from, to]: [number, number], done: number, total: number) => from + (to - from) * (total > 0 ? done / total : 0);
 const mib = (bytes: number) => `${(bytes / 1048576).toFixed(1)} MB`;
 const seconds = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
 
@@ -205,7 +208,7 @@ function createPipeline(state: SessionState, env: PipelineEnv) {
       for (const [n, i] of targets.entries()) {
         throwIfCancelled();
         setPhase(phaseText.revisionRetryBlock(i + 1, total));
-        reporter.progress(n / targets.length);
+        reporter.progress(spanAt([0, 1], n, targets.length));
         if (await revise(i, total)) {
           failed.delete(i);
           retried.push(i);
@@ -216,6 +219,7 @@ function createPipeline(state: SessionState, env: PipelineEnv) {
         state.failedBlocks = [...failed].sort((a, b) => a - b);
         await save();
         reporter.workDone('macro', total - failed.size, total);
+        reporter.progress(spanAt([0, 1], n + 1, targets.length));
         if (n + 1 < targets.length) await env.sleep(PIPELINE_DEFAULTS.pauseBetweenCallsSec, signal);
       }
     } catch (error) {
@@ -270,7 +274,7 @@ function createPipeline(state: SessionState, env: PipelineEnv) {
       for (let i = state.chunkTexts.length; i < total; i += 1) {
         throwIfCancelled();
         setPhase(phaseText.transcriptionChunk(i + 1, total));
-        reporter.progress(PHASE1_SPAN[0] + (PHASE1_SPAN[1] - PHASE1_SPAN[0]) * (i / total));
+        reporter.progress(spanAt(PHASE1_SPAN, i, total));
         prepare(i);
         const audio = await prepared.get(i)!;
         prepared.delete(i);
@@ -295,6 +299,7 @@ function createPipeline(state: SessionState, env: PipelineEnv) {
           }
         }
         reporter.workDone('chunks', i + 1, total);
+        reporter.progress(spanAt(PHASE1_SPAN, i + 1, total));
         if (i + 1 < total) await env.sleep(PIPELINE_DEFAULTS.pauseBetweenCallsSec, signal);
       }
     } finally {
@@ -412,12 +417,13 @@ function createPipeline(state: SessionState, env: PipelineEnv) {
         if (revised[i] !== null || state.pendingRetry!.includes(i)) continue;
         throwIfCancelled();
         setPhase(phaseText.revisionBlock(i + 1, total));
-        reporter.progress(PHASE2_SPAN[0] + (PHASE2_SPAN[1] - PHASE2_SPAN[0]) * (done() / total));
+        reporter.progress(spanAt(PHASE2_SPAN, done(), total));
         if (!await revise(i, total)) {
           state.pendingRetry!.push(i);
           await save();
         }
         reporter.workDone('macro', done(), total);
+        reporter.progress(spanAt(PHASE2_SPAN, done(), total));
         if (i + 1 < total) await env.sleep(PIPELINE_DEFAULTS.pauseBetweenCallsSec, signal);
       }
       // Retry pass: a second attempt, then the section goes in unrevised.
@@ -432,6 +438,7 @@ function createPipeline(state: SessionState, env: PipelineEnv) {
         state.pendingRetry = state.pendingRetry!.filter(item => item !== i);
         await save();
         reporter.workDone('macro', done(), total);
+        reporter.progress(spanAt(PHASE2_SPAN, done(), total));
       }
     } finally {
       state.phaseMs.phase2 += env.now() - started;

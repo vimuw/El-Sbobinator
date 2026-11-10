@@ -151,6 +151,32 @@ describe('runPipeline', () => {
     expect(audio.prepared).toEqual([0, 1, 2]);
   });
 
+  it('moves the percent with each finished chunk and section, not one step behind the step bar', async () => {
+    const replies: Reply[] = [okText(chunkText(1)), okText(chunkText(2)), okText(chunkText(3))];
+    for (let i = 0; i < 4; i += 1) replies.push(okText('## Rivisto\n\nTesto rivisto.'));
+    mockGemini(replies);
+    const events: string[] = [];
+    const { env } = makeEnv(fakeAudio(3));
+    env.reporter = {
+      ...env.reporter,
+      progress: value => events.push(`progress ${Math.round(value * 100)}`),
+      workDone: (kind, done, total) => events.push(`${kind} ${done}/${total}`),
+    };
+    const sleep = env.sleep;
+    env.sleep = async (secs, signal) => { events.push('pause'); await sleep(secs, signal); };
+
+    const state = await runPipeline(session(), env);
+
+    // Every counter is followed, before the pause between calls, by the percent it implies:
+    // 5-70% for chunks, 70-95% for sections.
+    const after = (event: string) => events[events.indexOf(event) + 1];
+    expect(after('chunks 1/3')).toBe('progress 27');
+    expect(after('chunks 2/3')).toBe('progress 48');
+    expect(after('chunks 3/3')).toBe('progress 70');
+    const sections = state.macroBlocks!.length;
+    expect(after(`macro ${sections}/${sections}`)).toBe('progress 95');
+  });
+
   it('resumes from the first chunk without text', async () => {
     const state = session();
     state.plan = [0, 1, 2].map(index => ({ index, startSec: index * 840, durationSec: 900 }));
