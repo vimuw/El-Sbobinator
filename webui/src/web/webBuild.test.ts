@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { SESSION_COOKIE, SESSION_MAX_AGE_S } from './drive/server/driveServer';
-import { WEB_CSP, WEB_STATIC_PAGES, driveClientId, toWebDevIndexHtml, toWebDevStaticPageHtml, toWebIndexHtml, webBuildVersion, webCsp, webHeadersFile, webStaticPages } from './webBuild';
+import { SEARCH_CONSOLE_VERIFICATION, WEB_CSP, WEB_STATIC_PAGES, driveClientId, toWebDevIndexHtml, toWebDevStaticPageHtml, toWebIndexHtml, webBuildVersion, webCsp, webHeadersFile, webStaticPages } from './webBuild';
 
 function directive(csp: string, name: string): string {
   return csp.split(';').map(part => part.trim()).find(part => part.startsWith(`${name} `)) ?? '';
@@ -26,6 +26,15 @@ describe('web build page policy', () => {
     expect(html).toContain('<script src="./boot-theme.js"></script>');
     expect(html).toContain('src="/src/main.tsx"');
     expect(html).toContain('<link rel="icon" type="image/png" href="./icon.png" />');
+  });
+
+  it('keeps the Search Console tag that verifies elsbobinator.pages.dev in the site head only', () => {
+    const desktopHtml = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+    const head = /<head>([\s\S]*?)<\/head>/i.exec(toWebIndexHtml(desktopHtml))?.[1] ?? '';
+    expect(head).toContain('<meta name="google-site-verification" content="XWVhccF0gdqWBcyMsZnKhkONXaFYCZAFHq19zBBjC8M" />');
+    expect(toWebIndexHtml(desktopHtml, true)).toContain(SEARCH_CONSOLE_VERIFICATION);
+    // The desktop page has no use for it.
+    expect(desktopHtml).not.toContain('google-site-verification');
   });
 
   it('lets the web dev server reach Gemini while keeping the desktop policy for HMR', () => {

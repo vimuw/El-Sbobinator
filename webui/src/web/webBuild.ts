@@ -50,10 +50,15 @@ export function driveClientId(value: string | undefined): string | null {
 // Desktop-only boot script: it talks to the pywebview startup check.
 const DESKTOP_ONLY_SCRIPTS = ['startup-guard.js'];
 
+// Search Console ownership of elsbobinator.pages.dev, an authorised domain of the Drive login's
+// OAuth client (Google wants each one verified). No DNS of ours there, and Pages redirects a
+// google….html file to its name without .html: so the homepage tag, which must stay.
+export const SEARCH_CONSOLE_VERIFICATION = '<meta name="google-site-verification" content="XWVhccF0gdqWBcyMsZnKhkONXaFYCZAFHq19zBBjC8M" />';
+
 export function toWebIndexHtml(html: string, drive = false): string {
   const cspPattern = /(<meta\s+http-equiv="Content-Security-Policy"\s+content=")[^"]*(")/i;
   if (!cspPattern.test(html)) throw new Error('index.html has no Content-Security-Policy meta tag to replace.');
-  let result = html.replace(cspPattern, `$1${webCsp(drive)}$2`);
+  let result = html.replace(cspPattern, `${SEARCH_CONSOLE_VERIFICATION}\n    $1${webCsp(drive)}$2`);
   for (const script of DESKTOP_ONLY_SCRIPTS) {
     result = result.replace(new RegExp(`\\s*<script src="\\./${script.replace('.', '\\.')}"></script>`), '');
   }
