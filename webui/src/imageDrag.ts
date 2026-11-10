@@ -250,11 +250,16 @@ function placeImage(view: EditorView, pos: number, left: number, top: number) {
   // Removing the old wrap gaps can move the destination paragraph. Measure its
   // final top before laying out the new wrap, then join the correction to the
   // same history group so the drop stays at the ghost's location.
+  // Near the end of the document the shorter content also scrolls the page
+  // back, moving the editor itself: the drop is measured from the editor's own
+  // top, never from where it was on screen before the dispatch.
   const placed = view.nodeDOM(selectedPos);
   const paragraph = placed instanceof HTMLElement ? placed.closest('p, h1, h2, h3, h4, h5, h6') : null;
   const current = view.state.doc.nodeAt(selectedPos);
   if (paragraph && current?.type.name === 'floatingImage') {
-    const offsetY = normalizeImageOffsetY((desiredTop - paragraph.getBoundingClientRect().top) / scale);
+    const placedRoot = view.dom.getBoundingClientRect();
+    const placedScale = placedRoot.width / view.dom.offsetWidth || 1;
+    const offsetY = normalizeImageOffsetY((placedRoot.top + top * placedScale - paragraph.getBoundingClientRect().top) / placedScale);
     if (offsetY !== current.attrs.offsetY) {
       view.dispatch(view.state.tr.setNodeMarkup(selectedPos, undefined, { ...current.attrs, offsetY }));
     }
