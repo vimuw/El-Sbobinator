@@ -1,10 +1,11 @@
 import { reportClientError } from '../diagnostics';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AudioLines, ChevronLeft, ChevronRight, HardDrive, Minus, MoreVertical, Pause, Play, Plus, RefreshCw, RotateCcw, RotateCw, Unlink, Volume1, Volume2, VolumeX } from 'lucide-react';
+import { AudioLines, ChevronLeft, ChevronRight, Gauge, HardDrive, Minus, MoreVertical, Pause, Play, Plus, RefreshCw, RotateCcw, RotateCw, Unlink, Volume1, Volume2, VolumeX } from 'lucide-react';
 import { ConfirmActionModal } from './modals/ConfirmActionModal';
 import { useDockFold } from '../hooks/useDockFold';
 import { usePhoneLayout } from '../hooks/usePhoneLayout';
+import { usePopoverPresence } from '../hooks/usePopoverPresence';
 import { formatSize } from '../utils';
 import { PlayerPillRing } from './PlayerPillRing';
 
@@ -104,12 +105,21 @@ export function AudioPlayer({ src, initialTime, initialDuration, initialPlayback
   const hardwareVolumeRef = useRef(hardwareVolume);
   useEffect(() => { hardwareVolumeRef.current = hardwareVolume; }, [hardwareVolume]);
   const [isSpeedOpen, setIsSpeedOpen] = useState(false);
+  const speedPresence = usePopoverPresence(isSpeedOpen);
   const [speedPanelPos, setSpeedPanelPos] = useState({ bottom: 0, left: 0 });
   const speedBtnRef = useRef<HTMLButtonElement>(null);
   const speedPanelRef = useRef<HTMLDivElement>(null);
   const speedSliderRef = useRef<HTMLInputElement>(null);
   const [isRelinking, setIsRelinking] = useState(false);
   const [showAudioMenu, setShowAudioMenu] = useState(false);
+  const audioMenuPresence = usePopoverPresence(showAudioMenu);
+  // The phone's ⋮ shows its list, or the speed panel in its place (a row of the list opens it).
+  const [menuView, setMenuView] = useState<'list' | 'speed'>('list');
+  // The menu is as wide as its list; the speed view keeps that width, so it swaps in place.
+  const [menuWidth, setMenuWidth] = useState<number | null>(null);
+  // A view swapped in slides from the side it comes from; the menu opening animates on its own.
+  const [menuViewEntry, setMenuViewEntry] = useState<'forward' | 'back' | null>(null);
+  const speedRowRef = useRef<HTMLButtonElement>(null);
   const [showConfirmRemove, setShowConfirmRemove] = useState(false);
   const audioMenuRef = useRef<HTMLDivElement>(null);
   // The menu is anchored to the whole bar, so it lives outside the kebab's wrapper.
@@ -254,6 +264,20 @@ export function AudioPlayer({ src, initialTime, initialDuration, initialPlayback
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [showAudioMenu]);
+
+  // Into the speed view the slider takes the focus; back out, the row that opened it does.
+  const menuViewChangedRef = useRef(false);
+  useEffect(() => {
+    if (!menuViewChangedRef.current) return;
+    menuViewChangedRef.current = false;
+    (menuView === 'speed' ? speedSliderRef.current : speedRowRef.current)?.focus();
+  }, [menuView]);
+  const showMenuView = (view: 'list' | 'speed') => {
+    menuViewChangedRef.current = true;
+    if (view === 'speed') setMenuWidth(audioMenuPanelRef.current?.offsetWidth ?? null);
+    setMenuViewEntry(view === 'speed' ? 'forward' : 'back');
+    setMenuView(view);
+  };
 
   // Phone and desktop lay the bar out differently: a resize or rotation closes its menus.
   useEffect(() => {
@@ -722,12 +746,13 @@ export function AudioPlayer({ src, initialTime, initialDuration, initialPlayback
       >
         {formatRate(playbackRate)}
       </button>
-      {isSpeedOpen && createPortal(
+      {speedPresence.shown && createPortal(
         <div
           ref={speedPanelRef}
           role="dialog"
           aria-label="Velocità di riproduzione"
-          className="kebab-panel player-menu player-speed-panel"
+          className={`kebab-panel player-menu player-speed-panel${speedPresence.closing ? ' popover-closing' : ''}`}
+          inert={speedPresence.closing}
           style={{
             position: 'fixed',
             bottom: `${speedPanelPos.bottom}px`,
@@ -742,60 +767,101 @@ export function AudioPlayer({ src, initialTime, initialDuration, initialPlayback
     </div>
   );
 
-  const audioMenuButton = hasAudioActions && (
+  // On a phone ⋮ also holds the speed, so it is there even without audio actions.
+  const audioMenuButton = (hasAudioActions || isPhone) && (
     <div className="relative" ref={audioMenuRef}>
       <button
         type="button"
         className={`player-control ${showAudioMenu ? 'is-active' : ''}`}
-        aria-label="Opzioni audio collegato"
-        title="Gestisci audio collegato"
+        aria-label={isPhone ? 'Opzioni del player' : 'Opzioni audio collegato'}
+        title={isPhone ? 'Velocità e audio collegato' : 'Gestisci audio collegato'}
         aria-haspopup="true"
         aria-expanded={showAudioMenu}
-        onClick={() => setShowAudioMenu(v => !v)}
+        onClick={() => {
+          // It opens on its list; closing leaves the view as it was, so the fade-out shows it.
+          if (!showAudioMenu) {
+            setMenuView('list');
+            setMenuWidth(null);
+            setMenuViewEntry(null);
+          }
+          setShowAudioMenu(!showAudioMenu);
+        }}
       >
         <MoreVertical className="h-4 w-4" />
       </button>
     </div>
   );
+  const menuViewClassName = `player-menu-view${menuViewEntry ? ` is-entering-${menuViewEntry}` : ''}`;
   // Anchored to the whole bar, not the kebab, so it clears the dock's top edge.
-  const audioMenuPanel = showAudioMenu && (
-    <div ref={audioMenuPanelRef} className={`kebab-panel player-menu player-more-panel${isPhone ? '' : ' is-desktop'}`}>
-      {audioActions}
+  const audioMenuPanel = audioMenuPresence.shown && (
+    <div ref={audioMenuPanelRef} className={`kebab-panel player-menu player-more-panel${isPhone ? '' : ' is-desktop'}${audioMenuPresence.closing ? ' popover-closing' : ''}`} inert={audioMenuPresence.closing}
+      style={menuWidth ? { width: menuWidth } : undefined}
+    >
+      {isPhone && menuView === 'speed' ? (
+        <div key="speed" role="group" aria-label="Velocità di riproduzione" className={menuViewClassName}>
+          <button
+            type="button"
+            className="kebab-item player-menu-item player-menu-back"
+            aria-label="Torna alle opzioni del player"
+            onClick={() => showMenuView('list')}
+          >
+            <ChevronLeft className="player-menu-icon" />
+            <span>Velocità</span>
+          </button>
+          <div className="kebab-separator" />
+          <div className="player-menu-speed-body">{speedPanel}</div>
+        </div>
+      ) : (
+        <div key="list" className={menuViewClassName}>
+          {isPhone && (
+            <>
+              <button
+                ref={speedRowRef}
+                type="button"
+                className="kebab-item player-menu-item"
+                aria-label={`Velocità di riproduzione: ${formatRate(playbackRate)}`}
+                onClick={() => showMenuView('speed')}
+              >
+                <Gauge className="player-menu-icon" />
+                <span>Velocità</span>
+                <span className="player-menu-end player-menu-value">{formatRate(playbackRate)}</span>
+                <ChevronRight className="player-menu-icon" />
+              </button>
+              {hasAudioActions && <div className="kebab-separator" />}
+            </>
+          )}
+          {audioActions}
+        </div>
+      )}
     </div>
   );
 
   if (isPhone) {
-    // Two lines. On top play sits in the very middle, between the skips, with the speed on its left
-    // and the audio options on its right, so their menus rise straight from the button pressed
-    // and never cover the scrubber. Below, the scrubber spans the dock between the time heard and
-    // the length, near the thumb, so a three-hour lecture can be scrubbed with a finger.
+    // One line, as low as the player gets: play and the 10-second skips, then the scrubber with
+    // the time, between the fold chevron and ⋮. The speed, set once a lecture, is one row of ⋮
+    // that opens its panel.
     return (
       <div
-        className={`${foldClassName} relative flex w-full flex-col gap-0.5 px-0.5 py-1.5`}
+        className={`${foldClassName} player-phone relative flex w-full items-center gap-1.5 px-0.5 py-1.5`}
         style={{ background: 'transparent' }}
         {...barTouchProps}
       >
         {audioElement}
-        <div className="player-phone-controls grid w-full grid-cols-[1fr_auto_1fr] items-center">
-          <div className="flex items-center justify-self-start gap-1">
-            {fold.side === 'left' && foldTab}
-            {speedControl}
-          </div>
-          <div className="flex items-center gap-1">
-            {backButton}
-            {playButton}
-            {forwardButton}
-          </div>
-          <div className="flex items-center justify-self-end gap-1">
-            {audioMenuButton}
-            {fold.side === 'right' && foldTab}
-          </div>
+        {fold.side === 'left' && foldTab}
+        {playButton}
+        {/* The skips touch, button to button: one pair, closer than the bar's other controls. */}
+        <div className="flex items-center">
+          {backButton}
+          {forwardButton}
         </div>
-        <div className="player-phone-seek flex w-full min-w-0 items-center gap-2">
-          {timeText(formatTime(currentTime), 'text-caption')}
+        <div className="player-phone-seek flex min-w-0 flex-1 items-center gap-2">
           {scrubber}
-          {timeText(formatTime(duration), 'text-caption')}
+          {/* Only the time heard: the scrubber shows how much is left, and a lecture's
+              "1:23:45 / 3:00:00" would take the scrubber's room (its aria text has both). */}
+          {timeText(formatTime(currentTime), 'text-caption')}
         </div>
+        {audioMenuButton}
+        {fold.side === 'right' && foldTab}
         {audioMenuPanel}
         {confirmRemoveModal}
       </div>

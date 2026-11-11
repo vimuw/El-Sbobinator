@@ -1,28 +1,65 @@
 import type React from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 // The editor's audio dock folds into a round button that sits in a bottom corner, so it can leave
-// the text alone. The player and the empty dock (no audio yet) share one fold, so the button stays
-// in the same corner whichever of the two the sbobina shows.
+// the text alone. The player, the loading dock and the empty dock (no audio yet) share one fold,
+// kept in one store, so the button stays in the same corner whichever of them the sbobina shows.
 export type PillSide = 'left' | 'right';
-interface FoldState { collapsed: boolean; side: PillSide }
+export interface FoldState { collapsed: boolean; side: PillSide }
+// The pill starts in the right corner, where a right thumb reaches it; while the editor scrolls
+// it steps aside for the scroll pill that follows the scrollbar (index.css, editor-player-dock).
 const FOLD_STORAGE_KEY = 'el-sbobinator.audio-player.v1';
+const DEFAULT_FOLD: FoldState = { collapsed: false, side: 'right' };
 
-function readFoldState(): FoldState {
+function parseFoldState(raw: string | null): FoldState {
   try {
-    const saved = JSON.parse(localStorage.getItem(FOLD_STORAGE_KEY) ?? '{}') as Partial<FoldState>;
+    const saved = JSON.parse(raw ?? '{}') as Partial<FoldState>;
     return { collapsed: saved.collapsed === true, side: saved.side === 'left' ? 'left' : 'right' };
   } catch {
-    return { collapsed: false, side: 'right' };
+    return DEFAULT_FOLD;
   }
 }
 
-function saveFoldState(state: FoldState): void {
+const foldListeners = new Set<() => void>();
+// Private windows may refuse storage: the fold then lives in memory until the page reloads.
+let unsavedFold: FoldState | null = null;
+let cachedRaw: string | null | undefined;
+let cachedFold: FoldState = DEFAULT_FOLD;
+
+function getFoldState(): FoldState {
+  if (unsavedFold) return unsavedFold;
+  let raw: string | null;
   try {
-    localStorage.setItem(FOLD_STORAGE_KEY, JSON.stringify(state));
+    raw = localStorage.getItem(FOLD_STORAGE_KEY);
   } catch {
-    // Private windows may refuse storage: the dock still folds, it just opens unfolded next time.
+    return DEFAULT_FOLD;
   }
+  if (raw !== cachedRaw) {
+    cachedRaw = raw;
+    cachedFold = parseFoldState(raw);
+  }
+  return cachedFold;
+}
+
+function updateFoldState(change: Partial<FoldState>): void {
+  const next = { ...getFoldState(), ...change };
+  try {
+    localStorage.setItem(FOLD_STORAGE_KEY, JSON.stringify(next));
+    unsavedFold = null;
+  } catch {
+    unsavedFold = next;
+  }
+  foldListeners.forEach(listener => listener());
+}
+
+function subscribeFold(listener: () => void): () => void {
+  foldListeners.add(listener);
+  return () => { foldListeners.delete(listener); };
+}
+
+/** Where the dock is folded, for the editor around it. */
+export function useDockFoldState(): FoldState {
+  return useSyncExternalStore(subscribeFold, getFoldState, getFoldState);
 }
 
 const SWIPE_MIN_PX = 40;
@@ -34,7 +71,7 @@ const DRAG_MIN_PX = 8;
 
 /** `onFold` runs as the bar starts to fold, to close whatever menus it has open. */
 export function useDockFold(onFold?: () => void) {
-  const [fold, setFold] = useState(readFoldState);
+  const fold = useDockFoldState();
   const pillRef = useRef<HTMLButtonElement>(null);
   const collapseBtnRef = useRef<HTMLButtonElement>(null);
   const focusAfterFoldRef = useRef(false);
@@ -56,11 +93,7 @@ export function useDockFold(onFold?: () => void) {
     focusAfterFoldRef.current = moveFocus;
     setFoldAnimated(true);
     onFoldRef.current?.();
-    const commit = () => setFold(prev => {
-      const next = { ...prev, collapsed };
-      saveFoldState(next);
-      return next;
-    });
+    const commit = () => updateFoldState({ collapsed });
     if (!collapsed) {
       commit();
       return;
@@ -123,11 +156,7 @@ export function useDockFold(onFold?: () => void) {
       if (!drag?.moved) return;
       const side: PillSide = e.clientX < window.innerWidth / 2 ? 'left' : 'right';
       setPillOffset(0);
-      setFold(prev => {
-        const next = { ...prev, side };
-        saveFoldState(next);
-        return next;
-      });
+      updateFoldState({ side });
     },
     onPointerCancel: () => { pillDragRef.current = null; setPillOffset(0); },
     onClick: () => {

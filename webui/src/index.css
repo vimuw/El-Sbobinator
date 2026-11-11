@@ -1473,12 +1473,46 @@ button {
   right: -8px;
   bottom: calc(100% + 14px);
   z-index: 50;
-  width: min(17rem, calc(100vw - 16px));
+  /* As wide as its longest row, no wider: a fixed width left empty room right of the labels. */
+  width: max-content;
+  min-width: 14rem;
+  max-width: calc(100vw - 16px);
 }
 
 .player-more-panel.is-desktop {
   right: -12px;
-  width: 18rem;
+}
+
+/* The phone's ⋮ opens on a list whose first row is the speed; tapped, the speed panel takes
+   the list's place under a row that leads back. Each view slides in from the side it comes from,
+   as a settings page does: the speed from the right, the list back from the left. */
+.player-menu-view.is-entering-forward {
+  animation: player-menu-view-forward 160ms var(--ease-out);
+}
+
+.player-menu-view.is-entering-back {
+  animation: player-menu-view-back 160ms var(--ease-out);
+}
+
+@keyframes player-menu-view-forward {
+  from { opacity: 0; transform: translateX(12px); }
+}
+
+@keyframes player-menu-view-back {
+  from { opacity: 0; transform: translateX(-12px); }
+}
+
+.player-menu-value {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.player-menu-value + .player-menu-icon {
+  margin-left: -6px;
+}
+
+.player-menu-speed-body {
+  padding: 4px 4px 2px;
 }
 
 /* Speed panel (YouTube-like, kept compact): the value, a slider between minus and plus,
@@ -6303,12 +6337,6 @@ input::-webkit-contacts-auto-fill-button {
 
   .editor-player-dock:has(> .audio-dock-empty) {
     padding: 0 8px;
-  }
-
-  /* The phone player has two rows (32px controls, 2px gap, the 16.5px time line) inside its
-     0.75rem padding: the loading dock keeps that height so the page does not shift when it lands. */
-  .audio-dock-loading {
-    min-height: calc(2rem + 2px + 16.5px + 0.75rem);
   }
 
   .audio-dock-empty-hint {

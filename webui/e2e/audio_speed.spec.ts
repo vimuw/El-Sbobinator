@@ -60,25 +60,34 @@ test('changing playback speed keeps the scrubber and controls in place', async (
     }
   }
 
-  // Phone: the value sits left of the centred play and opens the same panel above the dock.
+  // Phone: one line (play, the skips, scrubber, time, ⋮); the speed is a row of ⋮, which rises
+  // above the bar and swaps its list for the speed panel.
   await page.setViewportSize({ width: 480, height: 900 });
-  await chip.click();
-  await expect(panel).toBeVisible();
-  const baseline = await geometry(['.custom-scrubber', '.player-play-control']);
-  // The buttons' line is on top, so the panel rises from it and never covers the scrubber below.
-  const [scrubberBox, playBox] = baseline;
-  expect(playBox.y + playBox.height).toBeLessThanOrEqual(scrubberBox.y);
-  const bar = (await page.locator('.audio-player').boundingBox())!;
-  const box = (await panel.boundingBox())!;
-  expect(bar.y - (box.y + box.height)).toBeGreaterThanOrEqual(12);
+  const bar = page.locator('.audio-player');
+  const [scrubberBox, playBox] = await geometry(['.custom-scrubber', '.player-play-control']);
+  expect(Math.abs((scrubberBox.y + scrubberBox.height / 2) - (playBox.y + playBox.height / 2))).toBeLessThanOrEqual(1);
+  expect((await bar.boundingBox())!.height).toBeLessThanOrEqual(48);
+  await expect(chip).toHaveCount(0);
+  await page.getByRole('button', { name: 'Opzioni del player' }).click();
+  const menu = page.locator('.player-more-panel');
+  await expect(menu).toBeVisible();
+  await menu.evaluate(el => Promise.all(el.getAnimations().map(animation => animation.finished)));
+  const barBox = (await bar.boundingBox())!;
+  const menuBox = (await menu.boundingBox())!;
+  expect(barBox.y - (menuBox.y + menuBox.height)).toBeGreaterThanOrEqual(12);
+  expect(menuBox.x).toBeGreaterThanOrEqual(0);
+  expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(480);
+  await menu.getByRole('button', { name: 'Velocità di riproduzione: 1,15x' }).click();
+  await expect(slider).toBeFocused();
+  const speedBox = (await menu.boundingBox())!;
+  expect(barBox.y - (speedBox.y + speedBox.height)).toBeGreaterThanOrEqual(12);
+  expect(speedBox.y).toBeGreaterThanOrEqual(0);
   await preset('2x').click();
   await faster.click();
-  await expect(chip).toHaveText('2,05x');
-  expect(await geometry(['.custom-scrubber', '.player-play-control'])).toEqual(baseline);
-  const [, play] = baseline;
-  expect(Math.abs(play.x + play.width / 2 - (bar.x + bar.width / 2))).toBeLessThanOrEqual(1);
+  await expect(slider).toHaveAttribute('aria-valuetext', '2,05x');
+  expect(await geometry(['.custom-scrubber', '.player-play-control'])).toEqual([scrubberBox, playBox]);
   await page.keyboard.press('Escape');
-  await expect(panel).toBeHidden();
+  await expect(menu).toBeHidden();
   expect(await footer.evaluate(root => root.scrollWidth <= root.clientWidth)).toBe(true);
   await page.screenshot({ path: info.outputPath('speed-phone-480.png') });
 });

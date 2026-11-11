@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act, within } from '@testing-library/react';
+import { render, screen, fireEvent, act, within, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AudioPlayer } from './AudioPlayer';
 
@@ -85,49 +85,76 @@ describe('AudioPlayer', () => {
     }
   });
 
-  it('lays the phone player on two lines: play centred between the skips on top, the scrubber alone below', () => {
+  it('lays the phone player on one line with the 10-second skips beside play, and keeps the speed one row of ⋮', async () => {
     vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(max-width: 640px)' }));
     try {
       const onStateChange = vi.fn();
       const { container } = render(<AudioPlayer src="/audio/test.mp3" onRelink={vi.fn()} onStateChange={onStateChange} />);
-      // The scrubber sits between the time heard and the length, on a line with no buttons,
-      // so it is not squeezed between them.
-      const seek = container.querySelector<HTMLElement>('.player-phone-seek')!;
-      expect(Array.from(seek.children, child => child.getAttribute('aria-label') ?? child.textContent)).toEqual(['00:00', 'Posizione audio', '00:00']);
-      expect(seek.querySelector('button')).toBeNull();
-      expect(screen.queryByText('00:00 / 00:00')).toBeNull();
-      // Above it, so their menus rise from the buttons and not over the scrubber: three cells
-      // around a centre column, the speed, the skips with play in the middle, the audio options
-      // and the chevron.
-      const controls = seek.previousElementSibling as HTMLElement;
-      expect(controls.classList.contains('player-phone-controls')).toBe(true);
-      expect(controls.classList.contains('grid-cols-[1fr_auto_1fr]')).toBe(true);
-      const [left, centre, right] = Array.from(controls.children) as HTMLElement[];
-      expect(within(left).getByRole('button', { name: 'Velocità di riproduzione: 1x' })).toBeTruthy();
-      expect(Array.from(centre.children, button => button.getAttribute('aria-label'))).toEqual(['Indietro di 10 secondi', 'Avvia riproduzione', 'Avanti di 10 secondi']);
-      expect(Array.from(right.querySelectorAll('button'), button => button.getAttribute('aria-label'))).toEqual(['Opzioni audio collegato', 'Riduci il player a icona']);
+      // One line: play, the skips, the scrubber with the time heard, ⋮, the chevron (pill on the right by default).
+      const bar = container.querySelector<HTMLElement>('.audio-player.player-phone')!;
+      expect(Array.from(bar.querySelectorAll(':scope > button, :scope > div > button, :scope > .player-phone-seek > *'), el => el.getAttribute('aria-label') ?? el.textContent))
+        .toEqual(['Avvia riproduzione', 'Indietro di 10 secondi', 'Avanti di 10 secondi', 'Posizione audio', '00:00', 'Opzioni del player', 'Riduci il player a icona']);
+      expect(screen.queryByRole('button', { name: /^Velocità di riproduzione/ })).toBeNull();
       expect(screen.queryByLabelText("Torna all'inizio")).toBeNull();
+      const audio = container.querySelector('audio')!;
+      Object.defineProperty(audio, 'duration', { configurable: true, value: 60 });
+      audio.currentTime = 30;
+      fireEvent.click(screen.getByRole('button', { name: 'Avanti di 10 secondi' }));
+      expect(audio.currentTime).toBe(40);
+      fireEvent.click(screen.getByRole('button', { name: 'Indietro di 10 secondi' }));
+      expect(audio.currentTime).toBe(30);
 
-      // The speed opens the same panel as on desktop, straight from the bar.
-      fireEvent.click(screen.getByRole('button', { name: 'Velocità di riproduzione: 1x' }));
-      const panel = screen.getByRole('dialog', { name: 'Velocità di riproduzione' });
-      expect(document.activeElement).toBe(within(panel).getByRole('slider', { name: 'Velocità di riproduzione' }));
-      fireEvent.click(within(panel).getByRole('button', { name: '1,5x' }));
+      // ⋮ opens on a short list: the speed, with its value, then the audio actions.
+      fireEvent.click(screen.getByRole('button', { name: 'Opzioni del player' }));
+      const menu = document.querySelector<HTMLElement>('.player-more-panel')!;
+      expect(within(menu).queryByRole('slider', { name: 'Velocità di riproduzione' })).toBeNull();
+      expect(within(menu).getByText('Sostituisci file audio...')).toBeTruthy();
+      // The menu animates its own opening: the list inside does not slide in as well.
+      expect(menu.querySelector('.player-menu-view')!.className).toBe('player-menu-view');
+      fireEvent.click(within(menu).getByRole('button', { name: 'Velocità di riproduzione: 1x' }));
+      // The speed slides in from the right, as a settings page opens.
+      expect(within(menu).getByRole('group', { name: 'Velocità di riproduzione' }).className).toBe('player-menu-view is-entering-forward');
+
+      // The speed panel takes the list's place, its slider focused.
+      const slider = within(menu).getByRole('slider', { name: 'Velocità di riproduzione' });
+      expect(document.activeElement).toBe(slider);
+      expect(within(menu).queryByText('Sostituisci file audio...')).toBeNull();
+      fireEvent.click(within(menu).getByRole('button', { name: '1,5x' }));
       expect(onStateChange).toHaveBeenLastCalledWith(expect.objectContaining({ playbackRate: 1.5 }));
-      fireEvent.pointerDown(document.body);
-      expect(screen.queryByRole('dialog', { name: 'Velocità di riproduzione' })).toBeNull();
-      expect(screen.getByRole('button', { name: 'Velocità di riproduzione: 1,5x' })).toBeTruthy();
+      // The menu stays open while the speed is tried out.
+      expect(slider.getAttribute('aria-valuetext')).toBe('1,5x');
 
-      // ⋮ keeps only the audio actions, as on desktop.
-      fireEvent.click(screen.getByRole('button', { name: 'Opzioni audio collegato' }));
-      expect(screen.getByText('Sostituisci file audio...')).toBeTruthy();
-      expect(within(document.querySelector<HTMLElement>('.player-more-panel')!).queryByText('Velocità')).toBeNull();
+      // Back on the list, the focus returns to the row, which reads the new speed.
+      fireEvent.click(within(menu).getByRole('button', { name: 'Torna alle opzioni del player' }));
+      expect(document.activeElement).toBe(within(menu).getByRole('button', { name: 'Velocità di riproduzione: 1,5x' }));
+      // and the list slides back from the left.
+      expect(menu.querySelector('.player-menu-view')!.className).toBe('player-menu-view is-entering-back');
+      fireEvent.click(within(menu).getByRole('button', { name: 'Velocità di riproduzione: 1,5x' }));
+
       const editorClose = vi.fn();
       window.addEventListener('keydown', editorClose);
       fireEvent.keyDown(document.body, { key: 'Escape' });
       window.removeEventListener('keydown', editorClose);
-      expect(screen.queryByText('Sostituisci file audio...')).toBeNull();
+      await waitFor(() => expect(document.querySelector('.player-more-panel')).toBeNull());
       expect(editorClose).not.toHaveBeenCalled();
+
+      // Closed on the speed panel, ⋮ opens on its list again.
+      fireEvent.click(screen.getByRole('button', { name: 'Opzioni del player' }));
+      expect(screen.getByRole('button', { name: 'Velocità di riproduzione: 1,5x' })).toBeTruthy();
+      expect(screen.queryByRole('slider', { name: 'Velocità di riproduzione' })).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('shows only the time heard on the phone, leaving the room to the scrubber, which still reads both', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(max-width: 640px)' }));
+    try {
+      const { container } = render(<AudioPlayer src="/audio/test.mp3" initialTime={65} initialDuration={10800} />);
+      expect(container.querySelector('.player-phone-seek > span')?.textContent).toBe('0:01:05');
+      expect(container.textContent).not.toContain('3:00:00');
+      expect(screen.getByRole('slider', { name: 'Posizione audio' }).getAttribute('aria-valuetext'))
+        .toBe('1 minuto, 5 secondi di 3 ore');
     } finally {
       vi.unstubAllGlobals();
     }
@@ -144,8 +171,10 @@ describe('AudioPlayer', () => {
       // The arrows would only change a level that never plays there.
       fireEvent.keyDown(document.body, { code: 'ArrowDown' });
       expect(onStateChange).not.toHaveBeenCalledWith(expect.objectContaining({ volume: expect.closeTo(0.35, 5) }));
-      // With no audio actions there is no ⋮ to open.
-      expect(screen.queryByRole('button', { name: 'Opzioni audio collegato' })).toBeNull();
+      // With no audio actions ⋮ still opens on the speed, without a separator.
+      fireEvent.click(screen.getByRole('button', { name: 'Opzioni del player' }));
+      expect(screen.getByRole('button', { name: 'Velocità di riproduzione: 1x' })).toBeTruthy();
+      expect(document.querySelector('.player-more-panel .kebab-separator')).toBeNull();
       expect(onStateChange).not.toHaveBeenCalledWith(expect.objectContaining({ volume: 1 }));
       unmount();
     } finally {
@@ -190,12 +219,13 @@ describe('AudioPlayer', () => {
     vi.useFakeTimers();
     vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(max-width: 640px)' }));
     try {
+      localStorage.setItem('el-sbobinator.audio-player.v1', JSON.stringify({ collapsed: false, side: 'right' }));
       const { container } = render(<AudioPlayer src="/audio/test.mp3" onRelink={vi.fn()} />);
       const tab = screen.getByRole('button', { name: 'Riduci il player a icona' });
       expect(tab.classList.contains('is-right')).toBe(true);
-      // The chevron closes the buttons' line on the pill's side: after the menu, at the right edge.
-      expect(tab.previousElementSibling?.contains(screen.getByRole('button', { name: 'Opzioni audio collegato' }))).toBe(true);
-      expect(tab.nextElementSibling).toBeNull();
+      // The chevron closes the line on the pill's side: after the menu, at the right edge.
+      expect(tab.previousElementSibling?.contains(screen.getByRole('button', { name: 'Opzioni del player' }))).toBe(true);
+      expect(tab.nextElementSibling?.tagName).not.toBe('BUTTON');
 
       fireEvent.click(tab);
       expect(container.querySelector('.audio-player.is-folding')).not.toBeNull();
@@ -215,15 +245,14 @@ describe('AudioPlayer', () => {
 
   it('puts the phone chevron first when the pill lives on the left, and swipes left to fold', () => {
     vi.useFakeTimers();
-    localStorage.setItem('el-sbobinator.audio-player.v1', JSON.stringify({ collapsed: false, side: 'left' }));
     vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(max-width: 640px)' || query === '(prefers-reduced-motion: reduce)' }));
     try {
+      localStorage.setItem('el-sbobinator.audio-player.v1', JSON.stringify({ collapsed: false, side: 'left' }));
       const { container } = render(<AudioPlayer src="/audio/test.mp3" />);
       const tab = screen.getByRole('button', { name: 'Riduci il player a icona' });
       expect(tab.classList.contains('is-left')).toBe(true);
-      // First on the buttons' line, before the speed.
-      expect(container.querySelector('.player-phone-controls > div')!.firstElementChild).toBe(tab);
-      expect(tab.nextElementSibling?.contains(screen.getByRole('button', { name: /^Velocità di riproduzione/ }))).toBe(true);
+      // First on the line, before play.
+      expect(tab.nextElementSibling).toBe(screen.getByRole('button', { name: 'Avvia riproduzione' }));
 
       const play = screen.getByRole('button', { name: 'Avvia riproduzione' });
       // A swipe away from the pill's corner leaves the bar open; toward it folds.
@@ -248,7 +277,7 @@ describe('AudioPlayer', () => {
     // The fold animation is for the user's own fold, not for the player opening with the editor.
     expect(container.querySelector('.audio-player.did-fold')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Avvia riproduzione' }));
-    // Desktop folds from the same chevron as the phone, on the pill's side.
+    // Desktop folds from the same chevron as the phone, on the pill's side: the right by default.
     expect(screen.getByRole('button', { name: 'Riduci il player a icona' }).className).toBe('player-fold-tab is-right');
     fireEvent.click(screen.getByRole('button', { name: 'Riduci il player a icona' }));
     act(() => { vi.advanceTimersByTime(280); });
@@ -441,8 +470,11 @@ describe('AudioPlayer', () => {
     fireEvent.click(screen.getByLabelText('Opzioni audio collegato'));
     const relinkRow = screen.getByText('Sostituisci file audio...').closest('button');
     expect(relinkRow?.classList.contains('kebab-item')).toBe(true);
-    expect(relinkRow?.parentElement?.classList.contains('kebab-panel')).toBe(true);
-    expect(relinkRow?.parentElement?.getAttribute('style') ?? '').toBe('');
+    // In the menu's view, inside the shared panel, placed by CSS rather than inline.
+    const panel = relinkRow?.closest('.kebab-panel');
+    expect(relinkRow?.parentElement?.classList.contains('player-menu-view')).toBe(true);
+    expect(relinkRow?.parentElement?.parentElement).toBe(panel);
+    expect(panel?.getAttribute('style') ?? '').toBe('');
   });
 
   it('focuses the speed slider when the panel opens, so the arrows change the speed', () => {
@@ -451,19 +483,30 @@ describe('AudioPlayer', () => {
     expect(document.activeElement).toBe(screen.getByRole('slider', { name: 'Velocità di riproduzione' }));
   });
 
-  it('closes the speed panel on outside click, or on Escape without closing the editor', () => {
+  it('lets the speed panel fade out instead of vanishing', async () => {
+    render(<AudioPlayer src="/audio/test.mp3" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Velocità di riproduzione: 1x' }));
+    const panel = screen.getByRole('dialog', { name: 'Velocità di riproduzione' });
+    fireEvent.pointerDown(document.body);
+    expect(panel.isConnected).toBe(true);
+    expect(panel.classList.contains('popover-closing')).toBe(true);
+    expect(panel.hasAttribute('inert')).toBe(true);
+    await waitFor(() => expect(panel.isConnected).toBe(false));
+  });
+
+  it('closes the speed panel on outside click, or on Escape without closing the editor', async () => {
     render(<AudioPlayer src="/audio/test.mp3" />);
     const chip = screen.getByRole('button', { name: 'Velocità di riproduzione: 1x' });
     fireEvent.click(chip);
     fireEvent.pointerDown(document.body);
-    expect(screen.queryByRole('dialog', { name: 'Velocità di riproduzione' })).toBeNull();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Velocità di riproduzione' })).toBeNull());
 
     fireEvent.click(chip);
     const editorClose = vi.fn();
     window.addEventListener('keydown', editorClose);
     fireEvent.keyDown(screen.getByRole('slider', { name: 'Velocità di riproduzione' }), { key: 'Escape' });
     window.removeEventListener('keydown', editorClose);
-    expect(screen.queryByRole('dialog', { name: 'Velocità di riproduzione' })).toBeNull();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Velocità di riproduzione' })).toBeNull());
     expect(editorClose).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(chip);
   });
