@@ -26,7 +26,7 @@ import { credentialStorageWarning } from '../../credentialStorage';
 import { getHostCapabilities } from '../../hostCapabilities';
 import { APP_VERSION, WEB_PREVIEW_BUILD, WEB_PRIVACY_PATH } from '../../branding';
 import { STORAGE_KEYS } from '../../storageKeys';
-import { DURATION, modalCard } from '../../motion';
+import { DURATION, largeModalCard } from '../../motion';
 
 export type { SettingsUpdateInstallState };
 
@@ -144,9 +144,9 @@ const SettingsCard: React.FC<{ className: string; children: React.ReactNode }> =
   }, []);
   return (
     <motion.div
-      initial={modalCard.initial}
-      animate={hasPainted ? modalCard.animate : modalCard.initial}
-      exit={modalCard.exit}
+      initial={largeModalCard.initial}
+      animate={hasPainted ? largeModalCard.animate : largeModalCard.initial}
+      exit={largeModalCard.exit}
       data-entered={hasPainted ? 'true' : 'false'}
       className={className}
     >
