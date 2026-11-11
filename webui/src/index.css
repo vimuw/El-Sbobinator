@@ -6248,6 +6248,12 @@ input::-webkit-contacts-auto-fill-button {
     padding: 0;
   }
 
+  /* A table pasted from Google Docs keeps its column widths (602 px in all): without this the
+     column grew to fit it and the whole text ran past both edges of the phone. */
+  .editor-page-center {
+    min-width: 0;
+  }
+
   .editor-page,
   :root[data-theme="dark"] .editor-page {
     width: 100%;
