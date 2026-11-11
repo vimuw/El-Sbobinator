@@ -58,12 +58,12 @@ const post = (path: string, cookie = '', origin = ORIGIN) => new Request(`${ORIG
 });
 
 /** Start → Google → callback: the session cookie of a linked browser. */
-async function link(google = fakeGoogle(), now = 1_000_000) {
-  const started = await handleDriveRequest(get(`/api/drive/start?state=${STATE}&login_hint=studente%40example.com`), ENV, 'start', { now: () => now });
+async function link(google = fakeGoogle(), now = 1_000_000, env: DriveServerEnv = ENV) {
+  const started = await handleDriveRequest(get(`/api/drive/start?state=${STATE}&login_hint=studente%40example.com`), env, 'start', { now: () => now });
   const location = new URL(started.headers.get('Location')!);
   google.setChallenge(location.searchParams.get('code_challenge')!);
   const login = cookieOf(started, LOGIN_COOKIE)!;
-  const back = await handleDriveRequest(get(`/api/drive/callback?state=${STATE}&code=code-1`, `${LOGIN_COOKIE}=${login.value}`), ENV, 'callback', { fetchImpl: google.fetchImpl, now: () => now + 5000 });
+  const back = await handleDriveRequest(get(`/api/drive/callback?state=${STATE}&code=code-1`, `${LOGIN_COOKIE}=${login.value}`), env, 'callback', { fetchImpl: google.fetchImpl, now: () => now + 5000 });
   return { started, location, login, back, session: cookieOf(back, SESSION_COOKIE) };
 }
 
@@ -203,5 +203,20 @@ describe('Drive login server', () => {
     // A key of the wrong size counts as missing.
     expect((await handleDriveRequest(post('/api/drive/token', 'x=1'), { ...ENV, DRIVE_COOKIE_KEY: btoa('corta') }, 'token', { fetchImpl: google.fetchImpl })).status).toBe(503);
     expect(google.calls).toEqual([]);
+  });
+
+  it('ignores the newline a value pasted into the dashboard keeps, and counts a blank one as missing', async () => {
+    const pasted: DriveServerEnv = {
+      GOOGLE_CLIENT_ID: `${ENV.GOOGLE_CLIENT_ID}\n`,
+      GOOGLE_CLIENT_SECRET: ` ${ENV.GOOGLE_CLIENT_SECRET}\r\n`,
+      DRIVE_COOKIE_KEY: `${ENV.DRIVE_COOKIE_KEY}\n`,
+    };
+    const { location, back } = await link(fakeGoogle(), 1_000_000, pasted);
+    expect(location.searchParams.get('client_id')).toBe(ENV.GOOGLE_CLIENT_ID);
+    // The fake Google takes only the exact secret, as the real one does.
+    expect(fragment(back)).toEqual({ state: STATE, result: 'ok' });
+
+    const blank = { ...ENV, GOOGLE_CLIENT_SECRET: ' \n' };
+    expect(fragment(await handleDriveRequest(get(`/api/drive/start?state=${STATE}`), blank, 'start'))).toEqual({ state: STATE, error: 'server_not_configured' });
   });
 });

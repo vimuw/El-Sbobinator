@@ -66,11 +66,15 @@ function randomBytes(size: number): Uint8Array<ArrayBuffer> {
   return crypto.getRandomValues(new Uint8Array(size));
 }
 
+// Values pasted into the Cloudflare dashboard can keep a trailing newline: Google then knows
+// neither the client ID ("OAuth client was not found") nor the secret.
 async function configFrom(env: DriveServerEnv): Promise<Config | null> {
+  const clientId = env.GOOGLE_CLIENT_ID?.trim();
+  const clientSecret = env.GOOGLE_CLIENT_SECRET?.trim();
   const raw = env.DRIVE_COOKIE_KEY ? fromBase64(env.DRIVE_COOKIE_KEY) : null;
-  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || raw?.byteLength !== 32) return null;
+  if (!clientId || !clientSecret || raw?.byteLength !== 32) return null;
   const key = await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt']);
-  return { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET, key };
+  return { clientId, clientSecret, key };
 }
 
 // The cookie's name is the additional data: a login cookie never opens as a session one.
