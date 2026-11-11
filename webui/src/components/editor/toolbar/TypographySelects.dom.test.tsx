@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { FontFamilySelect, FontSizeSelect, HeadingSelect, ZoomSelect } from './TypographySelects';
 import { Editor, type Editor as TiptapEditor } from '@tiptap/core';
@@ -181,7 +181,19 @@ describe('TypographySelects', () => {
     } finally { editor.destroy(); }
   });
 
-  it('closes an open dropdown on Esc without reaching the editor page', () => {
+  it('closes an open dropdown with a short exit, like the other menus, then removes it', async () => {
+    const { editor } = createMockEditor();
+    render(<FontFamilySelect editor={editor as unknown as TiptapEditor} />);
+    fireEvent.click(screen.getByTitle('Carattere'));
+    const panel = document.querySelector<HTMLElement>('.font-family-dropdown-panel')!;
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(panel.isConnected).toBe(true);
+    expect(panel.classList.contains('popover-closing')).toBe(true);
+    expect(panel.hasAttribute('inert')).toBe(true);
+    await waitFor(() => expect(panel.isConnected).toBe(false));
+  });
+
+  it('closes an open dropdown on Esc without reaching the editor page', async () => {
     const { editor } = createMockEditor();
     const pageEscape = vi.fn();
     window.addEventListener('keydown', pageEscape);
@@ -190,7 +202,7 @@ describe('TypographySelects', () => {
       fireEvent.click(screen.getByTitle('Carattere'));
       expect(screen.getByRole('button', { name: 'Georgia' })).toBeTruthy();
       fireEvent.keyDown(document.body, { key: 'Escape' });
-      expect(screen.queryByRole('button', { name: 'Georgia' })).toBeNull();
+      await waitFor(() => expect(screen.queryByRole('button', { name: 'Georgia' })).toBeNull());
       expect(pageEscape).not.toHaveBeenCalled();
     } finally { window.removeEventListener('keydown', pageEscape); }
   });

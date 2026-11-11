@@ -66,6 +66,13 @@ describe('audio worker tasks', () => {
     expect(worker.terminate).toHaveBeenCalled();
   });
 
+  it('keeps the name of a read error, so a lost file is not retried', async () => {
+    const lost = new Blob(['x']);
+    vi.spyOn(lost, 'arrayBuffer').mockRejectedValue(new DOMException('A requested file or directory could not be found', 'NotFoundError'));
+    const source = createWorkerAudioSource(mp3(1), inProcessWorker(createAudioTasks({ canEncode: async () => false, encode: vi.fn() })));
+    await expect(source.toBase64(lost)).rejects.toMatchObject({ name: 'NotFoundError', message: expect.stringContaining('could not be found') });
+  });
+
   it('reports a file that is not audio', async () => {
     const source = createWorkerAudioSource(new Blob([new Uint8Array(100)]), inProcessWorker(createAudioTasks({ canEncode: async () => false, encode: vi.fn() })));
     await expect(source.cut(900, 840)).rejects.toThrow(/Formato non riconosciuto/);

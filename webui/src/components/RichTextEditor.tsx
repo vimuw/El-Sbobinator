@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import { TextSelection } from '@tiptap/pm/state';
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -19,6 +19,7 @@ import { MenuBar } from './EditorToolbar';
 import { getWordRangeAtPos } from '../editorUtils';
 import { EditorBubbleMenu } from './EditorBubbleMenu';
 import { FindReplacePanel } from './EditorFindReplace';
+import { EditorScrollPercent } from './EditorScrollPercent';
 import { useEditorImageDrop } from '../hooks/useEditorImageDrop';
 import { useTocScrollSpy } from '../hooks/useTocScrollSpy';
 import { usePhoneLayout } from '../hooks/usePhoneLayout';
@@ -35,6 +36,10 @@ import { EditorParagraphTab } from '../editorParagraphTab';
 import { EditorBold, EditorTextStyle } from '../editorBold';
 
 export type { Heading };
+
+// Widths of the index column on the left of the page, and of its mirror on the right.
+const TOC_CLOSED_WIDTH = 44;
+const TOC_OPEN_WIDTH = 260;
 
 interface RichTextEditorProps {
   initialContent?: string;
@@ -403,7 +408,27 @@ export function RichTextEditor({
     }
   }, [zoomLevel]);
 
-  // Center paper in viewport when TOC opens/closes or container resizes
+  // The page width follows the editor, never the index, as in Google Docs. On tablet widths the
+  // page fits the editor with the index closed (index.css reads --editor-page-fit); opening the
+  // index then moves the page right instead of narrowing it and rewrapping the text.
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const update = () => {
+      const outer = container.querySelector<HTMLElement>('.editor-page-outer');
+      const style = outer ? getComputedStyle(outer) : null;
+      const gutters = style ? (Number.parseFloat(style.paddingLeft) || 0) + (Number.parseFloat(style.paddingRight) || 0) : 0;
+      container.style.setProperty('--editor-page-fit', `${Math.max(0, container.clientWidth - gutters - 2 * TOC_CLOSED_WIDTH)}px`);
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
+  // When the index opens or closes, or the editor resizes. With the index open the view starts at
+  // the left edge, as in Google Docs: the index stays in sight while the page runs past the right
+  // edge. With it closed, a page wider than the editor (zoom) is centred.
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
@@ -415,7 +440,7 @@ export function RichTextEditor({
 
       const viewportWidth = container.clientWidth;
       const contentWidth = outer.scrollWidth;
-      if (contentWidth <= viewportWidth) {
+      if (contentWidth <= viewportWidth || isTocOpen) {
         container.scrollLeft = 0;
         return;
       }
@@ -436,7 +461,12 @@ export function RichTextEditor({
     };
     requestAnimationFrame(poll);
 
+    // Only a new width moves the page sideways. The dock opening or folding changes the bottom
+    // padding, so the box's height: re-centring then threw a page widened by a table to the right.
+    let lastWidth = container.clientWidth;
     const resizeObserver = new ResizeObserver(() => {
+      if (container.clientWidth === lastWidth) return;
+      lastWidth = container.clientWidth;
       adjustScroll();
     });
     resizeObserver.observe(container);
@@ -480,7 +510,7 @@ export function RichTextEditor({
         }}
       >
         <div className="editor-page-outer">
-          <div className="editor-toc-col" style={{ width: isTocOpen ? 260 : 44 }}>
+          <div className="editor-toc-col" style={{ width: isTocOpen ? TOC_OPEN_WIDTH : TOC_CLOSED_WIDTH }}>
             <div className="editor-toc-sticky" ref={tocStickyRef}>
               <div className="editor-toc-trigger" aria-hidden={isTocOpen} inert={isTocOpen}>
                 <button className="editor-toc-btn" onClick={onTocToggle} title="Apri indice">
@@ -523,9 +553,10 @@ export function RichTextEditor({
               <EditorContent editor={editor} />
             </div>
           </div>
-          <div className="editor-toc-spacer" style={{ width: isTocOpen ? 260 : 44 }} />
+          <div className="editor-toc-spacer" style={{ width: isTocOpen ? TOC_OPEN_WIDTH : TOC_CLOSED_WIDTH }} />
         </div>
       </div>
+      <EditorScrollPercent containerRef={scrollContainerRef} />
 
       <EditorContextMenu
         contextMenu={contextMenu}

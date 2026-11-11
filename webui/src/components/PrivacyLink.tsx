@@ -6,9 +6,15 @@ import { getHostCapabilities } from '../hostCapabilities';
 export function PrivacyLink({ className = 'footer-link' }: { className?: string }) {
   if (getHostCapabilities().kind !== 'web') return null;
   return (
-    <a href={WEB_PRIVACY_PATH} className={className}>
+    <a href={WEB_PRIVACY_PATH} className={className} aria-label="Informativa sulla privacy">
       <ShieldCheck className="w-3.5 h-3.5" aria-hidden="true" />
-      Informativa sulla privacy
+      {className === 'footer-link' ? (
+        // On a phone the footer shows the short label (index.css); the name stays the full one.
+        <>
+          <span className="footer-label-long">Informativa sulla privacy</span>
+          <span className="footer-label-short" aria-hidden="true">Privacy</span>
+        </>
+      ) : 'Informativa sulla privacy'}
     </a>
   );
 }

@@ -53,6 +53,70 @@ function renderArchive(overrides: Partial<{
   );
 }
 
+const MB = 1024 * 1024;
+
+describe('ArchivePage audio kept in this browser', () => {
+  const sessions = [
+    { ...makeSession('s1', 'Anatomia'), kept_audio_bytes: 120 * MB },
+    makeSession('s2', 'Biochimica'),
+    { ...makeSession('s3', 'Chimica'), kept_audio_bytes: 300 * MB },
+  ];
+  const listed = () => Array.from(document.querySelectorAll('.archive-session-list .archive-session-card p.text-sm')).map(row => row.textContent);
+  const baseProps = { folders: [] as ArchiveFolder[], onFoldersChange: vi.fn(), onPreview: vi.fn(), onOpenFile: vi.fn(), onDeleteSession: vi.fn() };
+
+  it('keeps the toolbar as it was: the size order is in the sort menu, only while some sbobina keeps its audio', () => {
+    const { unmount } = renderArchive({ sessions: [makeSession('s1'), makeSession('s2')] });
+    fireEvent.click(screen.getByLabelText('Cambia ordinamento'));
+    expect(screen.queryByText('Audio più pesante')).toBeNull();
+    unmount();
+
+    renderArchive({ sessions });
+    expect(screen.queryByTestId('kept-audio-summary')).toBeNull();
+    expect(screen.queryByRole('button', { name: /audio/i })).toBeNull();
+    fireEvent.click(screen.getByLabelText('Cambia ordinamento'));
+    fireEvent.click(screen.getByText('Audio più pesante'));
+    // Heaviest audio first, then the others by date.
+    expect(listed()).toEqual(['Chimica', 'Anatomia', 'Biochimica']);
+  });
+
+  it('opens filtered when Archiviazione asks which sbobine keep the audio, heaviest first with their total, even from inside a collection', () => {
+    const onHandled = vi.fn();
+    const folder: ArchiveFolder = { id: 'f1', name: 'Primo anno', color: '', session_dirs: [sessions[1].session_dir] };
+    const props = { ...baseProps, sessions, folders: [folder], onShowKeptAudioHandled: onHandled };
+    const { rerender } = render(<ArchivePage {...props} />);
+    fireEvent.click(within(screen.getByRole('region', { name: 'Raccolte' })).getByText('Primo anno'));
+    expect(screen.getByRole('heading', { name: 'Lezioni', level: 3 })).toBeTruthy();
+
+    rerender(<ArchivePage {...props} showKeptAudioRequest />);
+    expect(onHandled).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('heading', { name: 'Tutte le sbobine', level: 3 })).toBeTruthy();
+    expect(listed()).toEqual(['Chimica', 'Anatomia']);
+    expect(screen.getByTestId('kept-audio-summary').textContent).toBe('Con audio salvato · 2 sbobine · 420,0 MB');
+
+    // The handled request leaves the filter to the archive.
+    rerender(<ArchivePage {...props} showKeptAudioRequest={false} />);
+    expect(listed()).toEqual(['Chimica', 'Anatomia']);
+  });
+
+  it('gives back the whole archive in its usual order when the pill is closed', () => {
+    render(<ArchivePage {...baseProps} sessions={sessions} showKeptAudioRequest />);
+    fireEvent.click(screen.getByRole('button', { name: 'Mostra tutte le sbobine' }));
+    expect(screen.queryByTestId('kept-audio-summary')).toBeNull();
+    expect(listed()).toEqual(['Chimica', 'Biochimica', 'Anatomia']);
+  });
+
+  it('keeps the pill after the last audio goes, saying none is left', () => {
+    const { rerender } = render(<ArchivePage {...baseProps} sessions={sessions} showKeptAudioRequest />);
+    const without = sessions.map(({ kept_audio_bytes: _bytes, ...session }) => session);
+    rerender(<ArchivePage {...baseProps} sessions={without} showKeptAudioRequest />);
+    expect(listed()).toEqual([]);
+    expect(screen.getByTestId('kept-audio-summary').textContent).toBe('Nessuna sbobina con audio salvato');
+    expect(screen.getByText("Nessuna sbobina tiene l'audio in questo browser.")).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Mostra tutte le sbobine' }));
+    expect(listed()).toEqual(['Chimica', 'Biochimica', 'Anatomia']);
+  });
+});
+
 describe('ArchivePage', () => {
   it('lists each lesson as its own card, apart from the Riprendi card', () => {
     const session = { ...makeSession('s1'), last_opened_at_iso: '2026-10-01T10:00:00Z' };
@@ -594,6 +658,30 @@ describe('ArchivePage', () => {
       fireEvent.click(sortBtn);
     });
     expect(await screen.findByText('Più occorrenze')).toBeTruthy();
+  });
+
+  it('keeps the typed search when switching to full text and back', async () => {
+    const mockSearchSessions = vi.fn().mockResolvedValue({ ok: true, results: [], total: 0 });
+    (window as unknown as { pywebview: { api: { search_sessions: unknown } } }).pywebview = {
+      api: { search_sessions: mockSearchSessions },
+    };
+
+    renderArchive({ sessions: [makeSession('s1', 'Istologia 1')] });
+
+    act(() => {
+      fireEvent.change(screen.getByPlaceholderText('Cerca per nome...'), { target: { value: 'epitelio' } });
+    });
+    act(() => {
+      fireEvent.click(screen.getByTitle('Testo completo (Ricerca nel contenuto)'));
+    });
+
+    expect((screen.getByPlaceholderText('Cerca nel contenuto...') as HTMLInputElement).value).toBe('epitelio');
+    await waitFor(() => expect(mockSearchSessions).toHaveBeenCalledWith('epitelio', 100));
+
+    act(() => {
+      fireEvent.click(screen.getByTitle('Testo completo (Attivo - Clicca per disattivare)'));
+    });
+    expect((screen.getByPlaceholderText('Cerca per nome...') as HTMLInputElement).value).toBe('epitelio');
   });
 
   it('calls onNotification when importing sbobina package fails with error', async () => {

@@ -27,7 +27,11 @@ export function createWorkerAudioSource(file: Blob, worker: AudioWorkerLike = cr
     const waiter = pending.get(reply.id);
     if (!waiter) return;
     pending.delete(reply.id);
-    if (reply.type === 'error') waiter.reject(new Error(reply.message));
+    if (reply.type === 'error') {
+      const error = new Error(reply.message);
+      if (reply.name) error.name = reply.name;
+      waiter.reject(error);
+    }
     else waiter.resolve(reply.result);
   };
   worker.onerror = event => failAll(new Error(`Errore nel worker audio: ${event.message || 'sconosciuto'}`));

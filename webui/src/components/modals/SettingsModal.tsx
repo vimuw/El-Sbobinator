@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Settings, HardDrive, SlidersHorizontal, Loader2, X, LifeBuoy, Tag, Cloud } from 'lucide-react';
 import type { ApiUsageResult, CredentialStorage, ModelOption, ValidationResult } from '../../bridge';
 import { ConfirmActionModal } from './ConfirmActionModal';
+import { UnsavedChangesHint } from './UnsavedChangesHint';
 import { ApiKeySection, type DeleteKeyTarget } from './settings/ApiKeySection';
 import { ModelSection } from './settings/ModelSection';
 import { NotificationSection } from './settings/NotificationSection';
@@ -19,12 +20,13 @@ import { UpdaterSection, UpdateNotice, type SettingsUpdateInstallState } from '.
 import { SettingsDivider, SettingsPageHeader, SettingsSectionHeading } from './settings/SettingsLayout';
 
 import { useSettingsStorage } from '../../hooks/useSettingsStorage';
+import { useBackdropDismiss } from '../../hooks/useBackdropDismiss';
 import { formatSize } from '../../utils';
 import { credentialStorageWarning } from '../../credentialStorage';
 import { getHostCapabilities } from '../../hostCapabilities';
 import { APP_VERSION, WEB_PREVIEW_BUILD, WEB_PRIVACY_PATH } from '../../branding';
 import { STORAGE_KEYS } from '../../storageKeys';
-import { DURATION, modalCard } from '../../motion';
+import { DURATION, largeModalCard } from '../../motion';
 
 export type { SettingsUpdateInstallState };
 
@@ -64,6 +66,8 @@ export interface SettingsStorageProps {
   onArchiveImported?: () => void;
   /** Web build: grows each time a Drive sync changes the archive; an open Archiviazione re-reads the space. */
   archiveRevision?: number;
+  /** Web build: "Vedi quali" on the sbobine's audio: the archive, filtered to the sbobine that keep it. */
+  onShowKeptAudio?: () => void;
 }
 
 export interface SettingsModalProps {
@@ -89,7 +93,7 @@ const TAB_HEADERS: Record<TabType, { title: string; description: string }> = {
     description: 'Chiave API Google Gemini, modello di trascrizione e preferenze di sistema.',
   },
   drive: {
-    title: 'Sincronizzazione',
+    title: 'Google Drive',
     description: 'Una copia delle sbobine nel tuo Google Drive, per ritrovarle sugli altri dispositivi.',
   },
   storage: {
@@ -109,7 +113,7 @@ const WEB_TAB_HEADERS: Record<TabType, { title: string; description: string }> =
     description: 'Modello di trascrizione e chiavi API Google Gemini salvate in questo browser.',
   },
   drive: {
-    title: 'Sincronizzazione',
+    title: 'Google Drive',
     description: 'Una copia delle sbobine nel tuo Google Drive, per ritrovarle sugli altri dispositivi.',
   },
   storage: {
@@ -140,9 +144,9 @@ const SettingsCard: React.FC<{ className: string; children: React.ReactNode }> =
   }, []);
   return (
     <motion.div
-      initial={modalCard.initial}
-      animate={hasPainted ? modalCard.animate : modalCard.initial}
-      exit={modalCard.exit}
+      initial={largeModalCard.initial}
+      animate={hasPainted ? largeModalCard.animate : largeModalCard.initial}
+      exit={largeModalCard.exit}
       data-entered={hasPainted ? 'true' : 'false'}
       className={className}
     >
@@ -515,6 +519,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
     onClose();
   }, [onClose, setApiKey, setFallbackKeys, setPreferredModel]);
+  // Only the edits "Salva e Chiudi" would keep count: Drive, storage and key removal apply at once.
+  const backdrop = useBackdropDismiss({ dirty: hasPendingChanges, onClose: handleClose, blocked: isSaving });
 
   const webKeyCount = [apiKey, ...fallbackKeys].filter(key => key.trim()).length;
   // Web build: "Rimuovi tutte le chiavi" deletes the keys from this browser right away, not on "Salva".
@@ -591,9 +597,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               exit={{ opacity: 0 }}
               transition={{ duration: DURATION.fast }}
               className="modal-overlay absolute inset-0"
+              onClick={backdrop.onBackdropClick}
+              data-testid="settings-backdrop"
             />
 
-            <SettingsCard className="modal-card relative w-full max-w-md md:max-w-4xl h-[85vh] md:h-[80vh] overflow-hidden flex flex-col md:flex-row">
+            <SettingsCard className={`modal-card${backdrop.shaking ? ' is-shaking' : ''} relative w-full max-w-md md:max-w-4xl h-[85vh] md:h-[80vh] overflow-hidden flex flex-col md:flex-row`}>
               <nav
                 aria-label="Sezioni delle impostazioni"
                 className="settings-nav app-scroll"
@@ -623,14 +631,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     type="button"
                     onClick={() => handleTabChange('drive')}
                     aria-current={activeTab === 'drive' ? 'page' : undefined}
-                    aria-label="Sincronizzazione"
                     className={`settings-nav-item ${activeTab === 'drive' ? 'is-active' : ''}`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <Cloud className={`w-4 h-4 shrink-0 transition-colors ${activeTab === 'drive' ? 'text-[var(--accent-text)]' : 'text-[var(--text-secondary)]'}`} />
-                      {/* The phone's tab row fits "Archiviazione" but not "Sincronizzazione". */}
-                      <span className="truncate md:hidden">Sincronizza</span>
-                      <span className="truncate hidden md:inline">Sincronizzazione</span>
+                      {/* Named after the service, in full as Google asks: shorter than "Archiviazione",
+                          it fits the phone's tab row too. */}
+                      <span className="truncate">Google Drive</span>
                     </div>
                   </button>
                 )}
@@ -785,9 +792,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           sessionInfo={sessionInfo}
                           isLoadingSessionInfo={isLoadingSessionInfo}
                           onOpenDrive={hasDriveTab ? () => handleTabChange('drive') : undefined}
+                          onShowKeptAudio={storage?.onShowKeptAudio}
                           onArchiveChanged={() => {
                             storage?.onArchiveImported?.();
-                            fetchSessionStorageInfo();
+                            // The page is open: its figures stay until the new ones arrive.
+                            fetchSessionStorageInfo({ quiet: true });
                           }}
                         />
                       ) : (
@@ -829,6 +838,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         {saveError}
                       </p>
                     )}
+                    <UnsavedChangesHint show={backdrop.showHint && !saveError} />
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     {!showCloseOnly && <button
@@ -844,7 +854,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       type="button"
                       onClick={showCloseOnly ? handleClose : handleSave}
                       disabled={isSaving}
-                      className="modal-action-button is-primary"
+                      className={`modal-action-button is-primary${backdrop.shaking ? ' is-attention' : ''}`}
                     >
                       {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                       {showCloseOnly ? 'Chiudi' : 'Salva e Chiudi'}

@@ -24,6 +24,7 @@ export interface DriveConnection {
 export function createDriveConnection(clientId: string = GOOGLE_CLIENT_ID, origin: string = globalThis.location?.origin ?? ''): DriveConnection | null {
   if (!driveEnabled(clientId)) return null;
   const auth = createDriveAuth({ clientId, redirectUri: redirectUriFor(origin), origin });
-  const api = createDriveApi({ getToken: () => auth.token(), onUnauthorized: () => auth.expire() });
+  // Each request takes a token renewed by the site's server when needed: no hourly reconnect.
+  const api = createDriveApi({ getToken: () => auth.freshToken(), onUnauthorized: () => auth.expire() });
   return { auth, api, exportApi: token => createDriveApi({ getToken: () => token }) };
 }

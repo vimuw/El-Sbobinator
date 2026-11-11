@@ -74,6 +74,7 @@ function makeEnv(audio: AudioSource, overrides: Partial<PipelineEnv> = {}) {
   const phases: string[] = [];
   const consoleLines: string[] = [];
   const workDone: string[] = [];
+  const warnings: Array<[string, string | null]> = [];
   const controller = new AbortController();
   const env: PipelineEnv = {
     keys: ['KEY-1'],
@@ -86,6 +87,7 @@ function makeEnv(audio: AudioSource, overrides: Partial<PipelineEnv> = {}) {
       progress: () => {},
       totals: () => {},
       workDone: (kind, done, total) => workDone.push(`${kind} ${done}/${total}`),
+      warning: (code, message) => warnings.push([code, message]),
     },
     page: { isOffline: () => false, waitOnline: async () => {}, isHidden: () => false, wasHiddenSince: () => false, waitVisible: async () => {} },
     signal: controller.signal,
@@ -95,7 +97,7 @@ function makeEnv(audio: AudioSource, overrides: Partial<PipelineEnv> = {}) {
     now: () => 0,
     ...overrides,
   };
-  return { env, saved, phases, consoleLines, workDone, controller };
+  return { env, saved, phases, consoleLines, workDone, warnings, controller };
 }
 
 function session(model = 'gemini-2.5-flash', macroCharLimit = 400): SessionState {
@@ -151,6 +153,32 @@ describe('runPipeline', () => {
     expect(audio.prepared).toEqual([0, 1, 2]);
   });
 
+  it('moves the percent with each finished chunk and section, not one step behind the step bar', async () => {
+    const replies: Reply[] = [okText(chunkText(1)), okText(chunkText(2)), okText(chunkText(3))];
+    for (let i = 0; i < 4; i += 1) replies.push(okText('## Rivisto\n\nTesto rivisto.'));
+    mockGemini(replies);
+    const events: string[] = [];
+    const { env } = makeEnv(fakeAudio(3));
+    env.reporter = {
+      ...env.reporter,
+      progress: value => events.push(`progress ${Math.round(value * 100)}`),
+      workDone: (kind, done, total) => events.push(`${kind} ${done}/${total}`),
+    };
+    const sleep = env.sleep;
+    env.sleep = async (secs, signal) => { events.push('pause'); await sleep(secs, signal); };
+
+    const state = await runPipeline(session(), env);
+
+    // Every counter is followed, before the pause between calls, by the percent it implies:
+    // 5-70% for chunks, 70-95% for sections.
+    const after = (event: string) => events[events.indexOf(event) + 1];
+    expect(after('chunks 1/3')).toBe('progress 27');
+    expect(after('chunks 2/3')).toBe('progress 48');
+    expect(after('chunks 3/3')).toBe('progress 70');
+    const sections = state.macroBlocks!.length;
+    expect(after(`macro ${sections}/${sections}`)).toBe('progress 95');
+  });
+
   it('resumes from the first chunk without text', async () => {
     const state = session();
     state.plan = [0, 1, 2].map(index => ({ index, startSec: index * 840, durationSec: 900 }));
@@ -192,8 +220,9 @@ describe('runPipeline', () => {
     const quota = { status: 429, json: { error: { status: 'RESOURCE_EXHAUSTED', message: 'Quota exceeded for metric: generate_content_free_tier_requests, limit: 20' } } };
     const { calls } = mockGemini([quota, okText(chunkText(1)), okText('## R\n\nTesto rivisto.')]);
     const usage = { recordAttempt: vi.fn(), recordSuccess: vi.fn(), recordFailure: vi.fn() };
-    const { env, consoleLines } = makeEnv(fakeAudio(1), { keys: ['KEY-1', 'KEY-2'], usage });
+    const { env, consoleLines, warnings } = makeEnv(fakeAudio(1), { keys: ['KEY-1', 'KEY-2'], usage });
     const state = await runPipeline(session(), env);
+    expect(warnings).toEqual([['fallback_key_in_use', 'Quota giornaliera della chiave 1 esaurita: continuo con la chiave 2 di 2']]);
     expect(calls.map(call => call.key)).toEqual(['KEY-1', 'KEY-2', 'KEY-2']);
     expect(state.keyRotations).toBe(1);
     // The settings learn which key ran out, on the session's model, and that the next one works.
@@ -202,6 +231,21 @@ describe('runPipeline', () => {
     expect(usage.recordSuccess.mock.calls.map(call => call[0])).toEqual(['KEY-2', 'KEY-2']);
     expect(consoleLines.join('\n')).toContain('continuo con la chiave 2/2');
     expect(consoleLines.join('\n')).not.toContain('KEY-');
+  });
+
+  it('warns in the banner about every block Gemini cut short, and about skipped fallback keys', async () => {
+    const truncated = (i: number) => ({ json: { candidates: [{ content: { parts: [{ text: chunkText(i) }] }, finishReason: 'MAX_TOKENS' }] } });
+    const invalid = { status: 400, json: { error: { status: 'INVALID_ARGUMENT', message: 'API key not valid. Please pass a valid API key.' } } };
+    const quota = { status: 429, json: { error: { status: 'RESOURCE_EXHAUSTED', message: 'exceeded your current quota' } } };
+    mockGemini([truncated(1), okText(chunkText(2)), quota, invalid, truncated(3), okText('## R\n\nTesto rivisto.')]);
+    const { env, warnings } = makeEnv(fakeAudio(3), { keys: ['KEY-1', 'KEY-2', 'KEY-3'] });
+    await runPipeline(session('gemini-2.5-flash', 22000), env);
+    expect(warnings).toEqual([
+      ['truncated_output', 'Gemini ha troncato il testo del blocco 1: potrebbe mancarne la parte finale'],
+      ['fallback_key_in_use', 'Quota giornaliera della chiave 1 esaurita: continuo con la chiave 2 di 3'],
+      ['fallback_key_invalid', 'La chiave di riserva 2 non è valida: l’ho saltata. Controllala nelle impostazioni'],
+      ['truncated_output', 'Gemini ha troncato il testo dei blocchi 1, 3: potrebbe mancarne la parte finale'],
+    ]);
   });
 
   it('stops with the quota error, progress saved, when every key is exhausted', async () => {
@@ -215,8 +259,9 @@ describe('runPipeline', () => {
   it('includes a section unrevised after the retry pass and adds the warning', async () => {
     const bad = { status: 400, json: { error: { status: 'INVALID_ARGUMENT', message: 'bad' } } };
     mockGemini([okText(chunkText(1)), bad, bad]);
-    const { env, phases } = makeEnv(fakeAudio(1), {});
+    const { env, phases, warnings } = makeEnv(fakeAudio(1), {});
     const state = await runPipeline(session('gemini-2.5-flash', 22000), env);
+    expect(warnings).toEqual([['unrevised_blocks', '1 sezione inclusa senza revisione (sezione 1)']]);
     expect(state.failedBlocks).toEqual([0]);
     expect(state.revised![0]).toBe(state.macroBlocks![0].trim());
     expect(state.body).toContain('revision-warning-banner');

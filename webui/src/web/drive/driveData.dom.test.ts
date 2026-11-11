@@ -6,7 +6,6 @@ import { FOLDER_MIME, createDriveApi } from './driveApi';
 import { createDriveService } from './driveService';
 import { exportDocument, exportFolderName } from './exportDrive';
 import { createFakeAuth, createFakeDrive, type FakeDrive } from './fakeDrive';
-import { DRIVE_FILE_SCOPE } from './oauth';
 import { readMeta, readRecords, trackArchive } from './syncState';
 
 // "Elimina tutti i miei dati da Drive" and "Esporta tutte le sbobine nel mio Drive", on the
@@ -109,7 +108,7 @@ describe('Esporta tutte le sbobine nel mio Drive', () => {
     const progress: string[] = [];
 
     const result = await pc.service.exportAll((done, total) => progress.push(`${done}/${total}`));
-    expect(pc.login.calls).toEqual([{ silent: false, scope: DRIVE_FILE_SCOPE }]);
+    expect(pc.login.calls).toEqual(['export']);
     // The export's token is not the tab's: the sync stays unlinked.
     expect(pc.service.status()).toMatchObject({ connected: false });
     expect(result).toMatchObject({ ok: true, exported: 4, total: 4, folder_name: 'El Sbobinator – esportazione 2026-10-27' });

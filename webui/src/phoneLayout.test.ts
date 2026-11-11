@@ -16,6 +16,13 @@ describe('phone layout', () => {
     expect(end).toMatch(/border-left: 1px solid var\(--border-subtle\)/);
   });
 
+  it('lets the text column shrink to the phone, so a table pasted from Google Docs cannot widen it', () => {
+    // Docs tables arrive with fixed column widths (602 px in all): the flex column grew to fit
+    // them and the whole document ran past both edges of the screen.
+    const phoneEditor = index.slice(index.lastIndexOf('@media (max-width: 640px)', index.indexOf('padding: 20px 16px 32px')));
+    expect(rule('.editor-page-center', phoneEditor)).toMatch(/min-width: 0/);
+  });
+
   it('keeps card titles on one line, cut in the middle, so every card has the same height', () => {
     expect(phone).not.toMatch(/\.queue-card h4\.truncate|\.archive-session-card p\.truncate/);
     expect(rule('.middle-truncate', phone)).toMatch(/display: flex/);

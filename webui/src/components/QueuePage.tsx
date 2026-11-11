@@ -1,14 +1,14 @@
 import { credentialStorageWarning } from '../credentialStorage';
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { type DragEndEvent, type SensorDescriptor, type SensorOptions } from '@dnd-kit/core';
 import { AlertTriangle, Loader2, Settings } from 'lucide-react';
-import { GithubIcon } from './icons/GithubIcon';
-import { GITHUB_URL } from '../branding';
-import { ReportProblemLink } from './ReportProblemLink';
-import { PrivacyLink } from './PrivacyLink';
+import { AppFooterLinks } from './AppFooterLinks';
+import { ConsoleHint } from './ConsoleHint';
+import { useConsoleHint } from '../hooks/useConsoleHint';
 import type { ArchiveFolder, ArchiveSession } from '../bridge';
-import { type AppStatus, type FileItem, type ProcessingWarning, getDoneFiles, getPendingFiles } from '../appState';
+import { type AppStatus, type FileItem, type ProcessingWarning, type RunOutcome, getDoneFiles, getPendingFiles } from '../appState';
+import { RunOutcomeBanner, type RunOutcomeActions } from './RunOutcomeBanner';
 import { GEMINI_KEY_PATTERN } from '../utils';
 import { STORAGE_KEYS } from '../storageKeys';
 import { ProcessingStatusBanner } from './ProcessingStatusBanner';
@@ -36,6 +36,8 @@ export interface QueueProgressProps {
   batchCompleted: number;
   batchTotal: number;
   completionFlash: boolean;
+  /** What the last batch left to do; shown where the processing banner was. */
+  runOutcome?: RunOutcome | null;
 }
 
 export interface QueueAuthProps {
@@ -83,6 +85,9 @@ export interface QueueActionProps {
   handleOpenSettings: () => void;
   handleRemoveDoneFile: (id: string) => void;
   handleRetryFailedRevisionBlocks: (sessionDir: string, fileId?: string) => Promise<void>;
+  handleDismissRunOutcome?: () => void;
+  /** Settings opened on Archiviazione. */
+  handleOpenStorageSettings?: () => void;
 }
 
 export interface QueuePageProps {
@@ -130,6 +135,7 @@ export function QueuePage({
     batchCompleted,
     batchTotal,
     completionFlash,
+    runOutcome = null,
   } = progress;
 
   const {
@@ -177,6 +183,8 @@ export function QueuePage({
     handleOpenSettings,
     handleRemoveDoneFile,
     handleRetryFailedRevisionBlocks,
+    handleDismissRunOutcome,
+    handleOpenStorageSettings,
   } = actions;
 
   const pendingFiles = useMemo(() => getPendingFiles(files), [files]);
@@ -218,6 +226,16 @@ export function QueuePage({
     () => files.find(f => f.status === 'processing' || f.isRetryingBlocks) ?? (completionFlash ? doneFiles[0] : undefined),
     [files, completionFlash, doneFiles],
   );
+  const outcomeActions = useMemo<RunOutcomeActions>(() => ({
+    onResume: handleQueueRetry,
+    onRemove: requestRemoveFile,
+    onOpenSettings: handleOpenSettings,
+    onOpenStorage: handleOpenStorageSettings ?? handleOpenSettings,
+    onOpenSbobina: (htmlPath, title, sessionDir) => openPreview(htmlPath, title, undefined, undefined, sessionDir),
+    onReviseSections: (sessionDir, fileId) => { void handleRetryFailedRevisionBlocks(sessionDir, fileId); },
+    onDismiss: () => handleDismissRunOutcome?.(),
+  }), [handleQueueRetry, requestRemoveFile, handleOpenSettings, handleOpenStorageSettings, openPreview, handleRetryFailedRevisionBlocks, handleDismissRunOutcome]);
+  const showRunOutcome = Boolean(runOutcome) && !showProcessingBanner;
   const hasWork = pendingFiles.length > 0 || doneFiles.length > 0 || showProcessingBanner;
   const isConsoleDisabled = !hasApiKey || !isApiKeyValid || !hasWork;
 
@@ -252,6 +270,20 @@ export function QueuePage({
       window.removeEventListener('drop', clear);
     };
   }, [isDragging, handleDragLeave]);
+
+  const consoleHint = useConsoleHint(appState === 'processing', appState === 'idle' && batchTotal > 0, showConsole);
+  // Opened from the hint, the console (at the bottom of the column) is brought into view.
+  const revealConsoleRef = useRef(false);
+  const openConsoleFromHint = useCallback(() => {
+    revealConsoleRef.current = true;
+    setShowConsole(true);
+    localStorage.setItem(STORAGE_KEYS.SHOW_CONSOLE, 'true');
+  }, [setShowConsole]);
+  useEffect(() => {
+    if (!showConsole || !revealConsoleRef.current) return;
+    revealConsoleRef.current = false;
+    document.querySelector('.console-shell')?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+  }, [showConsole]);
 
   useEffect(() => {
     if (isConsoleDisabled && showConsole) {
@@ -363,9 +395,17 @@ export function QueuePage({
                       warnings={processingWarnings}
                       onStop={handleQueueStop}
                     />
+                    <ConsoleHint visible={consoleHint.visible} onOpen={openConsoleFromHint} onDismiss={consoleHint.dismiss} />
                   </motion.div>
                 ) : (
-                  <motion.div key="dropzone" {...fade}>
+                  <motion.div key="dropzone" className="flex flex-col gap-4" {...fade}>
+                    <AnimatePresence initial={false}>
+                      {showRunOutcome && runOutcome && (
+                        <motion.div key={`${runOutcome.kind}:${runOutcome.fileId}`} {...fade}>
+                          <RunOutcomeBanner outcome={runOutcome} actions={outcomeActions} canResume={hasApiKey && isApiKeyValid && isOnline} />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                     <DropZone
                       compact={pendingFiles.length > 0 || doneFiles.length > 0}
                       isDragging={isDragging}
@@ -434,13 +474,7 @@ export function QueuePage({
           />
         )}
       </div>
-      <footer className="app-footer app-footer-links">
-        <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }} className="footer-link">
-          <GithubIcon className="w-3.5 h-3.5" /> Progetto Open-Source — GitHub
-        </a>
-        <ReportProblemLink />
-        <PrivacyLink />
-      </footer>
+      <AppFooterLinks />
     </motion.main>
   );
 }

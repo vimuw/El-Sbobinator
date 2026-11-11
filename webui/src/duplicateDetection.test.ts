@@ -166,4 +166,21 @@ describe('duplicateDetection', () => {
 
     expect(matches).toEqual([]);
   });
+
+  it('web: matches a re-picked local:// file by name and exact size, rejecting a different size or duration', () => {
+    const archived = makeArchiveSession({
+      input_path: 'local://old-uuid/Lezione 3.mp3', input_name: 'Lezione 3.mp3',
+      input_size: 48_123_456, duration_sec: 5400,
+    });
+    const lookup = buildArchiveLookup([archived]);
+    const web = (overrides: Partial<FileItem>) => makeFile({
+      name: 'Lezione 3.mp3', path: 'local://new-uuid/Lezione 3.mp3', size: 48_123_456, duration: 0, ...overrides,
+    });
+
+    expect(getArchiveMatchesForFile(web({}), lookup)).toEqual([archived]);
+    expect(getArchiveMatchesForFile(web({ size: 48_123_457 }), lookup)).toEqual([]);
+    expect(getArchiveMatchesForFile(web({ duration: 1200 }), lookup)).toEqual([]);
+    // Desktop keeps requiring path or full name+size+duration metadata.
+    expect(getArchiveMatchesForFile(web({ path: 'D:/audio/Lezione 3.mp3' }), lookup)).toEqual([]);
+  });
 });

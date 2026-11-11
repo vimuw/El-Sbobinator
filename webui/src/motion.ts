@@ -98,3 +98,11 @@ export const modalCard = {
   },
   exit: { opacity: 0, scale: 0.98, filter: 'blur(2px)', transition: exitTransition },
 };
+
+// The same entrance without the blur, for a card that covers most of the window (Impostazioni):
+// half-faded and blurred at that size, it read as a smudge over the sharp page behind it.
+export const largeModalCard = {
+  initial: { opacity: 0, scale: 0.98 },
+  animate: { opacity: 1, scale: 1, transition: enterTransition(DURATION.base) },
+  exit: { opacity: 0, scale: 0.99, transition: exitTransition },
+};

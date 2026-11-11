@@ -23,6 +23,65 @@ describe('EditorContextMenu', () => {
     expect(container.firstChild).toBeNull();
   });
 
+  it('fades out where it stood when closed, unclickable, instead of vanishing', async () => {
+    const mockEditor = {
+      state: { selection: { empty: true, from: 0, to: 0 }, doc: { textBetween: () => '' } },
+      isDestroyed: false,
+    } as unknown as TiptapEditor;
+    const props = { onClose: vi.fn(), editor: mockEditor, onOpenMath: vi.fn(), onOpenImagePicker: vi.fn(), onOpenFind: vi.fn() };
+    const { rerender } = render(<EditorContextMenu {...props} contextMenu={{ x: 100, y: 120 }} />);
+    const menu = document.querySelector<HTMLElement>('.editor-context-menu')!;
+    expect(menu.classList.contains('popover-closing')).toBe(false);
+
+    rerender(<EditorContextMenu {...props} contextMenu={null} />);
+    expect(document.querySelector('.editor-context-menu')).toBe(menu);
+    expect(menu.classList.contains('popover-closing')).toBe(true);
+    expect(menu.hasAttribute('inert')).toBe(true);
+    await waitFor(() => expect(document.querySelector('.editor-context-menu')).toBeNull());
+  });
+
+  it('keeps a menu opened near the bottom-right corner 12px inside the window while it is still scaled down', () => {
+    // jsdom has no layout. On its first frame the menu is mid-dropdownPop, at scale(0.94): the
+    // bounding box is 6% smaller than the 304×420 it settles at, the layout size is not.
+    vi.stubGlobal('innerWidth', 1000);
+    vi.stubGlobal('innerHeight', 700);
+    const isMenu = (el: HTMLElement) => el.classList.contains('editor-context-menu');
+    const offsetWidth = vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (this: HTMLElement) {
+      return isMenu(this) ? 304 : 0;
+    });
+    const offsetHeight = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) {
+      return isMenu(this) ? 420 : 0;
+    });
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const width = isMenu(this) ? 304 * 0.94 : 0;
+      const height = isMenu(this) ? 420 * 0.94 : 0;
+      return { top: 0, left: 0, right: width, bottom: height, width, height, x: 0, y: 0, toJSON: () => ({}) };
+    });
+    const mockEditor = {
+      state: { selection: { empty: true, from: 0, to: 0 }, doc: { textBetween: () => '' } },
+      isDestroyed: false,
+    } as unknown as TiptapEditor;
+    try {
+      render(
+        <EditorContextMenu
+          contextMenu={{ x: 990, y: 690 }}
+          onClose={vi.fn()}
+          editor={mockEditor}
+          onOpenMath={vi.fn()} onOpenImagePicker={vi.fn()}
+          onOpenFind={vi.fn()}
+        />,
+      );
+      const menu = document.querySelector<HTMLElement>('.editor-context-menu')!;
+      expect(parseFloat(menu.style.left) + 304).toBe(1000 - 12);
+      expect(parseFloat(menu.style.top) + 420).toBe(700 - 12);
+    } finally {
+      offsetWidth.mockRestore();
+      offsetHeight.mockRestore();
+      rect.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('renders menu items when position and editor are provided', () => {
     const onClose = vi.fn();
     const onOpenFind = vi.fn();

@@ -166,6 +166,9 @@ export interface ArchiveSession {
   input_identity?: FileIdentity;
   /** Web previews with the trash: when the sbobina was moved to the trash (gone for good 30 days later). */
   trashed_at?: string;
+  /** Web: bytes of the lecture audio kept in this browser for the sbobina, counted when the archive
+   *  is read and never stored; absent when it keeps none (and on desktop, whose audio stays on disk). */
+  kept_audio_bytes?: number;
 }
 
 export interface SearchSnippet {
@@ -217,6 +220,8 @@ export interface SaveHtmlResult {
 export interface StorageUsagePart {
   label: string;
   bytes: number;
+  /** Web: 'session_audio' marks the audio kept by the sbobine, which the archive can list. */
+  kind?: 'session_audio';
 }
 
 export interface DriveStatus {
@@ -225,12 +230,17 @@ export interface DriveStatus {
   /** An account is linked (remembered across reloads), even if its token expired. */
   connected: boolean;
   email: string | null;
-  /** The token is gone (new tab, an hour passed, 401): a tap on "Drive: tocca per riconnettere". */
+  /** The site's server lost the login (revoked from the Google account, six months unused): a tap on "Drive: tocca per riconnettere". */
   needs_reconnect: boolean;
   syncing: boolean;
+  /** A round was asked for during a Gemini run: it starts when the run ends. */
+  waiting_for_run?: boolean;
   last_sync_at: string | null;
   error: string | null;
 }
+
+/** DriveStatus.error for a login Drive refused (401): what needs_reconnect already says, in other words. */
+export const DRIVE_EXPIRED_ERROR = 'Accesso a Google Drive scaduto: tocca per riconnettere.';
 
 /** Outcome of "Esporta tutte le sbobine nel mio Drive". */
 export interface DriveExportResult {
@@ -297,6 +307,13 @@ export interface BridgeCallbacks {
   documentChangedElsewhere?: (data: { session_dir: string }) => void;
   /** A sync found the Drive login expired. */
   driveNeedsReconnect?: () => void;
+  /** Web: the main key lacks the saved model, so the run saved the one it moved to instead. */
+  preferredModelChanged?: (data: PreferredModelChangedPayload) => void;
+}
+
+export interface PreferredModelChangedPayload {
+  from: string;
+  to: string;
 }
 
 export interface PywebviewApi {
@@ -357,6 +374,8 @@ export interface PywebviewApi {
   sync_drive_now?: () => Promise<DriveStatus>;
   /** The editor closed this document: changes from Drive may now be applied to it. */
   release_html_content?: (path: string) => Promise<{ ok: boolean }>;
+  /** Web build only: the file left the queue, so the browser's copy of its audio goes now. */
+  release_queue_file?: (path: string) => Promise<{ ok: boolean }>;
   /** Removes every file of the hidden Drive folder and the local sync state, then disconnects. */
   erase_drive_data?: () => Promise<DriveStatus & { removed?: number }>;
   /** One-way copy of the sbobine as HTML in a visible Drive folder; opens the Google window: call it inside a tap. */
@@ -469,6 +488,7 @@ export function createBridge(options: {
   onArchiveChangedRemotely?: () => void;
   onDocumentChangedElsewhere?: (data: { session_dir: string }) => void;
   onDriveNeedsReconnect?: () => void;
+  onPreferredModelChanged?: (data: PreferredModelChangedPayload) => void;
 }): BridgeCallbacks {
   const {
     dispatch,
@@ -488,6 +508,7 @@ export function createBridge(options: {
     onArchiveChangedRemotely,
     onDocumentChangedElsewhere,
     onDriveNeedsReconnect,
+    onPreferredModelChanged,
   } = options;
   let lastPhaseMessage = '';
 
@@ -531,5 +552,6 @@ export function createBridge(options: {
     archiveChangedRemotely: () => { onArchiveChangedRemotely?.(); },
     documentChangedElsewhere: data => { onDocumentChangedElsewhere?.(data); },
     driveNeedsReconnect: () => { onDriveNeedsReconnect?.(); },
+    preferredModelChanged: data => { onPreferredModelChanged?.(data); },
   };
 }

@@ -37,7 +37,16 @@ import {
   type SaveHtmlResult,
   type WebArchive,
 } from './webSessions';
-import { WEB_MODEL_OPTIONS, adoptSpikeKeys, loadWebKeys, loadWebModel, saveWebKeys, saveWebModel } from './webSettings';
+import {
+  WEB_MODEL_OPTIONS,
+  adoptSpikeKeys,
+  loadUnavailableModels,
+  loadWebKeys,
+  loadWebModel,
+  rememberUnavailableModel,
+  saveWebKeys,
+  saveWebModel,
+} from './webSettings';
 
 // Third host: the whole app runs in this page (static site, no backend). It implements the same
 // PywebviewApi contract as pywebview and the FastAPI dev host, and delivers bridge events by calling
@@ -107,7 +116,7 @@ function audioSupport(): string {
 function usageBreakdown(usage: WebStorageUsage): StorageUsagePart[] {
   return [
     { label: 'Testi delle sbobine', bytes: usage.documents },
-    { label: 'Audio delle sbobine', bytes: usage.audio },
+    { label: 'Audio delle sbobine', bytes: usage.audio, kind: 'session_audio' },
     ...(usage.queueAudio > 0 ? [{ label: 'Audio in coda', bytes: usage.queueAudio }] : []),
     ...(usage.trash > 0 ? [{ label: 'Sbobine nel cestino', bytes: usage.trash }] : []),
     { label: 'Avanzamento elaborazioni', bytes: usage.checkpoints },
@@ -145,6 +154,17 @@ export function createBridgeEmitter(target: () => Window['elSbobinatorBridge']):
   return (name, payload) => {
     queue.push({ name, payload });
     if (timer === null) timer = setTimeout(drain, 0);
+  };
+}
+
+// webRun reports only the main key's 404s. Later runs start with the replacement (none: the chosen
+// model stays), and the app's settings are told, so they show the model really in use.
+export function mainKeyModelUnavailable(mainKey: string, emit: EmitBridgeEvent) {
+  return (model: string, replacement: string | null) => {
+    rememberUnavailableModel(mainKey, model);
+    if (replacement && loadWebModel() === model && saveWebModel(replacement)) {
+      emit('preferredModelChanged', { from: model, to: replacement });
+    }
   };
 }
 
@@ -216,6 +236,8 @@ let stopHost: () => void = () => {};
 
 export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOptions = {}): PywebviewApi {
   let activeRun: AbortController | null = null;
+  // The file the active run reads: leaving the queue does not take its copy away mid-run.
+  let runningPath: string | null = null;
   // Leaving or reloading the page stops the run: the browser asks first while one is active.
   const confirmLeave = (event: BeforeUnloadEvent) => {
     if (tabLeft) return;
@@ -245,8 +267,9 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
   const driveConnection = options.drive === undefined ? createDriveConnection() : options.drive;
   stopHost = () => {
     activeRun?.abort();
-    // Also from memory: the page keeps running a moment before the reload.
-    driveConnection?.auth.expire();
+    // Also from memory, and for good: the page keeps running a moment before the reload, and a
+    // renewal through the server's cookie (still valid, the other tab uses it) would bring it back.
+    driveConnection?.auth.stop();
   };
   // The sbobina open in the editor: Drive's changes to it wait until the editor closes. One tab of
   // the site runs at a time (activeTab.ts), so this tab's editor is the only one.
@@ -276,9 +299,11 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
   drive?.start();
   const trashEnabled = options.trash ?? driveConnection !== null;
   // Sbobine in the trash for more than 30 days go for good (on Drive too: a mark without text, dated
-  // when they went to the trash, so a restore made since on another device wins over it). One already
-  // on Drive waits for a round of this page while one can run, to merge such a restore first and keep
-  // the sbobina here with its audio; without a token (a new visit) it goes now, not at the next login.
+  // when they went to the trash, so a restore made since on another device wins over it). While an
+  // account is linked and its login not lost, one already on Drive waits for this page's first sync
+  // round (the server renews the token without a tap, so that round runs even on a new visit), to
+  // merge such a restore first and keep the sbobina here with its audio. Without a linked account, or
+  // with a lost login waiting for "Riconnetti", it goes now, not at the next login.
   const purgeTrash = () => {
     if (!trashEnabled) return Promise.resolve(0);
     const linked = drive?.status();
@@ -315,15 +340,22 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
     });
   };
   const storedInBrowser = async (id: string) => (await pendingSaves.get(id)) ?? media.has(id).catch(() => false);
-  // The file behind a local:// path: in this page, or copied in IndexedDB before a reload.
+  // The file behind a local:// path. The copy in IndexedDB comes first: the File picked in
+  // this page only points to the file on disk, and the browser can no longer read it once the user
+  // moves, renames or edits the original (NotFoundError). The picked File is the fallback for a copy
+  // that could not be saved, and serves while the copy is still being written: a lecture weighs
+  // hundreds of MB and the run must not wait for it. The page keeps its File for the editor's player:
+  // the copy goes when the sbobina is archived.
   const resolveFile = async (path: string): Promise<File | undefined> => {
-    const inPage = getWebFile(path);
-    if (inPage) return inPage;
     const id = webFileId(path);
-    const stored = id ? await media.get(id).catch(() => null) : null;
-    if (!stored) return undefined;
-    restoreWebFile(path, stored);
-    return stored;
+    const inPage = getWebFile(path);
+    const useStored = id && (!inPage || (!pendingSaves.has(id) && await media.has(id).catch(() => false)));
+    const stored = useStored ? await media.get(id).catch(() => null) : null;
+    if (stored) {
+      if (!inPage) restoreWebFile(path, stored);
+      return stored;
+    }
+    return inPage;
   };
   // Copies the queue no longer lists go; copies linked to a sbobina stay with it.
   const pruneMedia = () => {
@@ -499,6 +531,16 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
       const id = webFileId(path);
       return { ok: true, exists: hasWebFile(path) || (id !== null && await storedInBrowser(id)) };
     },
+    // Without this the copy waited for the next page load past MEDIA_PRUNE_GRACE_MS, still listed
+    // as "Audio in coda". A copy already linked to a sbobina stays (media.remove skips it).
+    release_queue_file: async path => {
+      const id = webFileId(path);
+      if (!id || (activeRun && runningPath === path)) return { ok: true };
+      // A copy still being written would come back after the removal.
+      await pendingSaves.get(id);
+      await media.remove(id).catch(() => {});
+      return { ok: true };
+    },
 
     start_processing: async (files, apiKey, _resume, preferredModel) => {
       if (activeRun) return { ok: false, error: 'Un’elaborazione è già in corso.' };
@@ -507,6 +549,7 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
       if (!apiKey.trim()) return { ok: false, error: 'Inserisci una chiave API Gemini nelle impostazioni.' };
       const run = new AbortController();
       setActiveRun(run);
+      runningPath = file.path ?? null;
       if (!options.simulation) {
         const blob = file.path ? await resolveFile(file.path) : undefined;
         if (!blob) {
@@ -514,11 +557,14 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
           return { ok: false, error: 'Audio non più disponibile in questa pagina: selezionalo di nuovo.' };
         }
         const page = createPage();
+        const keys = runKeys(apiKey);
         void runWebFile({
           descriptor: file,
           file: blob,
-          keys: runKeys(apiKey),
+          keys,
           model: preferredModel,
+          unavailableModels: loadUnavailableModels(keys[0]),
+          onModelUnavailable: mainKeyModelUnavailable(keys[0], emit),
           emit,
           controller: run,
           store: checkpoints(),
@@ -728,9 +774,15 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
       }
     },
 
+    // Each sbobina carries the size of the audio it keeps, so the archive shows which ones make up
+    // "Audio delle sbobine" in Archiviazione. Audio that can't be read leaves the list unmarked.
     get_completed_sessions: async limit => {
       try {
-        const sessions = await archive.list();
+        const [listed, audioSizes] = await Promise.all([archive.list(), media.sizesBySession().catch(() => new Map<string, number>())]);
+        const sessions = listed.map(session => {
+          const bytes = audioSizes.get(session.session_dir);
+          return bytes ? { ...session, kept_audio_bytes: bytes } : session;
+        });
         return { ok: true, sessions: typeof limit === 'number' && limit > 0 ? sessions.slice(0, limit) : sessions, total: sessions.length };
       } catch (error) {
         return { ok: false, error: `Archivio del browser non leggibile: ${error instanceof Error ? error.message : String(error)}` };

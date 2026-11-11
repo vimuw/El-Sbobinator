@@ -78,14 +78,14 @@ class TestLoadConfigCache(unittest.TestCase):
                     self.assertEqual(reloaded["preferred_model"], expected)
                     self.assertNotIn("fallback_models", reloaded)
 
-    def test_new_configuration_defaults_to_36_without_fallbacks(self) -> None:
+    def test_new_configuration_defaults_to_25_without_fallbacks(self) -> None:
         with (
             tempfile.TemporaryDirectory() as tmp,
             patch.object(cs, "CONFIG_FILE", os.path.join(tmp, "config.json")),
             patch.object(cs, "LEGACY_CONFIG_FILE", os.path.join(tmp, "legacy.json")),
         ):
             loaded = cs.load_config()
-            self.assertEqual(loaded["preferred_model"], "gemini-3.6-flash")
+            self.assertEqual(loaded["preferred_model"], "gemini-2.5-flash")
             self.assertNotIn("fallback_models", loaded)
 
     # ------------------------------------------------------------------

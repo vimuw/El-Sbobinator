@@ -16,7 +16,10 @@ import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../../hostCapabilitie
 import { IDBFactory } from 'fake-indexeddb';
 import { createApiUsageStore } from '../../web/apiUsage';
 import { WEB_CAPABILITIES, createWebPywebviewApi } from '../../web/webHost';
+import { MODEL_25_ACCESS_NOTE, MODEL_25_ACCESS_NOTE_WEB } from './settings/ModelSection';
 import { APP_VERSION } from '../../branding';
+import { BACKDROP_SHAKE_MS } from '../../hooks/useBackdropDismiss';
+import { UNSAVED_CHANGES_HINT } from './UnsavedChangesHint';
 
 const motionCache = new Map<string, React.ForwardRefExoticComponent<React.PropsWithoutRef<Record<string, unknown>> & React.RefAttributes<unknown>>>();
 vi.mock('motion/react', () => ({
@@ -426,12 +429,47 @@ describe('SettingsModal — save behavior', () => {
     );
   });
 
-  it('backdrop click when idle: onClose NOT called', () => {
+  it('a click outside closes the settings when nothing waits to be saved', () => {
+    const onClose = vi.fn();
+    render(<SettingsModal {...makeProps()} onClose={onClose} />);
+    fireEvent.click(screen.getByTestId('settings-backdrop'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('a click outside with unsaved edits keeps them: the card shakes and "Salva e Chiudi" lights up', () => {
+    vi.useFakeTimers();
+    onTestFinished(() => { vi.useRealTimers(); });
+    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED, 'false');
     const onClose = vi.fn();
     const { container } = render(<SettingsModal {...makeProps()} onClose={onClose} />);
-    const backdrop = container.querySelector('.modal-overlay') as HTMLElement;
-    fireEvent.click(backdrop);
+    fireEvent.click(screen.getByRole('switch'));
+
+    fireEvent.click(screen.getByTestId('settings-backdrop'));
     expect(onClose).not.toHaveBeenCalled();
+    expect(container.querySelector('.modal-card')?.classList.contains('is-shaking')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Salva e Chiudi' }).classList.contains('is-attention')).toBe(true);
+
+    // A line beside the buttons says why, and stays once the shake is over.
+    expect(screen.getByText(UNSAVED_CHANGES_HINT).getAttribute('role')).toBe('status');
+    act(() => { vi.advanceTimersByTime(BACKDROP_SHAKE_MS); });
+    expect(screen.getByText(UNSAVED_CHANGES_HINT).getAttribute('role')).toBe('status');
+    expect(container.querySelector('.modal-card')?.classList.contains('is-shaking')).toBe(false);
+    expect(screen.getByRole('button', { name: 'Salva e Chiudi' }).classList.contains('is-attention')).toBe(false);
+    expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('true');
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('a click outside does nothing while the settings are being saved', async () => {
+    let resolveSave!: (value: { ok: boolean }) => void;
+    setPywebview({ save_settings: vi.fn(() => new Promise(resolve => { resolveSave = resolve; })) });
+    const onClose = vi.fn();
+    render(<SettingsModal {...makeProps()} onClose={onClose} />);
+    await act(async () => { fireEvent.click(screen.getByText('Salva e Chiudi')); });
+
+    fireEvent.click(screen.getByTestId('settings-backdrop'));
+    expect(onClose).not.toHaveBeenCalled();
+    await act(async () => { resolveSave({ ok: true }); });
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('closes on Escape key when idle', () => {
@@ -855,7 +893,7 @@ describe('SettingsModal — session folder and cleanup', () => {
 });
 
 describe('SettingsModal — model section', () => {
-  it('shows the 3.6 Flash default badge and the 2.5 Flash access tooltip', async () => {
+  it('shows the 2.5 Flash default badge and its access tooltip', async () => {
     const models = [
       { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: '', default_chunk_minutes: 12 },
       { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: '', default_chunk_minutes: 15 },
@@ -877,13 +915,13 @@ describe('SettingsModal — model section', () => {
     // The closed select shows only the choice; the Default badge appears while choosing
     expect(trigger.textContent).not.toContain('Default');
     fireEvent.click(trigger);
-    const defaultOption = screen.getByRole('option', { name: /Gemini 3.6 Flash.*Default/i });
-    expect(defaultOption.getAttribute('aria-selected')).toBe('true');
+    const selectedOption = screen.getByRole('option', { name: /Gemini 3.6 Flash/i });
+    expect(selectedOption.getAttribute('aria-selected')).toBe('true');
+    expect(selectedOption.textContent).not.toContain('Default');
     expect(screen.getAllByRole('option')).toHaveLength(3);
     expect(screen.queryByRole('option', { name: /Gemini 3\.5 Flash|Gemini 3\.7 Flash/i })).toBeNull();
-    const legacyOption = screen.getByRole('option', { name: /Gemini 2.5 Flash/i });
-    expect(legacyOption.textContent).not.toContain('Default');
-    const accessNote = 'Google consente l’uso solo a chi ha già usato questo modello. Se è la prima volta che lo usi, potrebbe non funzionare.';
+    const legacyOption = screen.getByRole('option', { name: /Gemini 2.5 Flash.*Default/i });
+    const accessNote = MODEL_25_ACCESS_NOTE;
     expect(legacyOption.querySelector('[title]')?.getAttribute('title')).toBe(accessNote);
     expect(screen.queryByText(accessNote)).toBeNull();
     fireEvent.click(trigger);
@@ -891,6 +929,21 @@ describe('SettingsModal — model section', () => {
     const legacyTrigger = screen.getByRole('button', { name: /Gemini 2.5 Flash/i });
     expect(legacyTrigger.querySelector('[title]')?.getAttribute('title')).toBe(accessNote);
     expect(screen.queryByText('Fast and capable')).toBeNull();
+  });
+
+  it('tells web users that a key without 2.5 Flash moves to 3.6 Flash by itself', async () => {
+    setHostCapabilities(WEB_CAPABILITIES);
+    onTestFinished(() => setHostCapabilities(DESKTOP_CAPABILITIES));
+    const models = [
+      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: '', default_chunk_minutes: 15 },
+      { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: '', default_chunk_minutes: 15 },
+    ];
+    render(<SettingsModal {...makeProps({ availableModels: models, preferredModel: 'gemini-2.5-flash' })} />);
+    await act(async () => {
+      fireEvent.click(screen.getAllByText('Generale')[0].closest('button')!);
+    });
+    const trigger = screen.getByRole('button', { name: /Gemini 2.5 Flash/i });
+    expect(trigger.querySelector('[title]')?.getAttribute('title')).toBe(MODEL_25_ACCESS_NOTE_WEB);
   });
 
   it('calls setPreferredModel when another model is selected', async () => {

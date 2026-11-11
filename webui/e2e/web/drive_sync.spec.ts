@@ -3,9 +3,9 @@ import { FAKE_FILE_TOKEN_MARK, createFakeDrive, type FakeDrive } from '../../src
 import { expectAutosaved } from '../autosave';
 
 // Drive sync between two browsers (two contexts: separate IndexedDB, localStorage and login) on
-// the preview build with a made-up client ID. Google's login answers by page.route with a token in
-// the return page's fragment, and one in-memory Drive (fakeDrive.ts) serves both contexts.
-// Chromium only: not Safari, not an iPad, not the real Google Drive.
+// the preview build with a made-up client ID. The site's login server and Google's export window
+// answer by context.route, and one in-memory Drive (fakeDrive.ts) serves both contexts.
+// Chromium only: not Safari, not an iPad, not the real Google Drive, not the real Cloudflare Function.
 const DUMMY_KEY = 'AIzaSyE2EDUMMYKEY000000000000000000000';
 const GEMINI = 'https://generativelanguage.googleapis.com';
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
@@ -29,11 +29,33 @@ async function fakeGemini(page: Page) {
 }
 
 /**
- * Google for one browser: the login page sends straight back with a token, Drive is the shared fake.
- * Asked for drive.file (the export), the token carries that scope only, as with include_granted_scopes=false.
+ * Google and the site's login server (/api/drive, a Cloudflare Function in production) for one
+ * browser: linking goes straight back to the return page, the server then renews tokens for as long
+ * as the browser stays linked, and Drive is the shared fake. The export asks Google itself for
+ * drive.file, and its token carries that scope only, as with include_granted_scopes=false.
  */
 async function fakeGoogle(context: BrowserContext, drive: FakeDrive, device: string) {
   let tokens = 0;
+  let linked = false;
+  await context.route('**/api/drive/**', route => {
+    const url = new URL(route.request().url());
+    const action = url.pathname.split('/').pop();
+    if (action === 'start') {
+      linked = true;
+      const fragment = new URLSearchParams({ state: url.searchParams.get('state') ?? '', result: 'ok' });
+      return route.fulfill({ status: 303, headers: { location: `${url.origin}/drive-auth#${fragment.toString()}` } });
+    }
+    if (action === 'token') {
+      return linked
+        ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ access_token: `${device}-${++tokens}`, expires_in: 3600, email: 'studente@example.com' }) })
+        : route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'login_required' }) });
+    }
+    if (action === 'disconnect') {
+      linked = false;
+      return route.fulfill({ status: 204 });
+    }
+    return route.fulfill({ status: 404 });
+  });
   await context.route('https://accounts.google.com/**', route => {
     const url = new URL(route.request().url());
     const file = url.searchParams.get('scope') === FILE_SCOPE;
@@ -62,7 +84,7 @@ async function startWithKey(page: Page) {
 
 async function openDriveSettings(page: Page) {
   await page.getByRole('button', { name: 'Apri impostazioni', exact: true }).click();
-  await page.getByRole('button', { name: 'Sincronizzazione', exact: true }).click();
+  await page.getByRole('button', { name: 'Google Drive', exact: true }).click();
   const panel = page.getByTestId('web-drive');
   await expect(panel).toBeVisible();
   return panel;
@@ -202,7 +224,7 @@ test('the trash and the restore reach the other browser; export and "Elimina tut
   expect(drive.files().some(file => file.name.endsWith('.html'))).toBe(false);
 
   // "Elimina tutti i miei dati da Drive": the hidden folder empties, the sbobina stays here.
-  await page.getByRole('button', { name: 'Sincronizzazione', exact: true }).click();
+  await page.getByRole('button', { name: 'Google Drive', exact: true }).click();
   const panel = page.getByTestId('web-drive');
   const eraseCard = page.getByTestId('web-drive-erase');
   await eraseCard.getByRole('button', { name: 'Elimina tutti i miei dati da Drive' }).click();

@@ -1,6 +1,9 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DRIVE_EXPIRED_ERROR } from '../bridge';
+import { DRIVE_WAITING_FOR_RUN } from '../hooks/useDriveStatus';
+import { DriveAuthError } from '../web/drive/auth';
 import { STORAGE_KEYS } from '../storageKeys';
 import { createDriveApi } from '../web/drive/driveApi';
 import { createFakeAuth, createFakeDrive, type FakeDrive } from '../web/drive/fakeDrive';
@@ -85,13 +88,13 @@ describe('SidebarAccount', () => {
     expect(menu.style.bottom).toBe('36px');
     expect(within(menu).getByTestId('popover-caret').style.bottom).toBe('25px');
     // Named like the settings page it leads to, with its state right after the title.
-    const heading = within(menu).getByRole('heading', { name: 'Sincronizzazione' });
+    const heading = within(menu).getByRole('heading', { name: 'Google Drive' });
     expect(heading.nextElementSibling?.textContent).toBe('Non collegato');
     expect(menu.textContent).toContain('Non collegato');
     expect(menu.textContent).toContain('le ritrovi sugli altri dispositivi');
     expect(menu.textContent).toContain('Più dettagli in Impostazioni');
     fireEvent.click(screen.getAllByRole('button', { name: 'Collega Google Drive' }).find(item => menu.contains(item))!);
-    expect(login.calls).toEqual([{ silent: false }]);
+    expect(login.calls).toEqual(['link']);
     expect(localStorage.getItem(STORAGE_KEYS.WEB_STORAGE_CHOICE_V1)).toBe('drive');
     await waitFor(() => expect(screen.getByTestId('sidebar-account-email').textContent).toBe('studente@example.com'));
     expect(screen.getByRole('button', { name: /^Account Google: studente@example\.com/ }).textContent).toBe('S');
@@ -107,8 +110,52 @@ describe('SidebarAccount', () => {
     fireEvent.click(button);
     expect(screen.getByRole('dialog', { name: 'Account Google Drive' }).textContent).toContain('L’accesso è scaduto');
     fireEvent.click(screen.getByRole('button', { name: 'Riconnetti' }));
-    expect(login.calls).toEqual([{ silent: true }]);
+    expect(login.calls).toEqual(['link']);
     await screen.findByRole('button', { name: 'Sincronizza ora' });
+  });
+
+  it('a "Riconnetti" that fails says why in the menu, still to reconnect', async () => {
+    const drive = createFakeDrive();
+    const { login } = setup(drive, { email: 'studente@example.com' });
+    // The server could not trade Google's code (a wrong client secret, say).
+    login.failures.push(new DriveAuthError('login_failed'));
+    render(<SidebarAccount onOpenStorageSettings={() => {}} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Account Google: studente@example.com (Da riconnettere)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Riconnetti' }));
+
+    const menu = screen.getByRole('dialog', { name: 'Account Google Drive' });
+    expect((await within(menu).findByRole('alert')).textContent).toBe('Accesso a Google non riuscito: riprova.');
+    expect(menu.textContent).toContain('L’accesso è scaduto');
+    expect(within(menu).getByRole('button', { name: 'Riconnetti' })).toBeTruthy();
+  });
+
+  it('to reconnect after a 401, the menu does not repeat "scaduto" as an error', async () => {
+    window.pywebview = { api: { get_drive_status: async () => ({
+      available: true, connected: true, email: 'studente@example.com', needs_reconnect: true, syncing: false,
+      last_sync_at: null, error: DRIVE_EXPIRED_ERROR,
+    }) } };
+    render(<SidebarAccount onOpenStorageSettings={() => {}} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Account Google: studente@example.com (Da riconnettere)' }));
+    const menu = screen.getByRole('dialog', { name: 'Account Google Drive' });
+    expect(menu.textContent).toContain('L’accesso è scaduto');
+    expect(within(menu).queryByRole('alert')).toBeNull();
+  });
+
+  it('"Sincronizza ora" during an elaborazione says it waits for its end', async () => {
+    let waiting = false;
+    const status = () => ({
+      available: true, connected: true, email: 'studente@example.com', needs_reconnect: false, syncing: false,
+      waiting_for_run: waiting, last_sync_at: '2026-11-10T08:00:00.000Z', error: null,
+    });
+    window.pywebview = { api: { get_drive_status: async () => status(), sync_drive_now: async () => { waiting = true; return status(); } } };
+    render(<SidebarAccount onOpenStorageSettings={() => {}} />);
+    fireEvent.click(await screen.findByRole('button', { name: /^Account Google: studente@example\.com/ }));
+    const sync = await screen.findByRole('button', { name: 'Sincronizza ora' });
+    fireEvent.click(sync);
+    const menu = screen.getByRole('dialog', { name: 'Account Google Drive' });
+    await waitFor(() => expect(menu.textContent).toContain(DRIVE_WAITING_FOR_RUN));
+    expect(menu.textContent).not.toContain('Ultima sincronizzazione');
+    expect((sync as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('"Esci dall’account" unlinks this browser from the menu and keeps the copy on Drive', async () => {
@@ -142,6 +189,52 @@ describe('SidebarAccount', () => {
     expect(within(menu).queryByText('Gestisci in Impostazioni')).toBeNull();
   });
 
+  it('while a round runs says it once: "In corso" by the heading, the last sync kept, the icon turning', async () => {
+    const status = {
+      available: true, connected: true, email: 'studente@example.com', needs_reconnect: false, syncing: true,
+      waiting_for_run: false, last_sync_at: '2026-11-10T08:00:00.000Z', error: null,
+    };
+    window.pywebview = { api: { get_drive_status: async () => status } };
+    render(<SidebarAccount onOpenStorageSettings={() => {}} />);
+    // The button, read on its own, keeps the full state.
+    fireEvent.click(await screen.findByRole('button', { name: 'Account Google: studente@example.com (Sincronizzazione…)' }));
+    const menu = screen.getByRole('dialog', { name: 'Account Google Drive' });
+    expect(within(menu).getByRole('heading', { name: 'Google Drive' }).nextElementSibling?.textContent).toBe('In corso');
+    expect(menu.textContent).toContain('Ultima sincronizzazione:');
+    expect(menu.textContent).not.toContain('Sincronizzazione in corso');
+    const sync = within(menu).getByRole('button', { name: 'Sincronizza ora' }) as HTMLButtonElement;
+    expect(sync.disabled).toBe(true);
+    expect(sync.querySelector('svg')?.classList.contains('animate-spin')).toBe(true);
+  });
+
+  it('linked and synced: "Collegato" by the "Google Drive" heading, the masculine opposite of "Non collegato"', async () => {
+    const status = {
+      available: true, connected: true, email: 'studente@example.com', needs_reconnect: false, syncing: false,
+      waiting_for_run: false, last_sync_at: '2026-11-10T08:00:00.000Z', error: null,
+    };
+    window.pywebview = { api: { get_drive_status: async () => status } };
+    render(<SidebarAccount onOpenStorageSettings={() => {}} />);
+    // The button, read on its own, keeps the full state.
+    fireEvent.click(await screen.findByRole('button', { name: 'Account Google: studente@example.com (Sincronizzato)' }));
+    const menu = screen.getByRole('dialog', { name: 'Account Google Drive' });
+    expect(within(menu).getByRole('heading', { name: 'Google Drive' }).nextElementSibling?.textContent).toBe('Collegato');
+    expect(menu.textContent).not.toContain('Attiva');
+  });
+
+  it('closes with the short exit of the other menus instead of vanishing', async () => {
+    setup(createFakeDrive(), { token: true, email: 'studente@example.com' });
+    render(<SidebarAccount onOpenStorageSettings={() => {}} />);
+    const button = await screen.findByRole('button', { name: /^Account Google: studente@example\.com/ });
+    fireEvent.click(button);
+    const menu = screen.getByRole('dialog', { name: 'Account Google Drive' });
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    // Still on the page while it plays its exit, then gone.
+    expect(menu.isConnected).toBe(true);
+    await waitFor(() => expect(menu.isConnected).toBe(false));
+  });
+
   it('"Gestisci in Impostazioni" leads to the settings and closes the menu; Esc closes it too', async () => {
     const drive = createFakeDrive();
     setup(drive, { token: true, email: 'studente@example.com' });
@@ -152,11 +245,11 @@ describe('SidebarAccount', () => {
     fireEvent.click(button);
     fireEvent.click(screen.getByRole('button', { name: 'Gestisci in Impostazioni' }));
     expect(onOpenStorageSettings).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 
     fireEvent.click(button);
     expect(button.getAttribute('aria-expanded')).toBe('true');
     fireEvent.keyDown(window, { key: 'Escape' });
-    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 });

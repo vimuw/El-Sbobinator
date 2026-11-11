@@ -5,10 +5,12 @@ import {
   buildArchiveLookup,
   filterArchiveSessionsByInputPath,
   getArchiveMatchesForFile,
+  webNameSizeKey,
 } from '../duplicateDetection';
 import type { AlreadyProcessedMatch, DuplicatePrompt } from '../components/modals/DuplicateFileModal';
 import type { PendingArchiveReplacement } from './useArchiveSync';
 import { getHostCapabilities } from '../hostCapabilities';
+import { releaseQueueFiles } from '../queueFileRelease';
 
 type WebViewHostWindow = Window & {
   chrome?: {
@@ -54,15 +56,28 @@ export function useQueueIngest({
   }, [duplicatePrompt]);
 
   const getFileFingerprint = useCallback((file: Pick<FileItem, 'path' | 'name' | 'size' | 'duration'>) => {
+    const webKey = webNameSizeKey(file);
+    if (webKey) return `web:${webKey}`;
     const normalizedPath = String(file.path || '').trim().toLowerCase();
     if (normalizedPath) return `path:${normalizedPath}`;
     return `meta:${String(file.name || '').trim().toLowerCase()}::${Number(file.size || 0)}::${Math.round(Number(file.duration || 0))}`;
   }, []);
 
+  // A path a queued file still reads is never released (a desktop path picked twice is the same one).
+  const releaseRejectedFiles = useCallback((rejected: FileItem[]) => {
+    const queuedPaths = new Set(filesRef.current.map(file => file.path).filter(Boolean));
+    releaseQueueFiles(rejected.filter(file => !queuedPaths.has(file.path)));
+  }, [filesRef]);
+
   const enqueueUniqueFiles = useCallback(
     (incomingFiles: FileItem[]) => {
       if (incomingFiles.length === 0) return;
-      if (duplicatePromptRef.current !== null) return;
+      // Web: a pick that never joins the queue (dropped here or a duplicate already queued) keeps
+      // no browser copy; the one with a prompt waits for its answer.
+      if (duplicatePromptRef.current !== null) {
+        releaseRejectedFiles(incomingFiles);
+        return;
+      }
       const currentFiles = filesRef.current;
       const currentArchive = archiveSessionsRef.current;
       const pendingFingerprints = new Set(
@@ -81,6 +96,7 @@ export function useQueueIngest({
       const archiveLookup = buildArchiveLookup(currentArchive);
       const uniqueFiles: FileItem[] = [];
       const inQueueNames: string[] = [];
+      const inQueueFiles: FileItem[] = [];
       const alreadyProcessedMatches: AlreadyProcessedMatch[] = [];
       const seenInBatch = new Set<string>();
 
@@ -88,6 +104,7 @@ export function useQueueIngest({
         const fp = getFileFingerprint(file);
         if (pendingFingerprints.has(fp) || seenInBatch.has(fp)) {
           inQueueNames.push(file.name);
+          inQueueFiles.push(file);
         } else if (doneByFingerprint.has(fp)) {
           alreadyProcessedMatches.push({ source: 'done', existingFile: doneByFingerprint.get(fp)!, incoming: file });
           seenInBatch.add(fp);
@@ -124,14 +141,23 @@ export function useQueueIngest({
           onFilesAddedToBatch?.(uniqueFiles.length);
         }
       }
+      releaseRejectedFiles(inQueueFiles);
       if (alreadyProcessedMatches.length > 0) {
         setDuplicatePrompt({ kind: 'already-processed', matches: alreadyProcessedMatches, alsoInQueue: inQueueNames.length > 0 ? inQueueNames : undefined });
       } else if (inQueueNames.length > 0) {
         setDuplicatePrompt({ kind: 'in-queue', filenames: inQueueNames });
       }
     },
-    [dispatch, filesRef, archiveSessionsRef, getFileFingerprint, appStateRef, onFilesAddedToBatch],
+    [dispatch, filesRef, archiveSessionsRef, getFileFingerprint, appStateRef, onFilesAddedToBatch, releaseRejectedFiles],
   );
+
+  // Closing the prompt without "add again": the re-picked files of the already-processed
+  // matches never join the queue, so their browser copies go.
+  const handleDuplicateDismiss = useCallback(() => {
+    const prompt = duplicatePromptRef.current;
+    setDuplicatePrompt(null);
+    if (prompt?.kind === 'already-processed') releaseRejectedFiles(prompt.matches.map(match => match.incoming));
+  }, [releaseRejectedFiles]);
 
   const handleDuplicateAddAgain = useCallback(
     async (matches: AlreadyProcessedMatch[]) => {
@@ -249,6 +275,7 @@ export function useQueueIngest({
     getFileFingerprint,
     enqueueUniqueFiles,
     handleDuplicateAddAgain,
+    handleDuplicateDismiss,
     handleBrowseClick,
     handleDragOver,
     handleDragLeave,

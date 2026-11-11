@@ -21,9 +21,14 @@ describe('web host taken over by another tab', () => {
     expect(await api.get_drive_status!()).toMatchObject({ connected: true, needs_reconnect: false });
 
     const reload = vi.fn();
+    const renewals = login.refreshes();
     leaveTab(reload);
     expect(reload).toHaveBeenCalledTimes(1);
     expect(login.auth.token()).toBeNull();
+    // Regression: the server's login is still valid (the other tab uses it); a renewal through it
+    // brought the token back and this tab's sync went on next to the new one's.
+    expect(await login.auth.freshToken()).toBeNull();
+    expect(login.refreshes()).toBe(renewals);
     expect((window as unknown as { __elSbobinatorQuitting?: boolean }).__elSbobinatorQuitting).toBe(true);
     const leaving = new Event('beforeunload', { cancelable: true });
     window.dispatchEvent(leaving);

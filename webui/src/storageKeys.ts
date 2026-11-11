@@ -14,9 +14,16 @@ export const STORAGE_KEYS = {
   THEME_V1: 'el-sbobinator.theme.v1',
   CONFIG_RECOVERY_PREFIX: 'el-sbobinator.config-recovery-dismissed.v1:',
   LAST_SEEN_APP_VERSION_V1: 'el-sbobinator.last-seen-app-version.v1',
+  // How many runs have shown the "open the console" hint, or "done" once it is retired.
+  CONSOLE_HINT_V1: 'el-sbobinator.console-hint.v1',
   // Web build only: Gemini keys (one per line) and model, kept in this browser.
   WEB_GEMINI_KEYS_V1: 'el-sbobinator.web.gemini-keys.v1',
+  // v1 saved 3.6 Flash for everyone who set up while it was the default: read once by
+  // loadWebModel (webSettings.ts), moved to v2 with 3.6 Flash turned into 2.5 Flash, then removed.
   WEB_MODEL_V1: 'el-sbobinator.web.model.v1',
+  WEB_MODEL_V2: 'el-sbobinator.web.model.v2',
+  // Models the main Gemini key turned out not to have (webSettings.ts): the key's hash, never the key.
+  WEB_UNAVAILABLE_MODELS_V1: 'el-sbobinator.web.unavailable-models.v1',
   // When this browser last downloaded a backup of its sbobine (ISO date).
   WEB_LAST_BACKUP_V1: 'el-sbobinator.web.last-backup.v1',
   // Set once the "data stay in this browser" notice has been shown after the first sbobina.
@@ -25,10 +32,13 @@ export const STORAGE_KEYS = {
   WEB_API_USAGE_V1: 'el-sbobinator.web.api-usage.v1',
   // M0 archive: copied once into IndexedDB by the M2 upgrade, then removed.
   WEB_M0_SESSIONS_V1: 'el-sbobinator.web.m0-sessions.v1',
-  // Drive sync (drive/auth.ts): the Google access token in sessionStorage only, with its expiry,
-  // and the connected account's email in localStorage for a silent reconnect.
+  // Drive sync (drive/auth.ts): the connected account's email in localStorage. The token key is
+  // only cleared now: the token stays in memory, renewed by the site's server.
   WEB_DRIVE_TOKEN_V1: 'el-sbobinator.web.drive-token.v1',
   WEB_DRIVE_ACCOUNT_V1: 'el-sbobinator.web.drive-account.v1',
+  // Set by "Disconnetti" until the server confirms it cleared the login cookie (auth.ts): while it
+  // stays, the cookie's login is never used and the disconnect is retried.
+  WEB_DRIVE_DISCONNECT_PENDING_V1: 'el-sbobinator.web.drive-disconnect-pending.v1',
   WEB_STORAGE_CHOICE_V1: 'el-sbobinator.web.storage-choice.v1',
 } as const;
 

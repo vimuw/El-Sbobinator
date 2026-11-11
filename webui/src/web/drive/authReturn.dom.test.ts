@@ -36,6 +36,14 @@ describe('Drive login return page', () => {
     expect(close).toHaveBeenCalled();
   });
 
+  it('hands over the server\'s answer to "Collega Google Drive" too', async () => {
+    vi.spyOn(window, 'close').mockImplementation(() => {});
+    history.replaceState(null, '', '/drive-auth#state=s1&result=ok');
+    await import('./authReturn');
+    expect(posted).toEqual([{ channel: OAUTH_CHANNEL, data: { type: 'el-sbobinator-oauth', fragment: '#state=s1&result=ok' } }]);
+    expect(location.hash).toBe('');
+  });
+
   it('sends nothing when opened without an answer', async () => {
     history.replaceState(null, '', '/drive-auth');
     await import('./authReturn');

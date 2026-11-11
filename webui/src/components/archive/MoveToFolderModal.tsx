@@ -4,6 +4,8 @@ import { ChevronRight, FolderPlus, X } from 'lucide-react';
 import type { ArchiveFolder, ArchiveSession } from '../../bridge';
 import { getFolderChildren, getFolderColor, getFolderSubtreeIds } from '../../archiveFolders';
 import { FolderBreadcrumbs } from './FolderBreadcrumbs';
+import { useBackdropDismiss } from '../../hooks/useBackdropDismiss';
+import { UnsavedChangesHint } from '../modals/UnsavedChangesHint';
 
 export function MoveToFolderModal({ folders, movingFolderId, movingSessions = [], initialParentId = null, onClose, onConfirm }: {
   folders: ArchiveFolder[];
@@ -26,6 +28,11 @@ export function MoveToFolderModal({ folders, movingFolderId, movingSessions = []
   const movingFolder = allFolders.find(folder => folder.id === movingFolderId);
   const excluded = movingFolder ? getFolderSubtreeIds(movingFolder, allFolders) : new Set<string>();
   const children = getFolderChildren(allFolders, destinationId).filter(folder => !excluded.has(folder.id));
+  // A chosen destination, the raccolte created here (kept only by "Sposta qui") or a name being typed.
+  const backdrop = useBackdropDismiss({
+    dirty: destinationId !== initialParentId || created.length > 0 || (creating && Boolean(name.trim())),
+    onClose,
+  });
 
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
@@ -47,8 +54,8 @@ export function MoveToFolderModal({ folders, movingFolderId, movingSessions = []
 
   return (
     <motion.div className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-4" exit={{ opacity: 0 }}>
-      <div className="modal-overlay absolute inset-0" />
-      <div role="dialog" aria-modal="true" aria-labelledby="move-folder-title" className="modal-card relative w-full max-w-md max-h-[86vh] overflow-hidden flex flex-col">
+      <div className="modal-overlay absolute inset-0" onClick={backdrop.onBackdropClick} data-testid="move-folder-backdrop" />
+      <div role="dialog" aria-modal="true" aria-labelledby="move-folder-title" className={`modal-card${backdrop.shaking ? ' is-shaking' : ''} relative w-full max-w-md max-h-[86vh] overflow-hidden flex flex-col`}>
         <div className="modal-header">
           <div className="min-w-0 flex-1">
             <h2 id="move-folder-title" className="text-lg font-semibold">Sposta in…</h2>
@@ -99,9 +106,10 @@ export function MoveToFolderModal({ folders, movingFolderId, movingSessions = []
             </form>
           ) : <button type="button" onClick={() => setCreating(true)} className="flex items-center gap-2 text-sm py-2 cursor-pointer" style={{ color: 'var(--accent-text)' }}><FolderPlus className="w-4 h-4" />Nuova raccolta…</button>}
         </div>
+        <UnsavedChangesHint show={backdrop.showHint} className="is-above-footer" />
         <div className="modal-footer">
           <button type="button" onClick={onClose} className="modal-action-button flex-1">Annulla</button>
-          <button type="button" disabled={creating || (destinationId !== null && excluded.has(destinationId))} onClick={() => onConfirm(destinationId, created)} className="modal-action-button is-primary flex-1">Sposta qui</button>
+          <button type="button" disabled={creating || (destinationId !== null && excluded.has(destinationId))} onClick={() => onConfirm(destinationId, created)} className={`modal-action-button is-primary flex-1${backdrop.shaking ? ' is-attention' : ''}`}>Sposta qui</button>
         </div>
       </div>
     </motion.div>

@@ -68,6 +68,7 @@ class GenerationProfileTests(unittest.TestCase):
                     "default_macro_char_limit": 22000,
                     "phase1_temperature": 0.35,
                     "phase1_thinking_budget": 16384,
+                    "is_default": True,
                 },
                 {
                     "id": "gemini-3.6-flash",
@@ -76,7 +77,6 @@ class GenerationProfileTests(unittest.TestCase):
                     "default_chunk_minutes": 15,
                     "default_macro_char_limit": 22000,
                     "phase1_temperature": 0.35,
-                    "is_default": True,
                 },
                 {
                     "id": "gemini-3.8-flash",
@@ -92,7 +92,7 @@ class GenerationProfileTests(unittest.TestCase):
             SUPPORTED_MODELS,
             ("gemini-2.5-flash", "gemini-3.6-flash", "gemini-3.8-flash"),
         )
-        self.assertEqual(DEFAULT_MODEL, "gemini-3.6-flash")
+        self.assertEqual(DEFAULT_MODEL, "gemini-2.5-flash")
         self.assertEqual(
             _LEGACY_MODEL_ALIASES,
             {

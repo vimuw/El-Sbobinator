@@ -22,4 +22,13 @@ describe('editor audio dock width', () => {
     expect(rule('.editor-player-dock:has(> .audio-player.did-fold.is-left:not(.is-collapsed):not(.is-folding))', wide))
       .toMatch(/animation: audio-dock-empty-in/);
   });
+
+  it('steps the dock aside, open or folded, while the scroll pill shows, unless one of its menus is open', () => {
+    const aside = rule(".editor-fullpage:has(.editor-scroll-percent[data-visible='true']) .editor-player-dock:not(:has([aria-expanded='true']))");
+    expect(aside).toMatch(/opacity: 0/);
+    expect(aside).toMatch(/pointer-events: none/);
+    expect(rule('.editor-player-dock')).toMatch(/transition:[^;]*opacity/);
+    // With a menu open the player is in use: the scroll pill waits instead.
+    expect(rule(".editor-fullpage:has(.editor-player-dock [aria-expanded='true']) .editor-scroll-percent")).toMatch(/visibility: hidden/);
+  });
 });

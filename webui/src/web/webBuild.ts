@@ -3,9 +3,10 @@
 // No COOP/COEP: nothing needs SharedArrayBuffer and require-corp would break the YouTube previews.
 
 const GEMINI_ORIGIN = 'https://generativelanguage.googleapis.com';
-// Drive sync (drive/): the REST API and token revocation. The login itself is a window to
-// accounts.google.com, so no Google script, frame or connect is needed for it.
-const DRIVE_ORIGINS = 'https://www.googleapis.com https://oauth2.googleapis.com';
+// Drive sync (drive/): the REST API. The login is a window (the site's /api/drive, then
+// accounts.google.com) and its token comes from 'self', so no Google script, frame or other
+// connect is needed for it.
+const DRIVE_ORIGINS = 'https://www.googleapis.com';
 
 const webCspDirectives = (drive: boolean): Array<[string, string]> => [
   ['default-src', "'self'"],
@@ -49,10 +50,15 @@ export function driveClientId(value: string | undefined): string | null {
 // Desktop-only boot script: it talks to the pywebview startup check.
 const DESKTOP_ONLY_SCRIPTS = ['startup-guard.js'];
 
+// Search Console ownership of elsbobinator.pages.dev, an authorised domain of the Drive login's
+// OAuth client (Google wants each one verified). No DNS of ours there, and Pages redirects a
+// google….html file to its name without .html: so the homepage tag, which must stay.
+export const SEARCH_CONSOLE_VERIFICATION = '<meta name="google-site-verification" content="XWVhccF0gdqWBcyMsZnKhkONXaFYCZAFHq19zBBjC8M" />';
+
 export function toWebIndexHtml(html: string, drive = false): string {
   const cspPattern = /(<meta\s+http-equiv="Content-Security-Policy"\s+content=")[^"]*(")/i;
   if (!cspPattern.test(html)) throw new Error('index.html has no Content-Security-Policy meta tag to replace.');
-  let result = html.replace(cspPattern, `$1${webCsp(drive)}$2`);
+  let result = html.replace(cspPattern, `${SEARCH_CONSOLE_VERIFICATION}\n    $1${webCsp(drive)}$2`);
   for (const script of DESKTOP_ONLY_SCRIPTS) {
     result = result.replace(new RegExp(`\\s*<script src="\\./${script.replace('.', '\\.')}"></script>`), '');
   }

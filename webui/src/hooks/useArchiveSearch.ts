@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ArchiveSession, SearchSessionResult } from '../bridge';
 import { normalizeSessionPath } from '../utils';
-import { getOpenedAtMs, type SortOption } from '../components/archive/types';
+import { getOpenedAtMs, keptAudioBytes, type SortOption } from '../components/archive/types';
 
 export interface UseArchiveSearchOptions {
   sessions: ArchiveSession[];
@@ -17,6 +17,8 @@ export function useArchiveSearch({
 }: UseArchiveSearchOptions) {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortOption>('newest');
+  // Web: only the sbobine that keep their audio in this browser (the name search still applies).
+  const [audioOnly, setAudioOnly] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -36,8 +38,13 @@ export function useArchiveSearch({
   const sortSessions = useCallback(
     (arr: ArchiveSession[]) => {
       const q = search.trim().toLowerCase();
-      const filtered = q ? arr.filter((s) => s.name.toLowerCase().includes(q)) : arr;
+      const filtered = arr.filter((s) => (!q || s.name.toLowerCase().includes(q)) && (!audioOnly || keptAudioBytes(s) > 0));
       return [...filtered].sort((a, b) => {
+        if (sort === 'audio_size') {
+          const sa = keptAudioBytes(a);
+          const sb = keptAudioBytes(b);
+          if (sa !== sb) return sb - sa;
+        }
         if (sort === 'name') {
           return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
         }
@@ -51,7 +58,7 @@ export function useArchiveSearch({
         return tb - ta;
       });
     },
-    [search, sort, editorSessionsMap]
+    [search, sort, audioOnly, editorSessionsMap]
   );
 
   const allSortedSessions = useMemo(() => sortSessions(sessions), [sessions, sortSessions]);
@@ -137,6 +144,8 @@ export function useArchiveSearch({
     setSearch,
     sort,
     setSort,
+    audioOnly,
+    setAudioOnly,
     searchFocused,
     setSearchFocused,
     searchInputRef,

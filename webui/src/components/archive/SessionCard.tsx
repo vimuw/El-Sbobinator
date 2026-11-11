@@ -1,13 +1,13 @@
 import { Fragment, useState, type MouseEvent, type ReactNode } from 'react';
 import {
-  AlertTriangle, Check, ChevronLeft, ChevronRight, Download,
+  AlertTriangle, AudioLines, Check, ChevronLeft, ChevronRight, Download,
   Eye, FileText, Folder, FolderOpen, Pencil, RotateCcw, Trash2, X,
 } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { ArchiveFolder, ArchiveSession } from '../../bridge';
 import { loadAllEditorSessions, type EditorSession } from '../../editorSessions';
-import { formatRelativeTime, shortModelName } from '../../utils';
+import { formatRelativeTime, formatSize, shortModelName } from '../../utils';
 import { getHostCapabilities } from '../../hostCapabilities';
 import { KebabMenu, type KebabMenuItem } from '../KebabMenu';
 import { FolderIndicatorChip } from '../FolderChip';
@@ -70,6 +70,27 @@ function SessionCardMeta({ completedAtMs, openedAtMs, model, folderIndicator, ha
         </span>
       ))}
     </div>
+  );
+}
+
+// Web: the audio a sbobina keeps in this browser, its share of "Audio delle sbobine" in
+// Archiviazione. It sits at the card's right edge, next to the menu, so the sbobine with audio line
+// up in one column down the list; a phone shows the icon alone, the size in its title. Not a button:
+// a click on it opens the sbobina like the rest of the card.
+function KeptAudioBadge({ bytes }: { bytes?: number }) {
+  const isPhone = usePhoneLayout();
+  if (!bytes || bytes <= 0) return null;
+  const size = formatSize(bytes);
+  return (
+    <span
+      data-testid="session-kept-audio"
+      className={`kept-audio-badge${isPhone ? ' is-icon' : ''}`}
+      title={`Audio salvato in questo browser: ${size}`}
+    >
+      <AudioLines className="w-3 h-3 shrink-0" aria-hidden="true" />
+      <span className="sr-only">Audio salvato: </span>
+      <span className={isPhone ? 'sr-only' : undefined}>{size}</span>
+    </span>
   );
 }
 
@@ -220,6 +241,7 @@ export function DraggableSessionCard({
         </div>
       </div>
 
+      <KeptAudioBadge bytes={session.kept_audio_bytes} />
       <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
         {canRetryBlocks && (
           <button
@@ -448,6 +470,7 @@ export function SortableSessionCard({
           />
         </div>
       </div>
+      <KeptAudioBadge bytes={session.kept_audio_bytes} />
       <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
         {canRetryBlocks && (
           <button

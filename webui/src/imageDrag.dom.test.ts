@@ -274,3 +274,41 @@ describe('wrap drag across a zoom change', () => {
     expect(images).toEqual([35]);
   });
 });
+
+describe('wrap drop near the end of the document', () => {
+  // Dropping clears the old wrap gaps first: the document gets shorter and, at its end, the page
+  // scrolls back and moves the editor down on screen before the drop is measured.
+  it('keeps the dropped position when the page scrolls back during the drop', () => {
+    const editor = new Editor({
+      extensions: [StarterKit, FloatingImage.extend({ addNodeView: () => null })],
+      content: '<p>Intro <span data-editor-image data-layout="wrap" data-width="35"><img src="drag.png"></span></p><p>Fine</p>',
+    });
+    editors.push(editor);
+    document.body.append(editor.view.dom);
+    let scrolledBack = 0;
+    editor.on('update', () => { scrolledBack = 121; });
+    Object.defineProperties(editor.view.dom, { offsetWidth: { value: 640 }, clientWidth: { value: 640 } });
+    vi.spyOn(editor.view.dom, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, scrolledBack, 640, 600));
+    const [intro, end] = Array.from(editor.view.dom.querySelectorAll(':scope > p'));
+    vi.spyOn(intro, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, 40 + scrolledBack, 640, 40));
+    vi.spyOn(end, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, 200 + scrolledBack, 640, 40));
+    let pos = 0;
+    editor.state.doc.descendants((node, nodePos) => { if (node.type.name === 'floatingImage') pos = nodePos; });
+    const anchor = editor.view.nodeDOM(pos) as HTMLElement;
+    vi.spyOn(anchor.querySelector<HTMLElement>('.editor-image-surface')!, 'getBoundingClientRect').mockReturnValue(new DOMRect(350, 40, 70, 40));
+    vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(1);
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
+    const pointer = (type: string, clientY: number) => {
+      const event = new Event(type, { cancelable: true });
+      Object.assign(event, { pointerId: 1, clientX: 360, clientY });
+      return event as PointerEvent;
+    };
+    cleanups.push(startImageDrag(editor.view, pos, anchor, pointer('pointerdown', 50)));
+    window.dispatchEvent(pointer('pointermove', 310));
+    window.dispatchEvent(pointer('pointerup', 310));
+    const image = editor.state.doc.child(1).firstChild!;
+    expect(image.type.name).toBe('floatingImage');
+    // The ghost's top was 300 px below the editor's top, and so is the image: 200 + 100.
+    expect(image.attrs.offsetY).toBeCloseTo(100, 1);
+  });
+});

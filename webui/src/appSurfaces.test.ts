@@ -78,8 +78,11 @@ describe('app surfaces', () => {
     expect(new Set(light).size).toBe(4);
     expect(index).toMatch(/:root:not\(\[data-theme="dark"\]\) \.editor-toolbar \{\s*background: var\(--editor-toolbar-bg\);/);
     expect(token(darkTheme, '--bg-floating')).toBe('var(--bg-elevated)');
+    // The selection bar over the text takes the toolbar's tone, not the menus' darker one.
+    expect(rule('.editor-bubble-menu')).toMatch(/background: var\(--editor-toolbar-bg\)/);
+    expect(rule(':root[data-theme="dark"] .editor-bubble-menu')).toMatch(/background: var\(--bg-elevated\)/);
     for (const selector of [
-      '.kebab-panel', '.color-picker-panel', '.context-menu', '.editor-bubble-menu', '.link-panel',
+      '.kebab-panel', '.color-picker-panel', '.context-menu', '.link-panel',
       '.editor-link-card', '.sidebar-account-menu', '.select-dropdown', '.notification-dropdown-panel',
       '.phone-format-sheet', '.editor-player-dock',
     ]) {
@@ -102,21 +105,23 @@ describe('app surfaces', () => {
     }
 
     // Inside floating surfaces the light hover lightens the menus' beige instead (a 10% black
-    // band read heavy, above all in the notification panel), but by the same threshold: a white
-    // hover too faint to see would separate rows less than the dark theme's. Selection and the
-    // danger row lighten too, each as far from the menu as its dark counterpart.
+    // band read heavy, above all in the notification panel). Selection and the danger row
+    // lighten each as far from the menu as its dark counterpart. The hover keeps a softer floor:
+    // a white veil on beige shows more than the same step on dark grey, and at the full step
+    // (72% white) the hovered notification turned near-white, a hole to the page; below about
+    // two thirds of the dark step it would barely separate the rows.
     const floating = { light: themeValue('--bg-floating', false), dark: themeValue('--bg-floating', true) };
-    for (const [name, darkCounterpart] of [
-      ['--bg-hover-floating', '--bg-hover'], ['--bg-selected-floating', '--accent-subtle'],
-      ['--bg-danger-hover-floating', '--error-subtle'],
-    ]) {
+    for (const [name, darkCounterpart, floor] of [
+      ['--bg-hover-floating', '--bg-hover', 0.65], ['--bg-selected-floating', '--accent-subtle', 0.9],
+      ['--bg-danger-hover-floating', '--error-subtle', 0.9],
+    ] as const) {
       expect(themeValue(name, true), name).toBe(themeValue(darkCounterpart, true));
       const over = (dark: boolean) => mix(themeValue(name, dark), floating[dark ? 'dark' : 'light']);
       const light = lstar(over(false)) - lstar(floating.light);
       const dark = lstar(over(true)) - lstar(floating.dark);
       expect(light, `${name} lightens the light menus`).toBeGreaterThan(0);
-      expect(light / dark, name).toBeGreaterThan(0.9);
-      expect(light / dark, name).toBeLessThan(1.35);
+      expect(light / dark, name).toBeGreaterThan(floor);
+      expect(light / dark, name).toBeLessThan(name === '--bg-hover-floating' ? 0.9 : 1.35);
     }
     // The selected row stays apart from the hovered one by its tint, not only its lightness.
     expect(themeValue('--bg-selected-floating', false)).not.toBe(mix(themeValue('--bg-hover-floating', false), floating.light));
@@ -243,12 +248,14 @@ describe('app surfaces', () => {
 
   it('frames every floating surface in the light theme as clearly as the dark one does', () => {
     // A menu in #e9e5dc on the #f0ede6 header (1.07:1), with a 0.16 hairline and a 0.08 shadow,
-    // read as part of the page, while the dark theme's menus stood out from everything.
+    // read as part of the page, while the dark theme's menus stood out from everything; one in
+    // #e4dfd5 (1.14:1) read heavy. The tone sits between, and the hairline carries the rest.
     const header = token(lightTheme, '--editor-chrome-bg')!;
     const floating = token(lightTheme, '--bg-floating')!;
-    expect(contrast(floating, header)).toBeGreaterThan(1.12);
+    expect(contrast(floating, header)).toBeGreaterThan(1.1);
+    expect(contrast(floating, header)).toBeLessThan(1.13);
     expect(contrast(floating, token(lightTheme, '--text-muted')!)).toBeGreaterThan(4.5);
-    expect(Number(token(lightTheme, '--border-floating')!.match(/([\d.]+)\)$/)?.[1])).toBeGreaterThanOrEqual(0.3);
+    expect(Number(token(lightTheme, '--border-floating')!.match(/([\d.]+)\)$/)?.[1])).toBeGreaterThanOrEqual(0.44);
     // A shadow that lifts without a halo: a 32px blur at 0.26 read as a cloud round every menu,
     // and the player's menus, opening upwards, kept a 0.45 black one of their own.
     for (const name of ['--shadow-floating', '--shadow-floating-up']) {
@@ -270,8 +277,11 @@ describe('app surfaces', () => {
     expect(token(darkTheme, '--shadow-floating')).toBe('var(--shadow-strong)');
     expect(token(darkTheme, '--shadow-floating-up')).toMatch(/^0 -10px 28px -14px rgb\(0 0 0 \/ 0\.45\)/);
 
+    // The selection bar has the toolbar's tone but the same frame.
+    expect(rule('.editor-bubble-menu')).toMatch(/border: 1px solid var\(--border-floating\)/);
+    expect(rule('.editor-bubble-menu')).toMatch(/box-shadow: var\(--shadow-floating\)/);
     for (const selector of [
-      '.kebab-panel', '.color-picker-panel', '.context-menu', '.editor-bubble-menu', '.link-panel',
+      '.kebab-panel', '.color-picker-panel', '.context-menu', '.link-panel',
       '.editor-link-card', '.sidebar-account-menu', '.select-dropdown', '.notification-dropdown-panel',
       '.find-bar-float', '.find-replace-dialog', '.editor-video-preview',
       '.folder-name-tooltip', '.archive-selection-bar', ['.editor-toc-content', '  '],
@@ -554,6 +564,25 @@ describe('app surfaces', () => {
       }
     }
     expect(offenders).toEqual([]);
+  });
+
+  it('spaces the stop button as far from the queue as from the run details, its label centred', () => {
+    // It sat 24px under the run details and 44px over the queue (the hero's 12px plus the page's
+    // 32px gap): both are now the page's 32px.
+    const px = (value: string) => Number(value.match(/^(-?[\d.]+)rem$/)?.[1]) * 16;
+    const source = (name: string) => componentSources.find(({ file }) => file.endsWith(name))!.source;
+    const tailwindGap = (className: string) => Number(className.match(/\bgap-(\d+)\b/)?.[1]) * 4;
+    const stop = rule('.processing-stop-button')!;
+    // The group that holds the run details and, under them, the button.
+    const detailsGroup = source('ProcessingStatusBanner.tsx').match(/className="([^"]*\bgap-\d+[^"]*)">\s*\{metaItems\.length > 0 &&/)![1];
+    const above = tailwindGap(detailsGroup) + px(token(stop, 'margin-top')!);
+    const heroBottom = token(rule('.processing-hero')!, 'padding')!.split(/\s+/)[2];
+    const pageGap = tailwindGap(source('QueuePage.tsx').match(/'my-auto'\} ([^`]*\bgap-\d+[^`]*)`/)![1]);
+    const below = (heroBottom === '0' ? 0 : px(heroBottom)) + pageGap;
+    expect([above, below]).toEqual([32, 32]);
+    // Manrope's lowercase sits low in a centred line box: the label rides 1px above centre.
+    expect(token(stop, 'padding')).toBe('calc(0.375rem - 1px) 1.125rem calc(0.375rem + 1px)');
+    expect(token(theme, '--button-padding-lg')).toBe('0.375rem 1.125rem');
   });
 
   it('shows keyboard focus with the one ring of theme.css, in both themes', () => {

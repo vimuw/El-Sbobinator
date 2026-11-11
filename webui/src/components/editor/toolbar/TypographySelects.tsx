@@ -1,5 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
+import { usePopoverPresence } from '../../../hooks/usePopoverPresence';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import { ChevronDown } from 'lucide-react';
 import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
@@ -13,6 +14,7 @@ export const FontFamilySelect = ({ editor }: { editor: TiptapEditor }) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   const panelRef = React.useRef<HTMLDivElement>(null);
+  const presence = usePopoverPresence(isOpen);
   const { panelPos, placeUnder } = useAnchoredPanel(isOpen, panelRef);
 
   const { value: currentFamily, label: currentLabel } = currentFontFamily(editor);
@@ -64,10 +66,11 @@ export const FontFamilySelect = ({ editor }: { editor: TiptapEditor }) => {
         <span className="text-xs font-medium truncate flex-1 text-left">{currentLabel}</span>
         <ChevronDown size={10} style={{ opacity: 0.6, marginLeft: 2, flexShrink: 0 }} />
       </button>
-      {isOpen && createPortal(
+      {presence.shown && createPortal(
         <div
           ref={panelRef}
-          className="kebab-panel editor-dropdown-panel font-family-dropdown-panel"
+          className={`kebab-panel editor-dropdown-panel font-family-dropdown-panel${presence.closing ? ' popover-closing' : ''}`}
+          inert={presence.closing}
           style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 'var(--z-popover)', minWidth: '170px' }}
         >
           {FONT_FAMILIES.map(f => {
@@ -95,6 +98,7 @@ export const FontSizeSelect = ({ editor }: { editor: TiptapEditor }) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   const panelRef = React.useRef<HTMLDivElement>(null);
+  const presence = usePopoverPresence(isOpen);
   const { panelPos, placeUnder } = useAnchoredPanel(isOpen, panelRef);
 
   const currentSize = currentFontSize(editor);
@@ -148,10 +152,11 @@ export const FontSizeSelect = ({ editor }: { editor: TiptapEditor }) => {
         <span className="text-xs font-medium flex-1 text-center">{currentSize}</span>
         <ChevronDown size={10} style={{ opacity: 0.6, marginLeft: 2, flexShrink: 0 }} />
       </button>
-      {isOpen && createPortal(
+      {presence.shown && createPortal(
         <div
           ref={panelRef}
-          className="kebab-panel editor-dropdown-panel font-size-dropdown-panel"
+          className={`kebab-panel editor-dropdown-panel font-size-dropdown-panel${presence.closing ? ' popover-closing' : ''}`}
+          inert={presence.closing}
           style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 'var(--z-popover)', minWidth: '64px', maxHeight: '220px', overflowY: 'auto' }}
         >
           {FONT_SIZES.map(s => {
@@ -179,6 +184,7 @@ export const HeadingSelect = ({ editor }: { editor: TiptapEditor }) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   const panelRef = React.useRef<HTMLDivElement>(null);
+  const presence = usePopoverPresence(isOpen);
   const { panelPos, placeUnder } = useAnchoredPanel(isOpen, panelRef);
 
   const current = currentHeading(editor);
@@ -230,10 +236,11 @@ export const HeadingSelect = ({ editor }: { editor: TiptapEditor }) => {
         <span className="text-xs font-medium truncate flex-1 text-left">{current.label}</span>
         <ChevronDown size={10} style={{ opacity: 0.6, marginLeft: 2, flexShrink: 0 }} />
       </button>
-      {isOpen && createPortal(
+      {presence.shown && createPortal(
         <div
           ref={panelRef}
-          className="kebab-panel editor-dropdown-panel heading-dropdown-panel"
+          className={`kebab-panel editor-dropdown-panel heading-dropdown-panel${presence.closing ? ' popover-closing' : ''}`}
+          inert={presence.closing}
           style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 'var(--z-popover)', minWidth: '150px' }}
         >
           {HEADING_OPTIONS.map(opt => {
@@ -275,6 +282,7 @@ export const ZoomSelect = ({
   const [isOpen, setIsOpen] = React.useState(false);
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   const panelRef = React.useRef<HTMLDivElement>(null);
+  const presence = usePopoverPresence(isOpen);
   const { panelPos, placeUnder } = useAnchoredPanel(isOpen, panelRef);
 
   const toggleOpen = () => {
@@ -324,10 +332,11 @@ export const ZoomSelect = ({
         <span className="text-xs font-medium flex-1 text-center">{zoomLevel}%</span>
         <ChevronDown size={10} style={{ opacity: 0.6, marginLeft: 2, flexShrink: 0 }} />
       </button>
-      {isOpen && createPortal(
+      {presence.shown && createPortal(
         <div
           ref={panelRef}
-          className="kebab-panel editor-dropdown-panel zoom-dropdown-panel"
+          className={`kebab-panel editor-dropdown-panel zoom-dropdown-panel${presence.closing ? ' popover-closing' : ''}`}
+          inert={presence.closing}
           style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 'var(--z-popover)', minWidth: '72px', maxHeight: '240px', overflowY: 'auto' }}
         >
           {ZOOM_OPTIONS.map(lvl => {

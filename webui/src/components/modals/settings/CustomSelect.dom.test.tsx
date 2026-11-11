@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { CustomSelect, type CustomSelectOption } from './CustomSelect';
 
 afterEach(() => { vi.restoreAllMocks(); });
@@ -79,7 +79,18 @@ describe('CustomSelect', () => {
     expect(onChange).toHaveBeenCalledWith('m2');
   });
 
-  it('closes dropdown on Escape keydown', () => {
+  it('closes with a short exit instead of vanishing, no longer clickable meanwhile', async () => {
+    render(<CustomSelect value="m1" onChange={vi.fn()} options={options} />);
+    fireEvent.click(screen.getByRole('button', { name: /Model One/i }));
+    const listbox = screen.getByRole('listbox');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(listbox.isConnected).toBe(true);
+    expect(listbox.classList.contains('popover-closing')).toBe(true);
+    expect(listbox.hasAttribute('inert')).toBe(true);
+    await waitFor(() => expect(listbox.isConnected).toBe(false));
+  });
+
+  it('closes dropdown on Escape keydown', async () => {
     render(
       <CustomSelect
         value="m1"
@@ -93,7 +104,7 @@ describe('CustomSelect', () => {
     expect(screen.getByRole('listbox')).toBeTruthy();
 
     fireEvent.keyDown(document, { key: 'Escape' });
-    expect(screen.queryByRole('listbox')).toBeNull();
+    await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
   });
 
   it('does not select disabled options', () => {

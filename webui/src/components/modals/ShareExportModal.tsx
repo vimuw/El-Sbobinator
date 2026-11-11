@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { X, Download, Package, FileText, Music, CheckCircle2, AlertCircle, Loader2, FolderOpen } from 'lucide-react';
 import type { ArchiveSession } from '../../bridge';
 import { modalCard } from '../../motion';
+import { useBackdropDismiss } from '../../hooks/useBackdropDismiss';
 
 interface ShareExportModalProps {
   session: ArchiveSession | null;
@@ -27,6 +28,9 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [session, isProcessing, onClose]);
+
+  // Nothing here waits to be saved: a click outside closes, except while exporting.
+  const backdrop = useBackdropDismiss({ dirty: false, onClose, blocked: isProcessing });
 
   if (!session) return null;
 
@@ -72,201 +76,201 @@ export function ShareExportModal({ session, onClose }: ShareExportModalProps) {
   };
 
   return (
-    <AnimatePresence>
+    <motion.div
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-4"
+    >
       <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-4"
+        className="modal-overlay absolute inset-0"
+        onClick={backdrop.onBackdropClick}
+        data-testid="share-export-backdrop"
+      />
+      <motion.div
+        {...modalCard}
+        className="modal-card relative w-full max-w-lg overflow-hidden flex flex-col"
       >
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="modal-overlay absolute inset-0"
-        />
-        <motion.div
-          {...modalCard}
-          className="modal-card relative w-full max-w-lg overflow-hidden flex flex-col"
-        >
-          {/* Header */}
-          <div className="modal-header">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-[var(--accent-subtle)] text-[var(--accent-text)]">
-                <Package className="w-4.5 h-4.5" />
+        {/* Header */}
+        <div className="modal-header">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-[var(--accent-subtle)] text-[var(--accent-text)]">
+              <Package className="w-4.5 h-4.5" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold truncate text-[var(--text-primary)]">
+                Esporta Pacchetto Sbobina
+              </h2>
+              <p className="text-xs truncate text-[var(--text-muted)] font-normal">
+                {session.name}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="icon-button modal-icon-button"
+            aria-label="Chiudi finestra"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="modal-body space-y-4">
+          {/* Option Cards */}
+          <div className="space-y-2.5">
+            <p className="dashboard-section-title">
+              Cosa desideri includere nel pacchetto?
+            </p>
+
+            {/* Option 1: Sbobina + Audio */}
+            <div
+              onClick={() => setExportType('full')}
+              className="p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3.5"
+              style={{
+                borderColor: exportType === 'full' ? 'var(--accent-bg)' : 'var(--border-default)',
+                background: exportType === 'full' ? 'var(--accent-subtle)' : 'var(--bg-surface)',
+              }}
+            >
+              <div
+                className="mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0"
+                style={{
+                  borderColor: exportType === 'full' ? 'var(--accent-bg)' : 'var(--border-strong)',
+                  background: exportType === 'full' ? 'var(--accent-bg)' : 'transparent',
+                }}
+              >
+                {exportType === 'full' && <div className="w-2 h-2 rounded-full bg-[var(--btn-primary-text)]" />}
               </div>
-              <div className="min-w-0">
-                <h2 className="text-base font-semibold truncate text-[var(--text-primary)]">
-                  Esporta Pacchetto Sbobina
-                </h2>
-                <p className="text-xs truncate text-[var(--text-muted)] font-normal">
-                  {session.name}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-[var(--text-primary)]">
+                    Sbobina + Audio (Completo)
+                  </span>
+                  <span
+                    className="text-caption font-semibold px-2 py-0.5 rounded-full"
+                    style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-text)' }}
+                  >
+                    Consigliato
+                  </span>
+                </div>
+                <p className="text-xs mt-0.5 text-[var(--text-muted)]">
+                  Include la sbobina completa (HTML, revisioni) e la traccia audio per riascoltarla sul nuovo PC.
                 </p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="icon-button modal-icon-button"
-              aria-label="Chiudi finestra"
+
+            {/* Option 2: Solo Sbobina */}
+            <div
+              onClick={() => setExportType('text_only')}
+              className="p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3.5"
+              style={{
+                borderColor: exportType === 'text_only' ? 'var(--accent-bg)' : 'var(--border-default)',
+                background: exportType === 'text_only' ? 'var(--accent-subtle)' : 'var(--bg-surface)',
+              }}
             >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Body */}
-          <div className="modal-body space-y-4">
-            {/* Option Cards */}
-            <div className="space-y-2.5">
-              <p className="dashboard-section-title">
-                Cosa desideri includere nel pacchetto?
-              </p>
-
-              {/* Option 1: Sbobina + Audio */}
               <div
-                onClick={() => setExportType('full')}
-                className="p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3.5"
+                className="mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0"
                 style={{
-                  borderColor: exportType === 'full' ? 'var(--accent-bg)' : 'var(--border-default)',
-                  background: exportType === 'full' ? 'var(--accent-subtle)' : 'var(--bg-surface)',
+                  borderColor: exportType === 'text_only' ? 'var(--accent-bg)' : 'var(--border-strong)',
+                  background: exportType === 'text_only' ? 'var(--accent-bg)' : 'transparent',
                 }}
               >
-                <div
-                  className="mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0"
-                  style={{
-                    borderColor: exportType === 'full' ? 'var(--accent-bg)' : 'var(--border-strong)',
-                    background: exportType === 'full' ? 'var(--accent-bg)' : 'transparent',
-                  }}
-                >
-                  {exportType === 'full' && <div className="w-2 h-2 rounded-full bg-[var(--btn-primary-text)]" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-[var(--text-primary)]">
-                      Sbobina + Audio (Completo)
-                    </span>
-                    <span
-                      className="text-caption font-semibold px-2 py-0.5 rounded-full"
-                      style={{ background: 'var(--btn-primary-bg)', color: 'var(--btn-primary-text)' }}
-                    >
-                      Consigliato
-                    </span>
-                  </div>
-                  <p className="text-xs mt-0.5 text-[var(--text-muted)]">
-                    Include la sbobina completa (HTML, revisioni) e la traccia audio per riascoltarla sul nuovo PC.
-                  </p>
-                </div>
+                {exportType === 'text_only' && <div className="w-2 h-2 rounded-full bg-[var(--btn-primary-text)]" />}
               </div>
-
-              {/* Option 2: Solo Sbobina */}
-              <div
-                onClick={() => setExportType('text_only')}
-                className="p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3.5"
-                style={{
-                  borderColor: exportType === 'text_only' ? 'var(--accent-bg)' : 'var(--border-default)',
-                  background: exportType === 'text_only' ? 'var(--accent-subtle)' : 'var(--bg-surface)',
-                }}
-              >
-                <div
-                  className="mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0"
-                  style={{
-                    borderColor: exportType === 'text_only' ? 'var(--accent-bg)' : 'var(--border-strong)',
-                    background: exportType === 'text_only' ? 'var(--accent-bg)' : 'transparent',
-                  }}
-                >
-                  {exportType === 'text_only' && <div className="w-2 h-2 rounded-full bg-[var(--btn-primary-text)]" />}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-[var(--accent-text)]" />
+                  <span className="text-sm font-semibold text-[var(--text-primary)]">
+                    Solo Sbobina (Leggero)
+                  </span>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-[var(--accent-text)]" />
-                    <span className="text-sm font-semibold text-[var(--text-primary)]">
-                      Solo Sbobina (Leggero)
-                    </span>
-                  </div>
-                  <p className="text-xs mt-0.5 text-[var(--text-muted)]">
-                    Include solo il testo della sbobina e i dati di sessione. File di dimensioni ridotte.
-                  </p>
-                </div>
-              </div>
-
-              {/* Option 3: Solo Audio */}
-              <div
-                onClick={() => setExportType('audio_only')}
-                className="p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3.5"
-                style={{
-                  borderColor: exportType === 'audio_only' ? 'var(--accent-bg)' : 'var(--border-default)',
-                  background: exportType === 'audio_only' ? 'var(--accent-subtle)' : 'var(--bg-surface)',
-                }}
-              >
-                <div
-                  className="mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0"
-                  style={{
-                    borderColor: exportType === 'audio_only' ? 'var(--accent-bg)' : 'var(--border-strong)',
-                    background: exportType === 'audio_only' ? 'var(--accent-bg)' : 'transparent',
-                  }}
-                >
-                  {exportType === 'audio_only' && <div className="w-2 h-2 rounded-full bg-[var(--btn-primary-text)]" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <Music className="w-4 h-4 text-[var(--accent-text)]" />
-                    <span className="text-sm font-semibold text-[var(--text-primary)]">
-                      Solo Audio
-                    </span>
-                  </div>
-                  <p className="text-xs mt-0.5 text-[var(--text-muted)]">
-                    Esporta solo la registrazione audio originale per la condivisione diretta.
-                  </p>
-                </div>
+                <p className="text-xs mt-0.5 text-[var(--text-muted)]">
+                  Include solo il testo della sbobina e i dati di sessione. File di dimensioni ridotte.
+                </p>
               </div>
             </div>
 
-            {/* Error or Success notification */}
-            {errorMsg && (
-              <div className="alert-card is-error text-xs flex items-center gap-2.5 p-3">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{errorMsg}</span>
+            {/* Option 3: Solo Audio */}
+            <div
+              onClick={() => setExportType('audio_only')}
+              className="p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3.5"
+              style={{
+                borderColor: exportType === 'audio_only' ? 'var(--accent-bg)' : 'var(--border-default)',
+                background: exportType === 'audio_only' ? 'var(--accent-subtle)' : 'var(--bg-surface)',
+              }}
+            >
+              <div
+                className="mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0"
+                style={{
+                  borderColor: exportType === 'audio_only' ? 'var(--accent-bg)' : 'var(--border-strong)',
+                  background: exportType === 'audio_only' ? 'var(--accent-bg)' : 'transparent',
+                }}
+              >
+                {exportType === 'audio_only' && <div className="w-2 h-2 rounded-full bg-[var(--btn-primary-text)]" />}
               </div>
-            )}
-
-            {successMsg && (
-              <div className="alert-card is-success text-xs flex flex-col gap-2.5 p-3">
-                <div className="flex items-center gap-3">
-                  <CheckCircle2 className="w-4 h-4 shrink-0 text-[var(--accent-text)]" />
-                  <span>{successMsg}</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <Music className="w-4 h-4 text-[var(--accent-text)]" />
+                  <span className="text-sm font-semibold text-[var(--text-primary)]">
+                    Solo Audio
+                  </span>
                 </div>
-                {exportedPath && (
-                  <button
-                    type="button"
-                    onClick={handleOpenFolder}
-                    className="inline-flex items-center gap-1.5 self-start text-xs font-semibold min-h-[var(--control-height-sm)] px-3.5 rounded-full border transition-all cursor-pointer bg-[var(--bg-surface)] border-[var(--border-default)] text-[var(--accent-text)] hover:bg-[var(--bg-hover)]"
-                  >
-                    <FolderOpen className="w-3.5 h-3.5" />
-                    <span>Apri cartella del pacchetto</span>
-                  </button>
-                )}
+                <p className="text-xs mt-0.5 text-[var(--text-muted)]">
+                  Esporta solo la registrazione audio originale per la condivisione diretta.
+                </p>
               </div>
-            )}
+            </div>
           </div>
 
-          {/* Footer Actions */}
-          <div className="modal-footer">
-            <button
-              type="button"
-              onClick={onClose}
-              className="modal-action-button flex-1"
-            >
-              Annulla
-            </button>
-            <button
-              type="button"
-              onClick={handleExportFile}
-              disabled={isProcessing}
-              className="modal-action-button is-primary flex-1 whitespace-nowrap"
-            >
-              {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              <span>Esporta Pacchetto (.sbobina)</span>
-            </button>
-          </div>
-        </motion.div>
+          {/* Error or Success notification */}
+          {errorMsg && (
+            <div className="alert-card is-error text-xs flex items-center gap-2.5 p-3">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+
+          {successMsg && (
+            <div className="alert-card is-success text-xs flex flex-col gap-2.5 p-3">
+              <div className="flex items-center gap-3">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-[var(--accent-text)]" />
+                <span>{successMsg}</span>
+              </div>
+              {exportedPath && (
+                <button
+                  type="button"
+                  onClick={handleOpenFolder}
+                  className="inline-flex items-center gap-1.5 self-start text-xs font-semibold min-h-[var(--control-height-sm)] px-3.5 rounded-full border transition-all cursor-pointer bg-[var(--bg-surface)] border-[var(--border-default)] text-[var(--accent-text)] hover:bg-[var(--bg-hover)]"
+                >
+                  <FolderOpen className="w-3.5 h-3.5" />
+                  <span>Apri cartella del pacchetto</span>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer Actions */}
+        <div className="modal-footer">
+          <button
+            type="button"
+            onClick={onClose}
+            className="modal-action-button flex-1"
+          >
+            Annulla
+          </button>
+          <button
+            type="button"
+            onClick={handleExportFile}
+            disabled={isProcessing}
+            className="modal-action-button is-primary flex-1 whitespace-nowrap"
+          >
+            {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            <span>Esporta Pacchetto (.sbobina)</span>
+          </button>
+        </div>
       </motion.div>
-    </AnimatePresence>
+    </motion.div>
   );
 }

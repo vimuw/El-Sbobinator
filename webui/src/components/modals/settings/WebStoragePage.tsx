@@ -23,15 +23,17 @@ interface WebStoragePageProps {
   isLoadingSessionInfo: boolean;
   /** An import, a restore or the emptied trash changed the archive. */
   onArchiveChanged: () => void;
-  /** Opens Impostazioni → Sincronizzazione. */
+  /** Opens Impostazioni → Google Drive. */
   onOpenDrive?: () => void;
+  /** Closes the settings on the archive, filtered to the sbobine that keep their audio. */
+  onShowKeptAudio?: () => void;
 }
 
 const noop = () => {};
 
 export const REVEAL_TIMEOUT_MS = 1500;
 
-export const WebStoragePage: React.FC<WebStoragePageProps> = ({ sessionInfo, isLoadingSessionInfo, onArchiveChanged, onOpenDrive }) => {
+export const WebStoragePage: React.FC<WebStoragePageProps> = ({ sessionInfo, isLoadingSessionInfo, onArchiveChanged, onOpenDrive, onShowKeptAudio }) => {
   const drive = useDriveStatus();
   const hasTrash = Boolean(window.pywebview?.api?.list_trash);
   const [backupLoaded, setBackupLoaded] = useState(() => Boolean(webStorageSnapshot().backup));
@@ -61,6 +63,7 @@ export const WebStoragePage: React.FC<WebStoragePageProps> = ({ sessionInfo, isL
         inBrowser
         drive={!drive.available ? 'unavailable' : drive.status?.connected ? 'connected' : 'disconnected'}
         onOpenDrive={onOpenDrive}
+        onShowKeptAudio={onShowKeptAudio}
         canManageSessionFolder={false}
         sessionInfo={sessionInfo}
         isLoadingSessionInfo={isLoadingSessionInfo}

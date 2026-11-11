@@ -381,7 +381,7 @@ describe('EditorToolbar MenuBar', () => {
     }
   });
 
-  it('opens the link panel under "+" on a phone, where the link button is hidden', () => {
+  it('opens the link panel under "+" on a phone, where the link button is hidden', async () => {
     vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(max-width: 640px)' }));
     try {
       const { editor } = createMockEditor();
@@ -418,7 +418,7 @@ describe('EditorToolbar MenuBar', () => {
 
       // Closed by a tap elsewhere, the video entry opens it again.
       fireEvent.mouseDown(document.body);
-      expect(document.querySelector('.link-panel')).toBeNull();
+      await waitFor(() => expect(document.querySelector('.link-panel')).toBeNull());
       fireEvent.click(screen.getByRole('button', { name: 'Inserisci' }));
       fireEvent.click(screen.getByRole('button', { name: 'Video YouTube' }));
       expect(document.querySelector('.link-panel')).toBeTruthy();

@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import type { ArchiveFolder, ArchiveSession, LowDiskWarning } from '../bridge';
 import type { FileItem, ProcessingAction } from '../appState';
 import { deletedFrom, getHostCapabilities } from '../hostCapabilities';
+import { releaseQueueFiles } from '../queueFileRelease';
 
 export type ConfirmActionState =
   | { type: 'stop-processing' }
@@ -164,11 +165,14 @@ export function useConfirmModal({
       setConfirmAction(null);
       if (removedFile?.status === 'queued') onFileRemovedFromBatch?.();
       if (removedFile?.status === 'done') void refreshArchiveSessions();
+      else if (removedFile) releaseQueueFiles([removedFile]);
       return;
     }
     if (confirmAction.type === 'clear-all') {
+      const removedFiles = filesRef.current.filter(file => file.status !== 'done');
       setConfirmAction(null);
       dispatch({ type: 'queue/clear_all' });
+      releaseQueueFiles(removedFiles);
       return;
     }
     if (confirmAction.type === 'low-disk-warning') {

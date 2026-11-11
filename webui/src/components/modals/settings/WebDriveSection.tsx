@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { Check, Cloud, FolderUp, Loader2, LogOut, MonitorSmartphone, RefreshCw, ShieldCheck, Trash2, X } from 'lucide-react';
 import type { DriveExportResult } from '../../../bridge';
-import { DRIVE_HEALTH_LABEL, driveHealth, formatLastSync, type DriveController, type DriveHealth } from '../../../hooks/useDriveStatus';
+import { DRIVE_HEALTH_LABEL, DRIVE_WAITING_FOR_RUN, driveHealth, formatLastSync, type DriveController, type DriveHealth } from '../../../hooks/useDriveStatus';
 import { InlineConfirm, SettingsCallout, SettingsCardLabel, SettingsMoreInfo, SettingsPanel, SettingsRow, StatusBadge, type StatusBadgeTone } from './SettingsLayout';
 import { ExternalLinkIcon } from '../../ExternalLinkIcon';
 
-// Web previews with Drive sync only, sharing one useDriveStatus. Impostazioni → Sincronizzazione is
+// Web previews with Drive sync only, sharing one useDriveStatus. Impostazioni → Google Drive is
 // two sections that follow the link state, not a "browser / Drive" choice: the account (link it,
 // or sync, reconnect and disconnect it) with what goes to Drive, and "Elimina i dati da Drive". The
 // "Esporta nel mio Drive" row (one-way copy to a visible folder) ends the backup in Archiviazione.
@@ -134,7 +134,8 @@ export const WebDriveSection: React.FC<{ drive: DriveController }> = ({ drive })
             <p data-testid="web-drive-last-sync" className={`text-xs ${status?.needs_reconnect ? 'font-medium text-[var(--warning-text)]' : 'text-[var(--text-secondary)]'}`}>
               {status?.needs_reconnect
                 ? 'Accesso a Google scaduto: le modifiche restano in questo browser e non vanno su Drive finché non riconnetti.'
-                : status?.syncing || busy === 'sync' ? 'Sincronizzazione in corso…' : formatLastSync(status?.last_sync_at ?? null)}
+                : status?.syncing || busy === 'sync' ? 'Sincronizzazione in corso…'
+                  : status?.waiting_for_run ? DRIVE_WAITING_FOR_RUN : formatLastSync(status?.last_sync_at ?? null)}
             </p>
           </div>
         </div>
@@ -145,7 +146,7 @@ export const WebDriveSection: React.FC<{ drive: DriveController }> = ({ drive })
               <span>Riconnetti</span>
             </button>
           ) : (
-            <button type="button" onClick={syncNow} disabled={busy !== null || Boolean(status?.syncing)} className="app-button-secondary is-settings-action">
+            <button type="button" onClick={syncNow} disabled={busy !== null || Boolean(status?.syncing || status?.waiting_for_run)} className="app-button-secondary is-settings-action">
               {busy === 'sync' ? spinner : <RefreshCw className="w-4 h-4" />}
               <span>Sincronizza ora</span>
             </button>

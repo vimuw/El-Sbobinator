@@ -107,6 +107,7 @@ test('index fades out before its reopen button appears and supports interrupted 
   await expect(column).toHaveCSS('width', '44px');
   await expect(content).toBeHidden();
   await expect(trigger).toHaveCSS('opacity', '1');
-  await expect(column).toHaveCSS('transition-duration', '0.25s');
-  await expect(trigger).toHaveCSS('transition-delay', '0.17s, 0.17s');
+  // The theme's --duration-base and --duration-state (theme.css).
+  await expect(column).toHaveCSS('transition-duration', '0.2s');
+  await expect(trigger).toHaveCSS('transition-delay', '0.16s, 0.16s');
 });

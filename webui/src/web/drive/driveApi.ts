@@ -94,8 +94,9 @@ function retryable(error: DriveError, idempotent: boolean): boolean {
 }
 
 export interface DriveApiOptions {
-  getToken: () => string | null;
-  /** Drive answered 401: the caller forgets the token. */
+  /** The token to send; the sync's renews it through the site's server (auth.ts freshToken). */
+  getToken: () => string | null | Promise<string | null>;
+  /** Drive answered 401: the caller forgets the token. A renewed one gets one more try. */
   onUnauthorized?: () => void;
   fetchImpl?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
@@ -127,8 +128,9 @@ export function createDriveApi(options: DriveApiOptions): DriveApi {
   const timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS;
 
   async function call(url: string, init: RequestInit = {}, idempotent = true): Promise<Response> {
+    let rejected: string | null = null;
     for (let attempt = 1; ; attempt += 1) {
-      const token = options.getToken();
+      const token = await options.getToken();
       if (!token) throw new DriveError(401, 'Non collegato a Google Drive.');
       const headers = new Headers(init.headers);
       headers.set('Authorization', `Bearer ${token}`);
@@ -155,7 +157,17 @@ export function createDriveApi(options: DriveApiOptions): DriveApi {
       }
       if (response.ok) return response;
       const error = await driveError(response);
-      if (error.needsAuthorization) options.onUnauthorized?.();
+      if (error.needsAuthorization) {
+        options.onUnauthorized?.();
+        // Once, and only with another token (renewed meanwhile): the same one would fail again.
+        // Drive refused the request, so even an upload never happened and may go again.
+        if (rejected === null) {
+          rejected = token;
+          const renewed = await options.getToken();
+          if (renewed && renewed !== token) continue;
+        }
+        throw error;
+      }
       if (attempt >= maxAttempts || !retryable(error, idempotent)) throw error;
       const retryAfter = Number.parseInt(response.headers.get('Retry-After') ?? '', 10);
       const wait = Number.isFinite(retryAfter) && retryAfter > 0

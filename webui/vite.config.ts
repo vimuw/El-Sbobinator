@@ -3,7 +3,8 @@ import react from '@vitejs/plugin-react';
 import { readdirSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'path';
-import { defineConfig, type UserConfig } from 'vite';
+import { defineConfig, type UserConfig, type ViteDevServer } from 'vite';
+import { createDriveDevMiddleware } from './src/web/drive/server/devServer.ts';
 import { driveClientId, toWebDevIndexHtml, toWebDevStaticPageHtml, toWebIndexHtml, webBuildVersion, webHeadersFile, webStaticPages } from './src/web/webBuild.ts';
 
 const packageInfo = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8')) as { version: string };
@@ -30,6 +31,22 @@ export function createViteConfig(target: 'desktop' | 'web'): UserConfig {
       transformIndexHtml: (html: string, ctx: { path: string }) => (
         isStaticPagePath(ctx.path) ? toWebDevStaticPageHtml(html) : toWebDevIndexHtml(html, drive)
       ),
+    }] : []), ...(isWeb && drive ? [{
+      // The Drive login's server half (the site's Pages Function) on the dev server too: the /api
+      // proxy below would send /api/drive to the desktop backend, which has none. Before Vite's
+      // own middlewares, so before the proxy. The secrets come from the shell, as on Cloudflare.
+      name: 'web-dev-drive',
+      apply: 'serve' as const,
+      configureServer(server: ViteDevServer) {
+        server.middlewares.use(createDriveDevMiddleware({
+          env: () => ({
+            GOOGLE_CLIENT_ID: driveClient,
+            GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
+            DRIVE_COOKIE_KEY: process.env.DRIVE_COOKIE_KEY,
+          }),
+          protocol: () => (server.config.server.https ? 'https' : 'http'),
+        }));
+      },
     }] : []), isWeb ? {
       name: 'web-static-site',
       // The dev server keeps the permissive desktop policy: HMR needs inline scripts and websockets.

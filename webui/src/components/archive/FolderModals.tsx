@@ -6,6 +6,8 @@ import { DEFAULT_FOLDER_COLOR, FOLDER_COLORS, type FolderModalState } from './ty
 import { getFolderColor, NEUTRAL_FOLDER_COLOR } from '../../archiveFolders';
 import { modalCard } from '../../motion';
 import { deletedFrom, getHostCapabilities } from '../../hostCapabilities';
+import { useBackdropDismiss } from '../../hooks/useBackdropDismiss';
+import { UnsavedChangesHint } from '../modals/UnsavedChangesHint';
 
 interface FolderModalProps {
   state: FolderModalState;
@@ -48,6 +50,9 @@ export function FolderModal({ state, onClose, onSave, folders = [] }: FolderModa
     if (!name.trim()) return;
     onSave(name.trim(), color);
   };
+  const initialName = state.type === 'edit' ? state.folder.name : '';
+  const initialColor = state.type === 'edit' ? state.folder.color ?? '' : '';
+  const backdrop = useBackdropDismiss({ dirty: name.trim() !== initialName.trim() || color !== initialColor, onClose });
 
   return (
     <motion.div
@@ -59,10 +64,12 @@ export function FolderModal({ state, onClose, onSave, folders = [] }: FolderModa
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         className="modal-overlay absolute inset-0"
+        onClick={backdrop.onBackdropClick}
+        data-testid="folder-modal-backdrop"
       />
       <motion.div
         {...modalCard}
-        className="modal-card relative w-full max-w-md max-h-[86vh] overflow-hidden flex flex-col"
+        className={`modal-card${backdrop.shaking ? ' is-shaking' : ''} relative w-full max-w-md max-h-[86vh] overflow-hidden flex flex-col`}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -142,6 +149,7 @@ export function FolderModal({ state, onClose, onSave, folders = [] }: FolderModa
             </div>
           </div>
           {/* Footer Actions */}
+          <UnsavedChangesHint show={backdrop.showHint} className="is-above-footer" />
           <div className="modal-footer">
             <button type="button" onClick={onClose} className="modal-action-button flex-1">
               Annulla
@@ -149,7 +157,7 @@ export function FolderModal({ state, onClose, onSave, folders = [] }: FolderModa
             <button
               type="submit"
               disabled={!name.trim()}
-              className="modal-action-button is-primary flex-1"
+              className={`modal-action-button is-primary flex-1${backdrop.shaking ? ' is-attention' : ''}`}
             >
               {state.type === 'create' ? 'Crea raccolta' : 'Salva modifiche'}
             </button>

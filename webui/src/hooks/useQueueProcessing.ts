@@ -152,6 +152,8 @@ export function useQueueProcessing({
     if (!isContinuation) {
       setBatchTotal(currentQueued.length);
       setBatchCompleted(0);
+      // A new batch: the last one's outcome banner gives way (its file card keeps the error).
+      dispatch({ type: 'outcome/clear' });
     }
     try {
       const fileDescriptors = await resolveQueuedFilesForProcessing();

@@ -110,7 +110,7 @@ test('without a Google client ID the settings have no Drive panel and no trash',
   await startWithKey(page);
   await openStorageSettings(page);
   await expect(page.getByTestId('web-drive')).toHaveCount(0);
-  await expect(page.getByRole('navigation', { name: 'Sezioni delle impostazioni' }).getByRole('button', { name: 'Sincronizzazione' })).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'Sezioni delle impostazioni' }).getByRole('button', { name: 'Google Drive' })).toHaveCount(0);
   // Deleting stays permanent in the released site.
   await expect(page.getByTestId('web-trash')).toHaveCount(0);
 });

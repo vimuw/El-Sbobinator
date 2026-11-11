@@ -135,7 +135,7 @@ export const NavSidebar = memo(function NavSidebar({
         />
         <UtilityButton
           icon={<Terminal size={18} />}
-          label="Console"
+          label="Console: dettagli della sbobinatura"
           ariaLabel="Mostra console"
           active={showConsole}
           onClick={() => {

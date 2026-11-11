@@ -37,7 +37,11 @@ export interface EditorDocumentProps {
   initialSearchTerm?: string;
   /** Web with Drive sync: this sbobina changed on another device while open here. */
   changedElsewhere?: boolean;
+  /** Renames the sbobina (title only); without it the title is plain text. Rejects with the message to show. */
+  onRename?: (title: string) => Promise<void>;
 }
+
+export const RENAME_ERROR_NOTICE = 'Non è stato possibile rinominare la sbobina.';
 
 // iPad, phones and Safari give Google Docs only HTML, whose images arrive grey or not at all.
 export const COPY_IMAGES_NOTICE = 'Da iPad, telefono o Safari le immagini non arrivano in Google Docs con la copia. Usa “Scarica .docx” (l’icona di download) e apri il file con Google Docs: testo e immagini arrivano insieme.';
@@ -119,6 +123,7 @@ export function EditorFullPage({
   const htmlPath = docProp?.htmlPath ?? flatHtmlPath ?? '';
   const previewInitScrollTop = docProp?.initScrollTop ?? flatPreviewInitScrollTop;
   const initialSearchTerm = docProp?.initialSearchTerm ?? flatInitialSearchTerm;
+  const onRename = docProp?.onRename;
 
   const audioSrc = audioProp?.src !== undefined ? audioProp.src : (flatAudioSrc ?? null);
   const audioRelinkNeeded = audioProp?.relinkNeeded ?? flatAudioRelinkNeeded ?? false;
@@ -146,6 +151,16 @@ export function EditorFullPage({
   const [isCopying, setIsCopying] = useState(false);
   const isCopyingRef = useRef(false);
   const [exportNotice, setExportNotice] = useState('');
+  // The title being typed after a click on it (null: the title is shown).
+  const [titleDraft, setTitleDraftState] = useState<string | null>(null);
+  // Read by the save, so the blur of a field that Enter or Escape just closed saves nothing again.
+  const titleDraftRef = useRef<string | null>(null);
+  const setTitleDraft = (draft: string | null) => {
+    titleDraftRef.current = draft;
+    setTitleDraftState(draft);
+  };
+  const [isRenaming, setIsRenaming] = useState(false);
+  const isRenamingRef = useRef(false);
   // Web only: the desktop app copies images into Docs, and its WebView has no download sheet.
   const offersDocx = getHostCapabilities().kind === 'web';
   const [isRemovingAudio, setIsRemovingAudio] = useState(false);
@@ -199,6 +214,8 @@ export function EditorFullPage({
     setIsCopied(false);
     setExportNotice('');
     setIsTocOpen(false);
+    titleDraftRef.current = null;
+    setTitleDraftState(null);
   }, [previewContent]);
 
   useEffect(() => {
@@ -288,6 +305,28 @@ export function EditorFullPage({
     }
   };
 
+  // Enter and leaving the field both save; an empty or unchanged name keeps the title as it was.
+  const commitTitle = async () => {
+    const draft = titleDraftRef.current;
+    if (draft === null || isRenamingRef.current) return;
+    const next = draft.trim();
+    if (!onRename || !next || next === previewTitle) {
+      setTitleDraft(null);
+      return;
+    }
+    isRenamingRef.current = true;
+    setIsRenaming(true);
+    try {
+      await onRename(next);
+    } catch (error) {
+      setExportNotice(error instanceof Error && error.message ? error.message : RENAME_ERROR_NOTICE);
+    } finally {
+      isRenamingRef.current = false;
+      setIsRenaming(false);
+      setTitleDraft(null);
+    }
+  };
+
   const scrollToHeading = (heading: Heading) => {
     const { text, level, id } = heading;
     const idx = headings.findIndex(h => h.id === id);
@@ -349,7 +388,49 @@ export function EditorFullPage({
               <FileText className="w-4 h-4 shrink-0" style={{ color: 'var(--text-muted)' }} />
               {/* Phone: cut short beside the editing tools, which keeps the lecture in view and the
                   header from looking empty; the whole title heads the "…" menu. */}
-              <span className="truncate">{previewTitle}</span>
+              {titleDraft !== null ? (
+                // The hidden copy of the name sizes the field, so it grows with the typing instead
+                // of jumping to its widest at the click.
+                <span className="editor-fullpage-title-field" data-value={titleDraft}>
+                <input
+                  className="editor-fullpage-title-input"
+                  type="text"
+                  size={1}
+                  value={titleDraft}
+                  maxLength={200}
+                  readOnly={isRenaming}
+                  aria-label="Nome sbobina"
+                  aria-busy={isRenaming}
+                  autoFocus
+                  onFocus={event => event.currentTarget.select()}
+                  onChange={event => setTitleDraft(event.target.value)}
+                  onBlur={() => void commitTitle()}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      void commitTitle();
+                    }
+                    // Escape only drops the new name: the editor closes on a window-level Escape.
+                    if (event.key === 'Escape') {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      if (!isRenamingRef.current) setTitleDraft(null);
+                    }
+                  }}
+                />
+                </span>
+              ) : onRename ? (
+                <button
+                  type="button"
+                  className="editor-fullpage-title-button truncate"
+                  title="Rinomina sbobina"
+                  onClick={() => setTitleDraft(previewTitle)}
+                >
+                  {previewTitle}
+                </button>
+              ) : (
+                <span className="truncate">{previewTitle}</span>
+              )}
               <span
                 className="editor-autosave-badge shrink-0"
                 data-status={autosaveStatus}

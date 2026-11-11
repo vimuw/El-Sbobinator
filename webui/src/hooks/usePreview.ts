@@ -220,6 +220,11 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
     setPreview(prev => (prev.content !== null && prev.sessionDir === sessionDir && !prev.changedElsewhere ? { ...prev, changedElsewhere: true } : prev));
   }, []);
 
+  // A rename saved from the editor's title: only the open sbobina's heading follows it.
+  const setPreviewTitle = useCallback((sessionDir: string, title: string) => {
+    setPreview(prev => (prev.content !== null && prev.sessionDir === sessionDir ? { ...prev, title } : prev));
+  }, []);
+
   const relinkPreviewAudio = useCallback(async () => {
     const api = window.pywebview?.api;
     // The web build picks the file for this page only, without copying it into the browser.
@@ -396,6 +401,7 @@ export function usePreview({ appendConsole, dispatch, setArchiveSessions, onOpen
     openPreview,
     closePreview,
     markChangedElsewhere,
+    setPreviewTitle,
     relinkPreviewAudio,
     removePreviewAudio,
     setPreviewAudioKept,

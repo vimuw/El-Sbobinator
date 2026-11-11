@@ -3,7 +3,7 @@ import type { FileDescriptor } from '../appState';
 import { CancelledError, CircuitBreakerExhaustedError, DegenerateOutputError, InvalidKeyError, QuotaDailyLimitError } from './pipeline/retry';
 import { FileMismatchError, defaultSettings, type AudioSource } from './pipeline/run';
 import { fileIdentity, newSession, sameFile, type CheckpointStore, type SessionState } from './pipeline/session';
-import { failurePayload, runWebFile, type WebRunOptions } from './webRun';
+import { LOST_FILE_MESSAGE, failurePayload, runWebFile, type WebRunOptions } from './webRun';
 
 type Reply = { status?: number; json: unknown };
 const okText = (text: string): Reply => ({ json: { candidates: [{ content: { parts: [{ text }] }, finishReason: 'STOP' }] } });
@@ -122,6 +122,7 @@ describe('failurePayload', () => {
     expect(failurePayload(new DegenerateOutputError('loop'), state('phase1'), base).error).toBe('phase1_degenerate_output');
     expect(failurePayload(new FileMismatchError('Non è lo stesso audio.'), state('phase1'), base).error).toBe('Non è lo stesso audio.');
     expect(failurePayload(new DOMException('full', 'QuotaExceededError'), state('phase1'), base).error).toContain('Spazio del browser esaurito');
+    expect(failurePayload(new DOMException('gone', 'NotFoundError'), state('phase1', 1), base)).toEqual({ ...base, error: LOST_FILE_MESSAGE });
     expect(failurePayload(new Error('boom'), state('phase2'), base)).toMatchObject({ error: 'processing_failed', error_detail: 'Error: boom' });
     expect(failurePayload(new Error('boom'), state('phase1', 1), base).error).toBe('phase1_chunk_failed_2');
   });
@@ -285,5 +286,182 @@ describe('runWebFile', () => {
     await expect(runWebFile(options)).resolves.toBe('paused');
     expect(named('fileFailed')).toEqual([expect.objectContaining({ error: 'phase1_chunk_failed_1', retry_reason: 'circuit_breaker_paused' })]);
     expect(named('processDone')).toEqual([expect.objectContaining({ paused: 1, failed: 0 })]);
+  });
+
+  describe('model fallback before the first block', () => {
+    const overloaded: Reply = { status: 503, json: { error: { status: 'UNAVAILABLE', message: 'The model is overloaded.' } } };
+    const notFound: Reply = { status: 404, json: { error: { status: 'NOT_FOUND', message: 'models/gemini-2.5-flash is not found for API version v1beta.' } } };
+    // One call plus the three busy retries of retryWithQuota.
+    const busyFirstBlock = () => Array<Reply>(4).fill(overloaded);
+    const calledModels = (fetchMock: ReturnType<typeof mockGemini>) =>
+      fetchMock.mock.calls.map(([url]) => /models\/([^:]+):/.exec(String(url))![1]);
+
+    it('starts over with 2.5 Flash when 3.6 Flash stays busy on the first block', async () => {
+      const fetchMock = mockGemini([...busyFirstBlock(), okText(chunkText(1)), okText('## R\n\nTesto rivisto.')]);
+      const { options, named, archived, records } = setup({ model: 'gemini-3.6-flash' });
+
+      await expect(runWebFile(options)).resolves.toBe('completed');
+
+      expect(calledModels(fetchMock)).toEqual([...Array(4).fill('gemini-3.6-flash'), 'gemini-2.5-flash', 'gemini-2.5-flash']);
+      expect(named('updateModel')).toEqual(['gemini-3.6-flash', 'gemini-2.5-flash']);
+      expect(named('processingWarning')).toContainEqual({ code: 'web_model_switched', message: expect.stringContaining('ricomincio con Gemini 2.5 Flash') });
+      expect(named('fileFailed')).toEqual([]);
+      expect(archived[0]).toMatchObject({ effective_model: 'gemini-2.5-flash' });
+      expect([...records.values()][0].settings).toEqual(defaultSettings('gemini-2.5-flash'));
+    });
+
+    it('keeps 3.6 Flash and pauses when a block was already written with it', async () => {
+      const started = await checkpoint('phase1', { settings: defaultSettings('gemini-3.6-flash') });
+      const fetchMock = mockGemini(busyFirstBlock());
+      const { options, named } = setup({ model: 'gemini-3.6-flash', createAudio: () => fakeAudio(2) }, [started]);
+
+      await expect(runWebFile(options)).resolves.toBe('paused');
+
+      expect(new Set(calledModels(fetchMock))).toEqual(new Set(['gemini-3.6-flash']));
+      expect(named('fileFailed')).toEqual([expect.objectContaining({ error: 'phase1_chunk_failed_2' })]);
+    });
+
+    it('moves a key without 2.5 Flash to 3.6 Flash and remembers it', async () => {
+      const fetchMock = mockGemini([notFound, okText(chunkText(1)), okText('## R\n\nTesto rivisto.')]);
+      const onModelUnavailable = vi.fn();
+      const { options, named } = setup({ model: 'gemini-2.5-flash', onModelUnavailable });
+
+      await expect(runWebFile(options)).resolves.toBe('completed');
+
+      expect(calledModels(fetchMock)).toEqual(['gemini-2.5-flash', 'gemini-3.6-flash', 'gemini-3.6-flash']);
+      expect(onModelUnavailable).toHaveBeenCalledWith('gemini-2.5-flash', 'gemini-3.6-flash');
+      expect(named('processingWarning')).toContainEqual({ code: 'web_model_switched', message: expect.stringContaining('non può usare Gemini 2.5 Flash') });
+    });
+
+    it('starts with 3.6 Flash when the key is known to lack 2.5 Flash, and never tries 2.5 again', async () => {
+      const fetchMock = mockGemini(busyFirstBlock());
+      const { options, named } = setup({ model: 'gemini-2.5-flash', unavailableModels: ['gemini-2.5-flash'] });
+
+      await expect(runWebFile(options)).resolves.toBe('paused');
+
+      expect(new Set(calledModels(fetchMock))).toEqual(new Set(['gemini-3.6-flash']));
+      expect(named('updateModel')).toEqual(['gemini-3.6-flash']);
+      expect(named('appendConsole')).toContainEqual(expect.stringContaining('non ha accesso a Gemini 2.5 Flash: uso Gemini 3.6 Flash'));
+    });
+
+    it('does not claim a model switch when a resumed session keeps its own model', async () => {
+      // Written with 2.5 Flash before this device learned the key lacks it: the session keeps 2.5.
+      const started = await checkpoint('phase1');
+      const fetchMock = mockGemini([okText(chunkText(2)), okText('## R\n\nTesto rivisto.')]);
+      const { options, named } = setup({ model: 'gemini-2.5-flash', unavailableModels: ['gemini-2.5-flash'], createAudio: () => fakeAudio(2) }, [started]);
+
+      await expect(runWebFile(options)).resolves.toBe('completed');
+
+      expect(new Set(calledModels(fetchMock))).toEqual(new Set(['gemini-2.5-flash']));
+      expect(named('appendConsole')).not.toContainEqual(expect.stringContaining('non ha accesso'));
+    });
+
+    it('keeps the busy pause when the key also lacks the model it switched to, and remembers that', async () => {
+      const fetchMock = mockGemini([...busyFirstBlock(), notFound]);
+      const onModelUnavailable = vi.fn();
+      const { options, named, records } = setup({ model: 'gemini-3.6-flash', onModelUnavailable });
+
+      await expect(runWebFile(options)).resolves.toBe('paused');
+
+      expect(calledModels(fetchMock)).toEqual([...Array(4).fill('gemini-3.6-flash'), 'gemini-2.5-flash']);
+      expect(named('fileFailed')).toEqual([expect.objectContaining({ error: 'phase1_chunk_failed_1', retry_reason: 'circuit_breaker_paused' })]);
+      // Remembered for the key, but the chosen 3.6 Flash stays the saved model.
+      expect(onModelUnavailable).toHaveBeenCalledWith('gemini-2.5-flash', null);
+      expect(named('updateModel')).toEqual(['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-3.6-flash']);
+      expect(named('processingWarning')).toContainEqual({ code: 'web_model_switched', message: null });
+      expect([...records.values()][0].settings).toEqual(defaultSettings('gemini-3.6-flash'));
+    });
+
+    it('switches only this run, without remembering, when a reserve key lacks 2.5 Flash', async () => {
+      const fetchMock = mockGemini([quota, notFound, quota, okText(chunkText(1)), okText('## R\n\nTesto rivisto.')]);
+      const onModelUnavailable = vi.fn();
+      const { options, named } = setup({ model: 'gemini-2.5-flash', keys: ['KEY-1', 'KEY-2'], onModelUnavailable });
+
+      await expect(runWebFile(options)).resolves.toBe('completed');
+
+      const calledKeys = fetchMock.mock.calls.map(([, init]) => new Headers(init?.headers).get('x-goog-api-key'));
+      expect(calledModels(fetchMock).slice(0, 2)).toEqual(['gemini-2.5-flash', 'gemini-2.5-flash']);
+      expect(calledKeys.slice(0, 2)).toEqual(['KEY-1', 'KEY-2']);
+      expect(calledModels(fetchMock).slice(2)).toEqual(Array(3).fill('gemini-3.6-flash'));
+      expect(onModelUnavailable).not.toHaveBeenCalled();
+      expect(named('processingWarning')).toContainEqual({ code: 'web_model_switched', message: expect.stringContaining('La chiave di riserva 2 non può usare Gemini 2.5 Flash') });
+    });
+
+    const notFoundFor = (model: string): Reply => ({ status: 404, json: { error: { status: 'NOT_FOUND', message: `models/${model} is not found for API version v1beta.` } } });
+
+    it('moves 3.8 Flash missing for the key to 2.5 Flash', async () => {
+      const fetchMock = mockGemini([notFoundFor('gemini-3.8-flash'), okText(chunkText(1)), okText('## R\n\nTesto rivisto.')]);
+      const onModelUnavailable = vi.fn();
+      const { options, named, archived } = setup({ model: 'gemini-3.8-flash', onModelUnavailable });
+
+      await expect(runWebFile(options)).resolves.toBe('completed');
+
+      expect(calledModels(fetchMock)).toEqual(['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.5-flash']);
+      expect(onModelUnavailable).toHaveBeenCalledWith('gemini-3.8-flash', 'gemini-2.5-flash');
+      expect(named('processingWarning')).toContainEqual({ code: 'web_model_switched', message: expect.stringContaining('non può usare Gemini 3.8 Flash: sbobino con Gemini 2.5 Flash') });
+      expect(archived[0]).toMatchObject({ effective_model: 'gemini-2.5-flash' });
+    });
+
+    it('moves 3.8 Flash to 3.6 Flash when the key is known to lack 2.5 Flash', async () => {
+      const fetchMock = mockGemini([notFoundFor('gemini-3.8-flash'), okText(chunkText(1)), okText('## R\n\nTesto rivisto.')]);
+      const onModelUnavailable = vi.fn();
+      const { options, named, archived } = setup({ model: 'gemini-3.8-flash', unavailableModels: ['gemini-2.5-flash'], onModelUnavailable });
+
+      await expect(runWebFile(options)).resolves.toBe('completed');
+
+      expect(calledModels(fetchMock)).toEqual(['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.6-flash']);
+      expect(onModelUnavailable).toHaveBeenCalledWith('gemini-3.8-flash', 'gemini-3.6-flash');
+      expect(named('fileFailed')).toEqual([]);
+      expect(archived[0]).toMatchObject({ effective_model: 'gemini-3.6-flash' });
+    });
+
+    it('moves a busy 3.8 Flash to 3.6 Flash when the key is known to lack 2.5 Flash', async () => {
+      const fetchMock = mockGemini([...busyFirstBlock(), okText(chunkText(1)), okText('## R\n\nTesto rivisto.')]);
+      const { options, named } = setup({ model: 'gemini-3.8-flash', unavailableModels: ['gemini-2.5-flash'] });
+
+      await expect(runWebFile(options)).resolves.toBe('completed');
+
+      expect(calledModels(fetchMock)).toEqual([...Array(4).fill('gemini-3.8-flash'), 'gemini-3.6-flash', 'gemini-3.6-flash']);
+      expect(named('processingWarning')).toContainEqual({ code: 'web_model_switched', message: expect.stringContaining('ricomincio con Gemini 3.6 Flash') });
+    });
+
+    it('tries 2.5 and then 3.6 Flash after 3.8 Flash, naming all three when none is available', async () => {
+      const fetchMock = mockGemini(['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-3.6-flash'].map(notFoundFor));
+      const onModelUnavailable = vi.fn();
+      const { options, named } = setup({ model: 'gemini-3.8-flash', onModelUnavailable });
+
+      await expect(runWebFile(options)).resolves.toBe('failed');
+
+      expect(calledModels(fetchMock)).toEqual(['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-3.6-flash']);
+      expect(onModelUnavailable.mock.calls).toEqual([['gemini-3.8-flash', 'gemini-2.5-flash'], ['gemini-2.5-flash', 'gemini-3.6-flash']]);
+      expect(named('fileFailed')).toEqual([{
+        index: 0,
+        id: 'f1',
+        error: 'Gemini 3.8 Flash, Gemini 2.5 Flash e Gemini 3.6 Flash non sono disponibili per questa chiave API: scegli un altro modello nelle impostazioni o usa un’altra chiave.',
+      }]);
+    });
+
+    it('names only the model tried when the key is known to lack the other one', async () => {
+      const fetchMock = mockGemini([notFound]);
+      const { options, named } = setup({ model: 'gemini-2.5-flash', unavailableModels: ['gemini-3.6-flash'] });
+
+      await expect(runWebFile(options)).resolves.toBe('failed');
+
+      expect(calledModels(fetchMock)).toEqual(['gemini-2.5-flash']);
+      expect(named('fileFailed')).toEqual([expect.objectContaining({
+        error: 'Gemini 2.5 Flash non è disponibile per questa chiave API: scegli un altro modello nelle impostazioni o usa un’altra chiave.',
+      })]);
+    });
+
+    it('does not switch away from 2.5 Flash when it is only busy', async () => {
+      const fetchMock = mockGemini(busyFirstBlock());
+      const { options, named } = setup({ model: 'gemini-2.5-flash' });
+
+      await expect(runWebFile(options)).resolves.toBe('paused');
+
+      expect(named('processingWarning')).not.toContainEqual(expect.objectContaining({ code: 'web_model_switched' }));
+
+      expect(new Set(calledModels(fetchMock))).toEqual(new Set(['gemini-2.5-flash']));
+    });
   });
 });

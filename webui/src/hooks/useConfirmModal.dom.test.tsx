@@ -111,6 +111,44 @@ describe('useConfirmModal', () => {
     expect(result.current.confirmAction).toBeNull();
   });
 
+  it('lets the browser drop the audio copy of files removed from the queue, never of a completed one', () => {
+    const release_queue_file = vi.fn().mockResolvedValue({ ok: true });
+    window.pywebview = { api: { release_queue_file } } as unknown as typeof window.pywebview;
+    const file = (id: string, status: FileItem['status']): FileItem => ({ id, name: `${id}.mp3`, size: 1, duration: 1, status, progress: 0, phase: 0, path: `local://${id}/${id}.mp3` });
+    const filesRef = { current: [file('queued', 'queued'), file('failed', 'error'), file('done', 'done')] };
+    const { result } = renderHook(() =>
+      useConfirmModal({
+        dispatch,
+        filesRef,
+        foldersRef: { current: [] },
+        onFoldersChange,
+        setArchiveSessions,
+        setArchiveTotal,
+        refreshArchiveSessions,
+        startProcessingRef: { current: vi.fn() },
+        executeRetryFromArchive,
+        normalizeSessionDir,
+        appendConsole,
+      }),
+    );
+    try {
+      act(() => { result.current.setConfirmAction({ type: 'remove-file', fileId: 'done', fileName: 'done.mp3', isDone: true }); });
+      act(() => { result.current.handleConfirmAction(); });
+      expect(release_queue_file).not.toHaveBeenCalled();
+
+      act(() => { result.current.setConfirmAction({ type: 'remove-file', fileId: 'queued', fileName: 'queued.mp3', isDone: false }); });
+      act(() => { result.current.handleConfirmAction(); });
+      expect(release_queue_file).toHaveBeenCalledWith('local://queued/queued.mp3');
+
+      release_queue_file.mockClear();
+      act(() => { result.current.setConfirmAction({ type: 'clear-all' }); });
+      act(() => { result.current.handleConfirmAction(); });
+      expect(release_queue_file.mock.calls).toEqual([['local://queued/queued.mp3'], ['local://failed/failed.mp3']]);
+    } finally {
+      delete window.pywebview;
+    }
+  });
+
   it('says a completed transcript leaves only Recenti, since the archive already holds it', () => {
     const { result } = renderHook(() =>
       useConfirmModal({

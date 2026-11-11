@@ -83,12 +83,15 @@ jobs:
           if [ -n "$EL_SBOBINATOR_GOOGLE_CLIENT_ID" ]; then
             test -f dist-web/drive-auth.html               || { echo "::error::The client ID is set but dist-web/drive-auth.html is missing."; exit 1; }
             grep -q 'https://www.googleapis.com' dist-web/_headers               || { echo "::error::The client ID is set but _headers does not reach the Drive API."; exit 1; }
+            test -f '../functions/api/drive/[action].ts'                       || { echo "::error::The client ID is set but the Drive login server (functions/api/drive) is missing."; exit 1; }
             echo "Google Drive sync: on"
           else
             # Not an error: the site goes out as before, without Drive.
             echo "::warning::EL_SBOBINATOR_GOOGLE_CLIENT_ID is not set: the site is published without Google Drive sync."
           fi
 
+      # Run from the repo root: wrangler also bundles functions/ (the Drive login server, /api/drive),
+      # which reads the project's Production variables GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, DRIVE_COOKIE_KEY.
       - name: Deploy to Cloudflare Pages (production branch)
         uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4.1.3
         with:

@@ -17,7 +17,7 @@ export interface ArchivePageProps {
   onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string, sessionDir?: string, searchTerm?: string) => void;
   onOpenFile: (path: string) => void;
   onDeleteSession: (sessionDir: string, name: string) => void;
-  onRenameSession?: (sessionDir: string, name: string) => Promise<void>;
+  onRenameSession?: (sessionDir: string, name: string) => Promise<unknown>;
   onDeleteMultipleSessions?: (sessions: { sessionDir: string; name: string }[]) => void;
   onRefresh?: () => void;
   onLoadAll?: () => void;
@@ -27,6 +27,10 @@ export interface ArchivePageProps {
     message: string,
     type?: 'info' | 'warning' | 'error' | 'success',
   ) => void;
+  /** Web: set by "Vedi quali" in Archiviazione: show the sbobine with kept audio, heaviest first. */
+  showKeptAudioRequest?: boolean;
+  /** The request above was applied: the archive keeps its own filter from here on. */
+  onShowKeptAudioHandled?: () => void;
 }
 
 export type FolderModalState =
@@ -36,13 +40,21 @@ export type FolderModalState =
 export type DeleteFolderConfirmState = { folder: ArchiveFolder };
 export type DeleteMultipleSessionsConfirmState = { sessions: { sessionDir: string; name: string }[] };
 
-export type SortOption = 'newest' | 'recently_opened' | 'name' | 'relevance';
+export type SortOption = 'newest' | 'recently_opened' | 'name' | 'relevance' | 'audio_size';
 
 export const SORT_OPTIONS: { id: SortOption; label: string }[] = [
   { id: 'newest', label: 'Create di recente' },
   { id: 'recently_opened', label: 'Aperte di recente' },
   { id: 'name', label: 'Nome (A-Z)' },
 ];
+
+/** Web: offered only while some sbobina keeps its audio in this browser. */
+export const AUDIO_SIZE_SORT_OPTION: { id: SortOption; label: string } = { id: 'audio_size', label: 'Audio più pesante' };
+
+/** Bytes of audio a sbobina keeps in this browser (0 on desktop and without a kept copy). */
+export function keptAudioBytes(session: ArchiveSession): number {
+  return session.kept_audio_bytes && session.kept_audio_bytes > 0 ? session.kept_audio_bytes : 0;
+}
 
 export const FULL_TEXT_SORT_OPTIONS: { id: SortOption; label: string }[] = [
   { id: 'relevance', label: 'Più occorrenze' },

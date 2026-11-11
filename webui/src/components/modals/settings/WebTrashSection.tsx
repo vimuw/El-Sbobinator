@@ -74,6 +74,8 @@ export const WebTrashSection: React.FC<WebTrashSectionProps> = ({ onArchiveChang
     setBusy(null);
     setConfirmEmpty(false);
     if (!result?.ok) setError(result?.error ?? 'Cestino non svuotato.');
+    // The space the trashed sbobine took is freed: the figures above follow.
+    else onArchiveChanged?.();
     await load();
   };
 

@@ -327,6 +327,15 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
     expect(onDriveNeedsReconnect).toHaveBeenCalledTimes(1);
   });
 
+  it('forwards the model a web run saved in place of the one the key lacks', () => {
+    const onPreferredModelChanged = vi.fn();
+    renderHook(() => { useBridgeCallbacks(makeMinimalHook({ onPreferredModelChanged })); });
+    act(() => {
+      window.elSbobinatorBridge?.preferredModelChanged?.({ from: 'gemini-2.5-flash', to: 'gemini-3.6-flash' });
+    });
+    expect(onPreferredModelChanged).toHaveBeenCalledWith({ from: 'gemini-2.5-flash', to: 'gemini-3.6-flash' });
+  });
+
   it('filesDropped calls enqueueUniqueFiles when appState is idle or processing', () => {
     const enqueueUniqueFiles = vi.fn();
     const opts = makeMinimalHook({ enqueueUniqueFiles });

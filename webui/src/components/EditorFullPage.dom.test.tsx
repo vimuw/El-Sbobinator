@@ -678,6 +678,110 @@ describe('EditorFullPage autosave', () => {
   });
 });
 
+describe('EditorFullPage title rename', () => {
+  // Queried afresh: the motion mock above remounts the header on every render.
+  const titleInput = () => screen.getByRole('textbox', { name: 'Nome sbobina' }) as HTMLInputElement;
+
+  function RenameHarness({ onRename, onClose = vi.fn() }: { onRename: (title: string) => Promise<void>; onClose?: () => void }) {
+    const [title, setTitle] = React.useState('Lezione 1');
+    return (
+      <EditorFullPage
+        {...baseProps}
+        onClose={onClose}
+        document={{
+          content: '<p>Testo</p>',
+          title,
+          htmlPath: '/sessions/out.html',
+          onRename: async next => { await onRename(next); setTitle(next); },
+        }}
+      />
+    );
+  }
+
+  it('renames the sbobina from its title: a click opens the field, Enter saves it', async () => {
+    const onRename = vi.fn().mockResolvedValue(undefined);
+    render(<RenameHarness onRename={onRename} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Lezione 1' }));
+    expect(titleInput().value).toBe('Lezione 1');
+    fireEvent.change(titleInput(), { target: { value: '  Anatomia 3  ' } });
+    await act(async () => {
+      fireEvent.keyDown(titleInput(), { key: 'Enter' });
+    });
+
+    expect(onRename).toHaveBeenCalledTimes(1);
+    expect(onRename).toHaveBeenCalledWith('Anatomia 3');
+    expect(screen.queryByRole('textbox', { name: 'Nome sbobina' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Anatomia 3' })).toBeTruthy();
+  });
+
+  // Regression: the field opened at its widest (480px) even for a short name. A hidden copy of the
+  // name sizes it now, so it keeps the button's width and grows with the typing.
+  it('sizes the name field to the name being typed', () => {
+    render(<RenameHarness onRename={vi.fn().mockResolvedValue(undefined)} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Lezione 1' }));
+    const field = () => titleInput().closest('.editor-fullpage-title-field') as HTMLElement;
+    expect(field().dataset.value).toBe('Lezione 1');
+    expect(titleInput().size).toBe(1);
+
+    fireEvent.change(titleInput(), { target: { value: 'Lezione 1 — anatomia del rene' } });
+    expect(field().dataset.value).toBe('Lezione 1 — anatomia del rene');
+  });
+
+  it('drops the new name on Escape without closing the editor', async () => {
+    const onRename = vi.fn().mockResolvedValue(undefined);
+    const onClose = vi.fn();
+    render(<RenameHarness onRename={onRename} onClose={onClose} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Lezione 1' }));
+    fireEvent.change(titleInput(), { target: { value: 'Altro nome' } });
+    await act(async () => {
+      fireEvent.keyDown(titleInput(), { key: 'Escape' });
+    });
+
+    expect(onRename).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Lezione 1' })).toBeTruthy();
+  });
+
+  it('saves on leaving the field, and leaves an empty or unchanged name alone', async () => {
+    const onRename = vi.fn().mockResolvedValue(undefined);
+    render(<RenameHarness onRename={onRename} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Lezione 1' }));
+    fireEvent.change(titleInput(), { target: { value: '   ' } });
+    await act(async () => { fireEvent.blur(titleInput()); });
+    expect(onRename).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Lezione 1' }));
+    fireEvent.change(titleInput(), { target: { value: 'Lezione 2' } });
+    await act(async () => { fireEvent.blur(titleInput()); });
+    expect(onRename).toHaveBeenCalledWith('Lezione 2');
+    expect(screen.getByRole('button', { name: 'Lezione 2' })).toBeTruthy();
+  });
+
+  it('keeps the old title and says why when the rename fails', async () => {
+    const onRename = vi.fn().mockRejectedValue(new Error('Puoi rinominare solo sbobine completate.'));
+    render(<RenameHarness onRename={onRename} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Lezione 1' }));
+    fireEvent.change(titleInput(), { target: { value: 'Nuovo' } });
+    await act(async () => {
+      fireEvent.keyDown(titleInput(), { key: 'Enter' });
+    });
+
+    expect(screen.getByRole('button', { name: 'Lezione 1' })).toBeTruthy();
+    expect(screen.getByTestId('editor-export-notice').textContent).toContain('Puoi rinominare solo sbobine completate.');
+  });
+
+  it('shows a plain title when the sbobina cannot be renamed', () => {
+    render(<EditorFullPage {...baseProps} />);
+    expect(screen.getByText('My Document').tagName).toBe('SPAN');
+    expect(screen.queryByRole('button', { name: 'My Document' })).toBeNull();
+  });
+});
+
 describe('EditorFullPage on hosts without session audio', () => {
   afterEach(() => setHostCapabilities(DESKTOP_CAPABILITIES));
 

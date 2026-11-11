@@ -1,13 +1,10 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { motion, MotionConfig } from 'motion/react';
 import { PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
-import { GithubIcon } from './components/icons/GithubIcon';
+import { AppFooterLinks } from './components/AppFooterLinks';
 import { fade } from './motion';
-import { ReportProblemLink } from './components/ReportProblemLink';
 import { MovedAddressBanner } from './components/MovedAddressBanner';
-import { PrivacyLink } from './components/PrivacyLink';
 import { hasMovedAddressNotice } from './movedAddress';
-import { GITHUB_URL } from './branding';
 import { type ElSbobinatorBridge, type PywebviewApi } from './bridge';
 import { createInitialProcessingState, processingReducer } from './appState';
 import { GEMINI_KEY_PATTERN, normalizeSessionPath } from './utils';
@@ -58,13 +55,14 @@ declare global {
 }
 
 export default function App() {
-  const [{ files, structuralVersion, appState, currentPhase, currentModel, activeProgress, workTotals, workDone, processingWarnings }, dispatch] = useReducer(
+  const [{ files, structuralVersion, appState, currentPhase, currentModel, activeProgress, workTotals, workDone, processingWarnings, runOutcome }, dispatch] = useReducer(
     processingReducer,
     undefined,
     () => createInitialProcessingState(loadPersistedQueue()),
   );
 
   const { consoleLogs, appendConsole } = useConsole();
+  const handleDismissRunOutcome = useCallback(() => dispatch({ type: 'outcome/clear' }), []);
   const { themeMode, setThemeMode } = useTheme();
   const { updateAvailable, latestVersion, isCheckingUpdate, hasChecked, checkFailed, checkForUpdates, dismissUpdate } = useUpdateChecker(
     getHostCapabilities().updateInstallation,
@@ -96,6 +94,8 @@ export default function App() {
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab | undefined>();
+  // "Vedi quali" in Archiviazione: the archive opens filtered to the sbobine that keep their audio.
+  const [showKeptAudioRequest, setShowKeptAudioRequest] = useState(false);
   // Counts the archive changes a Drive sync brought in: an open Archiviazione re-reads its figures.
   const [archiveRevision, setArchiveRevision] = useState(0);
   const [isConsoleExpanded, setIsConsoleExpanded] = useState(false);
@@ -210,10 +210,10 @@ export default function App() {
 
   const {
     duplicatePrompt,
-    setDuplicatePrompt,
     isDragging,
     enqueueUniqueFiles,
     handleDuplicateAddAgain,
+    handleDuplicateDismiss,
     handleBrowseClick,
     handleDragOver,
     handleDragLeave,
@@ -295,7 +295,14 @@ export default function App() {
     refreshArchiveSessions,
   });
 
-  const { preview, openPreview, closePreview, markChangedElsewhere, relinkPreviewAudio, removePreviewAudio, setPreviewAudioKept, handleAudioStateChange, handleScrollTopChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed, onArchiveRefresh: refreshArchiveSessions });
+  const { preview, openPreview, closePreview, markChangedElsewhere, setPreviewTitle, relinkPreviewAudio, removePreviewAudio, setPreviewAudioKept, handleAudioStateChange, handleScrollTopChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed, onArchiveRefresh: refreshArchiveSessions });
+
+  // The editor's title renames the sbobina like "Rinomina" in the archive (only the title changes).
+  const renamePreview = useCallback(async (name: string) => {
+    const sessionDir = preview.sessionDir;
+    const title = await handleRenameSession(sessionDir, name);
+    setPreviewTitle(sessionDir, title);
+  }, [handleRenameSession, preview.sessionDir, setPreviewTitle]);
 
   // Web: the screen lives in the URL, so Back/Forward and a reload keep it (editor included).
   const openEditorForSession = useCallback(async (sessionDir: string) => {
@@ -456,6 +463,9 @@ export default function App() {
       'system',
       { dedupeKey: 'drive-reconnect', actionType: 'open_settings' },
     ),
+    // Settings would otherwise keep showing (and Salva write back) the model the key lacks. A model
+    // picked meanwhile in an open Settings stays.
+    onPreferredModelChanged: ({ from, to }) => setPreferredModel(current => (current === from ? to : current)),
   });
   useBodyScrollLock(isSettingsOpen || regeneratePrompt !== null || preview.content !== null || askNewKeyPrompt || confirmAction !== null || duplicatePrompt !== null || regenDirtyConfirm !== null);
 
@@ -549,6 +559,14 @@ export default function App() {
     setIsSettingsOpen(true);
   }, [setIsSettingsOpen]);
 
+  const handleShowKeptAudio = useCallback(() => {
+    setIsSettingsOpen(false);
+    setSettingsInitialTab(undefined);
+    setActivePage('archive');
+    setShowKeptAudioRequest(true);
+  }, [setIsSettingsOpen]);
+  const handleShowKeptAudioHandled = useCallback(() => setShowKeptAudioRequest(false), []);
+
   // Removing from Recenti keeps the sbobina in the Archivio, so it needs no confirmation.
   const handleRemoveDoneFile = useCallback((id: string) => {
     const f = filesRef.current.find(item => item.id === id);
@@ -603,6 +621,7 @@ export default function App() {
               batchCompleted,
               batchTotal,
               completionFlash,
+              runOutcome,
             }}
             auth={{
               apiReady,
@@ -646,6 +665,8 @@ export default function App() {
               handleOpenSettings,
               handleRemoveDoneFile,
               handleRetryFailedRevisionBlocks,
+              handleDismissRunOutcome,
+              handleOpenStorageSettings: handleOpenBackupSettings,
             }}
             autoContinue={autoContinue}
             setAutoContinue={setAutoContinue}
@@ -678,16 +699,12 @@ export default function App() {
                   onLoadAll={handleLoadAll}
                   onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
                   onNotification={addNotification}
+                  showKeptAudioRequest={showKeptAudioRequest}
+                  onShowKeptAudioHandled={handleShowKeptAudioHandled}
                 />
               </React.Suspense>
             </div>
-            <footer className="app-footer app-footer-links">
-              <a href="#" onClick={e => { e.preventDefault(); window.pywebview?.api?.open_url?.(GITHUB_URL); }} className="footer-link">
-                <GithubIcon className="w-3.5 h-3.5" /> Progetto Open-Source — GitHub
-              </a>
-              <ReportProblemLink />
-              <PrivacyLink />
-            </footer>
+            <AppFooterLinks />
           </motion.main>
         )}
       </div>
@@ -703,7 +720,7 @@ export default function App() {
       />
       <DuplicateFileModal
         prompt={duplicatePrompt}
-        onDismiss={() => setDuplicatePrompt(null)}
+        onDismiss={handleDuplicateDismiss}
         onAddAgain={handleDuplicateAddAgain}
       />
       <ConfirmActionModal
@@ -771,6 +788,7 @@ export default function App() {
               onSessionRootMoved: handleSessionRootMoved,
               onArchiveImported: () => void handleSessionRootMoved(),
               archiveRevision,
+              onShowKeptAudio: handleShowKeptAudio,
             }}
           />
         </React.Suspense>
@@ -785,6 +803,7 @@ export default function App() {
               initScrollTop: preview.initScrollTop,
               initialSearchTerm: preview.initialSearchTerm,
               changedElsewhere: preview.changedElsewhere,
+              onRename: preview.sessionDir ? renamePreview : undefined,
             }}
             audio={{
               src: preview.audioSrc,

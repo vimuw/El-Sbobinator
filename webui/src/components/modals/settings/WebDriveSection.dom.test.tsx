@@ -7,7 +7,7 @@ import { createDriveApi } from '../../../web/drive/driveApi';
 import { createFakeAuth, createFakeDrive, type FakeDrive } from '../../../web/drive/fakeDrive';
 import { createWebPywebviewApi } from '../../../web/webHost';
 import { createWebArchive } from '../../../web/webSessions';
-import { useDriveStatus } from '../../../hooks/useDriveStatus';
+import { DRIVE_WAITING_FOR_RUN, useDriveStatus } from '../../../hooks/useDriveStatus';
 import { WebDriveEraseSection, WebDriveExportRow, WebDriveSection } from './WebDriveSection';
 
 // The Drive parts of the web settings (the account and "Elimina i dati da Drive" sections of
@@ -59,7 +59,7 @@ describe('WebDriveSection', () => {
     expect(screen.queryByRole('button', { name: 'Elimina tutti i miei dati da Drive' })).toBeNull();
 
     fireEvent.click(linkButton);
-    expect(login.calls).toEqual([{ silent: false }]);
+    expect(login.calls).toEqual(['link']);
     expect(choice()).toBe('drive');
     await waitFor(() => expect(screen.getByTestId('web-drive-status').textContent).toBe('Collegato come studente@example.com'));
     await waitFor(() => expect(screen.getByTestId('web-drive-last-sync').textContent).toMatch(/^Ultima sincronizzazione: /));
@@ -78,8 +78,29 @@ describe('WebDriveSection', () => {
     expect(expired.className).toContain('--warning-text');
     expect(screen.queryByRole('button', { name: 'Sincronizza ora' })).toBeNull();
     fireEvent.click(reconnect);
-    expect(login.calls).toEqual([{ silent: true }]);
+    expect(login.calls).toEqual(['link']);
     await screen.findByRole('button', { name: 'Sincronizza ora' });
+  });
+
+  it('"Sincronizza ora" during an elaborazione says it waits for its end instead of seeming to do nothing', async () => {
+    let waiting = false;
+    const status = () => ({
+      available: true, connected: true, email: 'studente@example.com', needs_reconnect: false, syncing: false,
+      waiting_for_run: waiting, last_sync_at: '2026-11-10T08:00:00.000Z', error: null,
+    });
+    // The host keeps the round for the end of the Gemini run (driveService), as during a real one.
+    window.pywebview = { api: { get_drive_status: async () => status(), sync_drive_now: async () => { waiting = true; return status(); } } };
+    render(<DriveCards />);
+    const sync = await screen.findByRole('button', { name: 'Sincronizza ora' });
+    await waitFor(() => expect(screen.getByTestId('web-drive-last-sync').textContent).toMatch(/^Ultima sincronizzazione: /));
+
+    fireEvent.click(sync);
+    await waitFor(() => expect(screen.getByTestId('web-drive-last-sync').textContent).toBe(DRIVE_WAITING_FOR_RUN));
+    expect((sync as HTMLButtonElement).disabled).toBe(true);
+
+    waiting = false;
+    await waitFor(() => expect(screen.getByTestId('web-drive-last-sync').textContent).toMatch(/^Ultima sincronizzazione: /), { timeout: 4000 });
+    expect((sync as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('disconnecting asks what to do with Drive first, and "Disconnetti" deletes nothing', async () => {
@@ -161,7 +182,7 @@ describe('WebDriveSection', () => {
     await archive.create(input('Cuore'), '<p>valvole</p>');
     render(<DriveCards />);
     fireEvent.click(await screen.findByRole('button', { name: 'Esporta tutte le sbobine nel mio Drive' }));
-    expect(login.calls).toEqual([{ silent: false, scope: 'https://www.googleapis.com/auth/drive.file' }]);
+    expect(login.calls).toEqual(['export']);
     const result = await screen.findByTestId('web-drive-export-result');
     expect(result.textContent).toMatch(/^2 sbobine esportate in “El Sbobinator – esportazione \d{4}-\d{2}-\d{2}”\./);
     expect(screen.getByRole('link', { name: 'Apri la cartella' }).getAttribute('href')).toContain('drive.google.com');

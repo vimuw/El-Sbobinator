@@ -7,7 +7,7 @@ import { createWebPywebviewApi } from '../../../web/webHost';
 import { WebDrivePage } from './WebDrivePage';
 import { REVEAL_TIMEOUT_MS, WebStoragePage } from './WebStoragePage';
 
-// Impostazioni → Archiviazione of the web build, and Impostazioni → Sincronizzazione beside it.
+// Impostazioni → Archiviazione of the web build, and Impostazioni → Google Drive beside it.
 
 const sessionInfo = { total_bytes: 1024 * 1024, total_sessions: 3, session_root: '', persisted: false };
 
@@ -36,7 +36,7 @@ describe('WebStoragePage', () => {
     expect(within(screen.getByRole('region', { name: 'Backup delle sbobine' })).getByTestId('web-drive-export')).toBeTruthy();
   });
 
-  it('the Sincronizzazione page goes account with what goes to Drive, then the erase', async () => {
+  it('the Google Drive page goes account with what goes to Drive, then the erase', async () => {
     setup(true);
     render(<WebDrivePage />);
     await waitFor(() => expect(screen.getByTestId('web-drive-status').textContent).toBe('Collegato come studente@example.com'));

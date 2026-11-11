@@ -1,7 +1,7 @@
-// Google login for the Drive sync: OAuth 2.0 for client-side web apps (implicit flow, token in the
-// URL fragment), proved on iPad Safari by the B0 probe. A "Web application" client needs a secret
-// for the code flow, so a static site without a server gets its access token this way. No refresh
-// token: after about an hour the page asks again, silently (prompt=none) for the remembered account.
+// Google login pieces for Drive. The sync links the account through the site's server (code flow
+// with the client secret, server/driveServer.ts), which keeps the login and renews the token: no
+// hourly reconnect. The export's own permission (drive.file) still uses OAuth 2.0 for client-side
+// web apps (implicit flow, token in the URL fragment), proved on iPad Safari by the B0 probe.
 
 export const DRIVE_APPDATA_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
 /** Asked only by "Esporta tutte le sbobine nel mio Drive": files this app creates, nothing else. */
@@ -61,10 +61,30 @@ export type OAuthResult =
   | { kind: 'token'; token: OAuthToken }
   | { kind: 'error'; error: string; description?: string };
 
-/** True when the fragment is an OAuth answer (token or error), whatever its state. */
+/** True when the fragment is a login answer (Google's token, the server's result, or an error), whatever its state. */
 export function isOAuthFragment(hash: string): boolean {
   const params = new URLSearchParams(hash.replace(/^#/, ''));
-  return params.has('state') && (params.has('access_token') || params.has('error'));
+  return params.has('state') && (params.has('access_token') || params.has('result') || params.has('error'));
+}
+
+export type ServerLoginResult =
+  | { kind: 'none' }
+  | { kind: 'ok' }
+  | { kind: 'error'; error: string; description?: string };
+
+/**
+ * Reads the site server's answer to "Collega Google Drive" (#state=…&result=ok or #state=…&error=…).
+ * The token never travels in the address: the page asks the server for it afterwards.
+ */
+export function parseServerReturn(hash: string, expectedState: string | null): ServerLoginResult {
+  const params = new URLSearchParams(hash.replace(/^#/, ''));
+  if (!params.has('result') && !params.has('error')) return { kind: 'none' };
+  if (!expectedState || params.get('state') !== expectedState) {
+    return { kind: 'error', error: 'state_mismatch', description: 'Risposta di Google non richiesta da questa pagina.' };
+  }
+  const error = params.get('error');
+  if (error) return { kind: 'error', error };
+  return params.get('result') === 'ok' ? { kind: 'ok' } : { kind: 'error', error: 'invalid_response', description: 'Risposta di Google incompleta.' };
 }
 
 export function fragmentState(hash: string): string | null {
@@ -134,6 +154,18 @@ export function oauthErrorMessage(error: string, description?: string): string {
       return 'Il browser ha bloccato la finestra di Google: consenti le finestre pop-up per questo sito e riprova.';
     case 'timeout':
       return 'Nessuna risposta da Google: chiudi la finestra di accesso e riprova.';
+    case 'login_expired':
+      return 'La finestra di accesso è rimasta aperta troppo a lungo: riprova.';
+    case 'cookie_blocked':
+      return 'Il browser non ha tenuto l’accesso a Google Drive: consenti i cookie per questo sito e riprova.';
+    case 'no_refresh_token':
+      return 'Google non ha dato l’accesso permanente: riprova. Se succede ancora, togli El Sbobinator dalle app collegate al tuo account Google e ricollega.';
+    case 'server_not_configured':
+      return 'Il collegamento a Google Drive non è ancora attivo su questo sito.';
+    case 'google_unreachable':
+      return 'Google non risponde: riprova tra poco.';
+    case 'login_failed':
+      return 'Accesso a Google non riuscito: riprova.';
     default:
       return `Accesso a Google non riuscito${description ? `: ${description}` : ` (${error}).`}`;
   }

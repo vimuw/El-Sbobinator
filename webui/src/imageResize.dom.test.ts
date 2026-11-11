@@ -197,3 +197,54 @@ describe('image resize preview', () => {
     expect(document.querySelector('.editor-image-resize-preview')).toBeNull();
   });
 });
+
+describe('inline images sharing a line', () => {
+  // Two inline images in one paragraph. While the resize is measured, the resized image's anchor
+  // carries its new width: the mocks then return the layout the browser gives after the change.
+  function sideBySide(before: { left: number; right: DOMRect }, after: { left: number; right: DOMRect }) {
+    const image = '<span data-editor-image data-layout="inline" data-width="40"><img src="a.png"></span>';
+    const editor = new Editor({ extensions: [StarterKit, FloatingImage], content: `<p>${image}${image}Testo</p>` });
+    editors.push(editor);
+    const paragraph = document.createElement('p');
+    Object.defineProperty(paragraph, 'clientWidth', { value: 634 });
+    paragraph.innerHTML = [0, 1].map(() => '<span class="editor-image-node" data-layout="inline" data-offset-y="0"><span class="editor-image-surface"><img src="a.png"><span class="editor-image-resize-handles"></span></span></span>').join('') + 'Testo';
+    document.body.append(paragraph);
+    const [left, right] = Array.from(paragraph.querySelectorAll<HTMLElement>('.editor-image-node'));
+    const resizing = () => right.style.width !== '';
+    const imageRect = (rect: DOMRect) => ({ ...rect.toJSON(), bottom: rect.top + rect.height }) as DOMRect;
+    vi.spyOn(left.querySelector('img')!, 'getBoundingClientRect').mockImplementation(() => imageRect(new DOMRect(112, (resizing() ? after : before).left - 159, 212, 159)));
+    vi.spyOn(right.querySelector('img')!, 'getBoundingClientRect').mockImplementation(() => imageRect(resizing() ? after.right : before.right));
+    vi.spyOn(right.querySelector('.editor-image-surface')!, 'getBoundingClientRect').mockImplementation(() => imageRect(before.right));
+    Object.defineProperty(editor.view.dom, 'offsetWidth', { value: 634 });
+    vi.spyOn(editor.view.dom, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 634 } as DOMRect);
+    const pointer = (type: string, dx = 0, dy = 0) => {
+      const event = new Event(type, { cancelable: true });
+      Object.assign(event, { pointerId: 1, clientX: before.right.right + dx, clientY: before.right.bottom + dy });
+      return event as PointerEvent;
+    };
+    startImageResize(editor.view, 2, right, right.querySelector<HTMLElement>('.editor-image-resize-handles')!, pointer('pointerdown'), 'br');
+    return (dx: number, dy: number) => {
+      window.dispatchEvent(pointer('pointermove', dx, dy));
+      window.dispatchEvent(pointer('pointerup', dx, dy));
+      return editor.state.doc.nodeAt(2)!.attrs;
+    };
+  }
+
+  it('keeps a resized image on the baseline it shares with its neighbour', () => {
+    // Shrinking the taller image shortens the line: both images still end on the same baseline.
+    const release = sideBySide(
+      { left: 515, right: new DOMRect(324, 292, 297, 223) },
+      { left: 451, right: new DOMRect(324, 303, 197, 148) },
+    );
+    expect(release(-100, -75)).toMatchObject({ offsetY: 0 });
+  });
+
+  it('sits an image that moves next to another on that line, instead of over the text', () => {
+    // Shrunk enough to fit beside the first image, the second one joins its line.
+    const release = sideBySide(
+      { left: 326, right: new DOMRect(112, 331, 297, 223) },
+      { left: 326, right: new DOMRect(409, 192, 178, 134) },
+    );
+    expect(release(-119, -89)).toMatchObject({ offsetY: 0 });
+  });
+});

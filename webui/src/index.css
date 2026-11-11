@@ -76,11 +76,6 @@
   opacity: 0.7;
 }
 
-:root:not([data-theme="dark"]) footer span {
-  color: var(--text-secondary);
-  opacity: 0.5;
-}
-
 :root[data-theme="dark"] footer a {
   color: var(--text-secondary);
   opacity: 1;
@@ -719,6 +714,51 @@ button {
   gap: 0.4rem;
 }
 
+/* A click outside a modal with unsaved edits (useBackdropDismiss): the card shakes a short,
+   fading "no" and the action that keeps the edits sends out one ring. Both fit in
+   BACKDROP_SHAKE_MS. The animation overrides the card's settled inline transform only while
+   it runs. */
+@keyframes modal-shake {
+  0%, 100% { transform: translateX(0); }
+  22% { transform: translateX(-4px); }
+  48% { transform: translateX(3px); }
+  74% { transform: translateX(-1.5px); }
+}
+
+@keyframes modal-action-attention {
+  from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--btn-primary-bg) 45%, transparent); }
+  to { box-shadow: 0 0 0 8px color-mix(in srgb, var(--btn-primary-bg) 0%, transparent); }
+}
+
+.modal-card.is-shaking {
+  animation: modal-shake 0.36s var(--ease-out);
+}
+
+.modal-action-button.is-attention {
+  animation: modal-action-attention 0.42s var(--ease-out);
+}
+
+/* The line that says why the card shook. Empty it takes no room, but stays in the page as a
+   live region. In the footer it sits beside the buttons; above it, aligned with the body. */
+.modal-unsaved-hint {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--warning-text);
+}
+
+@keyframes modal-unsaved-hint-in {
+  from { opacity: 0; }
+}
+
+.modal-unsaved-hint:not(:empty) {
+  animation: modal-unsaved-hint-in 0.2s var(--ease-out);
+}
+
+.modal-unsaved-hint.is-above-footer:not(:empty) {
+  padding: 0 20px 12px;
+}
+
 .app-button-secondary {
   display: inline-flex;
   align-items: center;
@@ -837,7 +877,7 @@ button {
 
 .settings-nav {
   display: grid;
-  /* The tabs: three, four with Sincronizzazione. Equal while they fit; a longer label
+  /* The tabs: three, four with Google Drive. Equal while they fit; a longer label
      ("Archiviazione") takes the room it needs from the others instead of spilling out of its tab. */
   grid-template-columns: repeat(var(--settings-tab-count, 3), minmax(max-content, 1fr));
   flex-shrink: 0;
@@ -1433,12 +1473,46 @@ button {
   right: -8px;
   bottom: calc(100% + 14px);
   z-index: 50;
-  width: min(17rem, calc(100vw - 16px));
+  /* As wide as its longest row, no wider: a fixed width left empty room right of the labels. */
+  width: max-content;
+  min-width: 14rem;
+  max-width: calc(100vw - 16px);
 }
 
 .player-more-panel.is-desktop {
   right: -12px;
-  width: 18rem;
+}
+
+/* The phone's ⋮ opens on a list whose first row is the speed; tapped, the speed panel takes
+   the list's place under a row that leads back. Each view slides in from the side it comes from,
+   as a settings page does: the speed from the right, the list back from the left. */
+.player-menu-view.is-entering-forward {
+  animation: player-menu-view-forward 160ms var(--ease-out);
+}
+
+.player-menu-view.is-entering-back {
+  animation: player-menu-view-back 160ms var(--ease-out);
+}
+
+@keyframes player-menu-view-forward {
+  from { opacity: 0; transform: translateX(12px); }
+}
+
+@keyframes player-menu-view-back {
+  from { opacity: 0; transform: translateX(-12px); }
+}
+
+.player-menu-value {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.player-menu-value + .player-menu-icon {
+  margin-left: -6px;
+}
+
+.player-menu-speed-body {
+  padding: 4px 4px 2px;
 }
 
 /* Speed panel (YouTube-like, kept compact): the value, a slider between minus and plus,
@@ -1778,9 +1852,10 @@ button {
 /* ═══ STATUS BANNER ═══ */
 
 /* Processing hero: sits on the page, no card. Step title, a large figure, one segmented track. */
-/* The stop button sits close to the queue below, as the banner's own parts sit close to each other. */
+/* The hero ends on the stop button, so the page's 32px gap to the queue below matches the
+   button's 32px from the run details above. */
 .processing-hero {
-  padding: 2.5rem 0 0.75rem;
+  padding: 2.5rem 0 0;
 }
 
 .processing-hero-icon-wrap {
@@ -1869,14 +1944,16 @@ button {
 }
 
 /* Quiet: the run is the focus, stopping is one deliberate click away. The size of the queue's
-   start pill, set apart from the details above it. */
+   start pill, set apart from the details above it. Centring the line box leaves the lowercase
+   label (x-height, the descender of its p) about 1.5px low in Manrope, so its content sits 1px
+   higher. */
 .processing-stop-button {
   display: inline-flex;
   min-height: var(--control-height-lg);
   align-items: center;
   gap: 0.5rem;
-  margin-top: 0.5rem;
-  padding: var(--button-padding-lg);
+  margin-top: 1rem;
+  padding: calc(0.375rem - 1px) 1.125rem calc(0.375rem + 1px);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-pill);
   background: transparent;
@@ -1936,6 +2013,109 @@ button {
 
 .processing-warning svg {
   margin-top: 0.15rem;
+}
+
+/* What the last run left to do, where the processing banner was (RunOutcomeBanner.tsx). */
+.run-outcome {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 1rem 2.75rem 1rem 1rem;
+  border: 1px solid var(--warning-ring);
+  border-radius: var(--radius-xl);
+  background: var(--warning-subtle);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+}
+
+.run-outcome.is-error {
+  border-color: var(--error-ring);
+  background: var(--error-subtle);
+}
+
+.run-outcome-icon {
+  display: flex;
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 0.05rem;
+  color: var(--warning-text);
+}
+
+.run-outcome-body {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.run-outcome.is-error .run-outcome-icon,
+.run-outcome.is-error .run-outcome-title {
+  color: var(--error-text);
+}
+
+.run-outcome-title {
+  font-weight: 600;
+  color: var(--warning-text);
+}
+
+.run-outcome-file {
+  margin-top: 0.1rem;
+  overflow: hidden;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-outcome-message {
+  margin-top: 0.45rem;
+  overflow-wrap: anywhere;
+}
+
+.run-outcome-warnings {
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+  list-style: disc;
+  color: var(--text-secondary);
+}
+
+.run-outcome-warnings li + li {
+  margin-top: 0.2rem;
+}
+
+/* Actions sit to the right of the text, stacked and of equal width when there are two. */
+.run-outcome-actions {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+/* A phone has no room beside the text: the actions move under it, aligned with the text. */
+@media (max-width: 639px) {
+  .run-outcome {
+    flex-wrap: wrap;
+  }
+
+  .run-outcome-actions {
+    flex-basis: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding-left: calc(1.25rem + 0.85rem);
+  }
+}
+
+.run-outcome .app-button-secondary.is-settings-action {
+  background: transparent;
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.run-outcome-close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
 }
 
 .phase-segment {
@@ -2201,7 +2381,9 @@ button {
   align-items: center;
   gap: 3px;
   padding: 4px 6px;
-  background: var(--bg-floating);
+  /* The selection bar takes the toolbar's tone and hover, not the menus' (light theme), and keeps
+     the floating frame so it still lifts off the page. */
+  background: var(--editor-toolbar-bg);
   border: 1px solid var(--border-floating);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-floating);
@@ -2393,17 +2575,15 @@ button {
 }
 
 /* Tablet widths (iPad portrait 744–834 px, landscape up to 1180 px) and narrow desktop windows:
-   the A4 page shrinks to the space left instead of scrolling sideways. From about 922 px with the
-   index closed it is back to its fixed 794 px, so wide windows look the same. */
+   with the index closed the A4 page shrinks to the editor instead of scrolling sideways. From about
+   922 px it is back to its fixed 794 px, so wide windows look the same. Its width never follows the
+   index (as in Google Docs): RichTextEditor measures --editor-page-fit with the index closed, and
+   opening the index pushes the page right, scrolling sideways when there is no room. */
 @media (max-width: 1180px) {
-  .editor-page-center,
   .editor-page {
     min-width: 0;
-  }
-
-  /* The open index keeps its left column; the matching spacer on the right would starve the page. */
-  .editor-toc-open .editor-toc-spacer {
-    display: none;
+    width: var(--editor-page-fit, 794px);
+    flex-shrink: 0;
   }
 }
 
@@ -2412,6 +2592,34 @@ button {
   .editor-page .tiptap-editor {
     padding: 64px 48px;
   }
+}
+
+/* How far through the document the view is: beside the scrollbar thumb while scrolling, at one
+   width ("100%" fits) so its edges never jump as the number grows. */
+.editor-scroll-percent {
+  position: absolute;
+  z-index: 30;
+  transform: translateY(-50%);
+  min-width: 4.5em;
+  padding: 2px 8px;
+  text-align: center;
+  border: 1px solid var(--border-floating);
+  border-radius: var(--radius-pill);
+  background: var(--bg-floating);
+  box-shadow: var(--shadow-floating);
+  color: var(--text-secondary);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--duration-state) var(--ease-out);
+}
+
+.editor-scroll-percent[data-visible='true'] {
+  opacity: 1;
 }
 
 /* ═══ EDITOR FIND / REPLACE ═══ */
@@ -2530,14 +2738,21 @@ button {
   position: relative;
 }
 
+/* "Trova" sits on the field's top border, half over the dialog and half over the field: each half
+   takes the colour it covers, so the notch shows no box around the word. Its 16px box, centred on
+   top: -8px, puts the split exactly on the border, which the lower half hides. */
 .find-replace-dialog-label {
   position: absolute;
   top: -8px;
   left: 14px;
+  display: flex;
+  align-items: center;
+  height: 16px;
   font-size: var(--text-caption);
   font-weight: 600;
+  line-height: var(--leading-none);
   color: var(--accent-bg);
-  background: var(--bg-elevated);
+  background: linear-gradient(to bottom, var(--bg-floating) 50%, var(--bg-input) 50%);
   padding: 0 4px;
   z-index: 1;
   pointer-events: none;
@@ -2645,6 +2860,8 @@ button {
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-floating);
   min-width: 260px;
+  animation: dropdownPop 0.2s var(--ease-out) forwards;
+  transform-origin: top left;
 }
 
 .link-input {
@@ -2860,8 +3077,11 @@ button {
   padding-right: 8px;
 }
 
+/* The right mirror of the index column keeps the page centred while there is room; it gives way
+   first, so an open index moves the page right before the editor scrolls sideways (Google Docs). */
 .editor-toc-spacer {
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 0;
   transition: width var(--duration-base) var(--ease-out);
 }
 
@@ -3486,6 +3706,9 @@ button {
   max-width: 90vw;
   max-height: calc(var(--app-height) - 24px);
   overflow-y: auto;
+  /* It opens where the pointer was, as the toolbar menus open under their button. */
+  animation: dropdownPop 0.2s var(--ease-out) forwards;
+  transform-origin: top left;
 }
 
 /* Two classes so the denser rows win over .kebab-item, which is declared later. */
@@ -3780,7 +4003,8 @@ input::-webkit-contacts-auto-fill-button {
 
 .sidebar-tooltip {
   position: absolute;
-  left: calc(100% + 10px);
+  /* The buttons end ~10px inside the sidebar's border: 18px leaves ~8px of air past it. */
+  left: calc(100% + 18px);
   top: 50%;
   transform: translateY(-50%);
   background: var(--bg-floating);
@@ -3810,12 +4034,13 @@ input::-webkit-contacts-auto-fill-button {
    same hover as elsewhere. Handing the token down covers every row, button and Tailwind
    hover:bg-[var(--bg-hover)] inside them. Docked bars (the player, the pinned Archive bar) sit
    in the page and keep the page hover, as does the editor's index while it is a column beside
-   the page (on a phone it floats: see its sheet). Selected rows use --bg-selected-floating where
-   they are styled. */
-:is(.kebab-panel, .context-menu, .color-picker-panel, .editor-bubble-menu, .link-panel,
+   the page (on a phone it floats: see its sheet), and so does the selection bar, which takes the
+   toolbar's tone in the light theme. Selected rows use --bg-selected-floating where they are
+   styled. */
+:is(.kebab-panel, .context-menu, .color-picker-panel, .link-panel,
   .editor-link-card, .editor-video-preview, .editor-image-toolbar, .sidebar-account-menu,
   .sidebar-tooltip, .select-dropdown, .notification-dropdown-panel, .archive-selection-bar,
-  .find-bar-float, .find-replace-dialog, .folder-name-tooltip, .phone-format-sheet) {
+  .find-bar-float, .find-replace-dialog, .folder-name-tooltip, .phone-format-sheet, .editor-scroll-percent) {
   --bg-hover: var(--bg-hover-floating);
 }
 
@@ -3829,6 +4054,26 @@ input::-webkit-contacts-auto-fill-button {
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-floating);
   padding: 4px;
+}
+
+/* CSS twin of popoverVariants.closed, for the popovers that open with dropdownPop or
+   player-menu-in (usePopoverPresence keeps them mounted for POPOVER_EXIT_MS): short and flat,
+   and no longer clickable while they fade. Two classes, after .kebab-panel.player-menu, so the
+   closing animation replaces the opening one. */
+@keyframes popover-close {
+  to {
+    opacity: 0;
+    transform: scale(0.97);
+    filter: blur(2px);
+  }
+}
+
+.kebab-panel.popover-closing,
+.color-picker-panel.popover-closing,
+.link-panel.popover-closing,
+.select-dropdown.popover-closing {
+  animation: popover-close 0.12s var(--ease-in) forwards;
+  pointer-events: none;
 }
 
 .kebab-separator {
@@ -4340,6 +4585,22 @@ input::-webkit-contacts-auto-fill-button {
   background: var(--bg-floating);
   box-shadow: var(--shadow-md);
   pointer-events: auto;
+  transition:
+    opacity var(--duration-state) var(--ease-out),
+    transform var(--duration-state) var(--ease-out);
+}
+
+/* While the editor scrolls, the dock, open or folded, steps out of the way and the scroll pill
+   runs down the scrollbar to the bottom, as floating bars do on phones; it comes back as the pill
+   fades. The audio keeps playing. A dock with a menu open is in use: it stays, and the pill waits. */
+.editor-fullpage:has(.editor-scroll-percent[data-visible='true']) .editor-player-dock:not(:has([aria-expanded='true'])) {
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+}
+
+.editor-fullpage:has(.editor-player-dock [aria-expanded='true']) .editor-scroll-percent {
+  visibility: hidden;
 }
 
 .editor-player-dock:has(> div > audio) {
@@ -4543,6 +4804,61 @@ input::-webkit-contacts-auto-fill-button {
 /* Phone: "Copiato!" waits at the end of the title room, beside the tools; the title shortens. */
 .editor-fullpage-title > .editor-copied-toast {
   margin-left: auto;
+}
+
+/* As in Google Docs, the title is the name field: a click edits it in place. Button and field share
+   their box, so the text keeps its place when the field opens. */
+.editor-fullpage-title-button,
+.editor-fullpage-title-input,
+.editor-fullpage-title-field::after {
+  min-width: 0;
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  font: inherit;
+  color: inherit;
+}
+
+.editor-fullpage-title-button {
+  flex: 0 1 auto;
+  margin-left: -4px;
+  background: transparent;
+  text-align: left;
+  cursor: text;
+  transition: border-color var(--duration-state) var(--ease-out);
+}
+
+.editor-fullpage-title-button:hover {
+  border-color: var(--border-default);
+}
+
+/* The field is as wide as the name, as the button was, and grows with the typing up to 480px:
+   a hidden copy of the name (plus a space for the caret) sizes the cell the field fills.
+   A narrow header shortens it and the name scrolls inside. */
+.editor-fullpage-title-field {
+  display: inline-grid;
+  grid-template-columns: minmax(0, max-content);
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 480px;
+  margin-left: -4px;
+}
+
+.editor-fullpage-title-field::after {
+  content: attr(data-value) ' ';
+  grid-area: 1 / 1;
+  overflow: hidden;
+  white-space: pre;
+  visibility: hidden;
+}
+
+/* Focus shows with the shared :focus-visible ring. */
+.editor-fullpage-title-input {
+  grid-area: 1 / 1;
+  width: 100%;
+  background: var(--bg-input);
+  border-color: var(--border-default);
 }
 
 .editor-shortcuts-dialog {
@@ -4974,6 +5290,68 @@ input::-webkit-contacts-auto-fill-button {
   background: color-mix(in srgb, var(--folder-color, var(--accent-bg)) 12%, transparent);
   color: color-mix(in srgb, var(--folder-color, var(--accent-bg)) 75%, #000000);
   border: 1px solid color-mix(in srgb, var(--folder-color, var(--accent-bg)) 28%, transparent);
+}
+
+/* Web: the audio a sbobina keeps in this browser, at the card's right edge (SessionCard). Quiet,
+   like the meta line: it marks the card without competing with the name. */
+.kept-audio-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-default);
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  line-height: var(--leading-none);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.kept-audio-badge.is-icon {
+  width: 22px;
+  padding: 0;
+  justify-content: center;
+}
+
+/* Web: the archive filtered to the sbobine with kept audio, from "Vedi quali" in Archiviazione.
+   A pill over the list instead of a toolbar button: it exists only while the filter is on. */
+.kept-audio-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  height: 28px;
+  padding: 0 4px 0 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--accent-text);
+  background: var(--accent-subtle);
+  color: var(--accent-text);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.kept-audio-filter-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-pill);
+  color: inherit;
+  cursor: pointer;
+  transition: background var(--duration-state) var(--ease-out);
+}
+
+.kept-audio-filter-clear:hover {
+  background: color-mix(in srgb, var(--accent-text) 16%, transparent);
 }
 
 .folder-indicator-chip > span:last-child {
@@ -5515,11 +5893,90 @@ input::-webkit-contacts-auto-fill-button {
   white-space: nowrap;
 }
 
+/* Long labels on wide screens, short ones on a phone, so the links keep one row there instead
+   of stacking one per line (AppFooterLinks, PrivacyLink). */
+.footer-label-short {
+  display: none;
+}
+
 @media (max-width: 540px) {
   .app-footer-links {
-    flex-direction: column;
-    gap: 12px;
+    column-gap: 16px;
+    row-gap: 8px;
   }
+
+  .footer-label-long {
+    display: none;
+  }
+
+  .footer-label-short {
+    display: inline;
+  }
+}
+
+/* The "open the console" hint under the progress (ConsoleHint): a quiet line, not an alert. */
+.console-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 12px;
+  padding: 8px 8px 8px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  color: var(--text-secondary);
+  font-size: var(--text-label);
+}
+
+.console-hint-icon {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.console-hint-text {
+  flex: 1 1 16rem;
+  min-width: 0;
+  margin: 0;
+}
+
+.console-hint-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.console-hint-open,
+.console-hint-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-lg);
+  background: transparent;
+  cursor: pointer;
+  transition: background-color var(--duration-state) var(--ease-out), color var(--duration-state) var(--ease-out);
+}
+
+.console-hint-open {
+  padding: 4px 10px;
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.console-hint-close {
+  width: 28px;
+  height: 28px;
+  color: var(--text-muted);
+}
+
+.console-hint-open:hover,
+.console-hint-close:hover {
+  background: var(--bg-hover);
+}
+
+.console-hint-close:hover {
+  color: var(--text-primary);
 }
 
 /* KaTeX Math Node */
@@ -5792,8 +6249,15 @@ input::-webkit-contacts-auto-fill-button {
     padding: 0;
   }
 
+  /* A table pasted from Google Docs keeps its column widths (602 px in all): without this the
+     column grew to fit it and the whole text ran past both edges of the phone. */
+  .editor-page-center {
+    min-width: 0;
+  }
+
   .editor-page,
   :root[data-theme="dark"] .editor-page {
+    width: 100%;
     min-width: 0;
     max-width: none;
     box-shadow: none;
@@ -5880,12 +6344,6 @@ input::-webkit-contacts-auto-fill-button {
 
   .editor-player-dock:has(> .audio-dock-empty) {
     padding: 0 8px;
-  }
-
-  /* The phone player has two rows (32px controls, 2px gap, the 16.5px time line) inside its
-     0.75rem padding: the loading dock keeps that height so the page does not shift when it lands. */
-  .audio-dock-loading {
-    min-height: calc(2rem + 2px + 16.5px + 0.75rem);
   }
 
   .audio-dock-empty-hint {

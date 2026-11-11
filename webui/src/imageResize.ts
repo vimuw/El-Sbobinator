@@ -6,6 +6,25 @@ import { normalizeImageLayout, normalizeImageOffsetY, normalizeImagePosition, no
 
 export type ImageResizeHandle = 'tl' | 'tc' | 'tr' | 'ml' | 'mr' | 'bl' | 'bc' | 'br';
 
+type LineImage = { anchor: HTMLElement; image: HTMLImageElement };
+
+// The other inline images of the paragraph, measured where they sit on their line.
+function lineImages(paragraph: HTMLElement, resized: HTMLElement): LineImage[] {
+  return Array.from(paragraph.querySelectorAll<HTMLElement>('.editor-image-node[data-layout="inline"]'))
+    .filter(anchor => anchor !== resized)
+    .flatMap(anchor => {
+      const image = anchor.querySelector('img');
+      return image ? [{ anchor, image }] : [];
+    });
+}
+
+// Images whose natural bottom (without their own vertical offset) is on this baseline.
+function sameLine(images: LineImage[], baseline: number, scale: number): Set<HTMLElement> {
+  return new Set(images
+    .filter(({ anchor, image }) => Math.abs(image.getBoundingClientRect().bottom - normalizeImageOffsetY(anchor.dataset.offsetY) * scale - baseline) < 1.5)
+    .map(({ anchor }) => anchor));
+}
+
 export function startImageResize(view: EditorView, pos: number, anchor: HTMLElement, handleElement: HTMLElement, event: PointerEvent, handle: ImageResizeHandle): () => void {
   const surface = anchor.querySelector<HTMLElement>('.editor-image-surface');
   const image = anchor.querySelector('img');
@@ -111,17 +130,29 @@ export function startImageResize(view: EditorView, pos: number, anchor: HTMLElem
       if (layout === 'inline') {
         // Measure the resulting line ascent once on release. React node views
         // update asynchronously, so measuring after dispatch would see old bounds.
+        // Other inline images on the same line share its baseline, as in Google
+        // Docs: a resized image keeps sitting on it, never above or across the
+        // text, and one that moves onto another line sits on that one's baseline.
+        const others = paragraph ? lineImages(paragraph, anchor) : [];
+        const sharedBefore = sameLine(others, start.bottom - normalizeImageOffsetY(node.attrs.offsetY) * scale, scale);
         const anchorStyle = anchor.style.cssText;
         const imageStyle = image.style.cssText;
+        let sharedAfter: Set<HTMLElement>;
         try {
           anchor.style.width = `${width}%`;
           anchor.style.marginLeft = `${attrs.offsetX}px`;
           anchor.style.top = `${attrs.offsetY}px`;
           image.style.aspectRatio = String(attrs.aspectRatio);
-          attrs.offsetY = normalizeImageOffsetY(attrs.offsetY + (top - image.getBoundingClientRect().top) / scale);
+          const resized = image.getBoundingClientRect();
+          sharedAfter = sameLine(others, resized.bottom - attrs.offsetY * scale, scale);
+          attrs.offsetY = normalizeImageOffsetY(attrs.offsetY + (top - resized.top) / scale);
         } finally {
           anchor.style.cssText = anchorStyle;
           image.style.cssText = imageStyle;
+        }
+        if (sharedBefore.size || sharedAfter.size) {
+          const stayed = sharedBefore.size === sharedAfter.size && [...sharedAfter].every(other => sharedBefore.has(other));
+          attrs.offsetY = stayed ? normalizeImageOffsetY(node.attrs.offsetY) : 0;
         }
       }
       const tr = closeHistory(view.state.tr).setNodeMarkup(pos, undefined, attrs);

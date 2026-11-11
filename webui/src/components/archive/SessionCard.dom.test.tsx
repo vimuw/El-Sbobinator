@@ -389,6 +389,54 @@ describe('SessionCard meta line', () => {
     expect(meta.textContent).toContain('1 blocco non revisionato');
   });
 
+  it('shows the size of the audio kept in this browser, and nothing without it', () => {
+    const { container, rerender } = renderCard();
+    expect(screen.queryByTestId('session-kept-audio')).toBeNull();
+
+    rerender(
+      <DraggableSessionCard
+        session={{ ...opened, kept_audio_bytes: 412 * 1024 * 1024 }}
+        allFolders={[]}
+        onAssignToFolder={vi.fn()}
+        onRemoveFromFolder={vi.fn()}
+        onPreview={vi.fn()}
+        onOpenFile={vi.fn()}
+        onDeleteSession={vi.fn()}
+      />,
+    );
+    const badge = screen.getByTestId('session-kept-audio');
+    expect(badge.textContent).toBe('Audio salvato: 412,0 MB');
+    expect(badge.getAttribute('title')).toBe('Audio salvato in questo browser: 412,0 MB');
+    // At the card's right edge, right before the menu, so the badges line up down the list;
+    // the line under the name stays as it was.
+    expect(container.querySelector('.session-card-meta')?.textContent).not.toContain('412,0 MB');
+    expect(badge.parentElement?.classList.contains('archive-session-card')).toBe(true);
+    expect(badge.nextElementSibling?.contains(screen.getByLabelText('Altre opzioni'))).toBe(true);
+  });
+
+  it('keeps the audio badge to its icon on a phone, the size still in its title', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(max-width: 640px)' }));
+    try {
+      render(
+        <DraggableSessionCard
+          session={{ ...opened, kept_audio_bytes: 2 * 1024 * 1024 }}
+          allFolders={[]}
+          onAssignToFolder={vi.fn()}
+          onRemoveFromFolder={vi.fn()}
+          onPreview={vi.fn()}
+          onOpenFile={vi.fn()}
+          onDeleteSession={vi.fn()}
+        />,
+      );
+      const badge = screen.getByTestId('session-kept-audio');
+      expect(badge.getAttribute('title')).toBe('Audio salvato in questo browser: 2,0 MB');
+      expect(screen.getByText('2,0 MB').classList.contains('sr-only')).toBe(true);
+      expect(badge.classList.contains('is-icon')).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('keeps one line on a phone, so every card has the same height, and never cuts the time', () => {
     vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(max-width: 640px)' }));
     try {

@@ -2,12 +2,12 @@ import { reportClientError } from '../diagnostics';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  ArrowRight, Eye, FileSearch, FileText,
+  ArrowRight, AudioLines, Eye, FileSearch, FileText,
   Loader2, Pencil, RefreshCw, Search, Upload, X,
 } from 'lucide-react';
 import type { ArchiveFolder, ArchiveSession } from '../bridge';
 import { loadAllEditorSessions } from '../editorSessions';
-import { formatRelativeTime, normalizeSessionPath, shortModelName } from '../utils';
+import { formatRelativeTime, formatSize, normalizeSessionPath, shortModelName } from '../utils';
 import { FolderIndicatorChip } from './FolderChip';
 import { MiddleTruncate } from './MiddleTruncate';
 import { ShareExportModal } from './modals/ShareExportModal';
@@ -15,12 +15,14 @@ import { getHostCapabilities } from '../hostCapabilities';
 import { ArchivePageTitle, ArchiveSectionHeading } from './archive/ArchiveLayout';
 
 import {
+  AUDIO_SIZE_SORT_OPTION,
   type ArchivePageProps,
   type DeleteFolderConfirmState,
   type DeleteMultipleSessionsConfirmState,
   type FolderModalState,
   FULL_TEXT_SORT_OPTIONS,
   getOpenedAtMs,
+  keptAudioBytes,
   SORT_OPTIONS,
   type SortOption,
 } from './archive/types';
@@ -60,6 +62,7 @@ export function ArchivePage({
   sessions, total, folders, onFoldersChange,
   onPreview, onOpenFile, onDeleteSession, onDeleteMultipleSessions, onRefresh,
   onRetryFailedRevisionBlocks, onNotification, onRenameSession,
+  showKeptAudioRequest, onShowKeptAudioHandled,
 }: ArchivePageProps) {
   const [toolbarRef, toolbarStuck] = useStickyStuck();
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
@@ -171,6 +174,8 @@ export function ArchivePage({
     setSearch,
     sort,
     setSort,
+    audioOnly,
+    setAudioOnly,
     searchFocused,
     setSearchFocused,
     searchInputRef,
@@ -190,6 +195,25 @@ export function ArchivePage({
   });
 
   const sessionPageData = allSortedSessions;
+
+  // Web: the sbobine that keep their audio in this browser, which make up "Audio delle sbobine" in
+  // Archiviazione. The size order is offered only while there is some. The filter has no button of
+  // its own: "Vedi quali" in Archiviazione turns it on and a pill over the list turns it off.
+  const hasKeptAudio = useMemo(() => sessions.some(session => keptAudioBytes(session) > 0), [sessions]);
+  const shownAudioBytes = useMemo(
+    () => (audioOnly ? sessionPageData.reduce((sum, session) => sum + keptAudioBytes(session), 0) : 0),
+    [audioOnly, sessionPageData],
+  );
+  const sortOptions = hasKeptAudio ? [...SORT_OPTIONS, AUDIO_SIZE_SORT_OPTION] : SORT_OPTIONS;
+  useEffect(() => {
+    if (!hasKeptAudio && sort === 'audio_size') setSort('newest');
+  }, [hasKeptAudio, sort, setSort]);
+
+  // Leaving the filter gives back the usual order too, unless the user picked another one meanwhile.
+  const clearAudioFilter = useCallback(() => {
+    setAudioOnly(false);
+    if (sort === 'audio_size') setSort('newest');
+  }, [setAudioOnly, setSort, sort]);
 
   const {
     selectedSessionDirs,
@@ -216,6 +240,17 @@ export function ArchivePage({
       setSelectedFolderId(null);
     }
   }, [folders, selectedFolderId]);
+
+  // "Vedi quali" from Archiviazione: the whole archive, filtered to the kept audio, heaviest first.
+  useEffect(() => {
+    if (!showKeptAudioRequest) return;
+    setSelectedFolderId(null);
+    setFullTextMode(false);
+    setSearch('');
+    setAudioOnly(true);
+    setSort('audio_size');
+    onShowKeptAudioHandled?.();
+  }, [showKeptAudioRequest, onShowKeptAudioHandled, setFullTextMode, setSearch, setAudioOnly, setSort]);
 
   const selectedFolder = selectedFolderId ? folders.find(f => f.id === selectedFolderId) ?? null : null;
 
@@ -314,12 +349,14 @@ export function ArchivePage({
           />
         )}
       </AnimatePresence>
-      {sharingSession && (
-        <ShareExportModal
-          session={sharingSession}
-          onClose={() => setSharingSession(null)}
-        />
-      )}
+      <AnimatePresence>
+        {sharingSession && (
+          <ShareExportModal
+            session={sharingSession}
+            onClose={() => setSharingSession(null)}
+          />
+        )}
+      </AnimatePresence>
     </>
   );
 
@@ -492,7 +529,8 @@ export function ArchivePage({
             </div>
             <button
               type="button"
-              onClick={() => { setFullTextMode(m => !m); setSearch(''); }}
+              // The typed text stays: switching mode searches the same words by name or in the content.
+              onClick={() => { setFullTextMode(m => !m); setAudioOnly(false); }}
               className="filter-chip w-9 p-0 flex items-center justify-center group/ft"
               style={fullTextMode ? { color: 'var(--accent-text)', borderColor: 'var(--accent-text)', background: 'var(--accent-subtle)' } : undefined}
               title={fullTextMode ? 'Testo completo (Attivo - Clicca per disattivare)' : 'Testo completo (Ricerca nel contenuto)'}
@@ -509,7 +547,7 @@ export function ArchivePage({
                   setSort(s);
                 }
               }}
-              options={fullTextMode ? FULL_TEXT_SORT_OPTIONS : SORT_OPTIONS}
+              options={fullTextMode ? FULL_TEXT_SORT_OPTIONS : sortOptions}
             />
             <div className="ml-auto flex items-center gap-2 shrink-0">
               {canSharePackages && <button
@@ -536,7 +574,22 @@ export function ArchivePage({
               )}
             </div>
           </div>
-          {!fullTextMode && search.trim().length > 0 && (
+          {!fullTextMode && audioOnly && (
+            <div className="flex">
+              <span className="kept-audio-filter" data-testid="kept-audio-summary">
+                <AudioLines className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">
+                  {sessionPageData.length === 0
+                    ? 'Nessuna sbobina con audio salvato'
+                    : `Con audio salvato · ${sessionPageData.length} ${sessionPageData.length === 1 ? 'sbobina' : 'sbobine'} · ${formatSize(shownAudioBytes)}`}
+                </span>
+                <button type="button" onClick={clearAudioFilter} className="kept-audio-filter-clear" aria-label="Mostra tutte le sbobine" title="Mostra tutte le sbobine">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            </div>
+          )}
+          {!fullTextMode && !audioOnly && search.trim().length > 0 && (
             <span className="search-results-count">
               {allSortedSessions.length === 0
                 ? 'Nessun risultato'
@@ -568,6 +621,12 @@ export function ArchivePage({
             <div className="py-12 text-center" style={{ color: 'var(--text-muted)' }}>
               <FileText className="w-8 h-8 mx-auto mb-3 opacity-30" />
               <p className="text-sm">Nessuna sbobina nell&apos;archivio.</p>
+            </div>
+          )}
+
+          {!fullTextMode && sessionPageData.length === 0 && sessions.length > 0 && audioOnly && !search.trim() && (
+            <div className="py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+              Nessuna sbobina tiene l&apos;audio in questo browser.
             </div>
           )}
 
