@@ -160,7 +160,7 @@ describe('privacy page of the web site', () => {
     const drive = html.slice(html.indexOf('id="google-drive"'), html.indexOf('id="diritti"'));
     expect(drive).toMatch(/^id="google-drive">Google Drive \(facoltativo\)<\/h2>/);
     expect(html).not.toMatch(/in arrivo|non è ancora disponibile|quando arriverà/i);
-    expect(drive).toContain('Impostazioni → Sincronizzazione');
+    expect(drive).toContain('Impostazioni → Google Drive');
     expect(html.slice(html.indexOf('id="in-breve"'), html.indexOf('id="titolare"'))).toContain('Google Drive');
   });
 

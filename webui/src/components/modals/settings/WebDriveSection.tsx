@@ -5,7 +5,7 @@ import { DRIVE_HEALTH_LABEL, DRIVE_WAITING_FOR_RUN, driveHealth, formatLastSync,
 import { InlineConfirm, SettingsCallout, SettingsCardLabel, SettingsMoreInfo, SettingsPanel, SettingsRow, StatusBadge, type StatusBadgeTone } from './SettingsLayout';
 import { ExternalLinkIcon } from '../../ExternalLinkIcon';
 
-// Web previews with Drive sync only, sharing one useDriveStatus. Impostazioni → Sincronizzazione is
+// Web previews with Drive sync only, sharing one useDriveStatus. Impostazioni → Google Drive is
 // two sections that follow the link state, not a "browser / Drive" choice: the account (link it,
 // or sync, reconnect and disconnect it) with what goes to Drive, and "Elimina i dati da Drive". The
 // "Esporta nel mio Drive" row (one-way copy to a visible folder) ends the backup in Archiviazione.

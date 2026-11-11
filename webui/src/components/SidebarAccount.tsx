@@ -35,8 +35,20 @@ const BADGE_TONE: Record<DriveHealth, StatusBadgeTone> = {
   error: 'error',
 };
 
+// Under the "Google Drive" heading the state alone, short ("Google Drive · In corso"), without
+// saying "sincronizzazione" again. The button's label and Impostazioni keep the full labels.
+// The labels agree with "Google Drive" (masculine): linked and synced reads "Collegato", the
+// opposite of "Non collegato" the same badge shows once the account is gone.
+const MENU_BADGE_LABEL: Record<DriveHealth, string> = {
+  off: 'Non collegato',
+  syncing: 'In corso',
+  ok: 'Collegato',
+  reconnect: 'Da riconnettere',
+  error: 'Errore',
+};
+
 interface SidebarAccountProps {
-  /** "Gestisci in Impostazioni": Impostazioni → Sincronizzazione. */
+  /** "Gestisci in Impostazioni": Impostazioni → Google Drive. */
   onOpenStorageSettings: () => void;
 }
 
@@ -146,8 +158,8 @@ export function SidebarAccount({ onOpenStorageSettings }: SidebarAccountProps) {
             {/* Header like the notifications panel, named like the settings page it leads to, with
                 the state right after the title as in the settings sections. */}
             <div className="flex items-center gap-2.5 px-4 py-3 border-b border-[var(--border-subtle)]">
-              <h3 className="text-sm font-semibold tracking-tight text-[var(--text-primary)]">Sincronizzazione</h3>
-              <StatusBadge tone={connected ? BADGE_TONE[health] : 'neutral'}>{connected ? DRIVE_HEALTH_LABEL[health] : 'Non collegato'}</StatusBadge>
+              <h3 className="text-sm font-semibold tracking-tight text-[var(--text-primary)]">Google Drive</h3>
+              <StatusBadge tone={connected ? BADGE_TONE[health] : 'neutral'}>{connected ? MENU_BADGE_LABEL[health] : 'Non collegato'}</StatusBadge>
             </div>
 
             <div className={isPhone ? 'p-3 space-y-2.5' : 'p-4 space-y-3'}>
@@ -157,14 +169,14 @@ export function SidebarAccount({ onOpenStorageSettings }: SidebarAccountProps) {
                     <DriveAvatar email={email} size={36} />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-[var(--text-primary)] truncate" data-testid="sidebar-account-email">{email ?? 'account Google'}</p>
+                      {/* While a round runs the badge says so and the button's icon turns: this line
+                          keeps the last sync instead of saying it a third time. */}
                       <p className="text-xs text-[var(--text-secondary)]">
                         {health === 'reconnect'
                           ? 'L’accesso è scaduto: le sbobine restano in questo browser finché non ti riconnetti.'
-                          : health === 'syncing'
-                            ? 'Sincronizzazione in corso…'
-                            : status?.waiting_for_run
-                              ? DRIVE_WAITING_FOR_RUN
-                              : formatLastSync(status?.last_sync_at ?? null)}
+                          : status?.waiting_for_run
+                            ? DRIVE_WAITING_FOR_RUN
+                            : formatLastSync(status?.last_sync_at ?? null)}
                       </p>
                     </div>
                   </div>
@@ -179,7 +191,7 @@ export function SidebarAccount({ onOpenStorageSettings }: SidebarAccountProps) {
                     </button>
                   ) : (
                     <button type="button" onClick={drive.syncNow} disabled={busy !== null || Boolean(status?.syncing || status?.waiting_for_run)} className="app-button-secondary is-settings-action w-full justify-center">
-                      {busy === 'sync' ? spinner : <RefreshCw className="w-4 h-4" />}<span>Sincronizza ora</span>
+                      <RefreshCw className={`w-4 h-4${busy === 'sync' || status?.syncing ? ' animate-spin' : ''}`} aria-hidden="true" /><span>Sincronizza ora</span>
                     </button>
                   ))}
                 </>

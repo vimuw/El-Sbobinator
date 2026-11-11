@@ -31,7 +31,7 @@ interface StorageSectionProps {
   inBrowser?: boolean;
   /** Web build: whether Google Drive sync exists here and is linked; it changes what the warning suggests. */
   drive?: 'unavailable' | 'disconnected' | 'connected';
-  /** Web build: opens Impostazioni → Sincronizzazione from the warning. */
+  /** Web build: opens Impostazioni → Google Drive from the warning. */
   onOpenDrive?: () => void;
   /** Web build: "Vedi quali" on the sbobine's audio opens the archive on the sbobine that keep it. */
   onShowKeptAudio?: () => void;
@@ -290,7 +290,7 @@ function WebSpacePanel({ sessionInfo, isLoadingSessionInfo, drive = 'unavailable
         >
           <p>
             Se non apri il sito per qualche giorno o manca spazio, il browser può eliminare sbobine e audio senza chiedere.
-            {/* The way out is a link in the sentence to Impostazioni → Sincronizzazione, named after
+            {/* The way out is a link in the sentence to Impostazioni → Google Drive, named after
                 that page so it doesn't read like a link to the Google Drive site. */}
             {drive === 'disconnected' ? (
               <>

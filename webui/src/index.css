@@ -832,7 +832,7 @@ button {
 
 .settings-nav {
   display: grid;
-  /* The tabs: three, four with Sincronizzazione. Equal while they fit; a longer label
+  /* The tabs: three, four with Google Drive. Equal while they fit; a longer label
      ("Archiviazione") takes the room it needs from the others instead of spilling out of its tab. */
   grid-template-columns: repeat(var(--settings-tab-count, 3), minmax(max-content, 1fr));
   flex-shrink: 0;

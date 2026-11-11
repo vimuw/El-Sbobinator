@@ -88,7 +88,7 @@ describe('SidebarAccount', () => {
     expect(menu.style.bottom).toBe('36px');
     expect(within(menu).getByTestId('popover-caret').style.bottom).toBe('25px');
     // Named like the settings page it leads to, with its state right after the title.
-    const heading = within(menu).getByRole('heading', { name: 'Sincronizzazione' });
+    const heading = within(menu).getByRole('heading', { name: 'Google Drive' });
     expect(heading.nextElementSibling?.textContent).toBe('Non collegato');
     expect(menu.textContent).toContain('Non collegato');
     expect(menu.textContent).toContain('le ritrovi sugli altri dispositivi');
@@ -187,6 +187,38 @@ describe('SidebarAccount', () => {
     const menu = screen.getByRole('dialog', { name: 'Account Google Drive' });
     expect(within(menu).getByRole('button', { name: 'Esci dall’account' })).toBeTruthy();
     expect(within(menu).queryByText('Gestisci in Impostazioni')).toBeNull();
+  });
+
+  it('while a round runs says it once: "In corso" by the heading, the last sync kept, the icon turning', async () => {
+    const status = {
+      available: true, connected: true, email: 'studente@example.com', needs_reconnect: false, syncing: true,
+      waiting_for_run: false, last_sync_at: '2026-11-10T08:00:00.000Z', error: null,
+    };
+    window.pywebview = { api: { get_drive_status: async () => status } };
+    render(<SidebarAccount onOpenStorageSettings={() => {}} />);
+    // The button, read on its own, keeps the full state.
+    fireEvent.click(await screen.findByRole('button', { name: 'Account Google: studente@example.com (Sincronizzazione…)' }));
+    const menu = screen.getByRole('dialog', { name: 'Account Google Drive' });
+    expect(within(menu).getByRole('heading', { name: 'Google Drive' }).nextElementSibling?.textContent).toBe('In corso');
+    expect(menu.textContent).toContain('Ultima sincronizzazione:');
+    expect(menu.textContent).not.toContain('Sincronizzazione in corso');
+    const sync = within(menu).getByRole('button', { name: 'Sincronizza ora' }) as HTMLButtonElement;
+    expect(sync.disabled).toBe(true);
+    expect(sync.querySelector('svg')?.classList.contains('animate-spin')).toBe(true);
+  });
+
+  it('linked and synced: "Collegato" by the "Google Drive" heading, the masculine opposite of "Non collegato"', async () => {
+    const status = {
+      available: true, connected: true, email: 'studente@example.com', needs_reconnect: false, syncing: false,
+      waiting_for_run: false, last_sync_at: '2026-11-10T08:00:00.000Z', error: null,
+    };
+    window.pywebview = { api: { get_drive_status: async () => status } };
+    render(<SidebarAccount onOpenStorageSettings={() => {}} />);
+    // The button, read on its own, keeps the full state.
+    fireEvent.click(await screen.findByRole('button', { name: 'Account Google: studente@example.com (Sincronizzato)' }));
+    const menu = screen.getByRole('dialog', { name: 'Account Google Drive' });
+    expect(within(menu).getByRole('heading', { name: 'Google Drive' }).nextElementSibling?.textContent).toBe('Collegato');
+    expect(menu.textContent).not.toContain('Attiva');
   });
 
   it('"Gestisci in Impostazioni" leads to the settings and closes the menu; Esc closes it too', async () => {

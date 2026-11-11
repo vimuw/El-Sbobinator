@@ -23,7 +23,7 @@ interface WebStoragePageProps {
   isLoadingSessionInfo: boolean;
   /** An import, a restore or the emptied trash changed the archive. */
   onArchiveChanged: () => void;
-  /** Opens Impostazioni → Sincronizzazione. */
+  /** Opens Impostazioni → Google Drive. */
   onOpenDrive?: () => void;
   /** Closes the settings on the archive, filtered to the sbobine that keep their audio. */
   onShowKeptAudio?: () => void;

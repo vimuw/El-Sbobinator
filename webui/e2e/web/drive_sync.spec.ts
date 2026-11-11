@@ -84,7 +84,7 @@ async function startWithKey(page: Page) {
 
 async function openDriveSettings(page: Page) {
   await page.getByRole('button', { name: 'Apri impostazioni', exact: true }).click();
-  await page.getByRole('button', { name: 'Sincronizzazione', exact: true }).click();
+  await page.getByRole('button', { name: 'Google Drive', exact: true }).click();
   const panel = page.getByTestId('web-drive');
   await expect(panel).toBeVisible();
   return panel;
@@ -224,7 +224,7 @@ test('the trash and the restore reach the other browser; export and "Elimina tut
   expect(drive.files().some(file => file.name.endsWith('.html'))).toBe(false);
 
   // "Elimina tutti i miei dati da Drive": the hidden folder empties, the sbobina stays here.
-  await page.getByRole('button', { name: 'Sincronizzazione', exact: true }).click();
+  await page.getByRole('button', { name: 'Google Drive', exact: true }).click();
   const panel = page.getByTestId('web-drive');
   const eraseCard = page.getByTestId('web-drive-erase');
   await eraseCard.getByRole('button', { name: 'Elimina tutti i miei dati da Drive' }).click();

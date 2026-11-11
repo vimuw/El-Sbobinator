@@ -91,7 +91,7 @@ const TAB_HEADERS: Record<TabType, { title: string; description: string }> = {
     description: 'Chiave API Google Gemini, modello di trascrizione e preferenze di sistema.',
   },
   drive: {
-    title: 'Sincronizzazione',
+    title: 'Google Drive',
     description: 'Una copia delle sbobine nel tuo Google Drive, per ritrovarle sugli altri dispositivi.',
   },
   storage: {
@@ -111,7 +111,7 @@ const WEB_TAB_HEADERS: Record<TabType, { title: string; description: string }> =
     description: 'Modello di trascrizione e chiavi API Google Gemini salvate in questo browser.',
   },
   drive: {
-    title: 'Sincronizzazione',
+    title: 'Google Drive',
     description: 'Una copia delle sbobine nel tuo Google Drive, per ritrovarle sugli altri dispositivi.',
   },
   storage: {
@@ -625,14 +625,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     type="button"
                     onClick={() => handleTabChange('drive')}
                     aria-current={activeTab === 'drive' ? 'page' : undefined}
-                    aria-label="Sincronizzazione"
                     className={`settings-nav-item ${activeTab === 'drive' ? 'is-active' : ''}`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <Cloud className={`w-4 h-4 shrink-0 transition-colors ${activeTab === 'drive' ? 'text-[var(--accent-text)]' : 'text-[var(--text-secondary)]'}`} />
-                      {/* The phone's tab row fits "Archiviazione" but not "Sincronizzazione". */}
-                      <span className="truncate md:hidden">Sincronizza</span>
-                      <span className="truncate hidden md:inline">Sincronizzazione</span>
+                      {/* Named after the service, in full as Google asks: shorter than "Archiviazione",
+                          it fits the phone's tab row too. */}
+                      <span className="truncate">Google Drive</span>
                     </div>
                   </button>
                 )}
