@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { ChevronDown, Check, Info } from 'lucide-react';
+import { usePopoverPresence } from '../../../hooks/usePopoverPresence';
 
 export interface CustomSelectOption {
   value: string;
@@ -30,6 +31,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
   disabled = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const presence = usePopoverPresence(isOpen);
   const containerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuLayout, setMenuLayout] = useState({ opensUp: false, maxHeight: 240 });
@@ -168,12 +170,13 @@ export const CustomSelect: React.FC<CustomSelectProps> = React.memo(({
       </button>
 
       {/* Menu Overlay */}
-      {isOpen && (
+      {presence.shown && (
         <div
           ref={menuRef}
           role="listbox"
           style={{ maxHeight: menuLayout.maxHeight, transformOrigin: menuLayout.opensUp ? 'bottom center' : 'top center' }}
-          className={`select-dropdown absolute left-0 right-0 ${menuLayout.opensUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'} z-50 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-default)] overflow-hidden py-1 overflow-y-auto app-scroll`}
+          className={`select-dropdown${presence.closing ? ' popover-closing' : ''} absolute left-0 right-0 ${menuLayout.opensUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'} z-50 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-default)] overflow-hidden py-1 overflow-y-auto app-scroll`}
+          inert={presence.closing}
         >
           {options.map(opt => {
             const isSelected = opt.value === value;

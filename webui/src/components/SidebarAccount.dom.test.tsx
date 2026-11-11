@@ -221,6 +221,20 @@ describe('SidebarAccount', () => {
     expect(menu.textContent).not.toContain('Attiva');
   });
 
+  it('closes with the short exit of the other menus instead of vanishing', async () => {
+    setup(createFakeDrive(), { token: true, email: 'studente@example.com' });
+    render(<SidebarAccount onOpenStorageSettings={() => {}} />);
+    const button = await screen.findByRole('button', { name: /^Account Google: studente@example\.com/ });
+    fireEvent.click(button);
+    const menu = screen.getByRole('dialog', { name: 'Account Google Drive' });
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    // Still on the page while it plays its exit, then gone.
+    expect(menu.isConnected).toBe(true);
+    await waitFor(() => expect(menu.isConnected).toBe(false));
+  });
+
   it('"Gestisci in Impostazioni" leads to the settings and closes the menu; Esc closes it too', async () => {
     const drive = createFakeDrive();
     setup(drive, { token: true, email: 'studente@example.com' });
@@ -231,11 +245,11 @@ describe('SidebarAccount', () => {
     fireEvent.click(button);
     fireEvent.click(screen.getByRole('button', { name: 'Gestisci in Impostazioni' }));
     expect(onOpenStorageSettings).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 
     fireEvent.click(button);
     expect(button.getAttribute('aria-expanded')).toBe('true');
     fireEvent.keyDown(window, { key: 'Escape' });
-    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 });

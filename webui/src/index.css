@@ -2826,6 +2826,8 @@ button {
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-floating);
   min-width: 260px;
+  animation: dropdownPop 0.2s var(--ease-out) forwards;
+  transform-origin: top left;
 }
 
 .link-input {
@@ -3670,6 +3672,9 @@ button {
   max-width: 90vw;
   max-height: calc(var(--app-height) - 24px);
   overflow-y: auto;
+  /* It opens where the pointer was, as the toolbar menus open under their button. */
+  animation: dropdownPop 0.2s var(--ease-out) forwards;
+  transform-origin: top left;
 }
 
 /* Two classes so the denser rows win over .kebab-item, which is declared later. */
@@ -4014,6 +4019,26 @@ input::-webkit-contacts-auto-fill-button {
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-floating);
   padding: 4px;
+}
+
+/* CSS twin of popoverVariants.closed, for the popovers that open with dropdownPop or
+   player-menu-in (usePopoverPresence keeps them mounted for POPOVER_EXIT_MS): short and flat,
+   and no longer clickable while they fade. Two classes, after .kebab-panel.player-menu, so the
+   closing animation replaces the opening one. */
+@keyframes popover-close {
+  to {
+    opacity: 0;
+    transform: scale(0.97);
+    filter: blur(2px);
+  }
+}
+
+.kebab-panel.popover-closing,
+.color-picker-panel.popover-closing,
+.link-panel.popover-closing,
+.select-dropdown.popover-closing {
+  animation: popover-close 0.12s var(--ease-in) forwards;
+  pointer-events: none;
 }
 
 .kebab-separator {

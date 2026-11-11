@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { ChevronRight, Cloud, EyeOff, Loader2, LogOut, MonitorSmartphone, RefreshCw, Settings, ShieldCheck, UserRound } from 'lucide-react';
 import { DRIVE_EXPIRED_ERROR } from '../bridge';
 import { DRIVE_HEALTH_LABEL, DRIVE_WAITING_FOR_RUN, driveHealth, formatLastSync, useDriveStatus, type DriveHealth } from '../hooks/useDriveStatus';
@@ -141,14 +141,17 @@ export function SidebarAccount({ onOpenStorageSettings }: SidebarAccountProps) {
         </button>
       </SidebarTooltip>
 
-      {open && (
-        <>
-          <div className="fixed inset-0 z-[var(--z-dismiss-layer)]" onClick={() => setOpen(false)} aria-hidden="true" />
+      {open && <div className="fixed inset-0 z-[var(--z-dismiss-layer)]" onClick={() => setOpen(false)} aria-hidden="true" />}
+      {/* It closes as the other menus do, short and flat, instead of vanishing. */}
+      <AnimatePresence>
+        {open && (
           <motion.div
+            key="sidebar-account-menu"
             role="dialog"
             aria-label="Account Google Drive"
             initial="closed"
             animate="open"
+            exit="closed"
             variants={popoverVariants({ x: isPhone ? 0 : -6, y: isPhone ? 4 : 0, scale: 0.94, blur: 6 })}
             className="sidebar-account-menu fixed z-[var(--z-dialog)] flex flex-col"
             style={isPhone
@@ -245,8 +248,8 @@ export function SidebarAccount({ onOpenStorageSettings }: SidebarAccountProps) {
             )}
             {!isPhone && anchor && <PopoverCaret centerFromBottom={anchor.caret} />}
           </motion.div>
-        </>
-      )}
+        )}
+      </AnimatePresence>
     </>
   );
 }

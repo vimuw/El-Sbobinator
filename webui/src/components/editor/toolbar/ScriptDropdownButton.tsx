@@ -1,5 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
+import { usePopoverPresence } from '../../../hooks/usePopoverPresence';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import { ChevronDown, Subscript, Superscript } from 'lucide-react';
 import { useEscapeToClose } from '../../../hooks/useEscapeToClose';
@@ -12,6 +13,7 @@ export const ScriptDropdownButton = ({ editor }: { editor: TiptapEditor }) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   const panelRef = React.useRef<HTMLDivElement>(null);
+  const presence = usePopoverPresence(isOpen);
   const { panelPos, placeUnder } = useAnchoredPanel(isOpen, panelRef);
 
   const isSuperscript = editor.isActive('superscript');
@@ -61,12 +63,13 @@ export const ScriptDropdownButton = ({ editor }: { editor: TiptapEditor }) => {
         <CurrentIcon className="h-4 w-4" />
         <ChevronDown size={9} style={{ opacity: 0.6, marginLeft: 2 }} />
       </button>
-      {isOpen && createPortal(
+      {presence.shown && createPortal(
         <div
           ref={panelRef}
           role="group"
           aria-label="Apice e pedice"
-          className="kebab-panel editor-dropdown-panel"
+          className={`kebab-panel editor-dropdown-panel${presence.closing ? ' popover-closing' : ''}`}
+          inert={presence.closing}
           style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 'var(--z-popover)' }}
         >
           {items.map(({ label, shortcut, icon: Icon, active, toggle }) => (

@@ -1,5 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
+import { usePopoverPresence } from '../../../hooks/usePopoverPresence';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import { Link2, Link2Off } from 'lucide-react';
 import { shortcutLabel } from '../../../keyboardLabels';
@@ -16,6 +17,7 @@ export const LinkButton = ({ editor, openRequest = 0, hideButton = false, anchor
   const [panelPos, setPanelPos] = React.useState({ top: 0, left: 0 });
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   const panelRef = React.useRef<HTMLDivElement>(null);
+  const presence = usePopoverPresence(isOpen);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const isActive = editor.isActive('link');
 
@@ -89,10 +91,11 @@ export const LinkButton = ({ editor, openRequest = 0, hideButton = false, anchor
           {isActive ? <Link2Off className="h-4 w-4" /> : <Link2 className="h-4 w-4" />}
         </button>
       )}
-      {isOpen && createPortal(
+      {presence.shown && createPortal(
         <div
           ref={panelRef}
-          className="link-panel"
+          className={`link-panel${presence.closing ? ' popover-closing' : ''}`}
+          inert={presence.closing}
           style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 'var(--z-popover)' }}
         >
           <input

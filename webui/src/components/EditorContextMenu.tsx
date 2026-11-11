@@ -20,6 +20,7 @@ import {
 import { getLastHighlightColor } from '../editorUtils';
 import { HighlightIcon } from './HighlightIcon';
 import { useEscapeToClose } from '../hooks/useEscapeToClose';
+import { usePopoverPresence } from '../hooks/usePopoverPresence';
 import { writeEditorClipboard } from '../editorClipboard';
 import { pasteEditorClipboard, prepareSelectionClipboard } from '../editorSelectionClipboard';
 import { shortcutLabel } from '../keyboardLabels';
@@ -61,11 +62,16 @@ export function EditorContextMenu({
   onOpenLink,
 }: EditorContextMenuProps) {
   const menuRef = React.useRef<HTMLDivElement>(null);
+  // Closed, the menu fades where it stood, at the place it was opened.
+  const { shown: menuAt, closing } = usePopoverPresence(contextMenu);
   React.useLayoutEffect(() => {
     const menu = menuRef.current;
     if (!menu || !contextMenu) return;
     const place = () => {
-      const { width, height } = menu.getBoundingClientRect();
+      // The layout size, not the bounding box: on its first frame the menu is still mid-dropdownPop,
+      // scaled down, and clamping it at that size would let it overflow once full size.
+      const width = menu.offsetWidth;
+      const height = menu.offsetHeight;
       menu.style.left = `${Math.max(12, Math.min(contextMenu.x, window.innerWidth - width - 12))}px`;
       menu.style.top = `${Math.max(12, Math.min(contextMenu.y, window.innerHeight - height - 12))}px`;
     };
@@ -74,13 +80,14 @@ export function EditorContextMenu({
     return () => window.removeEventListener('resize', place);
   }, [contextMenu, editor]);
   useEscapeToClose(Boolean(contextMenu), onClose);
-  if (!contextMenu || !editor || editor.isDestroyed) return null;
+  if (!menuAt || !editor || editor.isDestroyed) return null;
 
   return createPortal(
     <div
       ref={menuRef}
-      className="kebab-panel editor-context-menu fixed z-[var(--z-popover)] select-none"
-      style={{ left: contextMenu.x, top: contextMenu.y }}
+      className={`kebab-panel editor-context-menu${closing ? ' popover-closing' : ''} fixed z-[var(--z-popover)] select-none`}
+      inert={closing}
+      style={{ left: menuAt.x, top: menuAt.y }}
       onClick={e => {
         e.stopPropagation();
         onClose();

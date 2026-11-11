@@ -69,7 +69,7 @@ describe('Apice e pedice', () => {
     fireEvent.click(screen.getByRole('button', { name: label }));
     expect(editor.getJSON()).toEqual(original);
     // Picking a style closes the list.
-    expect(screen.queryByRole('group', { name: 'Apice e pedice' })).toBeNull();
+    await waitFor(() => expect(screen.queryByRole('group', { name: 'Apice e pedice' })).toBeNull());
   });
 
   it('switches the typing style exclusively while preserving other character formatting', async () => {

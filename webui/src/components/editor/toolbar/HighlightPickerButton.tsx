@@ -1,5 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
+import { usePopoverPresence } from '../../../hooks/usePopoverPresence';
 import { type Editor as TiptapEditor } from '@tiptap/core';
 import { ChevronDown } from 'lucide-react';
 import { getLastHighlightColor, setLastHighlightColor } from '../../../editorUtils';
@@ -12,6 +13,7 @@ export const HighlightPickerButton = ({ editor }: { editor: TiptapEditor }) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   const panelRef = React.useRef<HTMLDivElement>(null);
+  const presence = usePopoverPresence(isOpen);
   const { panelPos, placeUnder } = useAnchoredPanel(isOpen, panelRef);
   const currentColor: string | undefined = editor.getAttributes('highlight').color;
   const activeColor = currentColor ?? getLastHighlightColor();
@@ -50,10 +52,11 @@ export const HighlightPickerButton = ({ editor }: { editor: TiptapEditor }) => {
         <HighlightIcon color={activeColor} className="h-4 w-4" />
         <ChevronDown size={9} style={{ opacity: 0.55, flexShrink: 0 }} />
       </button>
-      {isOpen && createPortal(
+      {presence.shown && createPortal(
         <div
           ref={panelRef}
-          className="color-picker-panel"
+          className={`color-picker-panel${presence.closing ? ' popover-closing' : ''}`}
+          inert={presence.closing}
           style={{ position: 'fixed', top: panelPos.top, left: panelPos.left, zIndex: 'var(--z-popover)' }}
         >
           <div className="color-row" style={{ flexWrap: 'wrap', gap: 5 }}>
