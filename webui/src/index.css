@@ -4550,6 +4550,22 @@ input::-webkit-contacts-auto-fill-button {
   background: var(--bg-floating);
   box-shadow: var(--shadow-md);
   pointer-events: auto;
+  transition:
+    opacity var(--duration-state) var(--ease-out),
+    transform var(--duration-state) var(--ease-out);
+}
+
+/* While the editor scrolls, the dock, open or folded, steps out of the way and the scroll pill
+   runs down the scrollbar to the bottom, as floating bars do on phones; it comes back as the pill
+   fades. The audio keeps playing. A dock with a menu open is in use: it stays, and the pill waits. */
+.editor-fullpage:has(.editor-scroll-percent[data-visible='true']) .editor-player-dock:not(:has([aria-expanded='true'])) {
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+}
+
+.editor-fullpage:has(.editor-player-dock [aria-expanded='true']) .editor-scroll-percent {
+  visibility: hidden;
 }
 
 .editor-player-dock:has(> div > audio) {

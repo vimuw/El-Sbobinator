@@ -551,7 +551,7 @@ export function RichTextEditor({
           <div className="editor-toc-spacer" style={{ width: isTocOpen ? TOC_OPEN_WIDTH : TOC_CLOSED_WIDTH }} />
         </div>
       </div>
-      <EditorScrollPercent containerRef={scrollContainerRef} bottomInset={bottomInset} />
+      <EditorScrollPercent containerRef={scrollContainerRef} />
 
       <EditorContextMenu
         contextMenu={contextMenu}
