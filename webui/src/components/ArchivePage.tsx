@@ -349,12 +349,14 @@ export function ArchivePage({
           />
         )}
       </AnimatePresence>
-      {sharingSession && (
-        <ShareExportModal
-          session={sharingSession}
-          onClose={() => setSharingSession(null)}
-        />
-      )}
+      <AnimatePresence>
+        {sharingSession && (
+          <ShareExportModal
+            session={sharingSession}
+            onClose={() => setSharingSession(null)}
+          />
+        )}
+      </AnimatePresence>
     </>
   );
 

@@ -6,6 +6,8 @@ import { DEFAULT_FOLDER_COLOR } from './types';
 import { formatRelativeTime } from '../../utils';
 import { MiddleTruncate } from '../MiddleTruncate';
 import { DURATION, modalCard } from '../../motion';
+import { useBackdropDismiss } from '../../hooks/useBackdropDismiss';
+import { UnsavedChangesHint } from '../modals/UnsavedChangesHint';
 
 export interface AddSessionsToFolderModalProps {
   folder: ArchiveFolder;
@@ -75,6 +77,9 @@ export function AddSessionsToFolderModal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
+  // The search alone loses nothing worth a shake; a selection does.
+  const backdrop = useBackdropDismiss({ dirty: selectedDirs.size > 0, onClose });
+
   const allFilteredSelected =
     filteredSessions.length > 0 &&
     filteredSessions.every(s => selectedDirs.has(s.session_dir));
@@ -89,10 +94,12 @@ export function AddSessionsToFolderModal({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         className="modal-overlay absolute inset-0"
+        onClick={backdrop.onBackdropClick}
+        data-testid="add-sessions-backdrop"
       />
       <motion.div
         {...modalCard}
-        className="modal-card relative w-full max-w-lg max-h-[86vh] overflow-hidden flex flex-col"
+        className={`modal-card${backdrop.shaking ? ' is-shaking' : ''} relative w-full max-w-lg max-h-[86vh] overflow-hidden flex flex-col`}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -265,6 +272,7 @@ export function AddSessionsToFolderModal({
         </div>
 
         {/* Footer Actions */}
+        <UnsavedChangesHint show={backdrop.showHint} className="is-above-footer" />
         <div className="modal-footer">
           <button
             type="button"
@@ -277,7 +285,7 @@ export function AddSessionsToFolderModal({
             type="button"
             onClick={handleConfirm}
             disabled={selectedDirs.size === 0}
-            className="modal-action-button is-primary flex-1 flex items-center justify-center gap-1.5"
+            className={`modal-action-button is-primary flex-1 flex items-center justify-center gap-1.5${backdrop.shaking ? ' is-attention' : ''}`}
           >
             <Plus className="w-4 h-4" />
             <span>

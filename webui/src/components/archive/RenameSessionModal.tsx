@@ -3,6 +3,8 @@ import { motion } from 'motion/react';
 import { X } from 'lucide-react';
 import type { ArchiveSession } from '../../bridge';
 import { modalCard } from '../../motion';
+import { useBackdropDismiss } from '../../hooks/useBackdropDismiss';
+import { UnsavedChangesHint } from '../modals/UnsavedChangesHint';
 
 export function RenameSessionModal({ session, onSave, onClose }: {
   session: ArchiveSession;
@@ -64,11 +66,13 @@ export function RenameSessionModal({ session, onSave, onClose }: {
     }
   };
 
+  const backdrop = useBackdropDismiss({ dirty: name.trim() !== session.name.trim(), onClose, blocked: saving });
+
   return (
     <motion.div className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-4" exit={{ opacity: 0 }}>
-      <div className="modal-overlay absolute inset-0" />
+      <div className="modal-overlay absolute inset-0" onClick={backdrop.onBackdropClick} data-testid="rename-session-backdrop" />
       <motion.div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
-        className="modal-card relative w-full max-w-md overflow-hidden" {...modalCard}>
+        className={`modal-card${backdrop.shaking ? ' is-shaking' : ''} relative w-full max-w-md overflow-hidden`} {...modalCard}>
         <div className="modal-header">
           <h2 id={titleId} className="text-lg font-semibold">Rinomina sbobina</h2>
           <button type="button" className="icon-button modal-icon-button" aria-label="Chiudi finestra" disabled={saving} onClick={onClose}><X className="w-4 h-4" /></button>
@@ -81,9 +85,10 @@ export function RenameSessionModal({ session, onSave, onClose }: {
               aria-invalid={Boolean(error)} aria-describedby={error ? errorId : undefined} />
             {error && <p id={errorId} role="alert" className="text-sm text-[var(--error-text)]">{error}</p>}
           </div>
+          <UnsavedChangesHint show={backdrop.showHint} className="is-above-footer" />
           <div className="modal-footer">
             <button type="button" onClick={onClose} disabled={saving} className="modal-action-button flex-1">Annulla</button>
-            <button type="submit" disabled={saving || !name.trim() || name.trim().length > 200} className="modal-action-button is-primary flex-1">{saving ? 'Salvataggio…' : 'Salva'}</button>
+            <button type="submit" disabled={saving || !name.trim() || name.trim().length > 200} className={`modal-action-button is-primary flex-1${backdrop.shaking ? ' is-attention' : ''}`}>{saving ? 'Salvataggio…' : 'Salva'}</button>
           </div>
         </form>
       </motion.div>

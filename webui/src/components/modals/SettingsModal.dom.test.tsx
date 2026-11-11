@@ -18,6 +18,8 @@ import { createApiUsageStore } from '../../web/apiUsage';
 import { WEB_CAPABILITIES, createWebPywebviewApi } from '../../web/webHost';
 import { MODEL_25_ACCESS_NOTE, MODEL_25_ACCESS_NOTE_WEB } from './settings/ModelSection';
 import { APP_VERSION } from '../../branding';
+import { BACKDROP_SHAKE_MS } from '../../hooks/useBackdropDismiss';
+import { UNSAVED_CHANGES_HINT } from './UnsavedChangesHint';
 
 const motionCache = new Map<string, React.ForwardRefExoticComponent<React.PropsWithoutRef<Record<string, unknown>> & React.RefAttributes<unknown>>>();
 vi.mock('motion/react', () => ({
@@ -427,12 +429,47 @@ describe('SettingsModal — save behavior', () => {
     );
   });
 
-  it('backdrop click when idle: onClose NOT called', () => {
+  it('a click outside closes the settings when nothing waits to be saved', () => {
+    const onClose = vi.fn();
+    render(<SettingsModal {...makeProps()} onClose={onClose} />);
+    fireEvent.click(screen.getByTestId('settings-backdrop'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('a click outside with unsaved edits keeps them: the card shakes and "Salva e Chiudi" lights up', () => {
+    vi.useFakeTimers();
+    onTestFinished(() => { vi.useRealTimers(); });
+    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED, 'false');
     const onClose = vi.fn();
     const { container } = render(<SettingsModal {...makeProps()} onClose={onClose} />);
-    const backdrop = container.querySelector('.modal-overlay') as HTMLElement;
-    fireEvent.click(backdrop);
+    fireEvent.click(screen.getByRole('switch'));
+
+    fireEvent.click(screen.getByTestId('settings-backdrop'));
     expect(onClose).not.toHaveBeenCalled();
+    expect(container.querySelector('.modal-card')?.classList.contains('is-shaking')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Salva e Chiudi' }).classList.contains('is-attention')).toBe(true);
+
+    // A line beside the buttons says why, and stays once the shake is over.
+    expect(screen.getByText(UNSAVED_CHANGES_HINT).getAttribute('role')).toBe('status');
+    act(() => { vi.advanceTimersByTime(BACKDROP_SHAKE_MS); });
+    expect(screen.getByText(UNSAVED_CHANGES_HINT).getAttribute('role')).toBe('status');
+    expect(container.querySelector('.modal-card')?.classList.contains('is-shaking')).toBe(false);
+    expect(screen.getByRole('button', { name: 'Salva e Chiudi' }).classList.contains('is-attention')).toBe(false);
+    expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('true');
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('a click outside does nothing while the settings are being saved', async () => {
+    let resolveSave!: (value: { ok: boolean }) => void;
+    setPywebview({ save_settings: vi.fn(() => new Promise(resolve => { resolveSave = resolve; })) });
+    const onClose = vi.fn();
+    render(<SettingsModal {...makeProps()} onClose={onClose} />);
+    await act(async () => { fireEvent.click(screen.getByText('Salva e Chiudi')); });
+
+    fireEvent.click(screen.getByTestId('settings-backdrop'));
+    expect(onClose).not.toHaveBeenCalled();
+    await act(async () => { resolveSave({ ok: true }); });
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('closes on Escape key when idle', () => {
