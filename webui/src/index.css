@@ -4003,7 +4003,8 @@ input::-webkit-contacts-auto-fill-button {
 
 .sidebar-tooltip {
   position: absolute;
-  left: calc(100% + 10px);
+  /* The buttons end ~10px inside the sidebar's border: 18px leaves ~8px of air past it. */
+  left: calc(100% + 18px);
   top: 50%;
   transform: translateY(-50%);
   background: var(--bg-floating);
