@@ -461,7 +461,12 @@ export function RichTextEditor({
     };
     requestAnimationFrame(poll);
 
+    // Only a new width moves the page sideways. The dock opening or folding changes the bottom
+    // padding, so the box's height: re-centring then threw a page widened by a table to the right.
+    let lastWidth = container.clientWidth;
     const resizeObserver = new ResizeObserver(() => {
+      if (container.clientWidth === lastWidth) return;
+      lastWidth = container.clientWidth;
       adjustScroll();
     });
     resizeObserver.observe(container);

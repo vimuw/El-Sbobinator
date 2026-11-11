@@ -95,6 +95,44 @@ describe('RichTextEditor Component', () => {
     expect(margin().bottom).toBe(136);
   });
 
+  it('re-centres a page wider than the editor on a new width, not when only the height changes', async () => {
+    const observed: ResizeObserverCallback[] = [];
+    const Original = globalThis.ResizeObserver;
+    globalThis.ResizeObserver = class {
+      constructor(callback: ResizeObserverCallback) { observed.push(callback); }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+    try {
+      // A table wider than the page runs past the editor, as on a phone.
+      render(<RichTextEditor initialContent="<table><tr><td>Colonna</td></tr></table>" isTocOpen={false} />);
+      const container = document.querySelector<HTMLElement>('.editor-page-container')!;
+      const outer = container.querySelector<HTMLElement>('.editor-page-outer')!;
+      let width = 400;
+      Object.defineProperty(container, 'clientWidth', { configurable: true, get: () => width });
+      Object.defineProperty(outer, 'scrollWidth', { configurable: true, value: 660 });
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      await new Promise(resolve => setTimeout(resolve, 300));
+      const fire = () => act(() => { observed.forEach(callback => callback([], {} as ResizeObserver)); });
+      // Laid out at its width (jsdom mounted it at none): the wide page is centred.
+      fire();
+      expect(container.scrollLeft).toBe(130);
+
+      // The reader scrolled back to the left; the dock folds, so only the height changes.
+      container.scrollLeft = 0;
+      fire();
+      expect(container.scrollLeft).toBe(0);
+
+      // A narrower window does centre the page again.
+      width = 380;
+      fire();
+      expect(container.scrollLeft).toBe(140);
+    } finally {
+      globalThis.ResizeObserver = Original;
+    }
+  });
+
   it('keeps the index mounted for its exit fade and restores it on immediate reopen', () => {
     const onTocToggle = vi.fn();
     const onScrollToHeading = vi.fn();
