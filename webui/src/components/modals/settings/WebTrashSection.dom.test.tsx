@@ -53,7 +53,8 @@ describe('WebTrashSection', () => {
     const second = await archive.create(input('Due'), '<p>2</p>');
     await archive.trash(first.session_dir, new Date().toISOString());
     await archive.trash(second.session_dir, new Date().toISOString());
-    render(<WebTrashSection />);
+    const onArchiveChanged = vi.fn();
+    render(<WebTrashSection onArchiveChanged={onArchiveChanged} />);
 
     const empty = await screen.findByRole('button', { name: 'Svuota cestino' });
     // On the description's line, like "Elimina i dati da Drive", not alone under the list.
@@ -62,10 +63,13 @@ describe('WebTrashSection', () => {
     expect(screen.getByRole('group', { name: 'Svuota cestino' }).textContent).toBe('Svuotare il cestino?Le 2 sbobine nel cestino verranno eliminate subito, insieme al loro audio. Non potrai più recuperarle.AnnullaElimina');
     fireEvent.click(screen.getByRole('button', { name: 'Annulla' }));
     expect(await archive.listTrash()).toHaveLength(2);
+    expect(onArchiveChanged).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Svuota cestino' }));
     fireEvent.click(screen.getByRole('button', { name: 'Elimina' }));
     await waitFor(() => expect(screen.getByText('Il cestino è vuoto.')).toBeTruthy());
     expect(await archive.get(first.session_dir)).toBeNull();
+    // The freed space must reach Archiviazione's figures without a reload.
+    expect(onArchiveChanged).toHaveBeenCalledTimes(1);
   });
 });

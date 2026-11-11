@@ -795,7 +795,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           onShowKeptAudio={storage?.onShowKeptAudio}
                           onArchiveChanged={() => {
                             storage?.onArchiveImported?.();
-                            fetchSessionStorageInfo();
+                            // The page is open: its figures stay until the new ones arrive.
+                            fetchSessionStorageInfo({ quiet: true });
                           }}
                         />
                       ) : (
