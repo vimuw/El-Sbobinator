@@ -28,7 +28,7 @@ export interface DriveDevMiddlewareOptions {
   handle?: typeof handleDriveRequest;
 }
 
-async function readBody(request: DevRequest): Promise<Uint8Array<ArrayBuffer> | undefined> {
+export async function readBody(request: DevRequest): Promise<Uint8Array<ArrayBuffer> | undefined> {
   const chunks: Uint8Array[] = [];
   for await (const chunk of request) chunks.push(typeof chunk === 'string' ? new TextEncoder().encode(chunk) : chunk);
   if (!chunks.length) return undefined;
@@ -41,7 +41,7 @@ async function readBody(request: DevRequest): Promise<Uint8Array<ArrayBuffer> | 
   return body;
 }
 
-function toFetchRequest(request: DevRequest, url: string, method: string, body: Uint8Array<ArrayBuffer> | undefined): Request {
+export function toFetchRequest(request: DevRequest, url: string, method: string, body: Uint8Array<ArrayBuffer> | undefined): Request {
   const headers = new Headers();
   for (const [name, value] of Object.entries(request.headers)) {
     if (value === undefined || name.startsWith(':')) continue;

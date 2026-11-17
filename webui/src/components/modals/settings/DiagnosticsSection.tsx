@@ -12,6 +12,8 @@ import {
   MessageSquareWarning,
 } from 'lucide-react';
 import { ReportProblemLink } from '../../ReportProblemLink';
+import { getHostCapabilities } from '../../../hostCapabilities';
+import { loadAutoReports, saveAutoReports } from '../../../monitoring/config';
 import { CustomSelect } from './CustomSelect';
 import type { ValidationResult } from '../../../bridge';
 import { SettingsRow, SettingsSectionHeading } from './SettingsLayout';
@@ -66,6 +68,21 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
   };
 
   const problems = validationResult?.checks?.filter(check => check.status !== 'ok') ?? [];
+  const feedbackForm = !getHostCapabilities().reportForm;
+  const [autoReports, setAutoReportsState] = useState(loadAutoReports);
+
+  const toggleAutoReports = () => {
+    const next = !autoReports;
+    setAutoReportsState(next);
+    saveAutoReports(next);
+    // Loaded with the page in web builds with reports; Vite drops the SDK from the desktop bundle.
+    // A chunk that does not load (blocked, offline) leaves the saved choice for the next page.
+    if (import.meta.env.MODE === 'web') {
+      void import('../../../monitoring/sentry')
+        .then(monitoring => monitoring.setAutoReports(next))
+        .catch(error => reportClientError('monitoring', error));
+    }
+  };
 
   return (
     <div className="space-y-3 animate-fade-in">
@@ -73,9 +90,37 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
         <div className="space-y-2">
           <SettingsSectionHeading icon={MessageSquareWarning} id="diagnostic-support-heading">Segnala un problema</SettingsSectionHeading>
           <p className="text-xs text-[var(--text-secondary)]">
-            Due passaggi: copia il report e incollalo nel modulo.
+            {feedbackForm ? 'Scrivi cosa è successo: le informazioni tecniche si allegano da sole, se vuoi.' : 'Due passaggi: copia il report e incollalo nel modulo.'}
           </p>
         </div>
+        {feedbackForm ? (
+          <div>
+            <SettingsRow title="Invia una segnalazione" description="Un messaggio, con immagini se servono.">
+              <ReportProblemLink className="app-button-secondary is-settings-action shrink-0" />
+            </SettingsRow>
+            <SettingsRow
+              title="Invia report automatici degli errori"
+              description="Se qualcosa si rompe, l’app manda da sola un report tecnico, senza i tuoi testi."
+            >
+              <button
+                type="button"
+                role="switch"
+                aria-checked={autoReports}
+                aria-label="Invia report automatici degli errori"
+                onClick={toggleAutoReports}
+                className={`touch-hit relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                  autoReports ? 'bg-[var(--accent-bg)]' : 'bg-[var(--border-default)]'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-[var(--shadow-xs)] ring-0 transition duration-200 ease-in-out ${
+                    autoReports ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </SettingsRow>
+          </div>
+        ) : (<>
         {/* The two steps in the order they are done, each with its button on the right, like the
             rows of Archiviazione. The sbobina choice decides what the report holds, so it follows step 1. */}
         <div>
@@ -123,6 +168,7 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
             <ReportProblemLink className="app-button-secondary is-settings-action shrink-0" />
           </SettingsRow>
         </div>
+        </>)}
         {supportError && <p role="alert" className="text-xs text-[var(--error-text)]">{supportError}</p>}
       </section>
 

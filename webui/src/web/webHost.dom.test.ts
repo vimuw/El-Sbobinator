@@ -92,6 +92,8 @@ describe('web host', () => {
     expect(capabilities).toMatchObject({
       kind: 'web', keyStorage: 'browser', openLocalPath: false, nativeFolderPicker: false,
       updateInstallation: false, osNotifications: false, editorAudio: true, sessionKeepsAudio: false, sbobinaPackages: false, environmentCheck: false,
+      // No Sentry DSN in the tests' build: "Segnala un problema" keeps the Google form.
+      reportForm: true,
     });
     const api = window.pywebview?.api;
     expect(api?.start_processing).toBeTypeOf('function');

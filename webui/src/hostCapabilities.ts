@@ -25,6 +25,9 @@ export interface HostCapabilities {
   // Deleting a sbobina removes it at once; without this (web previews with Drive sync) it goes to a
   // trash kept 30 days.
   permanentDelete: boolean;
+  // "Segnala un problema" opens the Google form; web builds with a Sentry DSN turn it off for the
+  // in-app feedback window (components/modals/FeedbackModal.tsx).
+  reportForm: boolean;
 }
 
 export const DESKTOP_CAPABILITIES: HostCapabilities = {
@@ -44,6 +47,7 @@ export const DESKTOP_CAPABILITIES: HostCapabilities = {
   sbobinaPackages: true,
   environmentCheck: true,
   permanentDelete: true,
+  reportForm: true,
 };
 
 let hostCapabilities: HostCapabilities = DESKTOP_CAPABILITIES;

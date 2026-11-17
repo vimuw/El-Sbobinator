@@ -312,6 +312,16 @@ button {
   border-radius: var(--radius-pill);
 }
 
+/* A text area in a modal (the feedback's description) grows with its lines: rounded like the
+   cards, not a pill. */
+.modal-card .app-input.is-multiline {
+  height: auto;
+  min-height: 7.5rem;
+  padding: 0.75rem 1.1rem;
+  border-radius: var(--radius-xl);
+  resize: vertical;
+}
+
 /* Type scale for the queue page: one display title. */
 .page-title {
   font-size: var(--text-title);

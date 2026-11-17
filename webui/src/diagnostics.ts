@@ -34,10 +34,27 @@ async function drain() {
   }
 }
 
+// The web build's error reports (monitoring/sentry.ts), when the build and the user have them on.
+type ErrorMonitor = (source: string, error: unknown) => void;
+let monitor: ErrorMonitor | null = null;
+
+export function setErrorMonitor(next: ErrorMonitor | null) {
+  monitor = next;
+}
+
+function notifyMonitor(source: string, error: unknown) {
+  try {
+    monitor?.(source, error);
+  } catch {
+    // A report that cannot be built never breaks the page.
+  }
+}
+
 export function reportClientError(source: string, error: unknown = 'Errore senza dettagli') {
   // Keep developer-console behavior; production builds drop this statement,
   // while the explicit bridge report below remains.
   console.error(source, error);
+  notifyMonitor(source, error);
   const message = `${source}: ${error instanceof Error ? error.message : String(error)}`.slice(0, 3000);
   const stack = error instanceof Error ? (error.stack || '').slice(0, 6000) : '';
   enqueue({ kind: source === 'react' ? 'react' : 'error', message, stack });
@@ -64,6 +81,7 @@ export function installFrontendDiagnostics() {
   window.addEventListener('error', event => reportClientError('window', event.error || event.message));
   window.addEventListener('unhandledrejection', event => {
     const reason = event.reason;
+    notifyMonitor('unhandledrejection', reason);
     enqueue({ kind: 'unhandledrejection', message: String(reason instanceof Error ? reason.message : reason).slice(0, 3000), stack: reason instanceof Error ? (reason.stack || '').slice(0, 6000) : '' });
   });
 }

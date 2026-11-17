@@ -7,6 +7,7 @@ import { installFrontendDiagnostics, reportClientError, reportFrontendReady } fr
 import { APP_VERSION } from './branding';
 import { validateDesktopBuild } from './desktopStartup';
 import { scheduleEditorPreload } from './editorPreload';
+import { startMonitoring } from './monitoring/start';
 
 installFrontendDiagnostics();
 
@@ -108,6 +109,9 @@ async function mountApp() {
     // Waits while another tab of this browser has the app (one at a time). False: the browser
     // blocks the site's data, and a page says so instead of the app.
     if (!await initWebHost()) return;
+    // Feedback and error reports, in builds with a Sentry DSN: before the app, to catch its start.
+    // Never throws: if they cannot start, the app opens with the Google form instead.
+    await startMonitoring();
   } else {
     validateDesktopBuild(APP_VERSION);
     if (!window.elDesktopStartup) await initBrowserHost();

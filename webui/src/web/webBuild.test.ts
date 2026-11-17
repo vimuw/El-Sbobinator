@@ -1,7 +1,8 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { SESSION_COOKIE, SESSION_MAX_AGE_S } from './drive/server/driveServer';
-import { SEARCH_CONSOLE_VERIFICATION, WEB_CSP, WEB_STATIC_PAGES, driveClientId, toWebDevIndexHtml, toWebDevStaticPageHtml, toWebIndexHtml, webBuildVersion, webCsp, webHeadersFile, webStaticPages } from './webBuild';
+import { SEARCH_CONSOLE_VERIFICATION, WEB_CSP, WEB_STATIC_PAGES, driveClientId, sentryDsn, toWebDevIndexHtml, toWebDevStaticPageHtml, toWebIndexHtml, webBuildVersion, webCsp, webHeadersFile, webStaticPages } from './webBuild';
 
 function directive(csp: string, name: string): string {
   return csp.split(';').map(part => part.trim()).find(part => part.startsWith(`${name} `)) ?? '';
@@ -145,12 +146,17 @@ describe('privacy page of the web site', () => {
     // The Drive login does go through a service of the site: the summary must not deny it.
     expect(summary).not.toMatch(/non ha (?:un )?server/i);
     expect(summary).toContain('non passano da un server suo');
-    expect(summary).toContain('Solo il collegamento facoltativo a Google Drive passa da un piccolo servizio del sito');
+    // Both services of the site, the Drive login and the reports' tunnel (/api/report).
+    expect(summary).toContain('Da due piccoli servizi del sito, che non tengono dati, passano solo il collegamento facoltativo a Google Drive');
+    expect(summary).toContain('le segnalazioni che mandi dall’app, inoltrate a Sentry');
     const rows = [...summary.matchAll(/<tr><td>([^<]+)<\/td><td>([^<]+)<\/td><td>([^<]+)<\/td><\/tr>/g)].map(([, what, where]) => [what, where]);
     expect(rows).toContainEqual([
       'Collegamento a Google Drive (permesso di rinnovo ed email dell’account)',
       expect.stringContaining('in un cookie cifrato in questo browser'),
     ]);
+    // Sentry keeps reports 30 days in its EU region; the user can turn the automatic ones off.
+    expect(rows).toContainEqual(['Segnalazioni ed email', expect.stringContaining('Sentry (dati nell’Unione europea, 30 giorni)')]);
+    expect(rows).toContainEqual(['Report automatici degli errori', expect.stringContaining('Impostazioni → Diagnostica')]);
     // Same lifetime as the server's session cookie (server/driveServer.ts SESSION_MAX_AGE_S).
     expect(SESSION_MAX_AGE_S).toBe(180 * 24 * 3600);
     expect(summary).toContain('fino a sei mesi dall’ultimo uso');
@@ -287,5 +293,46 @@ describe('web build version', () => {
     expect(webBuildVersion(undefined, '1.0.0')).toEqual({ version: '1.0.0', preview: true });
     expect(webBuildVersion('', '1.0.0')).toEqual({ version: '1.0.0', preview: true });
     expect(() => webBuildVersion('web-vprova', '1.0.0')).toThrow('Tag della versione web non valido');
+  });
+});
+
+describe('feedback and error reports in the web build', () => {
+  const dsn = 'https://0123456789abcdef0123456789abcdef@o123.ingest.de.sentry.io/456';
+
+  it('takes a Sentry DSN only in its own format', () => {
+    expect(sentryDsn(undefined)).toBeNull();
+    expect(sentryDsn(' ')).toBeNull();
+    expect(sentryDsn(` ${dsn}\n`)).toBe(dsn);
+    expect(sentryDsn('https://0123456789abcdef0123456789abcdef@o123.ingest.sentry.io/456')).not.toBeNull();
+    expect(() => sentryDsn('https://key@example.com/456')).toThrow(/non valido/);
+    expect(() => sentryDsn(`${dsn}?secret=1`)).toThrow(/non valido/);
+  });
+
+  it('reaches Sentry through the site itself: no Sentry host in any policy', () => {
+    const desktopHtml = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+    for (const policy of [WEB_CSP, webCsp(true), webHeadersFile([], true), toWebDevIndexHtml(desktopHtml, true)]) {
+      expect(policy).not.toMatch(/sentry/i);
+    }
+  });
+
+  it('keeps the Sentry SDK out of drive-auth, where Google\'s answer arrives', () => {
+    // Every module the return page loads, following its relative imports.
+    const seen = new Set<string>();
+    const visit = (file: string) => {
+      if (seen.has(file)) return;
+      seen.add(file);
+      const source = readFileSync(file, 'utf8');
+      expect(source, file).not.toMatch(/@sentry\/|monitoring\//);
+      for (const [, specifier] of source.matchAll(/from\s+'(\.[^']+)'/g)) {
+        const base = path.resolve(path.dirname(file), specifier);
+        const target = ['', '.ts', '.tsx', '/index.ts'].map(suffix => base + suffix).find(candidate => existsSync(candidate) && !candidate.endsWith(path.sep));
+        if (target && /\.tsx?$/.test(target)) visit(target);
+      }
+    };
+    const html = readFileSync(new URL('../../drive-auth.html', import.meta.url), 'utf8');
+    const entry = /<script type="module" src="\.\/([^"]+)"/.exec(html)?.[1];
+    expect(entry).toBeTruthy();
+    visit(path.resolve(import.meta.dirname, '../..', entry!));
+    expect(seen.size).toBeGreaterThan(1);
   });
 });

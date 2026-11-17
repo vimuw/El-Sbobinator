@@ -1,9 +1,15 @@
 import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent, act, within } from '@testing-library/react';
+import { render, screen, fireEvent, act, within, waitFor } from '@testing-library/react';
+import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../../../hostCapabilities';
+import { AUTO_REPORTS_KEY } from '../../../monitoring/config';
 import { DiagnosticsSection } from './DiagnosticsSection';
 
-afterEach(() => { delete window.pywebview; });
+afterEach(() => {
+  delete window.pywebview;
+  setHostCapabilities(DESKTOP_CAPABILITIES);
+  localStorage.clear();
+});
 
 const baseProps = {
   isValidatingEnvironment: false,
@@ -149,5 +155,45 @@ describe('DiagnosticsSection', () => {
 
     expect(screen.queryByTitle('Report copiato!')).toBeNull();
     expect(screen.getByRole('alert').textContent).toContain('Generation failed');
+  });
+
+  it('sends reports from the app in web builds with Sentry, and lets the user stop the automatic ones', async () => {
+    setHostCapabilities({ kind: 'web', reportForm: false, environmentCheck: false });
+    render(<DiagnosticsSection {...baseProps} showEnvironmentCheck={false} />);
+
+    const support = within(screen.getByRole('region', { name: 'Segnala un problema' }));
+    // One step: the window attaches the report itself, so no copy and no form.
+    expect(support.queryByRole('button', { name: 'Copia report diagnostico' })).toBeNull();
+    expect(support.queryByRole('link')).toBeNull();
+    fireEvent.click(support.getByRole('button', { name: 'Segnala un problema' }));
+    expect(await screen.findByRole('dialog', { name: 'Segnala un problema' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Annulla' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    const automatic = support.getByRole('switch', { name: 'Invia report automatici degli errori' });
+    expect(automatic.getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(automatic);
+    expect(automatic.getAttribute('aria-checked')).toBe('false');
+    await waitFor(() => expect(localStorage.getItem(AUTO_REPORTS_KEY)).toBe('off'));
+  });
+
+  it('keeps the automatic-reports choice when the Sentry chunk does not load', async () => {
+    vi.stubEnv('MODE', 'web');
+    const blocked = new TypeError('Failed to fetch dynamically imported module: /assets/sentry-abc123.js');
+    vi.doMock('../../../monitoring/sentry', () => { throw blocked; });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      setHostCapabilities({ kind: 'web', reportForm: false, environmentCheck: false });
+      render(<DiagnosticsSection {...baseProps} showEnvironmentCheck={false} />);
+
+      fireEvent.click(screen.getByRole('switch', { name: 'Invia report automatici degli errori' }));
+      expect(localStorage.getItem(AUTO_REPORTS_KEY)).toBe('off');
+      // Reported, not an unhandled rejection (which fails the run).
+      await waitFor(() => expect(consoleError).toHaveBeenCalledWith('monitoring', expect.anything()));
+    } finally {
+      vi.doUnmock('../../../monitoring/sentry');
+      vi.unstubAllEnvs();
+      consoleError.mockRestore();
+    }
   });
 });
