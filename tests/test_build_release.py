@@ -59,6 +59,18 @@ class BuildReleaseTests(unittest.TestCase):
                 build_release.run_inno_setup("2.8.0")
         run.assert_not_called()
 
+    def test_installer_support_link_is_the_site_not_the_retired_form(self):
+        # Reports moved from the Google form to an email: the "Supporto" link in Windows'
+        # installed-apps list kept opening the retired form.
+        script = (
+            build_release.ROOT / "packaging" / "windows" / "installer.iss"
+        ).read_text(encoding="utf-8")
+        support = [
+            line for line in script.splitlines() if line.startswith("AppSupportURL=")
+        ]
+        self.assertEqual(support, ["AppSupportURL=https://elsbobinator.com"])
+        self.assertNotIn("docs.google.com/forms", script)
+
     def test_dependency_sync_is_exact_and_cannot_rewrite_the_committed_lock(self):
         with (
             patch.object(build_release, "ensure_uv", return_value=Path("uv")),

@@ -102,8 +102,8 @@ jobs:
             ! grep -qi 'sentry' dist-web/_headers                                 || { echo "::error::The policy reaches Sentry directly: reports must go through /api/report."; exit 1; }
             echo "Feedback and error reports: on"
           else
-            # Not an error: the site goes out with the Google form, as before.
-            echo "::warning::EL_SBOBINATOR_SENTRY_DSN is not set: the site is published with the Google form for reports."
+            # Not an error: the site goes out with reports by email (supporto@), as the desktop app does.
+            echo "::warning::EL_SBOBINATOR_SENTRY_DSN is not set: the site is published with reports by email."
           fi
 
       # Run from the repo root: wrangler also bundles functions/ (the Drive login server, /api/drive,

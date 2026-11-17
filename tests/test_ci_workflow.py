@@ -137,8 +137,9 @@ def test_web_release_builds_reports_from_the_repository_variable_and_checks_them
     with_reports, without_reports = check.split("\n          else\n", 1)
     assert "test -f ../functions/api/report.ts" in with_reports
     assert "dist-web/_headers" in with_reports and "exit 1" in with_reports
-    # Without the variable the release goes on with the Google form.
+    # Without the variable the release goes on with reports by email.
     assert "::warning::" in without_reports and "exit" not in without_reports
+    assert "reports by email" in without_reports and "Google" not in without_reports
     order = [
         web.index("npm run build:web"),
         web.index("- name: Check the feedback and error reports"),
