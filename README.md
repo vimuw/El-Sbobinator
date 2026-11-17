@@ -118,9 +118,11 @@ xattr -cr "/Applications/El Sbobinator.app"
 
 ## Hai trovato un bug?
 
-Se qualcosa non funziona come previsto, puoi segnalarlo tramite il modulo qui sotto. Descrivi cosa è successo, cosa ti aspettavi e i passaggi per riprodurre il problema. Indica anche la versione dell'app, il sistema operativo ed eventuali messaggi di errore: questi dettagli aiutano a individuare la causa.
+Se qualcosa non funziona come previsto, segnalalo dall'app con **Segnala un problema**, nella barra laterale (in basso sul telefono) o in Impostazioni → Assistenza: il messaggio arriva direttamente allo sviluppatore, con le informazioni tecniche se vuoi.
 
-> [**Segnala un problema**](https://docs.google.com/forms/d/e/1FAIpQLSdzfLau1SrSZuJgQ2J3lERgtXcz9EjE_vP63nHkiVYCsRqMzA/viewform)
+Se l'app non si apre, scrivi un'email. Descrivi cosa è successo, cosa ti aspettavi e i passaggi per riprodurre il problema. Indica anche il browser (o la versione dell'app desktop) ed eventuali messaggi di errore: questi dettagli aiutano a individuare la causa.
+
+> [**Scrivi allo sviluppatore**](mailto:supporto@elsbobinator.com?subject=El%20Sbobinator%3A%20segnalazione)
 
 ---
 
@@ -128,7 +130,7 @@ Se qualcosa non funziona come previsto, puoi segnalarlo tramite il modulo qui so
 
 - **Client Desktop Locale**: L'applicazione viene eseguita sul computer dell'utente e conserva file e bozze localmente. I contenuti necessari all'elaborazione AI vengono trasmessi direttamente e in forma cifrata agli endpoint ufficiali di Google Gemini (`generativelanguage.googleapis.com`) tramite la credenziale dell'utente. File audio, trascrizioni e API key non vengono inviati a infrastrutture gestite dallo sviluppatore.
 - **Dati inviati a Google**: Il trattamento di audio e testi trasmessi a Gemini dipende dai termini Google. Nello Spazio Economico Europeo (Italia compresa), in Svizzera e nel Regno Unito Google applica anche alle chiavi gratuite le regole del livello a pagamento: non usa i contenuti per migliorare i suoi prodotti. Consulta i [Termini Aggiuntivi Gemini API](https://ai.google.dev/gemini-api/terms).
-- **Segnalazioni**: Allo sviluppatore arriva solo quello che scrivi nel modulo "Segnala un problema" o per email.
+- **Segnalazioni**: Allo sviluppatore arriva solo quello che mandi con "Segnala un problema" o per email.
 
 ---
 

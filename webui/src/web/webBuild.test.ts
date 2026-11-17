@@ -156,7 +156,7 @@ describe('privacy page of the web site', () => {
     ]);
     // Sentry keeps reports 30 days in its EU region; the user can turn the automatic ones off.
     expect(rows).toContainEqual(['Segnalazioni ed email', expect.stringContaining('Sentry (dati nell’Unione europea, 30 giorni)')]);
-    expect(rows).toContainEqual(['Report automatici degli errori', expect.stringContaining('Impostazioni → Diagnostica')]);
+    expect(rows).toContainEqual(['Report automatici degli errori', expect.stringContaining('Impostazioni → Assistenza')]);
     // Same lifetime as the server's session cookie (server/driveServer.ts SESSION_MAX_AGE_S).
     expect(SESSION_MAX_AGE_S).toBe(180 * 24 * 3600);
     expect(summary).toContain('fino a sei mesi dall’ultimo uso');
@@ -220,8 +220,17 @@ describe('privacy page of the web site', () => {
   it('names the contact with a mailto link and no other address', () => {
     expect(html).not.toContain('[NOME E EMAIL DI CONTATTO]');
     expect(html).toMatch(/BOZZA da far rivedere/);
-    expect(html).toContain('<a href="mailto:vimuwijesinghe@gmail.com">vimuwijesinghe@gmail.com</a>');
-    expect(new Set(html.match(/[\w.+-]+@[\w-]+\.[\w.]+/g))).toEqual(new Set(['vimuwijesinghe@gmail.com']));
+    expect(html).toContain('<a href="mailto:supporto@elsbobinator.com">supporto@elsbobinator.com</a>');
+    expect(new Set(html.match(/[\w.+-]+@[\w-]+\.[\w.]+/g))).toEqual(new Set(['supporto@elsbobinator.com']));
+  });
+
+  it('names the mailbox of the contact, Zoho Mail in the EU, wherever it lists who receives data', () => {
+    // The contact moved from the developer's Gmail to supporto@ on Zoho Mail (EU data center).
+    expect(html).not.toMatch(/gmail/i);
+    const summary = html.slice(html.indexOf('id="in-breve"'), html.indexOf('id="titolare"'));
+    expect(summary).toMatch(/<tr><td>Segnalazioni ed email<\/td><td>[^<]*Zoho Mail \(data center nell’Unione europea\) se gli scrivi un’email<\/td>/);
+    expect(html.slice(html.indexOf('id="sviluppatore"'), html.indexOf('id="base-giuridica"'))).toContain('Le email al contatto le riceve Zoho Mail, nel suo data center dell’Unione europea');
+    expect(html.slice(html.indexOf('id="base-giuridica"'), html.indexOf('id="eta"'))).toContain('Le email al contatto le conserva invece Zoho Mail, nel suo data center dell’Unione europea.');
   });
 
   it('links the official terms instead of paraphrasing them', () => {
@@ -231,6 +240,7 @@ describe('privacy page of the web site', () => {
       'https://developers.google.com/terms/api-services-user-data-policy',
       'https://myaccount.google.com/permissions',
       'https://www.cloudflare.com/privacypolicy/',
+      'https://www.zoho.com/privacy.html',
     ]) expect(html).toContain(`href="${url}`);
     expect(html).toContain('<code>drive.appdata</code>');
     expect(html).toMatch(/Ultimo aggiornamento: \d{1,2} \w+ \d{4}/);
