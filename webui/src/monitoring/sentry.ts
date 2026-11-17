@@ -32,7 +32,7 @@ export interface FeedbackInput {
   message: string;
   email?: string;
   images: Array<{ data: Uint8Array; filename: string }>;
-  /** The diagnostic report shown to the user (Impostazioni → Diagnostica); undefined when they left it out. */
+  /** The diagnostic report shown to the user (Impostazioni → Assistenza); undefined when they left it out. */
   techReport?: string;
 }
 
@@ -151,7 +151,7 @@ export async function sendFeedback(input: FeedbackInput, now: number = Date.now(
     tags: { 'feedback.kind': input.kind, [BARE_TAG]: input.techReport !== undefined ? 'on' : 'off' },
   }, { attachments });
   // The slot is taken while the report travels, so parallel sends still count, and given back if
-  // it is not delivered: a failed try must not cost the user the next one, or the Google form link
+  // it is not delivered: a failed try must not cost the user the next one, or the email link
   // that comes only with 'unavailable'.
   feedbackTimes.push(now);
   const delivered = await waitForDelivery(eventId);

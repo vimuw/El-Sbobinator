@@ -12,11 +12,11 @@ afterEach(() => {
 describe('startMonitoring', () => {
   it('starts the reports in builds with a DSN', async () => {
     const initMonitoring = vi.fn();
-    setHostCapabilities({ kind: 'web', reportForm: false });
+    setHostCapabilities({ kind: 'web', reportByEmail: false });
 
     await expect(startMonitoring(DSN, async () => ({ initMonitoring }))).resolves.toBe(true);
     expect(initMonitoring).toHaveBeenCalledWith(DSN);
-    expect(getHostCapabilities().reportForm).toBe(false);
+    expect(getHostCapabilities().reportByEmail).toBe(false);
   });
 
   it('loads nothing without a DSN', async () => {
@@ -25,23 +25,23 @@ describe('startMonitoring', () => {
     expect(load).not.toHaveBeenCalled();
   });
 
-  it('lets the app open with the Google form when the Sentry chunk does not load', async () => {
+  it('lets the app open with the email when the Sentry chunk does not load', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-    setHostCapabilities({ kind: 'web', reportForm: false, permanentDelete: false });
+    setHostCapabilities({ kind: 'web', reportByEmail: false, permanentDelete: false });
     const blocked = new TypeError('Failed to fetch dynamically imported module: /assets/sentry-abc123.js');
 
     await expect(startMonitoring(DSN, () => Promise.reject(blocked))).resolves.toBe(false);
-    // The in-app window could not send: "Segnala un problema" goes back to the form, the rest stays.
-    expect(getHostCapabilities()).toMatchObject({ kind: 'web', reportForm: true, permanentDelete: false });
+    // The in-app window could not send: "Segnala un problema" goes back to the email, the rest stays.
+    expect(getHostCapabilities()).toMatchObject({ kind: 'web', reportByEmail: true, permanentDelete: false });
     expect(consoleError).toHaveBeenCalledWith('monitoring', blocked);
   });
 
   it('falls back the same way when the SDK fails to start', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    setHostCapabilities({ kind: 'web', reportForm: false });
+    setHostCapabilities({ kind: 'web', reportByEmail: false });
     const initMonitoring = vi.fn(() => { throw new Error('init failed'); });
 
     await expect(startMonitoring(DSN, async () => ({ initMonitoring }))).resolves.toBe(false);
-    expect(getHostCapabilities().reportForm).toBe(true);
+    expect(getHostCapabilities().reportByEmail).toBe(true);
   });
 });

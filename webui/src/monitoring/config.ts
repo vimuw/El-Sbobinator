@@ -1,5 +1,5 @@
 // Whether this build sends feedback and error reports to Sentry: web builds with
-// EL_SBOBINATOR_SENTRY_DSN. Without it the app keeps the Google form, as before. This module stays
+// EL_SBOBINATOR_SENTRY_DSN. Without it "Segnala un problema" writes an email. This module stays
 // free of the Sentry SDK, which only the page that reports loads (sentry.ts).
 
 // Injected at build time by Vite ('' without the variable).
@@ -9,7 +9,7 @@ export const SENTRY_DSN: string = typeof __SENTRY_DSN__ !== 'undefined' ? __SENT
 /** The site's tunnel to Sentry (functions/api/report.ts): ad blockers leave it alone. */
 export const REPORT_TUNNEL_PATH = '/api/report';
 
-/** The user's choice in Impostazioni → Diagnostica; on unless they turned it off. */
+/** The user's choice in Impostazioni → Assistenza; on unless they turned it off. */
 export const AUTO_REPORTS_KEY = 'el-sbobinator-web-error-reports';
 
 export function monitoringEnabled(dsn: string = SENTRY_DSN): boolean {

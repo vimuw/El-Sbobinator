@@ -9,7 +9,7 @@ import { SettingsRow } from './SettingsLayout';
 describe('settings on narrow screens', () => {
   it('lets a row wrap its control under a text that keeps a readable width', () => {
     render(
-      <SettingsRow title="2. Apri il modulo" description="Descrivi il problema e incolla il report.">
+      <SettingsRow title="2. Scrivimi un’email" description="Descrivi il problema e incolla il report.">
         <button type="button">Segnala un problema</button>
       </SettingsRow>,
     );

@@ -6464,6 +6464,13 @@ input::-webkit-contacts-auto-fill-button {
     display: none;
   }
 
+  /* Without its tooltip the API dot is a coloured spot nobody can read, and its 42px let
+     "Segnala un problema" and the Drive account fit a 360px phone. The setup page and the
+     queue say when a key is missing or wrong. */
+  .app-sidebar .sidebar-tooltip-anchor:has(> .sidebar-api-status) {
+    display: none !important; /* over SidebarTooltip's inline display */
+  }
+
   .app-sidebar .sidebar-account-divider {
     width: 1px;
     height: 20px;

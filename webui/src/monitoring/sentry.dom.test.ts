@@ -141,12 +141,12 @@ describe('Sentry reports', () => {
     await expect(sendFeedback(feedback(), now + 11 * 60_000)).resolves.toMatchObject({ ok: true });
   });
 
-  it('counts only delivered feedback, so failed tries keep offering the form', async () => {
+  it('counts only delivered feedback, so failed tries keep offering the email', async () => {
     start();
     const now = Date.now();
     status = 403;
     for (let index = 0; index < 3; index += 1) await expect(sendFeedback(feedback(), now + index)).resolves.toEqual({ ok: false, reason: 'unavailable' });
-    // The fourth failure is still 'unavailable' (with the Google form link), not 'rate_limited'.
+    // The fourth failure is still 'unavailable' (with the email link), not 'rate_limited'.
     await expect(sendFeedback(feedback(), now + 10)).resolves.toEqual({ ok: false, reason: 'unavailable' });
     status = 200;
     for (let index = 0; index < 3; index += 1) await expect(sendFeedback(feedback(), now + 20 + index)).resolves.toMatchObject({ ok: true });

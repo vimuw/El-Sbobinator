@@ -185,6 +185,28 @@ def _retry_no_failed_blocks_response(
 _ALLOWED_URL_PREFIXES: tuple[str, ...] = (
     "https://github.com/",
     "https://aistudio.google.com/",
-    "https://docs.google.com/forms/d/e/"
-    "1FAIpQLSdzfLau1SrSZuJgQ2J3lERgtXcz9EjE_vP63nHkiVYCsRqMzA/viewform?",
+    # "Segnala un problema": an email to the developer (webui/src/branding.ts BUG_REPORT_URL).
+    # _is_allowed_open_url also limits its query to a subject.
+    "mailto:supporto@elsbobinator.com?",
 )
+
+
+def _is_allowed_open_url(url: object) -> bool:
+    """Whether open_url may hand ``url`` to the system: an allowlisted prefix, and for an
+    email nothing but a subject, so the query cannot add recipients (cc, bcc, to) or a body."""
+    if not isinstance(url, str) or not any(
+        url.startswith(p) for p in _ALLOWED_URL_PREFIXES
+    ):
+        return False
+    if not url.startswith("mailto:"):
+        return True
+    from urllib.parse import parse_qsl
+
+    query = url.split("?", 1)[1]
+    if "#" in query:
+        return False
+    try:
+        fields = parse_qsl(query, keep_blank_values=True, strict_parsing=True)
+    except ValueError:
+        return False
+    return len(fields) == 1 and fields[0][0] == "subject"

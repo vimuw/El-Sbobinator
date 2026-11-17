@@ -5,7 +5,7 @@ import { SENTRY_DSN, monitoringEnabled } from './config';
 // Starts the feedback and error reports (sentry.ts) before the web app mounts. They are optional:
 // if their chunk does not load (an extension blocking anything named "sentry", a proxy, a dropped
 // connection) or the SDK fails to start, the app still opens and "Segnala un problema" goes back
-// to the Google form, since the in-app window could not send.
+// to an email, since the in-app window could not send.
 
 type MonitoringModule = Pick<typeof import('./sentry'), 'initMonitoring'>;
 
@@ -21,7 +21,7 @@ export async function startMonitoring(
     return true;
   } catch (error) {
     reportClientError('monitoring', error);
-    setHostCapabilities({ ...getHostCapabilities(), reportForm: true });
+    setHostCapabilities({ ...getHostCapabilities(), reportByEmail: true });
     return false;
   }
 }

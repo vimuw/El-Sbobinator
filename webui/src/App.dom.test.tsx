@@ -7,6 +7,8 @@ import { useBridgeCallbacks } from './hooks/useBridgeCallbacks';
 import { useQueuePersistence } from './hooks/useQueuePersistence';
 import { useUpdateChecker } from './hooks/useUpdateChecker';
 import { STORAGE_KEYS } from './storageKeys';
+import { BUG_REPORT_URL } from './branding';
+import { setHostCapabilities } from './hostCapabilities';
 import { setMovedAddressNotice } from './movedAddress';
 import type { FileDonePayload, ProcessingAction } from './appState';
 import type { PywebviewApi } from './bridge';
@@ -1445,6 +1447,57 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
       window.dispatchEvent(event);
 
       expect(preventDefaultSpy).toHaveBeenCalled();
+    });
+
+    it('opens the report email in a new tab during a run: this page stays and asks nothing', async () => {
+      // Regression: the email opened in place (location.href = mailto:). Chromium fired
+      // beforeunload, so mid-run the browser asked "Leave site?"; with a web mail handler (Gmail,
+      // Outlook) the app tab itself became the mail site and the run stopped.
+      setHostCapabilities({ kind: 'web', reportByEmail: true });
+      vi.mocked(useQueuePersistence).mockImplementation((_files, _structuralVersion, dispatch) => {
+        React.useEffect(() => {
+          dispatch({
+            type: 'queue/add',
+            files: [{
+              id: 'file-retry',
+              name: 'lesson.mp3',
+              size: 123,
+              duration: 60,
+              path: 'C:\\Media\\lesson.mp3',
+              status: 'done',
+              progress: 100,
+              phase: 0,
+              isRetryingBlocks: true,
+            }],
+          });
+        }, [dispatch]);
+      });
+      const opened: Array<{ href: string; target: string; rel: string; inPage: boolean }> = [];
+      const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+        opened.push({ href: this.getAttribute('href') ?? '', target: this.target, rel: this.rel, inPage: this.isConnected });
+      });
+      let unloads = 0;
+      const countUnload = () => { unloads += 1; };
+      window.addEventListener('beforeunload', countUnload);
+      try {
+        await act(async () => {
+          render(<App />);
+        });
+        const address = window.location.href;
+
+        fireEvent.click(screen.getByRole('button', { name: 'Segnala un problema' }));
+
+        expect(opened).toEqual([{ href: BUG_REPORT_URL, target: '_blank', rel: expect.stringContaining('noopener'), inPage: true }]);
+        expect(document.querySelector('a[href^="mailto:"][target="_blank"]')).toBeNull();
+        expect(unloads).toBe(0);
+        expect(window.location.href).toBe(address);
+        // The run is still guarded: a real reload asks.
+        expect(window.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(false);
+      } finally {
+        window.removeEventListener('beforeunload', countUnload);
+        click.mockRestore();
+        setHostCapabilities({});
+      }
     });
 
     it('one-click resume: clicking Riprendi on a failed queue item starts processing immediately', async () => {

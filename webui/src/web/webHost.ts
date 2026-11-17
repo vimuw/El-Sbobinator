@@ -985,7 +985,7 @@ export async function initWebHost(): Promise<boolean> {
   // ?simulazione=1 keeps the M0 simulated run (no Gemini calls) for demos and the smoke test.
   const simulation = new URLSearchParams(window.location.search).get('simulazione') === '1';
   // The trash comes with the Drive sync: hidden, like it, in the released site.
-  setHostCapabilities({ ...WEB_CAPABILITIES, permanentDelete: !driveEnabled(), reportForm: !monitoringEnabled() });
+  setHostCapabilities({ ...WEB_CAPABILITIES, permanentDelete: !driveEnabled(), reportByEmail: !monitoringEnabled() });
   adoptSpikeKeys();
   // Lets index.css size controls for touch on tablets without touching the desktop app.
   document.documentElement.dataset.host = 'web';

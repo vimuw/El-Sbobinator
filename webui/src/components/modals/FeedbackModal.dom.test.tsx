@@ -1,7 +1,8 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BUG_REPORT_URL } from '../../branding';
+import { BUG_REPORT_URL, SUPPORT_EMAIL } from '../../branding';
 import { FeedbackImageError, type FeedbackImage } from '../../feedback/images';
+import { loadReportHistory, resetReportHistoryForTests } from '../../feedback/history';
 import type { FeedbackInput, FeedbackResult } from '../../monitoring/sentry';
 import { MASK } from '../../monitoring/scrub';
 import { FeedbackModal } from './FeedbackModal';
@@ -45,7 +46,21 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
+  localStorage.clear();
+  resetReportHistoryForTests();
 });
+
+function stubClipboard(writeText: (text: string) => Promise<void>) {
+  const spy = vi.fn(writeText);
+  Object.defineProperty(navigator, 'clipboard', { value: { writeText: spy }, configurable: true });
+  return spy;
+}
+
+async function sendReport() {
+  write('L’editor non salva il titolo della sbobina.');
+  chooseKind('Suggerimento');
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Invia' })); });
+}
 
 describe('FeedbackModal', () => {
   it('sends only once a type is chosen and the description says enough', async () => {
@@ -73,8 +88,52 @@ describe('FeedbackModal', () => {
       images: [],
       techReport: REPORT.replace(GEMINI_KEY, MASK),
     });
-    expect(screen.getByRole('status').textContent).toContain('Grazie! Messaggio ricevuto.');
+    // The thanks fade in after the form fades out, and take the focus from the gone "Invia".
+    expect((await screen.findByText('Grazie! Messaggio ricevuto.')).closest('[role=status]')).not.toBeNull();
     expect(screen.getByText('A1B2C3D4')).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Chiudi' }));
+  });
+
+  it('keeps the code of a sent report in this browser and copies it on request', async () => {
+    const writeText = stubClipboard(async () => {});
+    setup({ ok: true, code: 'E5F60718' });
+    await sendReport();
+
+    expect(loadReportHistory()).toEqual([{ code: 'E5F60718', sentAt: expect.any(String), kind: 'idea' }]);
+    expect((await screen.findByText(/Impostazioni → Assistenza/)).closest('[role=status]')).not.toBeNull();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Copia codice' })); });
+    expect(writeText).toHaveBeenCalledWith('E5F60718');
+    expect(screen.getByRole('button', { name: 'Copiato' })).toBeTruthy();
+  });
+
+  it('leaves the focus on "Copia codice" after copying, so a second Enter does not close the window', async () => {
+    stubClipboard(async () => {});
+    const { onClose } = setup({ ok: true, code: 'E5F60718' });
+    await sendReport();
+    // "Chiudi" takes the focus once, when the thanks appear.
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Chiudi' })));
+    const copy = screen.getByRole('button', { name: 'Copia codice' });
+    copy.focus();
+    await act(async () => { fireEvent.click(copy); });
+    // The copy state re-renders the thanks: the focus must not jump back to "Chiudi".
+    expect(screen.getByRole('button', { name: 'Copiato' })).toBe(copy);
+    expect(document.activeElement).toBe(copy);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('says to copy the code by hand when the clipboard refuses', async () => {
+    stubClipboard(async () => { throw new DOMException('denied', 'NotAllowedError'); });
+    setup({ ok: true, code: 'E5F60718' });
+    await sendReport();
+    const copy = await screen.findByRole('button', { name: 'Copia codice' });
+    await act(async () => { fireEvent.click(copy); });
+    expect(screen.getByText('Non riesco a copiarlo: selezionalo e copialo a mano.')).toBeTruthy();
+  });
+
+  it('keeps no code when the report does not go', async () => {
+    setup({ ok: false, reason: 'unavailable' });
+    await sendReport();
+    expect(loadReportHistory()).toEqual([]);
   });
 
   it('shows the tech info that goes, without keys, and leaves it out when turned off', async () => {
@@ -116,13 +175,15 @@ describe('FeedbackModal', () => {
     expect(screen.queryAllByRole('img')).toHaveLength(0);
   });
 
-  it('offers the Google form when the report cannot be sent', async () => {
+  it('offers an email to the developer when the report cannot be sent', async () => {
     setup({ ok: false, reason: 'unavailable' });
     chooseKind('Bug');
     write('La coda resta ferma al 40%.');
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Invia' })); });
     expect(screen.getByRole('alert').textContent).toContain('Non riesco a inviare ora.');
-    expect(screen.getByRole('link', { name: 'Apri il modulo Google' }).getAttribute('href')).toBe(BUG_REPORT_URL);
+    const email = screen.getByRole('link', { name: SUPPORT_EMAIL });
+    expect(email.getAttribute('href')).toBe(BUG_REPORT_URL);
+    expect(BUG_REPORT_URL).toMatch(new RegExp(`^mailto:${SUPPORT_EMAIL}\\?subject=`));
     // What was written stays, to try again.
     expect((screen.getByLabelText('Descrizione') as HTMLTextAreaElement).value).toBe('La coda resta ferma al 40%.');
   });
@@ -133,7 +194,7 @@ describe('FeedbackModal', () => {
     write('La coda resta ferma al 40%.');
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Invia' })); });
     expect(screen.getByRole('alert').textContent).toContain('riprova tra qualche minuto');
-    expect(screen.queryByRole('link', { name: 'Apri il modulo Google' })).toBeNull();
+    expect(screen.queryByRole('link', { name: SUPPORT_EMAIL })).toBeNull();
   });
 
   it('closes on a click outside or Esc when empty, and keeps what was written otherwise', () => {

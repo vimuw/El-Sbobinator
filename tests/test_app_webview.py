@@ -4161,30 +4161,37 @@ class TestOpenUrlAllowlistCoverage(unittest.TestCase):
     _BRANDING_TS = _WEBUI_SRC / "branding.ts"
 
     def _resolve_branding_urls(self) -> dict[str, str]:
-        """Return {constant_name: resolved_url} for every https:// export in branding.ts."""
+        """Return {constant_name: resolved_url} for every https:// or mailto: export in branding.ts."""
+        from urllib.parse import quote
+
         text = self._BRANDING_TS.read_text(encoding="utf-8")
-        resolved: dict[str, str] = {}
+        # APP_VERSION is injected at build time; it changes only the query, not the destination.
+        resolved: dict[str, str] = {"APP_VERSION": "v0.0.0-test"}
         for m in re.finditer(r"export const (\w+)(?::[^=]+)?\s*=\s*'([^']+)'", text):
             resolved[m.group(1)] = m.group(2)
         for m in re.finditer(r'export const (\w+)(?::[^=]+)?\s*=\s*"([^"]+)"', text):
             resolved[m.group(1)] = m.group(2)
-        for _ in range(3):
+
+        def substitute(mm: re.Match[str]) -> str:
+            encode, name = mm.group(1), mm.group(2)
+            if name not in resolved:
+                return mm.group(0)
+            # The characters JavaScript's encodeURIComponent leaves alone.
+            return quote(resolved[name], safe="-_.!~*'()") if encode else resolved[name]
+
+        for _ in range(4):
             for m in re.finditer(
                 r"export const (\w+)(?::[^=]+)?\s*=\s*`([^`]+)`", text
             ):
                 name, tmpl = m.group(1), m.group(2)
-                # The version changes only the query, not the destination URL.
-                tmpl = tmpl.replace(
-                    "${encodeURIComponent(APP_VERSION)}", "test-version"
-                )
-                val = re.sub(
-                    r"\$\{(\w+)\}",
-                    lambda mm: resolved.get(mm.group(1), mm.group(0)),
-                    tmpl,
-                )
+                val = re.sub(r"\$\{(encodeURIComponent\()?(\w+)\)?\}", substitute, tmpl)
                 if "${" not in val:
                     resolved[name] = val
-        return {k: v for k, v in resolved.items() if v.startswith("https://")}
+        return {
+            k: v
+            for k, v in resolved.items()
+            if v.startswith("https://") or v.startswith("mailto:")
+        }
 
     def _collect_react_open_url_targets(
         self, branding_urls: dict[str, str]
@@ -4228,6 +4235,19 @@ class TestOpenUrlAllowlistCoverage(unittest.TestCase):
             "React open_url() targets NOT in _ALLOWED_URL_PREFIXES:\n"
             + "\n".join(f"  {u}" for u in not_covered)
             + "\n\nAdd a matching prefix to _ALLOWED_URL_PREFIXES in app_webview.py.",
+        )
+
+    def test_scanner_resolves_the_bug_report_email(self):
+        """The report email reaches open_url() through a constant built from other constants."""
+        branding_urls = self._resolve_branding_urls()
+        self.assertEqual(
+            branding_urls.get("BUG_REPORT_URL"),
+            "mailto:supporto@elsbobinator.com"
+            "?subject=El%20Sbobinator%20v0.0.0-test%3A%20segnalazione",
+        )
+        self.assertIn(
+            branding_urls["BUG_REPORT_URL"],
+            self._collect_react_open_url_targets(branding_urls),
         )
 
     def test_no_allowlist_prefix_is_orphaned(self):

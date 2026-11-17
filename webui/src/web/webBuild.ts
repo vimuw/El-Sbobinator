@@ -49,7 +49,7 @@ export function driveClientId(value: string | undefined): string | null {
 
 /**
  * Sentry DSN of the feedback and error reports (EL_SBOBINATOR_SENTRY_DSN), or null when the build
- * leaves them out and keeps the Google form. Public by design: the page sends to the site's own
+ * leaves them out and reports by email. Public by design: the page sends to the site's own
  * /api/report tunnel, which checks the envelope against the same DSN before forwarding it.
  */
 export function sentryDsn(value: string | undefined): string | null {

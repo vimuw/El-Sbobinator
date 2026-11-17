@@ -1,10 +1,12 @@
 import { useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
-import { motion } from 'motion/react';
-import { CheckCircle2, ImagePlus, MessageSquareWarning, X } from 'lucide-react';
-import { APP_VERSION, BUG_REPORT_URL } from '../../branding';
-import { modalCard } from '../../motion';
+import { AnimatePresence, motion } from 'motion/react';
+import { Check, CheckCircle2, Copy, ImagePlus, MessageSquareWarning, X } from 'lucide-react';
+import { APP_VERSION, BUG_REPORT_URL, SUPPORT_EMAIL } from '../../branding';
+import { DURATION, fade, fadeUp, modalCard } from '../../motion';
 import { useBackdropDismiss } from '../../hooks/useBackdropDismiss';
 import { FeedbackImageError, MAX_FEEDBACK_IMAGES, encodeFeedbackImage, type FeedbackImage } from '../../feedback/images';
+import { rememberReport } from '../../feedback/history';
+import { openReportEmail } from '../../feedback/reportEmail';
 import type { FeedbackInput, FeedbackKind, FeedbackResult } from '../../monitoring/sentry';
 import { scrubText } from '../../monitoring/scrub';
 import { CustomSelect } from './settings/CustomSelect';
@@ -12,7 +14,7 @@ import { UnsavedChangesHint } from './UnsavedChangesHint';
 
 // "Segnala un problema" in web builds with a Sentry DSN (piano-feedback.md): the user writes what
 // happened, may add screenshots and sees the tech info before it goes. Everything leaves through
-// monitoring/sentry.ts and the site's /api/report; when that fails, the Google form is one tap away.
+// monitoring/sentry.ts and the site's /api/report; when that fails, an email is one tap away.
 
 export const MIN_MESSAGE_LENGTH = 10;
 export const MAX_MESSAGE_LENGTH = 5000;
@@ -25,7 +27,7 @@ const KIND_OPTIONS: Array<{ value: FeedbackKind; label: string }> = [
   { value: 'altro', label: 'Altro' },
 ];
 
-/** The diagnostic report of Impostazioni → Diagnostica (the window masks it before showing it). */
+/** The diagnostic report of Impostazioni → Assistenza (the window masks it before showing it). */
 async function loadTechReport(): Promise<string | null> {
   const result = await window.pywebview?.api?.get_diagnostic_report?.(undefined, undefined, undefined, undefined, APP_VERSION);
   return result?.ok && result.report ? result.report : null;
@@ -47,6 +49,12 @@ interface FeedbackModalProps {
 
 type Failure = { reason: 'rate_limited' | 'unavailable' } | null;
 
+// Module-level, so its identity never changes: React 19 calls an inline callback ref again on every
+// render, which moved the focus back to "Chiudi" whenever the thanks re-rendered (copying the code).
+function focusOnMount(node: HTMLElement | null) {
+  node?.focus();
+}
+
 export function FeedbackModal({ onClose, send = sendThroughSentry, encodeImage = encodeFeedbackImage, loadReport = loadTechReport }: FeedbackModalProps) {
   const [kind, setKind] = useState<FeedbackKind | ''>('');
   const [message, setMessage] = useState('');
@@ -59,6 +67,7 @@ export function FeedbackModal({ onClose, send = sendThroughSentry, encodeImage =
   const [sending, setSending] = useState(false);
   const [failure, setFailure] = useState<Failure>(null);
   const [code, setCode] = useState('');
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
   const dialogRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imagesRef = useRef(images);
@@ -123,6 +132,15 @@ export function FeedbackModal({ onClose, send = sendThroughSentry, encodeImage =
 
   const backdrop = useBackdropDismiss({ dirty, onClose, blocked: busy });
 
+  const copyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopyState('copied');
+    } catch {
+      setCopyState('failed');
+    }
+  };
+
   const handleImages = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     event.target.value = '';
@@ -169,7 +187,11 @@ export function FeedbackModal({ onClose, send = sendThroughSentry, encodeImage =
         techReport: includeTech ? (techReport ?? `- Versione: ${APP_VERSION} (web)`) : undefined,
       });
       if (result.ok === false) setFailure({ reason: result.reason });
-      else setCode(result.code);
+      else {
+        setCode(result.code);
+        // Kept in this browser, so the code can be quoted later from Impostazioni → Assistenza.
+        rememberReport({ code: result.code, sentAt: new Date().toISOString(), kind });
+      }
     } catch {
       setFailure({ reason: 'unavailable' });
     } finally {
@@ -179,8 +201,10 @@ export function FeedbackModal({ onClose, send = sendThroughSentry, encodeImage =
   };
 
   return (
-    <motion.div className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-4" exit={{ opacity: 0 }}>
-      <div className="modal-overlay absolute inset-0" onClick={backdrop.onBackdropClick} data-testid="feedback-backdrop" />
+    <div className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-4">
+      {/* The dimmed page fades in and out like Impostazioni's, not at once. */}
+      <motion.div className="modal-overlay absolute inset-0" onClick={backdrop.onBackdropClick} data-testid="feedback-backdrop"
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: DURATION.fast }} />
       <motion.div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
         className={`modal-card${backdrop.shaking ? ' is-shaking' : ''} relative flex w-full max-w-lg max-h-[calc(100dvh-2rem)] flex-col overflow-hidden`} {...modalCard}>
         <div className="modal-header">
@@ -191,22 +215,33 @@ export function FeedbackModal({ onClose, send = sendThroughSentry, encodeImage =
           <button type="button" className="icon-button modal-icon-button" aria-label="Chiudi finestra" disabled={busy} onClick={onClose}><X className="w-4 h-4" /></button>
         </div>
 
+        {/* Form and thanks cross-fade instead of swapping at once. */}
+        <AnimatePresence mode="wait" initial={false}>
         {code ? (
-          <>
+          <motion.div key="sent" className="flex min-h-0 flex-1 flex-col" {...fadeUp}>
             <div className="modal-body space-y-3" role="status">
               <p className="flex items-center gap-2 text-base font-semibold text-[var(--text-primary)]">
                 <CheckCircle2 className="w-5 h-5 text-[var(--success-text)]" aria-hidden="true" />
                 Grazie! Messaggio ricevuto.
               </p>
-              <p>Codice segnalazione: <strong className="text-[var(--text-primary)]">{code}</strong></p>
-              <p>Se mi scrivi di nuovo per questo problema, indica il codice: così lo ritrovo subito.</p>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <p>Codice segnalazione: <strong className="font-mono text-[var(--text-primary)] select-all">{code}</strong></p>
+                <button type="button" className="app-button-secondary is-settings-action shrink-0" onClick={copyCode}>
+                  {copyState === 'copied' ? <Check className="w-4 h-4" aria-hidden="true" /> : <Copy className="w-4 h-4" aria-hidden="true" />}
+                  <span>{copyState === 'copied' ? 'Copiato' : 'Copia codice'}</span>
+                </button>
+              </div>
+              {copyState === 'failed' && <p className="text-xs text-[var(--error-text)]">Non riesco a copiarlo: selezionalo e copialo a mano.</p>}
+              <p>Se mi scrivi di nuovo per questo problema, indica il codice: così lo ritrovo subito. Lo trovi anche in Impostazioni → Assistenza.</p>
             </div>
             <div className="modal-footer">
-              <button type="button" data-autofocus onClick={onClose} className="modal-action-button is-primary flex-1">Chiudi</button>
+              {/* Takes the focus from "Invia", which is gone, once: a stable callback ref runs only when
+                  the button mounts, after the form's exit (an effect on `code` would run before it). */}
+              <button type="button" ref={focusOnMount} onClick={onClose} className="modal-action-button is-primary flex-1">Chiudi</button>
             </div>
-          </>
+          </motion.div>
         ) : (
-          <form onSubmit={handleSubmit} aria-busy={sending} className="flex min-h-0 flex-1 flex-col">
+          <motion.form key="form" onSubmit={handleSubmit} aria-busy={sending} className="flex min-h-0 flex-1 flex-col" {...fade}>
             <div className="modal-body space-y-4">
               <p>Scrivi cosa è successo o cosa vorresti migliorare: leggo ogni messaggio.</p>
 
@@ -298,8 +333,20 @@ export function FeedbackModal({ onClose, send = sendThroughSentry, encodeImage =
                     <p>Hai già inviato diversi messaggi: riprova tra qualche minuto.</p>
                   ) : (
                     <>
-                      <p>Non riesco a inviare ora. Riprova più tardi, oppure usa il modulo:</p>
-                      <a href={BUG_REPORT_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-[var(--accent-text)] underline">Apri il modulo Google</a>
+                      <p>Non riesco a inviare ora. Riprova più tardi, oppure scrivimi un’email:</p>
+                      <a
+                        href={BUG_REPORT_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-semibold text-[var(--accent-text)] underline"
+                        onClick={event => {
+                          // Through the helper: the desktop app opens it with its bridge, a browser in a new tab.
+                          event.preventDefault();
+                          openReportEmail();
+                        }}
+                      >
+                        {SUPPORT_EMAIL}
+                      </a>
                     </>
                   )}
                 </div>
@@ -312,9 +359,10 @@ export function FeedbackModal({ onClose, send = sendThroughSentry, encodeImage =
                 {sending ? 'Invio…' : 'Invia'}
               </button>
             </div>
-          </form>
+          </motion.form>
         )}
+        </AnimatePresence>
       </motion.div>
-    </motion.div>
+    </div>
   );
 }

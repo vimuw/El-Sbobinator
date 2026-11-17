@@ -14,6 +14,8 @@ import { CancelledError } from './pipeline/retry';
 import { defaultSettings, type AudioSource } from './pipeline/run';
 import { fileIdentity, newSession, type CheckpointStore } from './pipeline/session';
 import { createWebPywebviewApi, initWebHost } from './webHost';
+import { BUG_REPORT_URL } from '../branding';
+import { openReportEmail } from '../feedback/reportEmail';
 import { createWebArchive } from './webSessions';
 
 // The web host with the real pipeline: Gemini is a scripted fetch, audio work a fake source.
@@ -225,6 +227,41 @@ describe('web host with the real pipeline', () => {
     expect(leaveBlocked()).toBe(true);
     await vi.runAllTimersAsync();
     expect(leaveBlocked()).toBe(false);
+  });
+
+  it('opens the report email in a new tab during a run: the run goes on and nothing asks to leave', async () => {
+    // Regression: the email opened in place (location.href = mailto:): Chromium fired beforeunload,
+    // so mid-run the browser asked "Leave site?", and with a web mail handler (Gmail, Outlook) this
+    // tab became the mail site and the run stopped.
+    const leaveBlocked = () => !window.dispatchEvent(new Event('beforeunload', { cancelable: true }));
+    mockGemini([quota, okText(chunkText(1)), okText('## R\n\nTesto rivisto.')]);
+    const { api, named, finished } = host(1);
+    const [file] = await api.upload_browser_files!([new File(['a'], 'a.mp3')]);
+    await api.start_processing!([file], KEY, true, 'gemini-2.5-flash');
+    await vi.waitFor(() => expect(named('askNewKey')).toHaveLength(1));
+
+    const opened: Array<{ href: string; target: string }> = [];
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      opened.push({ href: this.getAttribute('href') ?? '', target: this.target });
+    });
+    let unloads = 0;
+    const countUnload = () => { unloads += 1; };
+    window.addEventListener('beforeunload', countUnload);
+    const address = window.location.href;
+    try {
+      openReportEmail();
+      expect(opened).toEqual([{ href: BUG_REPORT_URL, target: '_blank' }]);
+      expect(unloads).toBe(0);
+      expect(window.location.href).toBe(address);
+    } finally {
+      window.removeEventListener('beforeunload', countUnload);
+      click.mockRestore();
+    }
+    // The run is still guarded: a real reload asks.
+    expect(leaveBlocked()).toBe(true);
+    await api.answer_new_key!('AIzaSyNuova123456789012345678');
+    await finished();
+    expect(named('fileDone')).toHaveLength(1);
   });
 
   it('refuses a queued path the page no longer holds', async () => {

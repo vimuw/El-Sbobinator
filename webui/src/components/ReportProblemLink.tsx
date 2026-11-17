@@ -1,30 +1,21 @@
-import { useState } from 'react';
-import { createPortal } from 'react-dom';
-import { AnimatePresence } from 'motion/react';
 import { Bug } from 'lucide-react';
 import { BUG_REPORT_URL } from '../branding';
-import { reportClientError } from '../diagnostics';
-import { getHostCapabilities } from '../hostCapabilities';
 import { ExternalLinkIcon } from './ExternalLinkIcon';
-import { FeedbackModal } from './modals/FeedbackModal';
+import { useReportProblem } from './useReportProblem';
 
-// In the footer it stays a plain link like its neighbours; elsewhere it carries the external-link arrow.
-// Web builds with Sentry open the feedback window instead of the Google form.
-export function ReportProblemLink({ className = 'footer-link' }: { className?: string }) {
-  const [open, setOpen] = useState(false);
+// "Segnala un problema" as a labelled button (Impostazioni → Assistenza); the sidebar has its own
+// icon. As an email it carries the external-link arrow.
+export function ReportProblemLink({ className = 'app-button-secondary is-settings-action shrink-0' }: { className?: string }) {
+  const { byEmail, openReport, modal } = useReportProblem();
 
-  if (!getHostCapabilities().reportForm) {
+  if (!byEmail) {
     return (
       <>
-        <button type="button" className={className} aria-haspopup="dialog" onClick={() => setOpen(true)}>
+        <button type="button" className={className} aria-haspopup="dialog" onClick={openReport}>
           <Bug className="w-3.5 h-3.5" aria-hidden="true" />
           Segnala un problema
         </button>
-        {/* On the page, not inside the opener: Impostazioni is itself a moving card. */}
-        {createPortal(
-          <AnimatePresence>{open && <FeedbackModal onClose={() => setOpen(false)} />}</AnimatePresence>,
-          document.body,
-        )}
+        {modal}
       </>
     );
   }
@@ -36,18 +27,13 @@ export function ReportProblemLink({ className = 'footer-link' }: { className?: s
       rel="noopener noreferrer"
       className={className}
       onClick={event => {
-        if (!window.pywebview?.api?.open_url) return;
         event.preventDefault();
-        void window.pywebview.api.open_url?.(BUG_REPORT_URL)
-          .then(result => {
-            if (!result.ok) throw new Error(result.error || 'Impossibile aprire il modulo.');
-          })
-          .catch(error => reportClientError('bug-report-open', error));
+        openReport();
       }}
     >
       <Bug className="w-3.5 h-3.5" aria-hidden="true" />
       Segnala un problema
-      {className !== 'footer-link' && <ExternalLinkIcon />}
+      <ExternalLinkIcon />
     </a>
   );
 }

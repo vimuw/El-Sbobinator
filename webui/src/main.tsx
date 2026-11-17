@@ -110,7 +110,7 @@ async function mountApp() {
     // blocks the site's data, and a page says so instead of the app.
     if (!await initWebHost()) return;
     // Feedback and error reports, in builds with a Sentry DSN: before the app, to catch its start.
-    // Never throws: if they cannot start, the app opens with the Google form instead.
+    // Never throws: if they cannot start, the app opens with the email instead.
     await startMonitoring();
   } else {
     validateDesktopBuild(APP_VERSION);
