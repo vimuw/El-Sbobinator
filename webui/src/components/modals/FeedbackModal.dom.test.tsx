@@ -5,7 +5,7 @@ import { FeedbackImageError, type FeedbackImage } from '../../feedback/images';
 import { loadReportHistory, resetReportHistoryForTests } from '../../feedback/history';
 import type { FeedbackInput, FeedbackResult } from '../../monitoring/sentry';
 import { MASK } from '../../monitoring/scrub';
-import { FeedbackModal } from './FeedbackModal';
+import { FORM_HEIGHT_CLASS, FeedbackModal } from './FeedbackModal';
 import { UNSAVED_CHANGES_HINT } from './UnsavedChangesHint';
 
 const GEMINI_KEY = 'AIzaSyPrimary1234567890123';
@@ -147,6 +147,20 @@ describe('FeedbackModal', () => {
     write('Vorrei poter esportare in PDF.');
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Invia' })); });
     expect(send.mock.calls[0][0]).toMatchObject({ kind: 'idea', techReport: undefined, email: undefined });
+  });
+
+  it('keeps the form one height when the tech preview opens, and lets the thanks shrink', async () => {
+    setup();
+    const dialog = screen.getByTestId('feedback-dialog');
+    expect(dialog.className).toContain(FORM_HEIGHT_CLASS);
+    expect(dialog.className).toContain('max-h-[calc(100dvh-2rem)]');
+    const preview = await screen.findByTestId('feedback-tech-report');
+    fireEvent.click(screen.getByText('Mostra cosa viene inviato'));
+    expect((preview.closest('details') as HTMLDetailsElement).open).toBe(true);
+    expect(dialog.className).toContain(FORM_HEIGHT_CLASS);
+    await sendReport();
+    await screen.findByText('Grazie! Messaggio ricevuto.');
+    expect(dialog.className).not.toContain(FORM_HEIGHT_CLASS);
   });
 
   it('attaches up to three images, removes one and renumbers the rest', async () => {

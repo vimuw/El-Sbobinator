@@ -19,6 +19,8 @@ import { UnsavedChangesHint } from './UnsavedChangesHint';
 export const MIN_MESSAGE_LENGTH = 10;
 export const MAX_MESSAGE_LENGTH = 5000;
 const TECH_REPORT_LIMIT = 8000;
+// Just above the closed form's natural height (about 45.5rem): kept whole as a literal for Tailwind.
+export const FORM_HEIGHT_CLASS = 'h-[min(46rem,calc(100dvh-2rem))]';
 const EMAIL_PATTERN = /^[^\s@<>()[\]\\,;:"]+@[^\s@<>()[\]\\,;:"]+\.[^\s@<>()[\]\\,;:"]{2,}$/;
 
 const KIND_OPTIONS: Array<{ value: FeedbackKind; label: string }> = [
@@ -205,8 +207,10 @@ export function FeedbackModal({ onClose, send = sendThroughSentry, encodeImage =
       {/* The dimmed page fades in and out like Impostazioni's, not at once. */}
       <motion.div className="modal-overlay absolute inset-0" onClick={backdrop.onBackdropClick} data-testid="feedback-backdrop"
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: DURATION.fast }} />
-      <motion.div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
-        className={`modal-card${backdrop.shaking ? ' is-shaking' : ''} relative flex w-full max-w-lg max-h-[calc(100dvh-2rem)] flex-col overflow-hidden`} {...modalCard}>
+      {/* The form keeps one height (what it needs closed, within the screen): opening the tech
+          preview, adding images or an error scroll its body instead of resizing the window. */}
+      <motion.div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} data-testid="feedback-dialog"
+        className={`modal-card${backdrop.shaking ? ' is-shaking' : ''} relative flex w-full max-w-lg max-h-[calc(100dvh-2rem)] flex-col overflow-hidden${code ? '' : ` ${FORM_HEIGHT_CLASS}`}`} {...modalCard}>
         <div className="modal-header">
           <h2 id={titleId} className="flex items-center gap-2 text-lg font-semibold">
             <MessageSquareWarning className="w-5 h-5 text-[var(--accent-text)]" aria-hidden="true" />
@@ -243,7 +247,7 @@ export function FeedbackModal({ onClose, send = sendThroughSentry, encodeImage =
         ) : (
           <motion.form key="form" onSubmit={handleSubmit} aria-busy={sending} className="flex min-h-0 flex-1 flex-col" {...fade}>
             <div className="modal-body space-y-4">
-              <p>Scrivi cosa è successo o cosa vorresti migliorare: leggo ogni messaggio.</p>
+              <p>Scrivi cosa è successo o cosa vorresti migliorare.</p>
 
               <div className="space-y-2">
                 <label htmlFor={kindId} className="text-xs font-semibold block text-[var(--text-primary)]">Tipo di segnalazione</label>
@@ -258,7 +262,7 @@ export function FeedbackModal({ onClose, send = sendThroughSentry, encodeImage =
                   placeholder="Cosa stavi facendo, cosa è successo e cosa ti aspettavi"
                   onChange={event => { setMessage(event.target.value); setFailure(null); }} />
                 <p id={messageHintId} className="flex justify-between gap-3 text-xs text-[var(--text-muted)]">
-                  <span>{trimmed.length > 0 && trimmed.length < MIN_MESSAGE_LENGTH ? `Almeno ${MIN_MESSAGE_LENGTH} caratteri.` : 'Più dettagli dai, prima lo risolvo.'}</span>
+                  <span>{trimmed.length > 0 && trimmed.length < MIN_MESSAGE_LENGTH ? `Almeno ${MIN_MESSAGE_LENGTH} caratteri.` : ''}</span>
                   <span aria-label={`${message.length} caratteri su ${MAX_MESSAGE_LENGTH}`}>{message.length}/{MAX_MESSAGE_LENGTH}</span>
                 </p>
               </div>
