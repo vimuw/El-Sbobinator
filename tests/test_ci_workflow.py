@@ -121,6 +121,32 @@ def test_web_release_builds_drive_from_the_repository_variable_and_checks_it():
     assert order == sorted(order)
 
 
+def test_web_release_builds_reports_from_the_repository_variable_and_checks_them():
+    web = WEB_RELEASE.read_text(encoding="utf-8")
+    variable = "EL_SBOBINATOR_SENTRY_DSN: ${{ vars.EL_SBOBINATOR_SENTRY_DSN }}"
+    build = web.split("- name: Build the static site", 1)[1].split(
+        "\n      - name:", 1
+    )[0]
+    assert variable in build
+    # The DSN is public: a secret would also hide it from the build logs.
+    assert "secrets.EL_SBOBINATOR_SENTRY_DSN" not in web
+    check = web.split("- name: Check the feedback and error reports", 1)[1].split(
+        "\n      - name:", 1
+    )[0]
+    assert variable in check
+    with_reports, without_reports = check.split("\n          else\n", 1)
+    assert "test -f ../functions/api/report.ts" in with_reports
+    assert "dist-web/_headers" in with_reports and "exit 1" in with_reports
+    # Without the variable the release goes on with the Google form.
+    assert "::warning::" in without_reports and "exit" not in without_reports
+    order = [
+        web.index("npm run build:web"),
+        web.index("- name: Check the feedback and error reports"),
+        web.index("cloudflare/wrangler-action@"),
+    ]
+    assert order == sorted(order)
+
+
 def test_web_release_publishes_nothing_on_github():
     # The web site stays out of the desktop repository's Releases page and artifacts.
     web = WEB_RELEASE.read_text(encoding="utf-8")
@@ -169,6 +195,8 @@ def test_web_staging_is_manual_and_never_deploys_production():
         "EL_SBOBINATOR_GOOGLE_CLIENT_ID: ${{ vars.EL_SBOBINATOR_GOOGLE_CLIENT_ID }}"
         in build
     )
+    # And with the reports, so the /api/report tunnel can be tried there too.
+    assert "EL_SBOBINATOR_SENTRY_DSN: ${{ vars.EL_SBOBINATOR_SENTRY_DSN }}" in build
     order = [
         staging.index("npm run typecheck"),
         staging.index("npm test"),
