@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { RichTextEditor } from './RichTextEditor';
@@ -175,6 +177,25 @@ describe('FloatingImage selection and resize handles', () => {
     });
 
     await waitFor(() => expect(imageContainer?.classList.contains('is-selected')).toBe(true));
+  });
+
+  it('keeps a touch on the selected wrap image for the move gesture, not page scrolling', async () => {
+    // On tablets the browser claimed the finger for scrolling, sent pointercancel and the
+    // moved image sprang back. Only the selected image opts out, so swipes still scroll.
+    const css = readFileSync(resolve(import.meta.dirname, 'FloatingImage.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const touchNone = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)]
+      .filter(([, , body]) => /touch-action:\s*none/.test(body))
+      .map(([, selector]) => selector.trim());
+    const blocksTouch = (element: Element) => touchNone.some(selector => element.matches(selector));
+    render(<RichTextEditor initialContent={'<p>Uno <span data-editor-image data-layout="wrap" data-width="30"><img src="a.png" alt="prima"></span></p><p>Due <span data-editor-image data-layout="wrap" data-width="30"><img src="b.png" alt="seconda"></span></p>'} />);
+    const first = await screen.findByAltText('prima');
+    const second = await screen.findByAltText('seconda');
+    const surface = (img: HTMLElement) => img.closest('.editor-image-surface')!;
+    expect(blocksTouch(surface(first))).toBe(false);
+    await act(async () => { fireEvent.mouseDown(first); });
+    await waitFor(() => expect(first.closest('.editor-image-node')?.classList.contains('is-selected')).toBe(true));
+    expect(blocksTouch(surface(first))).toBe(true);
+    expect(blocksTouch(surface(second))).toBe(false);
   });
 
   it('calculates clipboard image pixel width from percentage', async () => {

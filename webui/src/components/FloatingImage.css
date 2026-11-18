@@ -29,6 +29,13 @@
   max-width: none;
 }
 
+/* A touch on a wrap image starts the move gesture. Without this the browser
+   claims the finger for scrolling, sends pointercancel and the image springs
+   back. Only once selected, so a swipe across other images still scrolls. */
+.editor-image-node.is-selected[data-layout="wrap"] .editor-image-surface {
+  touch-action: none;
+}
+
 .editor-image-surface {
   z-index: 2;
 }
