@@ -75,6 +75,7 @@ describe('audio worker tasks', () => {
 
   it('reports a file that is not audio', async () => {
     const source = createWorkerAudioSource(new Blob([new Uint8Array(100)]), inProcessWorker(createAudioTasks({ canEncode: async () => false, encode: vi.fn() })));
-    await expect(source.cut(900, 840)).rejects.toThrow(/Formato non riconosciuto/);
+    // The name crosses the worker, so the page can tell it from a block failure (webRun.failurePayload).
+    await expect(source.cut(900, 840)).rejects.toMatchObject({ name: 'UnsupportedFormatError', message: expect.stringMatching(/Formato non riconosciuto/) });
   });
 });

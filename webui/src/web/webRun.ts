@@ -4,6 +4,7 @@ import { profileModel, sanitizeModelName } from '../generationProfile';
 import { INVALID_KEY_MESSAGE, modelUnavailableMessage } from '../keyProblemMessages';
 import { phaseText } from '../phaseLabels';
 import type { EmitBridgeEvent } from './fakePipeline';
+import { isUnsupportedFormatError } from './chunker/types';
 import { createScreenWakeLock, type ScreenWakeLock } from './pageLifecycle';
 import {
   CancelledError,
@@ -30,6 +31,9 @@ export const REGENERATE_TIMEOUT_MS = 120_000;
 export const NEW_KEY_TIMEOUT_MS = 120_000;
 const PAUSE_RECOMMENDATION_MS = 30 * 60_000;
 export const LOST_FILE_MESSAGE = 'Il browser non riesce più a leggere il file audio: è stato spostato, rinominato o modificato dopo averlo scelto. Rimuovilo dalla coda e aggiungilo di nuovo.';
+// Also covers a damaged or incomplete file (an interrupted recording: M4A without its index): the
+// chunker cannot tell it from another format, so the text names both ways out.
+export const UNSUPPORTED_FORMAT_MESSAGE = 'Audio non leggibile: in questo file non c’è audio MP3 o AAC (anche dentro un M4A o MP4) che la versione web riesca a leggere, qualunque sia l’estensione. Se il file si ascolta con un altro programma, convertilo in MP3 o M4A e aggiungilo di nuovo alla coda; se non si apre nemmeno lì, la registrazione è probabilmente incompleta o danneggiata.';
 
 export type RegenerateAnswer = boolean | null | 'timeout';
 
@@ -121,6 +125,8 @@ export function failurePayload(
   if (error instanceof DegenerateOutputError) return { ...base, error: 'phase1_degenerate_output', error_detail: detail(error) };
   if (error instanceof FileMismatchError) return { ...base, error: error.message };
   if (isLostFileError(error)) return { ...base, error: LOST_FILE_MESSAGE };
+  // Checked before the phase-1 fallback: it fails before any request, so no "block N after 4 attempts".
+  if (isUnsupportedFormatError(error)) return { ...base, error: UNSUPPORTED_FORMAT_MESSAGE, error_detail: detail(error) };
   if (error instanceof PermanentError && stage === 'phase1') return { ...base, error: 'bad_request_phase1', error_detail: detail(error) };
   if (error instanceof CircuitBreakerExhaustedError) {
     return {

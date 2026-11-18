@@ -4,7 +4,7 @@
 // Xing/Info/VBRI header frames, CBR and VBR, and resyncs over garbage.
 
 import { BlobReader } from './blobReader';
-import { DEFAULT_CHUNK_SEC, now, type Chunk, type ChunkOptions, type ChunkResult, type SourceInfo } from './types';
+import { DEFAULT_CHUNK_SEC, UnsupportedFormatError, now, type Chunk, type ChunkOptions, type ChunkResult, type SourceInfo } from './types';
 
 // kbps, index 1..14. [MPEG1 L3, MPEG2/2.5 L3]
 const BITRATES_L3 = [
@@ -124,7 +124,7 @@ export async function chunkMp3(blob: Blob, opts: ChunkOptions = {}): Promise<Chu
   };
 
   const first = await resync(pos);
-  if (!first) throw new Error('Nessun frame MP3 valido trovato');
+  if (!first) throw new UnsupportedFormatError('Nessun frame MP3 valido trovato');
   if (first.pos !== pos) notes.push(`${first.pos - pos} byte non audio prima del primo frame`);
   pos = first.pos;
   const ref = first.h;

@@ -1,6 +1,6 @@
 import { BufferTarget, EncodedAudioPacketSource, EncodedPacket, Mp4OutputFormat, Output } from 'mediabunny';
 import { describe, expect, it } from 'vitest';
-import { chunkAudio, detectFormat } from './index';
+import { UnsupportedFormatError, chunkAudio, detectFormat } from './index';
 import { parseHeader } from './mp3';
 import { parseAsc } from './mp4';
 
@@ -72,6 +72,7 @@ describe('MP3 chunking', () => {
 
   it('rejects files that are neither MP3 nor MP4', async () => {
     await expect(chunkAudio(new Blob([new Uint8Array(64)]))).rejects.toThrow(/Formato non riconosciuto/);
+    await expect(chunkAudio(new Blob([new Uint8Array(64)]))).rejects.toBeInstanceOf(UnsupportedFormatError);
   });
 });
 
@@ -115,5 +116,21 @@ describe('M4A chunking', () => {
     expect(bytes[1]).toBe(0xf1);
     expect(((bytes[3] & 3) << 11) | (bytes[4] << 3) | (bytes[5] >> 5)).toBe(47);
     expect(bytes.length % 47).toBe(0);
+  });
+
+  // An interrupted recording keeps ftyp (and maybe mdat) but never gets its moov index. It must stop
+  // for good like any unreadable audio (webRun: Audio non leggibile), not as a block failure to retry.
+  it('refuses an interrupted M4A recording without moov as unreadable audio', async () => {
+    const box = (type: string, payload: number[]) => {
+      const size = 8 + payload.length;
+      return new Uint8Array([size >>> 24, (size >> 16) & 0xff, (size >> 8) & 0xff, size & 0xff, ...[...type].map(c => c.charCodeAt(0)), ...payload]);
+    };
+    const ftyp = box('ftyp', [...'M4A '].map(c => c.charCodeAt(0)).concat([0, 0, 0, 0], [...'M4A isom'].map(c => c.charCodeAt(0))));
+    const mdat = box('mdat', Array.from({ length: 4000 }, (_, i) => i % 251));
+    for (const parts of [[ftyp, mdat], [ftyp]]) {
+      const file = new Blob(parts, { type: 'audio/mp4' });
+      expect(await detectFormat(file)).toBe('mp4-aac');
+      await expect(chunkAudio(file)).rejects.toMatchObject({ name: 'UnsupportedFormatError', message: 'Nessuna traccia audio nel file' });
+    }
   });
 });

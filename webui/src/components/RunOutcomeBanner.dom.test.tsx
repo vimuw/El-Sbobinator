@@ -117,6 +117,34 @@ describe('RunOutcomeBanner', () => {
     expect(screen.getByRole('button', { name: 'Rimuovi dalla coda' })).toBeTruthy();
   });
 
+  it('names an unsupported format without blocks, attempts or Riprendi (regression: "dopo 4 tentativi" on the first click)', () => {
+    // The worker sends the chunker's error as a plain Error with its name (audioPort).
+    const workerError = Object.assign(new Error('Formato non riconosciuto: il contenuto non è audio MP3 né AAC in M4A/MP4'), { name: 'UnsupportedFormatError' });
+    const payload = failurePayload(workerError, null, { index: 0, id: 'f1' });
+    render(<RunOutcomeBanner outcome={stopped({ error: payload.error, errorDetail: payload.error_detail })} actions={actions()} canResume />);
+    expect(screen.getByRole('heading').textContent).toBe('Audio non leggibile');
+    const text = screen.getByTestId('run-outcome-banner').textContent ?? '';
+    expect(text).not.toMatch(/tentativi|blocco/);
+    expect(screen.queryByRole('button', { name: /Riprova|Riprendi/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Rimuovi dalla coda' })).toBeTruthy();
+  });
+
+  // Regression: an interrupted M4A recording (no moov) was titled "Formato audio non supportato" and
+  // told to convert a file that no converter can read.
+  it('names a damaged or incomplete recording among the unreadable audio, with the same way out', () => {
+    const handlers = actions();
+    const workerError = Object.assign(new Error('Nessuna traccia audio nel file'), { name: 'UnsupportedFormatError' });
+    const payload = failurePayload(workerError, null, { index: 0, id: 'f1' });
+    render(<RunOutcomeBanner outcome={stopped({ error: payload.error, errorDetail: payload.error_detail })} actions={handlers} canResume />);
+    expect(screen.getByRole('heading').textContent).toBe('Audio non leggibile');
+    const text = screen.getByTestId('run-outcome-banner').textContent ?? '';
+    expect(text).toMatch(/incompleta o danneggiata/);
+    expect(text).not.toMatch(/non supportato|tentativi|blocco/);
+    expect(screen.queryByRole('button', { name: /Riprova|Riprendi/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Rimuovi dalla coda' }));
+    expect(handlers.onRemove).toHaveBeenCalledWith('f1');
+  });
+
   it('sends a full browser storage to Archiviazione, with Riprendi as the second choice', () => {
     const handlers = actions();
     render(<RunOutcomeBanner outcome={stopped({ error: 'Spazio del browser esaurito: libera spazio (o elimina sbobine vecchie) e riprendi.' })} actions={handlers} canResume />);

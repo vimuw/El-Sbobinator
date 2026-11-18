@@ -3,6 +3,17 @@
 
 export type SourceFormat = 'mp3' | 'mp4-aac';
 
+/**
+ * The file's content is not audio the chunker can cut (whatever its extension says). The same
+ * bytes always fail the same way, so the run stops for good instead of offering a resume. The
+ * name crosses the worker boundary (audioTasks) and is what webRun.failurePayload looks for.
+ */
+export class UnsupportedFormatError extends Error {
+  name = 'UnsupportedFormatError';
+}
+export const isUnsupportedFormatError = (error: unknown): boolean =>
+  typeof error === 'object' && error !== null && (error as { name?: unknown }).name === 'UnsupportedFormatError';
+
 export interface Chunk {
   index: number;
   /** Start time in the source, seconds. */

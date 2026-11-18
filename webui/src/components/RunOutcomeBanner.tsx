@@ -39,6 +39,7 @@ const BUTTON_ICON = 'h-3.5 w-3.5';
 // Kept in sync with the error texts of webRun.failurePayload (key problems: keyProblemMessages).
 const LOST_FILE = /^Il browser non riesce più a leggere il file audio/;
 const OTHER_FILE = /non è lo stesso audio/;
+const UNSUPPORTED_FORMAT = /^Audio non leggibile/;
 const STORAGE_FULL = /^Spazio del browser esaurito/;
 
 function retryTime(iso?: string): string | null {
@@ -103,12 +104,12 @@ function describeOutcome(outcome: RunOutcome, actions: RunOutcomeActions, canRes
   if (isKeyProblemMessage(error)) {
     return { tone: 'error', icon: <KeyRound className={ICON} />, title: 'Chiave API da controllare', message: label, primary: settings('Apri le impostazioni') };
   }
-  // Retrying cannot help: the queue holds a file the browser cannot read, or a different audio.
-  if (LOST_FILE.test(error) || OTHER_FILE.test(error)) {
+  // Retrying cannot help: the queue holds a file the browser cannot read or cut, or a different audio.
+  if (LOST_FILE.test(error) || OTHER_FILE.test(error) || UNSUPPORTED_FORMAT.test(error)) {
     return {
       tone: 'error',
       icon: <FileX className={ICON} />,
-      title: LOST_FILE.test(error) ? 'File audio non più leggibile' : 'Non è lo stesso file audio',
+      title: LOST_FILE.test(error) ? 'File audio non più leggibile' : UNSUPPORTED_FORMAT.test(error) ? 'Audio non leggibile' : 'Non è lo stesso file audio',
       message: label,
       primary: { label: 'Rimuovi dalla coda', icon: <Trash2 className={BUTTON_ICON} />, run: () => actions.onRemove(outcome.fileId) },
     };

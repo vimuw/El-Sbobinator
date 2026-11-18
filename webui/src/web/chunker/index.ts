@@ -1,6 +1,6 @@
 import { chunkMp3 } from './mp3';
 import { chunkMp4 } from './mp4';
-import type { ChunkOptions, ChunkResult, SourceFormat } from './types';
+import { UnsupportedFormatError, type ChunkOptions, type ChunkResult, type SourceFormat } from './types';
 
 export * from './types';
 export { chunkMp3 } from './mp3';
@@ -19,5 +19,5 @@ export async function chunkAudio(blob: Blob, opts: ChunkOptions = {}): Promise<C
   const format = await detectFormat(blob);
   if (format === 'mp3') return chunkMp3(blob, opts);
   if (format === 'mp4-aac') return chunkMp4(blob, opts);
-  throw new Error('Formato non riconosciuto: servono MP3 o M4A/MP4 (AAC)');
+  throw new UnsupportedFormatError('Formato non riconosciuto: il contenuto non è audio MP3 né AAC in M4A/MP4');
 }

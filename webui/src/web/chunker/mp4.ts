@@ -16,7 +16,7 @@ import {
   QTFF,
   type EncodedPacket,
 } from 'mediabunny';
-import { DEFAULT_CHUNK_SEC, now, type Chunk, type ChunkOptions, type ChunkResult, type SourceInfo } from './types';
+import { DEFAULT_CHUNK_SEC, UnsupportedFormatError, now, type Chunk, type ChunkOptions, type ChunkResult, type SourceInfo } from './types';
 
 export async function chunkMp4(blob: Blob, opts: ChunkOptions = {}): Promise<ChunkResult> {
   const t0 = now();
@@ -25,9 +25,9 @@ export async function chunkMp4(blob: Blob, opts: ChunkOptions = {}): Promise<Chu
   const input = new Input({ source: new BlobSource(blob), formats: [MP4, QTFF, ADTS] });
   try {
     const track = await input.getPrimaryAudioTrack();
-    if (!track) throw new Error('Nessuna traccia audio nel file');
+    if (!track) throw new UnsupportedFormatError('Nessuna traccia audio nel file');
     const codec = await track.getCodec();
-    if (codec !== 'aac') throw new Error(`Codec ${codec ?? 'sconosciuto'} non supportato (serve AAC)`);
+    if (codec !== 'aac') throw new UnsupportedFormatError(`Codec ${codec ?? 'sconosciuto'} non supportato (serve AAC)`);
     const decoderConfig = await track.getDecoderConfig();
     if (!decoderConfig) throw new Error('Configurazione decoder AAC mancante');
     const sampleRate = await track.getSampleRate();
