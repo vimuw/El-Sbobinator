@@ -600,6 +600,93 @@ def command_update_local(args: argparse.Namespace) -> None:
     print("[OK] App locale aggiornata: .venv verificato e interfaccia ricostruita.")
 
 
+# npm advisories with no patched release that reach only build/test tooling, as
+# {GHSA id: (package, last vulnerable release)}. Each one is tolerated only while that
+# release is still the package's latest and every copy in package-lock.json is dev-only:
+# once a fix ships, or the package reaches the shipped bundle, the audit fails again.
+NPM_AUDIT_EXCEPTIONS: dict[str, tuple[str, str]] = {
+    # picomatch ReDoS through repeated extglobs; pulled in by vite and vitest only.
+    "GHSA-fc5q-39xc-vjpf": ("picomatch", "4.0.7"),
+}
+
+
+def npm_latest_version(package: str) -> str | None:
+    result = subprocess.run(
+        ["npm.cmd" if os.name == "nt" else "npm", "view", package, "version"],
+        cwd=WEBUI_DIR,
+        capture_output=True,
+        text=True,
+    )
+    version = result.stdout.strip()
+    return version if result.returncode == 0 and version else None
+
+
+def npm_audit_blockers(
+    audit: dict, lock: dict, latest_versions: dict[str, str | None]
+) -> list[str]:
+    """Advisories of an `npm audit --json` report that NPM_AUDIT_EXCEPTIONS does not cover."""
+    vulnerabilities = audit.get("vulnerabilities")
+    if not isinstance(vulnerabilities, dict) or not vulnerabilities:
+        return ["npm audit non ha restituito un elenco di avvisi"]
+    lock_packages = lock.get("packages", {})
+    blockers: list[str] = []
+    for name, vulnerability in vulnerabilities.items():
+        for source in vulnerability.get("via", []):
+            if isinstance(source, str):
+                # Inherited from another flagged package, judged at its own entry.
+                continue
+            ghsa = str(source.get("url", "")).rstrip("/").rsplit("/", 1)[-1]
+            exception = NPM_AUDIT_EXCEPTIONS.get(ghsa)
+            if exception is None or exception[0] != name:
+                blockers.append(f"{name}: {ghsa or source.get('title', 'avviso')}")
+                continue
+            package, last_vulnerable = exception
+            latest = latest_versions.get(package)
+            if latest != last_vulnerable:
+                blockers.append(
+                    f"{name}: {ghsa} ha una versione nuova ({latest or 'sconosciuta'}): aggiornala"
+                )
+            shipped = [
+                path
+                for path, entry in lock_packages.items()
+                if path.endswith(f"node_modules/{package}")
+                and entry.get("dev") is not True
+            ]
+            if shipped:
+                blockers.append(
+                    f"{name}: {ghsa} non solo negli strumenti di sviluppo ({', '.join(shipped)})"
+                )
+    return blockers
+
+
+def npm_audit_has_blockers(audit_output: str) -> bool:
+    try:
+        audit = json.loads(audit_output)
+        lock = json.loads((WEBUI_DIR / "package-lock.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        print(f"[ERRORE] Audit npm illeggibile: {exc}")
+        return True
+    packages = {
+        NPM_AUDIT_EXCEPTIONS[ghsa][0]
+        for vulnerability in audit.get("vulnerabilities", {}).values()
+        for source in vulnerability.get("via", [])
+        if isinstance(source, dict)
+        and (ghsa := str(source.get("url", "")).rstrip("/").rsplit("/", 1)[-1])
+        in NPM_AUDIT_EXCEPTIONS
+    }
+    blockers = npm_audit_blockers(
+        audit, lock, {package: npm_latest_version(package) for package in packages}
+    )
+    for blocker in blockers:
+        print(f"[ERRORE] Avviso npm: {blocker}")
+    if not blockers:
+        print(
+            "[AVVISO] Audit npm: tollerati solo avvisi senza correzione negli strumenti di "
+            f"sviluppo ({', '.join(sorted(NPM_AUDIT_EXCEPTIONS))})."
+        )
+    return bool(blockers)
+
+
 def command_audit(args: argparse.Namespace) -> None:
     verify_python_dependencies()
     # Audit the environment that CI/build actually use, including tools/transitives.
@@ -635,6 +722,8 @@ def command_audit(args: argparse.Namespace) -> None:
         )
         (report / "npm.json").write_text(npm_audit.stdout, encoding="utf-8")
         npm_result = npm_audit.returncode
+        if npm_result and not npm_audit_has_blockers(npm_audit.stdout):
+            npm_result = 0
     if python_audit.returncode or npm_result:
         raise RuntimeError(f"Audit dipendenze fallito: consulta {report}")
     print("[OK] Audit completo Python/npm: nessun avviso noto.")

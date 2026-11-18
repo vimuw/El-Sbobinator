@@ -1,9 +1,10 @@
 import { memo, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { motion } from 'motion/react';
-import { Archive, Bell, Layers, Moon, Settings, Sun, Terminal } from 'lucide-react';
+import { Archive, Bell, Layers, MessageSquareWarning, Moon, Settings, Sun, Terminal } from 'lucide-react';
 import type { AppStatus } from '../appState';
 import { STORAGE_KEYS } from '../storageKeys';
 import { BrandLogo } from './BrandLogo';
+import { useReportProblem } from './useReportProblem';
 import { SidebarAccount } from './SidebarAccount';
 import { SidebarBadge, SidebarTooltip } from './sidebarParts';
 export type ActivePage = 'queue' | 'archive';
@@ -57,6 +58,8 @@ export const NavSidebar = memo(function NavSidebar({
   completionFlash = false,
   onOpenStorageSettings,
 }: NavSidebarProps) {
+  const report = useReportProblem();
+
   const apiStatusColor = !apiReady
     ? (bridgeDelayed ? 'var(--error-text)' : 'var(--warning-text)')
     : !hasApiKey ? 'var(--text-muted)'
@@ -117,7 +120,7 @@ export const NavSidebar = memo(function NavSidebar({
         <SidebarTooltip label={apiStatusLabel}>
           <div
             aria-label={apiStatusLabel}
-            className="flex items-center justify-center rounded-lg text-xs font-medium w-9 h-9 cursor-default"
+            className="sidebar-api-status flex items-center justify-center rounded-lg text-xs font-medium w-9 h-9 cursor-default"
             style={{ color: apiStatusColor }}
           >
             <span className="shrink-0 inline-flex items-center justify-center" style={{ width: 18, height: 18, lineHeight: 0 }}>
@@ -164,6 +167,14 @@ export const NavSidebar = memo(function NavSidebar({
           active={isNotificationsOpen}
           onClick={() => setIsNotificationsOpen(prev => !prev)}
         />
+        {/* On every page, the editor too, and in the phone's bottom bar. */}
+        <UtilityButton
+          icon={<MessageSquareWarning size={18} />}
+          label="Segnala un problema"
+          active={report.open}
+          onClick={report.openReport}
+        />
+        {report.modal}
         <UtilityButton
           icon={
             <span style={{ position: 'relative', display: 'inline-flex' }}>

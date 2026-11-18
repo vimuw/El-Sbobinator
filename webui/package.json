@@ -30,6 +30,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@fontsource/manrope": "^5.3.0",
+    "@sentry/browser": "^11.10.0",
     "@tiptap/extension-color": "^3.32.0",
     "@tiptap/extension-font-family": "^3.32.0",
     "@tiptap/extension-highlight": "^3.32.0",

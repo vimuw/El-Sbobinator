@@ -71,6 +71,7 @@ jobs:
         env:
           EL_SBOBINATOR_WEB_VERSION: ${{ github.ref_name }}
           EL_SBOBINATOR_GOOGLE_CLIENT_ID: ${{ vars.EL_SBOBINATOR_GOOGLE_CLIENT_ID }}
+          EL_SBOBINATOR_SENTRY_DSN: ${{ vars.EL_SBOBINATOR_SENTRY_DSN }}
         run: |
           npm run build:web
           node -e "const v = require('./dist-web/version.json'); if (v.preview) throw new Error('version.json says preview'); console.log('Version', v.version);"
@@ -90,8 +91,24 @@ jobs:
             echo "::warning::EL_SBOBINATOR_GOOGLE_CLIENT_ID is not set: the site is published without Google Drive sync."
           fi
 
-      # Run from the repo root: wrangler also bundles functions/ (the Drive login server, /api/drive),
-      # which reads the project's Production variables GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, DRIVE_COOKIE_KEY.
+      - name: Check the feedback and error reports of the build
+        working-directory: webui
+        env:
+          EL_SBOBINATOR_SENTRY_DSN: ${{ vars.EL_SBOBINATOR_SENTRY_DSN }}
+        run: |
+          if [ -n "$EL_SBOBINATOR_SENTRY_DSN" ]; then
+            test -f ../functions/api/report.ts                                 || { echo "::error::The DSN is set but the reports' tunnel (functions/api/report.ts) is missing."; exit 1; }
+            grep -rqsF "$EL_SBOBINATOR_SENTRY_DSN" dist-web/assets                || { echo "::error::The DSN is set but the build does not carry it."; exit 1; }
+            ! grep -qi 'sentry' dist-web/_headers                                 || { echo "::error::The policy reaches Sentry directly: reports must go through /api/report."; exit 1; }
+            echo "Feedback and error reports: on"
+          else
+            # Not an error: the site goes out with reports by email (supporto@), as the desktop app does.
+            echo "::warning::EL_SBOBINATOR_SENTRY_DSN is not set: the site is published with reports by email."
+          fi
+
+      # Run from the repo root: wrangler also bundles functions/ (the Drive login server, /api/drive,
+      # and the reports' tunnel, /api/report), which read the project's Production variables
+      # GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, DRIVE_COOKIE_KEY, SENTRY_DSN, REPORT_ALLOWED_ORIGIN.
       - name: Deploy to Cloudflare Pages (production branch)
         uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4.1.3
         with:

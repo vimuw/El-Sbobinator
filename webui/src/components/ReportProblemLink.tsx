@@ -1,10 +1,25 @@
 import { Bug } from 'lucide-react';
 import { BUG_REPORT_URL } from '../branding';
-import { reportClientError } from '../diagnostics';
 import { ExternalLinkIcon } from './ExternalLinkIcon';
+import { useReportProblem } from './useReportProblem';
 
-// In the footer it stays a plain link like its neighbours; elsewhere it carries the external-link arrow.
-export function ReportProblemLink({ className = 'footer-link' }: { className?: string }) {
+// "Segnala un problema" as a labelled button (Impostazioni → Assistenza); the sidebar has its own
+// icon. As an email it carries the external-link arrow.
+export function ReportProblemLink({ className = 'app-button-secondary is-settings-action shrink-0' }: { className?: string }) {
+  const { byEmail, openReport, modal } = useReportProblem();
+
+  if (!byEmail) {
+    return (
+      <>
+        <button type="button" className={className} aria-haspopup="dialog" onClick={openReport}>
+          <Bug className="w-3.5 h-3.5" aria-hidden="true" />
+          Segnala un problema
+        </button>
+        {modal}
+      </>
+    );
+  }
+
   return (
     <a
       href={BUG_REPORT_URL}
@@ -12,18 +27,13 @@ export function ReportProblemLink({ className = 'footer-link' }: { className?: s
       rel="noopener noreferrer"
       className={className}
       onClick={event => {
-        if (!window.pywebview?.api?.open_url) return;
         event.preventDefault();
-        void window.pywebview.api.open_url?.(BUG_REPORT_URL)
-          .then(result => {
-            if (!result.ok) throw new Error(result.error || 'Impossibile aprire il modulo.');
-          })
-          .catch(error => reportClientError('bug-report-open', error));
+        openReport();
       }}
     >
       <Bug className="w-3.5 h-3.5" aria-hidden="true" />
       Segnala un problema
-      {className !== 'footer-link' && <ExternalLinkIcon />}
+      <ExternalLinkIcon />
     </a>
   );
 }

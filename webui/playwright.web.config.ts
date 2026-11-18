@@ -20,6 +20,8 @@ const DRIVE_SPECS = /(?:^|[\\/])drive[^\\/]*\.spec\.ts$/;
 function build(outDir: string, clientId: string | undefined) {
   const env = { ...process.env };
   delete env.EL_SBOBINATOR_GOOGLE_CLIENT_ID;
+  // No Sentry: the tests never send reports, and "Segnala un problema" writes an email.
+  delete env.EL_SBOBINATOR_SENTRY_DSN;
   if (clientId) env.EL_SBOBINATOR_GOOGLE_CLIENT_ID = clientId;
   execFileSync(process.execPath, [vite, 'build', '--config', 'vite.web.config.ts', '--outDir', outDir, '--logLevel', 'error'], {
     cwd: import.meta.dirname,

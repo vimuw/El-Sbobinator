@@ -8,7 +8,9 @@ export const GITHUB_RELEASES_URL = `${GITHUB_URL}/releases/latest`;
 export const GITHUB_API_RELEASES_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
 // Privacy notice of the web build, a static page of the same site (webBuild.ts emits it).
 export const WEB_PRIVACY_PATH = '/privacy';
-export const BUG_REPORT_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSdzfLau1SrSZuJgQ2J3lERgtXcz9EjE_vP63nHkiVYCsRqMzA/viewform';
+// The developer's contact, the same as on the privacy page: where reports go when the app cannot
+// send them itself (builds without Sentry, a failed send).
+export const SUPPORT_EMAIL = 'supporto@elsbobinator.com';
 
 // Injected at build time by Vite from package.json — do not hardcode here.
 declare const __APP_VERSION__: string;
@@ -18,5 +20,8 @@ export const APP_VERSION: string = typeof __APP_VERSION__ !== 'undefined' ? __AP
 declare const __WEB_PREVIEW__: boolean;
 export const WEB_PREVIEW_BUILD: boolean = typeof __WEB_PREVIEW__ !== 'undefined' && __WEB_PREVIEW__;
 
-// Google Forms field for "Versione dell’app (facoltativa)".
-export const BUG_REPORT_URL = `${BUG_REPORT_FORM_URL}?usp=pp_url&entry.1877160526=${encodeURIComponent(APP_VERSION)}`;
+// An email to the developer with the app version in the subject. The desktop bridge allows exactly
+// this address with only a subject (bridge_utils._ALLOWED_URL_PREFIXES, _is_allowed_open_url); the
+// subject is its own constant so tests/test_app_webview.py can resolve this URL.
+export const BUG_REPORT_SUBJECT = `${APP_NAME} ${APP_VERSION}: segnalazione`;
+export const BUG_REPORT_URL = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(BUG_REPORT_SUBJECT)}`;

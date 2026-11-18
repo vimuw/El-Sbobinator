@@ -59,6 +59,18 @@ class BuildReleaseTests(unittest.TestCase):
                 build_release.run_inno_setup("2.8.0")
         run.assert_not_called()
 
+    def test_installer_support_link_is_the_site_not_the_retired_form(self):
+        # Reports moved from the Google form to an email: the "Supporto" link in Windows'
+        # installed-apps list kept opening the retired form.
+        script = (
+            build_release.ROOT / "packaging" / "windows" / "installer.iss"
+        ).read_text(encoding="utf-8")
+        support = [
+            line for line in script.splitlines() if line.startswith("AppSupportURL=")
+        ]
+        self.assertEqual(support, ["AppSupportURL=https://elsbobinator.com"])
+        self.assertNotIn("docs.google.com/forms", script)
+
     def test_dependency_sync_is_exact_and_cannot_rewrite_the_committed_lock(self):
         with (
             patch.object(build_release, "ensure_uv", return_value=Path("uv")),
@@ -524,6 +536,90 @@ class WriteSha256Tests(unittest.TestCase):
             result = build_release.write_sha256(artifact)
             content = result.read_text(encoding="utf-8")
             self.assertEqual(content.split()[0], expected_digest)
+
+
+_PICOMATCH_ADVISORY = {
+    "source": 1247710,
+    "name": "picomatch",
+    "url": "https://github.com/advisories/GHSA-fc5q-39xc-vjpf",
+    "range": "<=4.0.7",
+}
+
+
+def _audit(**vulnerabilities):
+    return {"vulnerabilities": vulnerabilities}
+
+
+def _lock(**dev_by_path):
+    return {"packages": {path: {"dev": dev} for path, dev in dev_by_path.items()}}
+
+
+class NpmAuditExceptionTests(unittest.TestCase):
+    picomatch_report = _audit(
+        picomatch={"via": [_PICOMATCH_ADVISORY]},
+        vite={"via": ["picomatch", "tinyglobby"]},
+    )
+    dev_lock = _lock(**{"node_modules/picomatch": True, "node_modules/vite": True})
+
+    def test_unpatched_dev_only_advisory_is_tolerated(self):
+        blockers = build_release.npm_audit_blockers(
+            self.picomatch_report, self.dev_lock, {"picomatch": "4.0.7"}
+        )
+        self.assertEqual(blockers, [])
+
+    def test_exception_ends_when_a_newer_release_ships(self):
+        blockers = build_release.npm_audit_blockers(
+            self.picomatch_report, self.dev_lock, {"picomatch": "4.0.8"}
+        )
+        self.assertEqual(len(blockers), 1)
+        self.assertIn("4.0.8", blockers[0])
+
+    def test_unknown_latest_release_is_not_tolerated(self):
+        blockers = build_release.npm_audit_blockers(
+            self.picomatch_report, self.dev_lock, {"picomatch": None}
+        )
+        self.assertEqual(len(blockers), 1)
+
+    def test_copy_outside_dev_tooling_is_not_tolerated(self):
+        lock = _lock(
+            **{
+                "node_modules/picomatch": True,
+                "node_modules/some-runtime/node_modules/picomatch": False,
+            }
+        )
+        blockers = build_release.npm_audit_blockers(
+            self.picomatch_report, lock, {"picomatch": "4.0.7"}
+        )
+        self.assertEqual(len(blockers), 1)
+        self.assertIn("some-runtime", blockers[0])
+
+    def test_other_advisories_still_fail(self):
+        report = _audit(
+            picomatch={"via": [_PICOMATCH_ADVISORY]},
+            lodash={
+                "via": [{"url": "https://github.com/advisories/GHSA-xxxx-yyyy-zzzz"}]
+            },
+        )
+        blockers = build_release.npm_audit_blockers(
+            report, self.dev_lock, {"picomatch": "4.0.7"}
+        )
+        self.assertEqual(blockers, ["lodash: GHSA-xxxx-yyyy-zzzz"])
+
+    def test_exception_id_on_another_package_still_fails(self):
+        report = _audit(other={"via": [dict(_PICOMATCH_ADVISORY, name="other")]})
+        blockers = build_release.npm_audit_blockers(
+            report, self.dev_lock, {"picomatch": "4.0.7"}
+        )
+        self.assertEqual(len(blockers), 1)
+
+    def test_failed_audit_without_advisories_still_fails(self):
+        blockers = build_release.npm_audit_blockers(
+            {"error": {"code": "ENOTFOUND"}}, self.dev_lock, {}
+        )
+        self.assertEqual(len(blockers), 1)
+
+    def test_unreadable_audit_output_still_fails(self):
+        self.assertTrue(build_release.npm_audit_has_blockers("not json"))
 
 
 if __name__ == "__main__":

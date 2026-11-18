@@ -1,6 +1,13 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { BUG_REPORT_URL } from '../branding';
+import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 import { NavSidebar } from './NavSidebar';
+
+afterEach(() => {
+  setHostCapabilities(DESKTOP_CAPABILITIES);
+  delete window.pywebview;
+});
 
 function renderSidebar(overrides: Partial<Parameters<typeof NavSidebar>[0]> = {}) {
   const props = {
@@ -49,6 +56,24 @@ describe('NavSidebar badges', () => {
       expect(badge.querySelector('.sidebar-badge-halo')).not.toBeNull();
     }
     expect(document.querySelector('.animate-ping')).toBeNull();
+  });
+
+  it('opens the feedback window from the sidebar in web builds with Sentry', async () => {
+    setHostCapabilities({ kind: 'web', reportByEmail: false });
+    renderSidebar();
+    fireEvent.click(screen.getByRole('button', { name: 'Segnala un problema' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Segnala un problema' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Annulla' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('writes the email through the desktop bridge, where the WebView has no mail handler', async () => {
+    const openUrl = vi.fn(async (_url: string) => ({ ok: true }));
+    window.pywebview = { api: { open_url: openUrl } } as unknown as NonNullable<typeof window.pywebview>;
+    renderSidebar();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Segnala un problema' })); });
+    expect(openUrl).toHaveBeenCalledWith(BUG_REPORT_URL);
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('keeps the API status dot still during a run', () => {

@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import webview
 
 from el_sbobinator.bridge.bridge_utils import (
-    _ALLOWED_URL_PREFIXES,
+    _is_allowed_open_url,
     _path_under_root,
     bridge_error,
     bridge_ok,
@@ -239,9 +239,7 @@ class SystemControllerMixin:
 
     def open_url(self, url: str) -> dict:
         """Open an external URL in the system browser (allowlist only)."""
-        if not isinstance(url, str) or not any(
-            url.startswith(p) for p in _ALLOWED_URL_PREFIXES
-        ):
+        if not _is_allowed_open_url(url):
             return bridge_error("URL non consentito.")
         try:
             file_ops.open_path_with_default_app(url)

@@ -5,7 +5,8 @@ import { createHash } from 'node:crypto';
 import path from 'path';
 import { defineConfig, type UserConfig, type ViteDevServer } from 'vite';
 import { createDriveDevMiddleware } from './src/web/drive/server/devServer.ts';
-import { driveClientId, toWebDevIndexHtml, toWebDevStaticPageHtml, toWebIndexHtml, webBuildVersion, webHeadersFile, webStaticPages } from './src/web/webBuild.ts';
+import { createReportDevMiddleware } from './src/monitoring/server/devServer.ts';
+import { driveClientId, sentryDsn, toWebDevIndexHtml, toWebDevStaticPageHtml, toWebIndexHtml, webBuildVersion, webHeadersFile, webStaticPages } from './src/web/webBuild.ts';
 
 const packageInfo = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8')) as { version: string };
 const version = (process.env.EL_SBOBINATOR_BUILD_VERSION ?? packageInfo.version).replace(/^v/, '');
@@ -21,6 +22,8 @@ export function createViteConfig(target: 'desktop' | 'web'): UserConfig {
   // Drive sync: only web builds with a Google OAuth client ID have it (and its return page).
   const driveClient = web ? driveClientId(process.env.EL_SBOBINATOR_GOOGLE_CLIENT_ID) : null;
   const drive = driveClient !== null;
+  // Feedback and error reports: only web builds with a Sentry DSN have them; the others keep the form.
+  const reportDsn = web ? sentryDsn(process.env.EL_SBOBINATOR_SENTRY_DSN) : null;
   const staticPages = webStaticPages(drive);
   const isStaticPagePath = (url: string) => staticPages.some(page => url === `/${page}.html` || url === `/${page}`);
   return {
@@ -44,6 +47,17 @@ export function createViteConfig(target: 'desktop' | 'web'): UserConfig {
             GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
             DRIVE_COOKIE_KEY: process.env.DRIVE_COOKIE_KEY,
           }),
+          protocol: () => (server.config.server.https ? 'https' : 'http'),
+        }));
+      },
+    }] : []), ...(isWeb && reportDsn ? [{
+      // The reports' tunnel (the site's Pages Function functions/api/report.ts) on the dev server,
+      // before the /api proxy like /api/drive. It forwards to the same Sentry project.
+      name: 'web-dev-report',
+      apply: 'serve' as const,
+      configureServer(server: ViteDevServer) {
+        server.middlewares.use(createReportDevMiddleware({
+          dsn: reportDsn,
           protocol: () => (server.config.server.https ? 'https' : 'http'),
         }));
       },
@@ -72,6 +86,7 @@ export function createViteConfig(target: 'desktop' | 'web'): UserConfig {
       __APP_VERSION__: JSON.stringify(`v${web?.version ?? version}`),
       __WEB_PREVIEW__: JSON.stringify(web?.preview ?? false),
       __GOOGLE_CLIENT_ID__: JSON.stringify(driveClient ?? ''),
+      __SENTRY_DSN__: JSON.stringify(reportDsn ?? ''),
       'process.env': {},
       global: 'globalThis',
     },

@@ -47,6 +47,20 @@ export function driveClientId(value: string | undefined): string | null {
   return clientId;
 }
 
+/**
+ * Sentry DSN of the feedback and error reports (EL_SBOBINATOR_SENTRY_DSN), or null when the build
+ * leaves them out and reports by email. Public by design: the page sends to the site's own
+ * /api/report tunnel, which checks the envelope against the same DSN before forwarding it.
+ */
+export function sentryDsn(value: string | undefined): string | null {
+  const dsn = value?.trim();
+  if (!dsn) return null;
+  if (!/^https:\/\/[0-9a-f]{32}@o[0-9]+\.ingest(\.[a-z]{2})?\.sentry\.io\/[0-9]+$/.test(dsn)) {
+    throw new Error(`DSN Sentry non valido: ${dsn} (atteso https://<chiave>@o123.ingest.de.sentry.io/456).`);
+  }
+  return dsn;
+}
+
 // Desktop-only boot script: it talks to the pywebview startup check.
 const DESKTOP_ONLY_SCRIPTS = ['startup-guard.js'];
 

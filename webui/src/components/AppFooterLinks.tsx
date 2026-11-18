@@ -1,10 +1,10 @@
 import { GITHUB_URL } from '../branding';
 import { GithubIcon } from './icons/GithubIcon';
 import { PrivacyLink } from './PrivacyLink';
-import { ReportProblemLink } from './ReportProblemLink';
 
 // The links under the dashboard and the archive. On a phone they keep one row: the long labels
-// give way to short ones (index.css) instead of stacking one link per line.
+// give way to short ones (index.css) instead of stacking one link per line. "Segnala un problema"
+// lives in the sidebar, so it is on every page.
 export function AppFooterLinks() {
   return (
     <footer className="app-footer app-footer-links">
@@ -18,7 +18,6 @@ export function AppFooterLinks() {
         <span className="footer-label-long">Progetto Open-Source — GitHub</span>
         <span className="footer-label-short" aria-hidden="true">GitHub</span>
       </a>
-      <ReportProblemLink />
       <PrivacyLink />
     </footer>
   );

@@ -91,11 +91,19 @@ class SystemControllerSecurityTests(unittest.TestCase):
             "https://malicious-site.com/exploit",
             "about:blank",
             "vbscript:msgbox(1)",
-            "https://docs.google.com/forms/d/e/another-form/viewform?usp=pp_url",
+            # The old bug-report form is no longer opened.
             "https://docs.google.com/forms/d/e/"
-            "1FAIpQLSdzfLau1SrSZuJgQ2J3lERgtXcz9EjE_vP63nHkiVYCsRqMzA/edit",
-            "https://docs.google.com/forms/d/e/"
-            "1FAIpQLSdzfLau1SrSZuJgQ2J3lERgtXcz9EjE_vP63nHkiVYCsRqMzA/viewform-other",
+            "1FAIpQLSdzfLau1SrSZuJgQ2J3lERgtXcz9EjE_vP63nHkiVYCsRqMzA/viewform?usp=pp_url",
+            "mailto:someone-else@example.com?subject=x",
+            "mailto:supporto@elsbobinator.com.evil.example?subject=x",
+            "mailto:supporto@elsbobinator.com,other@example.com?subject=x",
+            # The right address, but the query adds recipients or a body.
+            "mailto:supporto@elsbobinator.com?cc=other@example.com",
+            "mailto:supporto@elsbobinator.com?to=other@example.com",
+            "mailto:supporto@elsbobinator.com?bcc=other@example.com&body=x",
+            "mailto:supporto@elsbobinator.com?subject=x&cc=other@example.com",
+            "mailto:supporto@elsbobinator.com?subject=x&subject=y",
+            "mailto:supporto@elsbobinator.com?%63c=other@example.com",
         ]
         for url in evil_urls:
             with self.subTest(url=url):
@@ -107,9 +115,7 @@ class SystemControllerSecurityTests(unittest.TestCase):
         allowed_urls = [
             "https://github.com/vimuw/El-Sbobinator",
             "https://aistudio.google.com/app/apikey",
-            "https://docs.google.com/forms/d/e/"
-            "1FAIpQLSdzfLau1SrSZuJgQ2J3lERgtXcz9EjE_vP63nHkiVYCsRqMzA/"
-            "viewform?usp=pp_url&entry.1877160526=2.7.4",
+            "mailto:supporto@elsbobinator.com?subject=El%20Sbobinator%20v2.7.4%3A%20segnalazione",
         ]
         with patch(
             "el_sbobinator.utils.file_ops.open_path_with_default_app"

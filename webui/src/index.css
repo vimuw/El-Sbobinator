@@ -312,6 +312,16 @@ button {
   border-radius: var(--radius-pill);
 }
 
+/* A text area in a modal (the feedback's description) grows with its lines: rounded like the
+   cards, not a pill. */
+.modal-card .app-input.is-multiline {
+  height: auto;
+  min-height: 7.5rem;
+  padding: 0.75rem 1.1rem;
+  border-radius: var(--radius-xl);
+  resize: vertical;
+}
+
 /* Type scale for the queue page: one display title. */
 .page-title {
   font-size: var(--text-title);
@@ -6452,6 +6462,13 @@ input::-webkit-contacts-auto-fill-button {
 
   .app-sidebar .sidebar-tooltip {
     display: none;
+  }
+
+  /* Without its tooltip the API dot is a coloured spot nobody can read, and its 42px let
+     "Segnala un problema" and the Drive account fit a 360px phone. The setup page and the
+     queue say when a key is missing or wrong. */
+  .app-sidebar .sidebar-tooltip-anchor:has(> .sidebar-api-status) {
+    display: none !important; /* over SidebarTooltip's inline display */
   }
 
   .app-sidebar .sidebar-account-divider {
