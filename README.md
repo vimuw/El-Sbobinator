@@ -1,51 +1,40 @@
 # El Sbobinator
 
 <p align="center">
-  <a href="https://github.com/vimuw/El-Sbobinator/releases/latest"><img src="https://img.shields.io/github/v/release/vimuw/El-Sbobinator?style=flat-square&color=blue&label=Versione" alt="Ultima Versione" /></a>
-  <a href="https://github.com/vimuw/El-Sbobinator/releases"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-informational?style=flat-square" alt="Platform" /></a>
+  <a href="https://elsbobinator.com"><img src="https://img.shields.io/badge/Apri-elsbobinator.com-2ea44f?style=flat-square" alt="Apri elsbobinator.com" /></a>
+  <a href="https://github.com/vimuw/El-Sbobinator/releases/tag/v2.7.3"><img src="https://img.shields.io/badge/Desktop-v2.7.3%20(riserva)-lightgrey?style=flat-square" alt="Versione desktop 2.7.3 di riserva" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License: MIT" /></a>
 </p>
 
-Applicazione desktop per trasformare lezioni audio e video in dispense di studio tramite Google Gemini.
+App web gratuita che trasforma lezioni audio e video in dispense di studio tramite Google Gemini. Si usa dal browser, su computer, tablet e telefono, senza installare niente.
 
 <p align="center">
-  <img width="100%" alt="Dimostrazione di El Sbobinator: inserimento della chiave Gemini, aggiunta di una registrazione, elaborazione e sbobina finale nell'editor con il player audio" src="assets/screenshots/demo.gif" />
+  <img width="100%" alt="Dimostrazione di El Sbobinator: inserimento della chiave Gemini, una registrazione trascinata nella pagina, l'elaborazione e la sbobina finale nell'editor con il player audio" src="assets/screenshots/demo.gif" />
 </p>
+
+---
+
+## Come usarlo
+
+> [!TIP]
+> ### [**Apri El Sbobinator → elsbobinator.com**](https://elsbobinator.com)
+> È la versione **mantenuta**: riceve aggiornamenti e correzioni. Funziona dal browser su computer, tablet e telefono, senza installare nulla, e si aggiorna da sola.
+
+**Requisiti**: un browser aggiornato (Chrome, Edge o Safari), una connessione a internet e una chiave API Google Gemini personale (vedi [Guida Rapida](#guida-rapida)).
+
+> [!NOTE]
+> **Versione desktop 2.7.3 (riserva)**: usala solo se la versione web ti dà problemi. Non riceve più aggiornamenti.
+> Scarica per [**Windows (.exe)**](https://github.com/vimuw/El-Sbobinator/releases/download/v2.7.3/El-Sbobinator-Setup-v2.7.3.exe) · [**macOS (.dmg)**](https://github.com/vimuw/El-Sbobinator/releases/download/v2.7.3/El-Sbobinator-v2.7.3.dmg) · dettagli in [Versione desktop (riserva)](#versione-desktop-riserva).
 
 ---
 
 ## Funzioni Principali
 
 - **Trascrizione e Rielaborazione**: Converte registrazioni audio e video in dispense di studio strutturate, ripulendo il parlato da intercalari e ripetizioni e organizzando i contenuti in capitoli, paragrafi ed elenchi puntati.
-- **Gratuita e con chiave personale**: Nessun abbonamento all'app; utilizzi Google Gemini con la tua API key.
-- **Editor Sincronizzato**: Permette di riascoltare la lezione con il player audio sincronizzato (velocità da 1.0x a 3.0x) mentre si corregge la bozza, con supporto per formule scientifiche (LaTeX) e copia rapida formattata per altri editor di documenti.
-- **Archivio Locale & Ricerca Istantanea**: Conserva lo storico delle lezioni elaborate sul computer in cartelle organizzabili, con ricerca testuale full-text ad alta velocità tra tutte le sbobine salvate.
-
-<table>
-  <tr>
-    <td colspan="2"><img alt="Editor con indice, formula LaTeX e player audio" src="assets/screenshots/editor.png" /><p align="center"><sub>Editor con indice, formule e player audio sincronizzato</sub></p></td>
-  </tr>
-  <tr>
-    <td width="50%"><img alt="Archivio con raccolte colorate" src="assets/screenshots/archive.png" /><p align="center"><sub>Archivio e raccolte</sub></p></td>
-    <td width="50%"><img alt="Ricerca full-text tra le sbobine" src="assets/screenshots/search.png" /><p align="center"><sub>Ricerca nel testo di tutte le sbobine</sub></p></td>
-  </tr>
-</table>
-
----
-
-## Download e Installazione
-
-**Requisiti**: Windows 10 o 11 oppure macOS, una connessione a internet e una chiave API Google Gemini personale (vedi [Guida Rapida](#guida-rapida)).
-
-Scarica la versione per il tuo sistema operativo:
-
-| Sistema Operativo | Pacchetto | Installazione rapida |
-| :--- | :--- | :--- |
-| **Windows** | [**Scarica per Windows (.exe)**](https://github.com/vimuw/El-Sbobinator/releases/latest) | Avvia l'installer `.exe` e segui la procedura guidata. |
-| **macOS** | [**Scarica per macOS (.dmg)**](https://github.com/vimuw/El-Sbobinator/releases/latest) | Apri il file `.dmg` e trascina *El Sbobinator* in **Applicazioni**. |
-
-> [!NOTE]
-> L'applicazione verifica automaticamente la presenza di aggiornamenti all'avvio e notifica la disponibilità di nuove versioni.
+- **Gratuita e con chiave personale**: Nessun abbonamento e nessun account; utilizzi Google Gemini con la tua API key.
+- **Editor con audio sincronizzato**: Riascolti la lezione con il player (velocità da 0,5x a 3x) mentre correggi la bozza, con supporto per formule scientifiche (LaTeX). Puoi copiare il documento con la formattazione oppure scaricarlo in formato **.docx**.
+- **Archivio e Ricerca**: Le sbobine restano nel tuo browser, organizzate in raccolte, con ricerca nel testo di tutte le lezioni. Puoi scaricarne un backup in qualsiasi momento.
+- **Salvataggio su Google Drive**: Se vuoi, salvi le sbobine sul tuo Google Drive e le ritrovi sincronizzate su tutti i tuoi dispositivi: computer, tablet e telefono.
 
 ---
 
@@ -59,23 +48,55 @@ Inizia a sbobinare in 4 passaggi:
 2. Clicca su **"Create API key"** (oppure *"Get API key"*), seleziona o crea un progetto Google Cloud e conferma.
 3. Copia la chiave generata (`AIzaSy...`).
 
-### 2. Inserisci la chiave nell'applicazione
-All'avvio di **El Sbobinator**, incolla la chiave nel campo iniziale e clicca su **Salva e inizia**. La chiave viene memorizzata in modo protetto nel portachiavi sicuro del sistema operativo (Windows DPAPI o macOS Keychain).
+### 2. Inserisci la chiave
+Apri [**elsbobinator.com**](https://elsbobinator.com), incolla la chiave nel campo iniziale e clicca su **Salva e inizia**. La chiave resta salvata in questo browser, non cifrata: chi usa il tuo dispositivo con lo stesso browser può vederla.
 
 > [!NOTE]
 > **Costi e quote Google**: modelli disponibili, costi e limiti dipendono dal piano del tuo **progetto Google Cloud**. Se raggiungi un limite al minuto, l'app attende e riprova da sola; se esaurisci la quota giornaliera, puoi usare una chiave di riserva oppure attendere il ripristino a mezzanotte (ora del Pacifico). Dettagli nelle [quote Gemini API](https://ai.google.dev/gemini-api/docs/rate-limits).
 
-### 3. Trascina la registrazione e avvia
-Trascina il file audio o video direttamente nella finestra dell'applicazione (è possibile inserire più registrazioni in coda) e clicca su **Avvia Sbobinatura**.
-- **Formati audio supportati**: `.m4a`, `.mp3`, `.wav`, `.aac`, `.flac`, `.ogg`, `.opus`.
-- **Formati video supportati**: `.mp4`, `.mkv`, `.webm`, `.mov`, `.3gp`.
+### 3. Scegli la registrazione e avvia
+Trascina il file nella pagina oppure sceglilo dal dispositivo (puoi mettere più registrazioni in coda) e clicca su **Avvia sbobinatura**.
+- **Formati supportati**: `.mp3`, `.m4a` (audio) e `.mp4` (video).
 
 ### 4. Rivedi ed esporta
-Al termine dell'elaborazione puoi aprire la lezione nell'editor per riascoltare l'audio e correggere il testo. Usa **Copia documento** per incollarla con la formattazione in un altro editor.
+Al termine dell'elaborazione apri la lezione nell'editor per riascoltare l'audio e correggere il testo. Usa **Copia documento** per incollarla con la formattazione in un altro editor, oppure **Scarica .docx**: da iPad, telefono o Safari è il modo per portare anche le immagini in Google Docs.
+
+> [!IMPORTANT]
+> Le sbobine sono salvate nella memoria del browser: se il browser la svuota le perdi, e su un altro dispositivo non le ritrovi. Ogni tanto scarica un backup (Impostazioni → **Archiviazione**) oppure attiva la sincronizzazione in Impostazioni → **Google Drive**.
 
 ---
 
-## Risoluzione Problemi Comuni
+## Hai trovato un bug?
+
+Se qualcosa non funziona come previsto, segnalalo dall'app con **Segnala un problema**, nella barra laterale (in basso sul telefono) o in Impostazioni → Assistenza: il messaggio arriva direttamente allo sviluppatore, con le informazioni tecniche se vuoi.
+
+Se l'app non si apre, scrivi un'email. Descrivi cosa è successo, cosa ti aspettavi e i passaggi per riprodurre il problema. Indica anche il browser (o la versione dell'app desktop) ed eventuali messaggi di errore.
+
+> [**Scrivi allo sviluppatore**](mailto:supporto@elsbobinator.com?subject=El%20Sbobinator%3A%20segnalazione)
+
+---
+
+## Privacy e Architettura dei Dati
+
+- **Nel tuo browser**: Sbobine, raccolte, chiavi API e (se scegli di tenerlo) l'audio delle lezioni restano nella memoria del browser. Non serve un account e lo sviluppatore non riceve né le sbobine, né l'audio, né le chiavi.
+- **Google Gemini**: Per trascrivere, il browser invia l'audio e i testi direttamente e in forma cifrata agli endpoint ufficiali di Google Gemini (`generativelanguage.googleapis.com`) con la tua chiave. Nello Spazio Economico Europeo (Italia compresa), in Svizzera e nel Regno Unito Google applica anche alle chiavi gratuite le regole del livello a pagamento: non usa i contenuti per migliorare i suoi prodotti. Consulta i [Termini Aggiuntivi Gemini API](https://ai.google.dev/gemini-api/terms).
+- **Google Drive (facoltativo)**: Se attivi la sincronizzazione, le sbobine vanno dal browser a una cartella nascosta del tuo Drive. Audio e chiavi non vengono sincronizzati.
+- **Segnalazioni ed errori**: Allo sviluppatore arrivano quello che mandi con "Segnala un problema" o per email e i report automatici degli errori (senza i testi delle sbobine), che puoi spegnere in Impostazioni → Assistenza.
+
+Tutti i dettagli sono nell'[**informativa sulla privacy**](https://elsbobinator.com/privacy).
+
+---
+
+## Versione desktop (riserva)
+
+La versione desktop **2.7.3** per Windows e macOS resta disponibile come riserva, da usare solo se la versione web ti dà problemi. Non riceve più aggiornamenti.
+
+| Sistema Operativo | Pacchetto | Installazione |
+| :--- | :--- | :--- |
+| **Windows 10/11** | [**El-Sbobinator-Setup-v2.7.3.exe**](https://github.com/vimuw/El-Sbobinator/releases/download/v2.7.3/El-Sbobinator-Setup-v2.7.3.exe) | Avvia l'installer e segui la procedura guidata. |
+| **macOS** | [**El-Sbobinator-v2.7.3.dmg**](https://github.com/vimuw/El-Sbobinator/releases/download/v2.7.3/El-Sbobinator-v2.7.3.dmg) | Apri il file `.dmg` e trascina *El Sbobinator* in **Applicazioni**. |
+
+È un'app separata dal sito: le sbobine fatte con una versione non compaiono nell'altra.
 
 <details>
 <summary><strong>Windows: avviso SmartScreen ("PC protetto da Windows")</strong></summary>
@@ -113,24 +134,6 @@ xattr -cr "/Applications/El Sbobinator.app"
 ```
 
 </details>
-
----
-
-## Hai trovato un bug?
-
-Se qualcosa non funziona come previsto, segnalalo dall'app con **Segnala un problema**, nella barra laterale (in basso sul telefono) o in Impostazioni → Assistenza: il messaggio arriva direttamente allo sviluppatore, con le informazioni tecniche se vuoi.
-
-Se l'app non si apre, scrivi un'email. Descrivi cosa è successo, cosa ti aspettavi e i passaggi per riprodurre il problema. Indica anche il browser (o la versione dell'app desktop) ed eventuali messaggi di errore: questi dettagli aiutano a individuare la causa.
-
-> [**Scrivi allo sviluppatore**](mailto:supporto@elsbobinator.com?subject=El%20Sbobinator%3A%20segnalazione)
-
----
-
-## Privacy e Architettura dei Dati
-
-- **Client Desktop Locale**: L'applicazione viene eseguita sul computer dell'utente e conserva file e bozze localmente. I contenuti necessari all'elaborazione AI vengono trasmessi direttamente e in forma cifrata agli endpoint ufficiali di Google Gemini (`generativelanguage.googleapis.com`) tramite la credenziale dell'utente. File audio, trascrizioni e API key non vengono inviati a infrastrutture gestite dallo sviluppatore.
-- **Dati inviati a Google**: Il trattamento di audio e testi trasmessi a Gemini dipende dai termini Google. Nello Spazio Economico Europeo (Italia compresa), in Svizzera e nel Regno Unito Google applica anche alle chiavi gratuite le regole del livello a pagamento: non usa i contenuti per migliorare i suoi prodotti. Consulta i [Termini Aggiuntivi Gemini API](https://ai.google.dev/gemini-api/terms).
-- **Segnalazioni**: Allo sviluppatore arriva solo quello che mandi con "Segnala un problema" o per email.
 
 ---
 
