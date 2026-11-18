@@ -1,7 +1,7 @@
 // Shared types for the chunking module. No DOM or Node APIs here: the same
 // code runs in the audio Web Worker (browser) and in Node (unit tests).
 
-export type SourceFormat = 'mp3' | 'mp4-aac';
+export type SourceFormat = 'mp3' | 'mp4-aac' | 'adts-aac';
 
 /**
  * The file's content is not audio the chunker can cut (whatever its extension says). The same

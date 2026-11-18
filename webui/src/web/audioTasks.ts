@@ -1,4 +1,4 @@
-import { chunkAudio, type Chunk } from './chunker';
+import { chunkAudio, type Chunk, type SourceFormat } from './chunker';
 import { OPUS_MIME, canEncodeOpus, encodeOpus } from './chunker/opus';
 import type { CutResult, PreparedAudio } from './pipeline/run';
 
@@ -15,6 +15,8 @@ export type AudioReply =
   | { id: number; type: 'prepare'; result: PreparedAudio }
   | { id: number; type: 'base64'; result: string }
   | { id: number; type: 'error'; message: string; name?: string };
+
+const FORMAT_LABEL: Record<SourceFormat, string> = { mp3: 'MP3', 'mp4-aac': 'M4A', 'adts-aac': 'AAC (ADTS)' };
 
 export async function blobToBase64(blob: Blob): Promise<string> {
   const bytes = new Uint8Array(await blob.arrayBuffer());
@@ -33,7 +35,7 @@ export function createAudioTasks(encoder: { canEncode: () => Promise<boolean>; e
         opus ??= encoder.canEncode();
         const { info, chunks: cut, totalMs } = await chunkAudio(request.file, { chunkSec: request.chunkSec, stepSec: request.stepSec });
         chunks = cut;
-        const description = `${info.format === 'mp3' ? 'MP3' : 'M4A'} ${info.sampleRate} Hz ${info.channels === 1 ? 'mono' : 'stereo'} ~${info.bitrateKbps} kbps`;
+        const description = `${FORMAT_LABEL[info.format]} ${info.sampleRate} Hz ${info.channels === 1 ? 'mono' : 'stereo'} ~${info.bitrateKbps} kbps`;
         return {
           id: request.id,
           type: 'cut',
