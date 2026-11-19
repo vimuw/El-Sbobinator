@@ -66,16 +66,6 @@ Al termine dell'elaborazione apri la lezione nell'editor per riascoltare l'audio
 
 ---
 
-## Hai trovato un bug?
-
-Se qualcosa non funziona come previsto, segnalalo dall'app con **Segnala un problema**, nella barra laterale (in basso sul telefono) o in Impostazioni → Assistenza: il messaggio arriva direttamente allo sviluppatore, con le informazioni tecniche se vuoi.
-
-Se l'app non si apre, scrivi un'email. Descrivi cosa è successo, cosa ti aspettavi e i passaggi per riprodurre il problema. Indica anche il browser (o la versione dell'app desktop) ed eventuali messaggi di errore.
-
-> [**Scrivi allo sviluppatore**](mailto:supporto@elsbobinator.com?subject=El%20Sbobinator%3A%20segnalazione)
-
----
-
 ## Privacy e Architettura dei Dati
 
 - **Nel tuo browser**: Sbobine, raccolte, chiavi API e (se scegli di tenerlo) l'audio delle lezioni restano nella memoria del browser. Non serve un account e lo sviluppatore non riceve né le sbobine, né l'audio, né le chiavi.
