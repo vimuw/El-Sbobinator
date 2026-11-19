@@ -7,7 +7,14 @@ import { BUG_REPORT_URL, SUPPORT_EMAIL } from '../../../branding';
 import { rememberReport, resetReportHistoryForTests } from '../../../feedback/history';
 import { DiagnosticsSection } from './DiagnosticsSection';
 
+// The report dates below are fixed: the clock is pinned near them, so they never turn 30 days old.
+function pinClockNearReports() {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-11-18T12:00:00.000Z'));
+}
+
 afterEach(() => {
+  vi.useRealTimers();
   delete window.pywebview;
   setHostCapabilities(DESKTOP_CAPABILITIES);
   localStorage.clear();
@@ -190,6 +197,7 @@ describe('DiagnosticsSection', () => {
   });
 
   it('lists the codes of the reports sent from this browser, a new one at once', () => {
+    pinClockNearReports();
     setHostCapabilities({ kind: 'web', reportByEmail: false, environmentCheck: false });
     rememberReport({ code: 'A1B2C3D4', sentAt: '2026-11-17T10:30:00.000Z', kind: 'bug' });
     render(<DiagnosticsSection {...baseProps} showEnvironmentCheck={false} />);
@@ -210,7 +218,27 @@ describe('DiagnosticsSection', () => {
     ]);
   });
 
+  // Regression: code, type and date alone did not say which report a code was for.
+  it('names each report by what the user wrote, with its code beside type and date', () => {
+    pinClockNearReports();
+    setHostCapabilities({ kind: 'web', reportByEmail: false, environmentCheck: false });
+    rememberReport({ code: 'A1B2C3D4', sentAt: '2026-11-17T10:30:00.000Z', kind: 'bug' });
+    rememberReport({ code: 'E5F60718', sentAt: '2026-11-17T11:00:00.000Z', kind: 'idea', excerpt: 'Il titolo della lezione non si salva' });
+    render(<DiagnosticsSection {...baseProps} showEnvironmentCheck={false} />);
+
+    const [withExcerpt, older] = within(screen.getByRole('list', { name: 'Le tue segnalazioni' })).getAllByRole('listitem');
+    const title = within(withExcerpt).getByText('Il titolo della lezione non si salva');
+    expect(title.getAttribute('title')).toBe('Il titolo della lezione non si salva');
+    const code = within(withExcerpt).getByText('E5F60718');
+    expect(code.closest('p')?.textContent).toMatch(/^E5F60718 · Suggerimento · /);
+    expect(within(withExcerpt).getByRole('button', { name: 'Copia codice E5F60718' })).toBeTruthy();
+    // Saved before the excerpt was kept: the code stays the title, as before.
+    expect(within(older).getByText('A1B2C3D4').closest('p')).toBeNull();
+    expect(older.querySelector('p')?.textContent).toMatch(/^Bug · /);
+  });
+
   it('copies a report code with its own button, and says when it cannot', async () => {
+    pinClockNearReports();
     setHostCapabilities({ kind: 'web', reportByEmail: false, environmentCheck: false });
     rememberReport({ code: 'A1B2C3D4', sentAt: '2026-11-17T10:30:00.000Z', kind: 'bug' });
     const writeText = vi.fn(async (_text: string) => {});
@@ -252,6 +280,7 @@ describe('DiagnosticsSection', () => {
   });
 
   it('shows no report list before the first report, nor with the email', () => {
+    pinClockNearReports();
     render(<DiagnosticsSection {...baseProps} />);
     rememberReport({ code: 'A1B2C3D4', sentAt: '2026-11-17T10:30:00.000Z', kind: 'bug' });
     expect(screen.queryByRole('list', { name: 'Le tue segnalazioni' })).toBeNull();

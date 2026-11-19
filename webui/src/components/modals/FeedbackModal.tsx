@@ -5,7 +5,7 @@ import { APP_VERSION, BUG_REPORT_URL, SUPPORT_EMAIL } from '../../branding';
 import { DURATION, fade, fadeUp, modalCard } from '../../motion';
 import { useBackdropDismiss } from '../../hooks/useBackdropDismiss';
 import { FeedbackImageError, MAX_FEEDBACK_IMAGES, encodeFeedbackImage, type FeedbackImage } from '../../feedback/images';
-import { rememberReport } from '../../feedback/history';
+import { rememberReport, reportExcerpt } from '../../feedback/history';
 import { openReportEmail } from '../../feedback/reportEmail';
 import type { FeedbackInput, FeedbackKind, FeedbackResult } from '../../monitoring/sentry';
 import { scrubText } from '../../monitoring/scrub';
@@ -192,7 +192,7 @@ export function FeedbackModal({ onClose, send = sendThroughSentry, encodeImage =
       else {
         setCode(result.code);
         // Kept in this browser, so the code can be quoted later from Impostazioni → Assistenza.
-        rememberReport({ code: result.code, sentAt: new Date().toISOString(), kind });
+        rememberReport({ code: result.code, sentAt: new Date().toISOString(), kind, excerpt: reportExcerpt(trimmed) });
       }
     } catch {
       setFailure({ reason: 'unavailable' });

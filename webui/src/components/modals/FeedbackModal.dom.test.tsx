@@ -99,7 +99,7 @@ describe('FeedbackModal', () => {
     setup({ ok: true, code: 'E5F60718' });
     await sendReport();
 
-    expect(loadReportHistory()).toEqual([{ code: 'E5F60718', sentAt: expect.any(String), kind: 'idea' }]);
+    expect(loadReportHistory()).toEqual([{ code: 'E5F60718', sentAt: expect.any(String), kind: 'idea', excerpt: 'L’editor non salva il titolo della sbobina.' }]);
     expect((await screen.findByText(/Impostazioni → Assistenza/)).closest('[role=status]')).not.toBeNull();
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Copia codice' })); });
     expect(writeText).toHaveBeenCalledWith('E5F60718');
