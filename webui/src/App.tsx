@@ -30,6 +30,7 @@ import { useRegenerateDialog } from './hooks/useRegenerateDialog';
 import type { EditorSaveController } from './hooks/useEditorAutosave';
 import { useSystemNotificationTriggers } from './hooks/useSystemNotificationTriggers';
 import { useWebStorageNotice } from './hooks/useWebStorageNotice';
+import { useTabTitle } from './hooks/useTabTitle';
 import { QueuePage } from './components/QueuePage';
 import { RegenerateModal } from './components/modals/RegenerateModal';
 import { NewKeyModal } from './components/modals/NewKeyModal';
@@ -379,9 +380,24 @@ export default function App() {
   const isApiKeyValid = hasProtectedKey || GEMINI_KEY_PATTERN.test(apiKey.trim());
   const isConsoleDisabled = !hasApiKey || !isApiKeyValid || !(files.length > 0 || appState === 'processing' || appState === 'canceling' || completionFlash);
 
+  const isWebHost = getHostCapabilities().kind === 'web';
   useEffect(() => {
-    document.title = appState === 'processing' ? '⏳ El Sbobinator' : 'El Sbobinator';
-  }, [appState]);
+    if (!isWebHost) document.title = appState === 'processing' ? '⏳ El Sbobinator' : 'El Sbobinator';
+  }, [appState, isWebHost]);
+  const lastCompletedAt = useMemo(() => files.reduce((latest, file) => Math.max(latest, file.completedAt ?? 0), 0), [files]);
+  useTabTitle({
+    enabled: isWebHost,
+    appState,
+    activeProgress,
+    batchCompleted,
+    batchTotal,
+    runOutcome,
+    lastCompletedAt,
+    queueOnScreen: activePage === 'queue' && preview.content === null && !isSettingsOpen,
+    retryingBlocks: files.some(file => file.isRetryingBlocks),
+    batchOpen: batchTotal > 0,
+    queuedLeft: autoContinue && files.some(file => file.status === 'queued'),
+  });
 
   useEffect(() => {
     if (appState !== 'processing' && confirmAction?.type === 'stop-processing') {
