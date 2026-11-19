@@ -9,7 +9,7 @@ import { useConsoleHint } from '../hooks/useConsoleHint';
 import type { ArchiveFolder, ArchiveSession } from '../bridge';
 import { type AppStatus, type FileItem, type ProcessingWarning, type RunOutcome, getDoneFiles, getPendingFiles } from '../appState';
 import { RunOutcomeBanner, type RunOutcomeActions } from './RunOutcomeBanner';
-import { GEMINI_KEY_PATTERN } from '../utils';
+import { GEMINI_KEY_PATTERN, normalizeSessionPath } from '../utils';
 import { STORAGE_KEYS } from '../storageKeys';
 import { ProcessingStatusBanner } from './ProcessingStatusBanner';
 import { DropOverlay, DropZone } from './DropZone';
@@ -189,6 +189,10 @@ export function QueuePage({
 
   const pendingFiles = useMemo(() => getPendingFiles(files), [files]);
   const doneFiles = useMemo(() => getDoneFiles(files), [files]);
+  // Web: only sbobine whose kept audio was actually read are known; an unread or missing one claims nothing.
+  const keptAudioByDir = useMemo(() => new Map(archiveSessions
+    .filter(session => typeof session.kept_audio_bytes === 'number')
+    .map(session => [normalizeSessionPath(session.session_dir), (session.kept_audio_bytes ?? 0) > 0])), [archiveSessions]);
   const { queuedCount, failedCount } = useMemo(() => {
     let queued = 0;
     let failed = 0;
@@ -459,6 +463,7 @@ export function QueuePage({
               onOpenFile={openFile}
               onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
               sessionFolderMap={completedSessionFolderMap}
+              keptAudioByDir={keptAudioByDir}
               onOpenArchive={onOpenArchive}
             />
           </>

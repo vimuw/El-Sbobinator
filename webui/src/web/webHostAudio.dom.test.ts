@@ -308,7 +308,7 @@ describe('audio kept in the browser by the web host', () => {
 
     const { api } = host();
     const sessions = (await api.get_completed_sessions!()).sessions!;
-    expect(sessions.map(session => [session.name, session.kept_audio_bytes])).toEqual([['Senza audio', undefined], ['Con audio', 7]]);
+    expect(sessions.map(session => [session.name, session.kept_audio_bytes])).toEqual([['Senza audio', 0], ['Con audio', 7]]);
     expect(await measureWebStorage(database)).toMatchObject({ audio: 7 });
     // The size is read, never written into the sbobina.
     expect(await archive.get(kept.session_dir)).not.toHaveProperty('kept_audio_bytes');

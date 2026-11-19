@@ -12,6 +12,10 @@ function newKeyNotice(): string {
     : 'Limite API raggiunto. Le tue chiavi Gemini hanno esaurito i crediti gratuiti o la capacità temporanea. Aggiungi una chiave nelle impostazioni per continuare.';
 }
 
+// Web: the audio copy goes when the sbobina is done, and the page's File goes at the next reload.
+// The player's switch can still keep it while this page holds the file.
+export const WEB_AUDIO_NOT_KEPT_NOTE = 'L’audio non viene conservato: se vuoi riascoltarlo, apri la sbobina e attiva «Tieni l’audio nel browser» nel player prima di chiudere la pagina.';
+
 export function useBridgeCallbacks(options: {
   dispatch: Dispatch<ProcessingAction>;
   appendConsole: (msg: string) => void;
@@ -195,9 +199,11 @@ export function useBridgeCallbacks(options: {
             const modelPart = model ? ` con ${shortModelName(model)}` : '';
             const elapsed = currentFile.startedAt ? Math.round((Date.now() - currentFile.startedAt) / 60000) : null;
             const elapsedPart = elapsed !== null && elapsed > 0 ? ` · ${elapsed} min` : '';
+            // Only a sbobina made by this run surely has no audio kept: an existing one may keep it.
+            const audioNote = getHostCapabilities().sessionKeepsAudio || data.reused_existing ? '' : ` ${WEB_AUDIO_NOT_KEPT_NOTE}`;
             addNotificationRef.current(
               'Sbobina pronta',
-              `"${currentFile.name}" completata con successo${modelPart}${elapsedPart}.`,
+              `"${currentFile.name}" completata con successo${modelPart}${elapsedPart}.${audioNote}`,
               'success',
               'processing'
             );

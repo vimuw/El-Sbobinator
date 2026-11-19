@@ -2145,7 +2145,9 @@ button {
   transition: background var(--duration-base) var(--ease-out);
 }
 
-/* The running segment carries a narrow sheen that passes, then rests for the rest of the beat. */
+/* The running segment carries a narrow sheen that crosses it at a steady pace, once per beat:
+   it leaves the leading edge as the next one enters. A sheen that eased out and then rested for
+   half the beat read as the bar stopping halfway. */
 .phase-segment-fill.is-live::after {
   content: "";
   position: absolute;
@@ -2154,13 +2156,14 @@ button {
   left: 0;
   width: 40%;
   background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.28) 50%, transparent);
-  transform: translateX(-120%);
-  animation: processing-progress-sheen var(--processing-beat, 2.8s) var(--ease-move) infinite;
+  transform: translateX(-100%);
+  animation: processing-progress-sheen var(--processing-beat, 2.8s) linear infinite;
 }
 
+/* From just outside the start to just past the end (250% of a 40% sheen is the fill's width). */
 @keyframes processing-progress-sheen {
-  0% { transform: translateX(-120%); }
-  55%, 100% { transform: translateX(260%); }
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
 }
 
 /* A soft light at the leading edge marks where the work is, even while the figure holds still. */

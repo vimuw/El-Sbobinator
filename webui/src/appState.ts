@@ -94,6 +94,8 @@ export type FileDonePayload = {
   effective_model?: string;
   completion_status?: 'completed' | 'completed_with_warnings';
   revision_failed_blocks?: number[];
+  /** Web: the sbobina already existed and was kept as it is, so its audio may be kept in the browser. */
+  reused_existing?: boolean;
 };
 
 export type FileFailedPayload = {

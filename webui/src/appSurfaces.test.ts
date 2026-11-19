@@ -585,6 +585,20 @@ describe('app surfaces', () => {
     expect(token(theme, '--button-padding-lg')).toBe('0.375rem 1.125rem');
   });
 
+  it('keeps the running segment sheen moving across the whole fill', () => {
+    // The sheen eased out and then held still for 45% of the beat, so the bar read as stopping halfway.
+    const sheen = rule('.phase-segment-fill.is-live::after')!;
+    expect(token(sheen, 'animation')).toBe('processing-progress-sheen var(--processing-beat, 2.8s) linear infinite');
+    const keyframes = index.match(/@keyframes processing-progress-sheen \{([\s\S]*?)\n\}/)![1];
+    const stops = [...keyframes.matchAll(/([\w%, ]+)\{\s*transform: translateX\((-?\d+)%\);\s*\}/g)]
+      .map(([, at, x]) => [at.trim(), Number(x)] as const);
+    const width = Number(token(sheen, 'width')!.replace('%', ''));
+    // One pass with no held stop: it starts fully before the fill and ends fully past its edge.
+    expect(stops.map(([at]) => at)).toEqual(['from', 'to']);
+    expect(stops[0][1]).toBeLessThanOrEqual(-100);
+    expect(stops[1][1] * width / 100).toBeGreaterThanOrEqual(100);
+  });
+
   it('shows keyboard focus with the one ring of theme.css, in both themes', () => {
     // Four focus styles had drifted apart: 3px halos in two greens (at 18-32% opacity, under 3:1
     // on every surface), 2px outlines in two other greens, red, amber and processing halos, and
