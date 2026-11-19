@@ -167,7 +167,8 @@ export interface ArchiveSession {
   /** Web previews with the trash: when the sbobina was moved to the trash (gone for good 30 days later). */
   trashed_at?: string;
   /** Web: bytes of the lecture audio kept in this browser for the sbobina, counted when the archive
-   *  is read and never stored; absent when it keeps none (and on desktop, whose audio stays on disk). */
+   *  is read and never stored; 0 when it keeps none, absent when the audio couldn't be read (and on
+   *  desktop, whose audio stays on disk). */
   kept_audio_bytes?: number;
 }
 

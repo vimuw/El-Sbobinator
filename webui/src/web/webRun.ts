@@ -221,7 +221,7 @@ export async function runWebFile(options: WebRunOptions): Promise<WebRunOutcome>
         state = null;
       } else if (state.stage === 'done' && state.archiveSessionDir && await options.archiveExists(state.archiveSessionDir)) {
         emit('appendConsole', 'Sbobina già pronta: uso la versione esistente.');
-        outcome = finish(state, state.archiveSessionDir);
+        outcome = finish(state, state.archiveSessionDir, true);
         return outcome;
       } else {
         state.resumes += 1;
@@ -375,7 +375,7 @@ export async function runWebFile(options: WebRunOptions): Promise<WebRunOutcome>
     return session.stage === 'phase1' && session.chunkTexts.length === 0;
   }
 
-  function finish(done: SessionState, sessionDir: string): WebRunOutcome {
+  function finish(done: SessionState, sessionDir: string, reusedExisting = false): WebRunOutcome {
     const failed = (done.failedBlocks ?? []).map(index => index + 1);
     const status = failed.length ? 'completed_with_warnings' : 'completed';
     const htmlPath = webSessionHtmlPath(sessionDir);
@@ -390,6 +390,7 @@ export async function runWebFile(options: WebRunOptions): Promise<WebRunOutcome>
       effective_model: done.settings.model,
       completion_status: status,
       revision_failed_blocks: failed,
+      ...(reusedExisting ? { reused_existing: true } : {}),
     });
     return status;
   }

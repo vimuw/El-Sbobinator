@@ -775,15 +775,15 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
       }
     },
 
-    // Each sbobina carries the size of the audio it keeps, so the archive shows which ones make up
-    // "Audio delle sbobine" in Archiviazione. Audio that can't be read leaves the list unmarked.
+    // Each sbobina carries the size of the audio it keeps (0 when none), so the archive shows which
+    // ones make up "Audio delle sbobine" in Archiviazione and the queue which ones lost their audio.
+    // Audio that can't be read leaves the list unmarked: nothing is claimed about it.
     get_completed_sessions: async limit => {
       try {
-        const [listed, audioSizes] = await Promise.all([archive.list(), media.sizesBySession().catch(() => new Map<string, number>())]);
-        const sessions = listed.map(session => {
-          const bytes = audioSizes.get(session.session_dir);
-          return bytes ? { ...session, kept_audio_bytes: bytes } : session;
-        });
+        const [listed, audioSizes] = await Promise.all([archive.list(), media.sizesBySession().catch(() => null)]);
+        const sessions = audioSizes
+          ? listed.map(session => ({ ...session, kept_audio_bytes: audioSizes.get(session.session_dir) ?? 0 }))
+          : listed;
         return { ok: true, sessions: typeof limit === 'number' && limit > 0 ? sessions.slice(0, limit) : sessions, total: sessions.length };
       } catch (error) {
         return { ok: false, error: `Archivio del browser non leggibile: ${error instanceof Error ? error.message : String(error)}` };

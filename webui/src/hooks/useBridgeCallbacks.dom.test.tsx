@@ -391,6 +391,54 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
     vi.restoreAllMocks();
   });
 
+  it('fileDone on the web says the audio is not kept and where to keep it', () => {
+    const doneFile: FileItem = {
+      id: 'file-1', name: 'audio.mp3', size: 1, duration: 60, path: '/a.mp3', status: 'done', progress: 1, phase: 0,
+    };
+    type AddNotification = Parameters<typeof useBridgeCallbacks>[0]['addNotification'];
+    const finish = (addNotification: AddNotification) => {
+      const opts = makeMinimalHook({ addNotification });
+      opts.filesRef = { current: [doneFile] } as unknown as ReturnType<typeof useRef<FileItem[]>>;
+      const { unmount } = renderHook(() => { useBridgeCallbacks(opts); });
+      act(() => { window.elSbobinatorBridge?.fileDone({ id: 'file-1', index: 0, output_html: '/out.html', output_dir: '/sessions/x' }); });
+      unmount();
+    };
+    const web = vi.fn<AddNotification>();
+    setHostCapabilities({ kind: 'web', sessionKeepsAudio: false });
+    try {
+      finish(web);
+    } finally {
+      setHostCapabilities(DESKTOP_CAPABILITIES);
+    }
+    expect(web).toHaveBeenCalledWith('Sbobina pronta', expect.stringContaining('L’audio non viene conservato'), 'success', 'processing');
+    expect(web.mock.calls[0][1]).toContain('«Tieni l’audio nel browser»');
+
+    const desktop = vi.fn<AddNotification>();
+    finish(desktop);
+    expect(desktop.mock.calls[0][1]).toBe('"audio.mp3" completata con successo.');
+  });
+
+  it('fileDone on the web does not say the audio is not kept for an existing sbobina it reused', () => {
+    // «Tieni l’audio nel browser» may already be on for it: the queue card then shows the audio size.
+    const doneFile: FileItem = {
+      id: 'file-1', name: 'audio.mp3', size: 1, duration: 60, path: '/a.mp3', status: 'done', progress: 1, phase: 0,
+    };
+    const addNotification = vi.fn<Parameters<typeof useBridgeCallbacks>[0]['addNotification']>();
+    const opts = makeMinimalHook({ addNotification });
+    opts.filesRef = { current: [doneFile] } as unknown as ReturnType<typeof useRef<FileItem[]>>;
+    setHostCapabilities({ kind: 'web', sessionKeepsAudio: false });
+    try {
+      const { unmount } = renderHook(() => { useBridgeCallbacks(opts); });
+      act(() => {
+        window.elSbobinatorBridge?.fileDone({ id: 'file-1', index: 0, output_html: '/out.html', output_dir: '/sessions/x', reused_existing: true });
+      });
+      unmount();
+    } finally {
+      setHostCapabilities(DESKTOP_CAPABILITIES);
+    }
+    expect(addNotification).toHaveBeenCalledWith('Sbobina pronta', '"audio.mp3" completata con successo.', 'success', 'processing');
+  });
+
   it('fileDone callback: does not show native notification when batchTotal > 1', () => {
     const showNotification = vi.fn();
     setPywebview({ show_notification: showNotification });

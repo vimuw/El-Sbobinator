@@ -4,6 +4,8 @@ import React from 'react';
 import { QueuePage, type QueuePageProps } from './QueuePage';
 import { credentialStorageWarning } from '../credentialStorage';
 import type { FileItem } from '../appState';
+import type { ArchiveSession } from '../bridge';
+import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 import { STORAGE_KEYS } from '../storageKeys';
 
 vi.mock('../branding', async importOriginal => ({
@@ -236,6 +238,33 @@ describe('QueuePage Component', () => {
     expect(screen.getByText('fatta-2.mp3')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: "Apri l'Archivio" }));
     expect(onOpenArchive).toHaveBeenCalledTimes(1);
+  });
+
+  it('on the web claims "Audio non salvato" only for sbobine whose kept audio was read', () => {
+    const done = (name: string, dir: string): FileItem => ({
+      ...queuedFile, id: dir, name, status: 'done', completedAt: 1, outputHtml: `${dir}/out.html`, outputDir: dir,
+    });
+    const files = [done('tenuta.mp3', '/sessions/kept'), done('persa.mp3', '/sessions/gone')];
+    const session = (dir: string, keptAudioBytes?: number): ArchiveSession => ({
+      name: dir, completed_at_iso: '2026-11-19T10:00:00Z', html_path: `${dir}/out.html`, session_dir: dir, effective_model: '', input_path: '',
+      ...(keptAudioBytes === undefined ? {} : { kept_audio_bytes: keptAudioBytes }),
+    });
+    const claims = () => screen.queryAllByTestId('completed-audio-not-kept').map(label => label.closest('.queue-card')?.textContent ?? '');
+    setHostCapabilities({ kind: 'web', sessionKeepsAudio: false });
+    try {
+      // The browser's saved audio couldn't be read: the sbobine come back unmarked.
+      const { rerender } = render(<QueuePage {...defaultProps} files={files} archiveSessions={[session('/sessions/kept'), session('/sessions/gone')]} />);
+      expect(claims()).toEqual([]);
+      // The first archive load failed: loaded, but nothing listed.
+      rerender(<QueuePage {...defaultProps} files={files} archiveSessions={[]} />);
+      expect(claims()).toEqual([]);
+      // Read: only the sbobina without a copy says so.
+      rerender(<QueuePage {...defaultProps} files={files} archiveSessions={[session('/sessions/kept', 5), session('/sessions/gone', 0)]} />);
+      expect(claims()).toHaveLength(1);
+      expect(claims()[0]).toContain('persa.mp3');
+    } finally {
+      setHostCapabilities(DESKTOP_CAPABILITIES);
+    }
   });
 
   describe('console hint', () => {

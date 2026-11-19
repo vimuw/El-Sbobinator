@@ -218,13 +218,17 @@ interface CompletedFileCardProps {
   onOpenFile: (path: string) => void;
   onRetryFailedRevisionBlocks?: (sessionDir: string, fileId?: string) => Promise<void>;
   currentFolder?: Pick<ArchiveFolder, 'name' | 'color'>;
+  // Web: whether this browser keeps the sbobina's audio; undefined while that is unknown.
+  audioKept?: boolean;
 }
 
 // A sbobina finished moments ago gets a brief background highlight instead of motion.
 const FRESH_COMPLETION_MS = 6000;
 
-function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetryFailedRevisionBlocks, currentFolder }: CompletedFileCardProps) {
-  const canOpenLocalPath = getHostCapabilities().openLocalPath;
+function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetryFailedRevisionBlocks, currentFolder, audioKept }: CompletedFileCardProps) {
+  const { openLocalPath: canOpenLocalPath, sessionKeepsAudio } = getHostCapabilities();
+  // Web: the lecture's size reads as audio still here, so a sbobina without a copy says so instead.
+  const audioNotKept = !sessionKeepsAudio && audioKept === false;
   const [isFresh] = React.useState(() => file.completedAt !== undefined && Date.now() - file.completedAt < FRESH_COMPLETION_MS);
   const isClickable = Boolean(file.outputHtml);
   const [isRetryingBlocks, setIsRetryingBlocks] = React.useState(false);
@@ -289,7 +293,15 @@ function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetry
               )}
             </div>
             <div className={`queue-card-meta flex items-center gap-x-2 gap-y-1 mt-0.5 text-xs text-[var(--text-muted)] min-w-0 ${isPhone ? 'flex-nowrap overflow-hidden' : 'flex-wrap'}`}>
-              <span className={fit}>{formatSize(file.size)}</span>
+              {audioNotKept ? (
+                <span
+                  className={fit}
+                  data-testid="completed-audio-not-kept"
+                  title="Dopo aver ricaricato la pagina dovrai scegliere di nuovo il file audio. Per tenerlo, apri la sbobina e attiva «Tieni l’audio nel browser» nel player."
+                >
+                  Audio non salvato
+                </span>
+              ) : <span className={fit}>{formatSize(file.size)}</span>}
               {file.duration > 0 && (
                 <>
                   <span className="w-1 h-1 rounded-full bg-[var(--border-default)] shrink-0" />

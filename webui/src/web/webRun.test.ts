@@ -158,6 +158,8 @@ describe('runWebFile', () => {
       completion_status: 'completed',
       revision_failed_blocks: [],
     })]);
+    // Made by this run, so no audio is kept yet: the completion notification says so.
+    expect(named('fileDone')[0]).not.toHaveProperty('reused_existing');
     expect(archived[0]).toMatchObject({ input_name: 'Lezione.mp3', completion_status: 'completed', body: expect.stringContaining('<h1>Lezione</h1>') });
     expect([...records.values()][0].archiveSessionDir).toBe('web-session://s1');
     expect(named('processDone')).toEqual([expect.objectContaining({ cancelled: false, completed: 1, failed: 0, total: 1 })]);
@@ -220,7 +222,7 @@ describe('runWebFile', () => {
 
     expect(asked).toEqual(['completed']);
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(named('fileDone')).toEqual([expect.objectContaining({ session_dir: 'web-session://s1', html_path: 'web-session://s1/sbobina.html' })]);
+    expect(named('fileDone')).toEqual([expect.objectContaining({ session_dir: 'web-session://s1', html_path: 'web-session://s1/sbobina.html', reused_existing: true })]);
   });
 
   it('starts over on "rigenera": the old checkpoint is deleted', async () => {
