@@ -16,12 +16,13 @@ import { ReportProblemLink } from '../../ReportProblemLink';
 import { SUPPORT_EMAIL } from '../../../branding';
 import { getHostCapabilities } from '../../../hostCapabilities';
 import { loadAutoReports, saveAutoReports } from '../../../monitoring/config';
-import { MAX_REPORT_HISTORY, loadReportHistory, subscribeReportHistory, type SentReport } from '../../../feedback/history';
+import { MAX_REPORT_HISTORY, REPORT_MAX_AGE_DAYS, loadReportHistory, subscribeReportHistory, type SentReport } from '../../../feedback/history';
 import { CustomSelect } from './CustomSelect';
 import type { ValidationResult } from '../../../bridge';
 import { SettingsRow, SettingsSectionHeading } from './SettingsLayout';
 
 const REPORT_KIND_LABELS: Record<SentReport['kind'], string> = { bug: 'Bug', idea: 'Suggerimento', altro: 'Altro' };
+const REPORT_CODE_CLASS = 'font-mono font-semibold tracking-wide select-all';
 const REPORT_DATE = new Intl.DateTimeFormat('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 interface DiagnosticsSectionProps {
@@ -127,19 +128,27 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
             <SettingsRow title="Invia una segnalazione" description="Un messaggio, con immagini se servono.">
               <ReportProblemLink className="app-button-secondary is-settings-action shrink-0" />
             </SettingsRow>
-            {/* The reports sent with the button above, right under it: a caption, not one more row. */}
+            {/* The reports sent with the button above, right under it: a caption, not one more row. A
+                quieter line than the one between sections sets them apart as a group of their own. */}
             {sentReports.length > 0 && (
-              <div className="space-y-1 pt-2">
+              <div className="mt-2 space-y-1 border-t border-[var(--border-subtle)] pt-3">
                 <div className="space-y-0.5 px-0.5">
                   <span id="diagnostic-sent-reports" className="text-xs font-semibold text-[var(--text-secondary)] block">Le tue segnalazioni</span>
-                  <p className="text-xs text-[var(--text-secondary)]">Le ultime {MAX_REPORT_HISTORY} inviate da questo browser: se mi scrivi, indica il codice.</p>
+                  <p className="text-xs text-[var(--text-secondary)]">Le ultime {MAX_REPORT_HISTORY} inviate da questo browser negli ultimi {REPORT_MAX_AGE_DAYS} giorni: se mi scrivi, indica il codice.</p>
                 </div>
                 <ul aria-labelledby="diagnostic-sent-reports">
                   {sentReports.map(report => (
                     <li key={report.code}>
+                      {/* What the user wrote says which report it is; the code they quote sits with type and
+                          date. A report saved before the excerpt was kept shows its code as the title. */}
                       <SettingsRow
-                        title={<span className="font-mono text-base tracking-wide select-all">{report.code}</span>}
-                        description={<>{REPORT_KIND_LABELS[report.kind]} · <time dateTime={report.sentAt}>{REPORT_DATE.format(new Date(report.sentAt))}</time></>}
+                        title={report.excerpt
+                          ? <span className="block truncate" title={report.excerpt}>{report.excerpt}</span>
+                          : <span className={REPORT_CODE_CLASS}>{report.code}</span>}
+                        description={<>
+                          {report.excerpt && <><span className={`${REPORT_CODE_CLASS} text-[var(--text-primary)]`}>{report.code}</span> · </>}
+                          {REPORT_KIND_LABELS[report.kind]} · <time dateTime={report.sentAt}>{REPORT_DATE.format(new Date(report.sentAt))}</time>
+                        </>}
                       >
                         <button
                           type="button"

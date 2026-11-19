@@ -1,6 +1,7 @@
 import { BufferTarget, EncodedAudioPacketSource, EncodedPacket, Mp4OutputFormat, Output } from 'mediabunny';
 import { describe, expect, it } from 'vitest';
-import { chunkAudio, detectFormat } from './index';
+import { parseAdtsHeader } from './adts';
+import { UnsupportedFormatError, chunkAudio, detectFormat } from './index';
 import { parseHeader } from './mp3';
 import { parseAsc } from './mp4';
 
@@ -70,8 +71,77 @@ describe('MP3 chunking', () => {
     expect(info.notes.join(' ')).toMatch(/resync/);
   });
 
-  it('rejects files that are neither MP3 nor MP4', async () => {
+  it('rejects files that are neither MP3, MP4 nor ADTS', async () => {
     await expect(chunkAudio(new Blob([new Uint8Array(64)]))).rejects.toThrow(/Formato non riconosciuto/);
+    await expect(chunkAudio(new Blob([new Uint8Array(64)]))).rejects.toBeInstanceOf(UnsupportedFormatError);
+  });
+});
+
+// AAC-LC, 48 kHz, stereo, no CRC, one raw block: 1024 samples per frame.
+const ADTS_PAYLOAD = 90;
+const ADTS_FRAME = ADTS_PAYLOAD + 7;
+const ADTS_SEC = 1024 / 48000;
+
+function adtsFrames(count: number): Uint8Array<ArrayBuffer> {
+  const out = new Uint8Array(count * ADTS_FRAME).fill(0x21);
+  const n = ADTS_FRAME;
+  const header = [0xff, 0xf1, (1 << 6) | (3 << 2) | 0, (2 << 6) | (n >> 11), (n >> 3) & 0xff, ((n & 7) << 5) | 0x1f, 0xfc];
+  for (let i = 0; i < count; i += 1) out.set(header, i * ADTS_FRAME);
+  return out;
+}
+
+describe('ADTS (raw AAC) chunking', () => {
+  it('parses an ADTS header and tells it from an MP3 one', () => {
+    expect(parseAdtsHeader(adtsFrames(1))).toMatchObject({ objectType: 2, sampleRate: 48000, channelConfig: 2, length: ADTS_FRAME, samples: 1024 });
+    expect(parseAdtsHeader(FRAME_HEADER.concat([0, 0, 0]))).toBeNull(); // MP3 Layer III
+  });
+
+  // Regression: a bare ADTS stream named .m4a (some recorders) was refused as "Formato non riconosciuto".
+  it('cuts overlapping windows of a bare ADTS stream on frame boundaries', async () => {
+    const file = new Blob([adtsFrames(1407)], { type: 'audio/mp4' }); // ~30 s, labelled like the .m4a
+    expect(await detectFormat(file)).toBe('adts-aac');
+    const { info, chunks } = await chunkAudio(file, { chunkSec: 10, stepSec: 8 });
+    expect(info).toMatchObject({ format: 'adts-aac', codec: 'mp4a.40.2', sampleRate: 48000, channels: 2 });
+    expect(info.durationSec).toBeCloseTo(1407 * ADTS_SEC, 6);
+    expect(chunks.map(chunk => Math.round(chunk.startSec))).toEqual([0, 8, 16, 24]);
+    for (const chunk of chunks.slice(0, -1)) expect(chunk.durationSec).toBeGreaterThanOrEqual(10);
+    for (const chunk of chunks) {
+      const bytes = new Uint8Array(await chunk.blob.arrayBuffer());
+      expect([bytes[0], bytes[1]]).toEqual([0xff, 0xf1]);
+      expect(bytes.length % ADTS_FRAME).toBe(0);
+      expect(chunk).toMatchObject({ mimeType: 'audio/aac', ext: 'aac' });
+    }
+  });
+
+  it('reads ADTS behind an ID3v2 tag and over stray bytes', async () => {
+    const file = new Blob([id3v2(50), adtsFrames(200), new Uint8Array([1, 2, 3]), adtsFrames(200)]);
+    expect(await detectFormat(file)).toBe('adts-aac');
+    const { info, chunks } = await chunkAudio(file, { chunkSec: 900 });
+    expect(chunks).toHaveLength(1);
+    expect(info.durationSec).toBeCloseTo(400 * ADTS_SEC, 6);
+    expect(info.notes.join(' ')).toMatch(/ID3v2.*resync/);
+  });
+
+  // Regression: detection looked only right after the first ID3v2 tag, so these playable
+  // files were taken for MP3 and refused as unreadable audio.
+  it('detects ADTS behind two stacked ID3v2 tags', async () => {
+    const file = new Blob([id3v2(50), id3v2(30), adtsFrames(200)]);
+    expect(await detectFormat(file)).toBe('adts-aac');
+    const { info } = await chunkAudio(file, { chunkSec: 900 });
+    expect(info.durationSec).toBeCloseTo(200 * ADTS_SEC, 6);
+    expect(info.notes.filter(note => note.includes('ID3v2'))).toHaveLength(2);
+  });
+
+  it('detects ADTS behind an ID3v2 tag followed by zero padding', async () => {
+    const file = new Blob([id3v2(50), new Uint8Array(1000), adtsFrames(200)]);
+    expect(await detectFormat(file)).toBe('adts-aac');
+    const { info } = await chunkAudio(file, { chunkSec: 900 });
+    expect(info.durationSec).toBeCloseTo(200 * ADTS_SEC, 6);
+  });
+
+  it('still detects MP3 behind stacked ID3v2 tags and padding', async () => {
+    expect(await detectFormat(new Blob([id3v2(50), id3v2(30), mp3Frames(100)]))).toBe('mp3');
+    expect(await detectFormat(new Blob([id3v2(50), new Uint8Array(1000), mp3Frames(100)]))).toBe('mp3');
   });
 });
 
@@ -115,5 +185,21 @@ describe('M4A chunking', () => {
     expect(bytes[1]).toBe(0xf1);
     expect(((bytes[3] & 3) << 11) | (bytes[4] << 3) | (bytes[5] >> 5)).toBe(47);
     expect(bytes.length % 47).toBe(0);
+  });
+
+  // An interrupted recording keeps ftyp (and maybe mdat) but never gets its moov index. It must stop
+  // for good like any unreadable audio (webRun: Audio non leggibile), not as a block failure to retry.
+  it('refuses an interrupted M4A recording without moov as unreadable audio', async () => {
+    const box = (type: string, payload: number[]) => {
+      const size = 8 + payload.length;
+      return new Uint8Array([size >>> 24, (size >> 16) & 0xff, (size >> 8) & 0xff, size & 0xff, ...[...type].map(c => c.charCodeAt(0)), ...payload]);
+    };
+    const ftyp = box('ftyp', [...'M4A '].map(c => c.charCodeAt(0)).concat([0, 0, 0, 0], [...'M4A isom'].map(c => c.charCodeAt(0))));
+    const mdat = box('mdat', Array.from({ length: 4000 }, (_, i) => i % 251));
+    for (const parts of [[ftyp, mdat], [ftyp]]) {
+      const file = new Blob(parts, { type: 'audio/mp4' });
+      expect(await detectFormat(file)).toBe('mp4-aac');
+      await expect(chunkAudio(file)).rejects.toMatchObject({ name: 'UnsupportedFormatError', message: 'Nessuna traccia audio nel file' });
+    }
   });
 });

@@ -3,7 +3,7 @@ import type { FileDescriptor } from '../appState';
 import { CancelledError, CircuitBreakerExhaustedError, DegenerateOutputError, InvalidKeyError, QuotaDailyLimitError } from './pipeline/retry';
 import { FileMismatchError, defaultSettings, type AudioSource } from './pipeline/run';
 import { fileIdentity, newSession, sameFile, type CheckpointStore, type SessionState } from './pipeline/session';
-import { LOST_FILE_MESSAGE, failurePayload, runWebFile, type WebRunOptions } from './webRun';
+import { LOST_FILE_MESSAGE, UNSUPPORTED_FORMAT_MESSAGE, failurePayload, runWebFile, type WebRunOptions } from './webRun';
 
 type Reply = { status?: number; json: unknown };
 const okText = (text: string): Reply => ({ json: { candidates: [{ content: { parts: [{ text }] }, finishReason: 'STOP' }] } });
@@ -123,6 +123,17 @@ describe('failurePayload', () => {
     expect(failurePayload(new FileMismatchError('Non è lo stesso audio.'), state('phase1'), base).error).toBe('Non è lo stesso audio.');
     expect(failurePayload(new DOMException('full', 'QuotaExceededError'), state('phase1'), base).error).toContain('Spazio del browser esaurito');
     expect(failurePayload(new DOMException('gone', 'NotFoundError'), state('phase1', 1), base)).toEqual({ ...base, error: LOST_FILE_MESSAGE });
+    // Not a block failure: the cut rejects the file before any request, and resuming cannot help.
+    const unsupported = Object.assign(new Error('Formato non riconosciuto'), { name: 'UnsupportedFormatError' });
+    expect(failurePayload(unsupported, state('phase1'), base)).toEqual({ ...base, error: UNSUPPORTED_FORMAT_MESSAGE, error_detail: 'UnsupportedFormatError: Formato non riconosciuto' });
+    // Regression: an interrupted M4A (no moov) was told its content is "non è audio MP3 né AAC" and to
+    // convert it, which a damaged file does not survive. The text must name that case too.
+    const damaged = Object.assign(new Error('Nessuna traccia audio nel file'), { name: 'UnsupportedFormatError' });
+    const damagedPayload = failurePayload(damaged, state('phase1'), base);
+    expect(damagedPayload).toEqual({ ...base, error: UNSUPPORTED_FORMAT_MESSAGE, error_detail: 'UnsupportedFormatError: Nessuna traccia audio nel file' });
+    expect(damagedPayload.error).toMatch(/^Audio non leggibile: /);
+    expect(damagedPayload.error).toMatch(/incompleta o danneggiata/);
+    expect(damagedPayload.error).not.toMatch(/non è audio/);
     expect(failurePayload(new Error('boom'), state('phase2'), base)).toMatchObject({ error: 'processing_failed', error_detail: 'Error: boom' });
     expect(failurePayload(new Error('boom'), state('phase1', 1), base).error).toBe('phase1_chunk_failed_2');
   });

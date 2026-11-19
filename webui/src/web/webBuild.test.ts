@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { MAX_REPORT_HISTORY, REPORT_EXCERPT_LENGTH, REPORT_MAX_AGE_DAYS } from '../feedback/history';
 import { SESSION_COOKIE, SESSION_MAX_AGE_S } from './drive/server/driveServer';
 import { SEARCH_CONSOLE_VERIFICATION, WEB_CSP, WEB_STATIC_PAGES, driveClientId, sentryDsn, toWebDevIndexHtml, toWebDevStaticPageHtml, toWebIndexHtml, webBuildVersion, webCsp, webHeadersFile, webStaticPages } from './webBuild';
 
@@ -178,6 +179,17 @@ describe('privacy page of the web site', () => {
     expect(html).not.toContain('non trascriverla con una chiave gratuita');
   });
 
+  it('says what the report history keeps in the browser, with the limits of feedback/history.ts', () => {
+    // The history keeps the start of the description too, and drops codes Sentry no longer holds.
+    const browser = html.slice(html.indexOf('id="browser"'), html.indexOf('id="gemini"'));
+    const item = browser.match(/<li>i codici delle ultime[^<]*<\/li>/)?.[0] ?? '';
+    const italianNumbers: Record<number, string> = { 3: 'tre', 4: 'quattro', 5: 'cinque', 10: 'dieci' };
+    expect(item).toContain(`ultime ${italianNumbers[MAX_REPORT_HISTORY]} segnalazioni`);
+    expect(item).toContain(`negli ultimi ${REPORT_MAX_AGE_DAYS} giorni`);
+    expect(item).toContain(`i primi ${REPORT_EXCERPT_LENGTH} caratteri del testo (indirizzi email e chiavi API nascosti)`);
+    expect(html).not.toContain('senza il testo');
+  });
+
   it('names what reaches the developer, the legal bases, the minimum age and the Garante', () => {
     expect(html.slice(html.indexOf('id="sviluppatore"'), html.indexOf('id="base-giuridica"'))).toContain('Segnala un problema');
     expect(html).toContain('Data Privacy Framework');
@@ -217,10 +229,12 @@ describe('privacy page of the web site', () => {
     expect(toWebDevStaticPageHtml(html)).toContain('<link rel="stylesheet" href="./src/web/pages/privacy.css" />');
   });
 
-  it('names the contact with a mailto link and no other address', () => {
+  it('names the controller by full name, with a mailto link and no other address', () => {
     expect(html).not.toContain('[NOME E EMAIL DI CONTATTO]');
     expect(html).toMatch(/BOZZA da far rivedere/);
-    expect(html).toContain('<a href="mailto:supporto@elsbobinator.com">supporto@elsbobinator.com</a>');
+    // GDPR art. 13(1)(a): the notice gives the controller's identity, not just a mailbox.
+    const controller = html.slice(html.indexOf('id="titolare"'), html.indexOf('id="browser"'));
+    expect(controller).toContain('<p>Vimukthi Wijesinghe, <a href="mailto:supporto@elsbobinator.com">supporto@elsbobinator.com</a></p>');
     expect(new Set(html.match(/[\w.+-]+@[\w-]+\.[\w.]+/g))).toEqual(new Set(['supporto@elsbobinator.com']));
   });
 

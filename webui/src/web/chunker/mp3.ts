@@ -4,7 +4,7 @@
 // Xing/Info/VBRI header frames, CBR and VBR, and resyncs over garbage.
 
 import { BlobReader } from './blobReader';
-import { DEFAULT_CHUNK_SEC, now, type Chunk, type ChunkOptions, type ChunkResult, type SourceInfo } from './types';
+import { DEFAULT_CHUNK_SEC, UnsupportedFormatError, now, type Chunk, type ChunkOptions, type ChunkResult, type SourceInfo } from './types';
 
 // kbps, index 1..14. [MPEG1 L3, MPEG2/2.5 L3]
 const BITRATES_L3 = [
@@ -45,7 +45,23 @@ export function parseHeader(b0: number, b1: number, b2: number, b3: number): Fra
   return { version, bitrateKbps, sampleRate, channels, samples, length };
 }
 
-function sameStream(a: FrameHeader, b: FrameHeader): boolean {
+/**
+ * Skips the ID3v2 tags at `pos` (several may be stacked, in front of MP3 and raw AAC alike)
+ * and returns the first offset past them.
+ */
+export async function skipId3v2(r: BlobReader, pos: number, notes?: string[]): Promise<number> {
+  for (;;) {
+    await r.ensure(pos, 10);
+    if (r.at(pos) !== 0x49 || r.at(pos + 1) !== 0x44 || r.at(pos + 2) !== 0x33) return pos;
+    const flags = r.at(pos + 5);
+    const size = ((r.at(pos + 6) & 0x7f) << 21) | ((r.at(pos + 7) & 0x7f) << 14) | ((r.at(pos + 8) & 0x7f) << 7) | (r.at(pos + 9) & 0x7f);
+    const total = 10 + size + (flags & 0x10 ? 10 : 0);
+    notes?.push(`ID3v2 di ${total} byte saltato`);
+    pos += total;
+  }
+}
+
+export function sameStream(a: FrameHeader, b: FrameHeader): boolean {
   return a.version === b.version && a.sampleRate === b.sampleRate;
 }
 
@@ -70,17 +86,7 @@ export async function chunkMp3(blob: Blob, opts: ChunkOptions = {}): Promise<Chu
   const notes: string[] = [];
   let pos = 0;
 
-  // ID3v2 at start (possibly several stacked tags).
-  for (;;) {
-    await r.ensure(pos, 10);
-    if (r.at(pos) === 0x49 && r.at(pos + 1) === 0x44 && r.at(pos + 2) === 0x33) {
-      const flags = r.at(pos + 5);
-      const size = ((r.at(pos + 6) & 0x7f) << 21) | ((r.at(pos + 7) & 0x7f) << 14) | ((r.at(pos + 8) & 0x7f) << 7) | (r.at(pos + 9) & 0x7f);
-      const total = 10 + size + (flags & 0x10 ? 10 : 0);
-      notes.push(`ID3v2 di ${total} byte saltato`);
-      pos += total;
-    } else break;
-  }
+  pos = await skipId3v2(r, pos, notes);
 
   // Trailing tags: ID3v1 ("TAG", 128 bytes) and APEv2 footer.
   let end = r.size;
@@ -124,7 +130,7 @@ export async function chunkMp3(blob: Blob, opts: ChunkOptions = {}): Promise<Chu
   };
 
   const first = await resync(pos);
-  if (!first) throw new Error('Nessun frame MP3 valido trovato');
+  if (!first) throw new UnsupportedFormatError('Nessun frame MP3 valido trovato');
   if (first.pos !== pos) notes.push(`${first.pos - pos} byte non audio prima del primo frame`);
   pos = first.pos;
   const ref = first.h;

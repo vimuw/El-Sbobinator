@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MAX_REPORT_HISTORY, REPORT_HISTORY_KEY, loadReportHistory, rememberReport, resetReportHistoryForTests, subscribeReportHistory, type SentReport } from './history';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MAX_REPORT_HISTORY, REPORT_EXCERPT_LENGTH, REPORT_HISTORY_KEY, REPORT_MAX_AGE_DAYS, loadReportHistory, rememberReport, reportExcerpt, resetReportHistoryForTests, subscribeReportHistory, type SentReport } from './history';
 
 function memoryStorage(initial: Record<string, string> = {}) {
   const data = new Map(Object.entries(initial));
@@ -13,7 +13,12 @@ function report(index: number, kind: SentReport['kind'] = 'bug'): SentReport {
   return { code: `A1B2C3${String(index).padStart(2, '0')}`, sentAt: new Date(Date.UTC(2026, 10, 17, 10, index)).toISOString(), kind };
 }
 
-afterEach(() => resetReportHistoryForTests());
+const DAY_MS = 24 * 60 * 60 * 1000;
+const TODAY = Date.UTC(2026, 10, 18, 12);
+
+// The fixture dates are fixed: the clock is pinned the day after, so they never turn 30 days old.
+beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(TODAY); });
+afterEach(() => { vi.useRealTimers(); resetReportHistoryForTests(); });
 
 describe('report history', () => {
   it('keeps the last five codes, newest first, without repeating one', () => {
@@ -26,6 +31,25 @@ describe('report history', () => {
     expect(history[0].kind).toBe('idea');
     // Only code, date and type are kept.
     expect(Object.keys(JSON.parse(storage.getItem(REPORT_HISTORY_KEY)!)[0]).sort()).toEqual(['code', 'kind', 'sentAt']);
+  });
+
+  // Regression: with only code, type and date, two reports of the same week could not be told apart.
+  it('keeps the start of the description, on one line and masked, to tell the reports apart', () => {
+    const excerpt = reportExcerpt('Il titolo non si salva.\n\n  Scrivetemi a mario.rossi@example.com, chiave AIzaSyA1234567890abcdefghijklmnopqrstuv');
+    expect(excerpt).toBe('Il titolo non si salva. Scrivetemi a [nascosto], chiave [nascosto]');
+    const long = reportExcerpt('a'.repeat(REPORT_EXCERPT_LENGTH + 40));
+    expect(long).toBe(`${'a'.repeat(REPORT_EXCERPT_LENGTH)}…`);
+
+    const storage = memoryStorage();
+    rememberReport({ ...report(1), excerpt: long }, storage);
+    expect(loadReportHistory(storage)).toEqual([{ ...report(1), excerpt: long }]);
+  });
+
+  it('reads a saved code without an excerpt, but not a broken excerpt', () => {
+    const storage = memoryStorage({
+      [REPORT_HISTORY_KEY]: JSON.stringify([report(1), { ...report(2), excerpt: 42 }, { ...report(3), excerpt: 'x'.repeat(500) }]),
+    });
+    expect(loadReportHistory(storage)).toEqual([report(1)]);
   });
 
   it('ignores what it did not write', () => {
@@ -63,6 +87,35 @@ describe('report history', () => {
       .toEqual(['A1B2C304', 'A1B2C303', 'A1B2C302', 'A1B2C301']);
     storage.setItem(REPORT_HISTORY_KEY, JSON.stringify([report(5)]));
     expect(loadReportHistory(storage).map(entry => entry.code)).toEqual(['A1B2C305']);
+  });
+
+  // Sentry deletes a report after 30 days: a code past that pointed to nothing the developer could find.
+  it('drops the codes Sentry no longer holds, from the list and from the next save', () => {
+    const sentDaysAgo = (code: string, days: number): SentReport => ({ code, sentAt: new Date(TODAY - days * DAY_MS).toISOString(), kind: 'bug' });
+    const storage = memoryStorage({
+      [REPORT_HISTORY_KEY]: JSON.stringify([
+        sentDaysAgo('0000000A', 1),
+        sentDaysAgo('0000000B', REPORT_MAX_AGE_DAYS - 0.01),
+        sentDaysAgo('0000000C', REPORT_MAX_AGE_DAYS),
+        sentDaysAgo('0000000D', 90),
+      ]),
+    });
+    expect(loadReportHistory(storage).map(entry => entry.code)).toEqual(['0000000A', '0000000B']);
+
+    // A day later the second one is gone too, and a new send no longer writes the expired ones back.
+    vi.setSystemTime(TODAY + DAY_MS);
+    rememberReport(sentDaysAgo('0000000E', -1), storage);
+    expect(JSON.parse(storage.getItem(REPORT_HISTORY_KEY)!).map((entry: SentReport) => entry.code)).toEqual(['0000000E', '0000000A']);
+  });
+
+  it('drops expired codes kept only for this page', () => {
+    const blocked = {
+      getItem: () => { throw new DOMException('blocked', 'SecurityError'); },
+      setItem: () => { throw new DOMException('blocked', 'SecurityError'); },
+    };
+    rememberReport(report(1), blocked);
+    vi.setSystemTime(TODAY + REPORT_MAX_AGE_DAYS * DAY_MS);
+    expect(loadReportHistory(blocked)).toEqual([]);
   });
 
   it('tells an open Diagnostica about a new code', () => {

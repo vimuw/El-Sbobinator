@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { close, createTransport } from '@sentry/browser';
 import { reportClientError } from '../diagnostics';
 import { AUTO_REPORTS_KEY, REPORT_TUNNEL_PATH } from './config';
-import { MAX_AUTOMATIC_REPORTS, initMonitoring, monitoringOptions, resetMonitoringForTests, sendFeedback, setAutoReports, type FeedbackInput } from './sentry';
+import { FEEDBACK_CODE_TAG, MAX_AUTOMATIC_REPORTS, initMonitoring, monitoringOptions, resetMonitoringForTests, sendFeedback, setAutoReports, type FeedbackInput } from './sentry';
 
 const DSN = 'https://0123456789abcdef0123456789abcdef@o123.ingest.de.sentry.io/456';
 const GEMINI_KEY = 'AIzaSyPrimary1234567890123';
@@ -112,6 +112,28 @@ describe('Sentry reports', () => {
     expect(payload.contexts.feedback).toMatchObject({ message: 'L’editor non salva il titolo.', contact_email: 'io@example.com' });
     expect(payload.tags).toMatchObject({ 'feedback.kind': 'bug', 'feedback.tech': 'on' });
     expect(attachments.map(item => item.filename)).toEqual(['immagine-1.jpg', 'info-tecniche.txt']);
+  });
+
+  // Regression: the code was only the start of the event id, which Sentry's search cannot find by
+  // itself; the tag makes a code quoted in an email one search away.
+  it('tags the feedback with the code the user is shown, the start of its event id', async () => {
+    start();
+    const first = await sendFeedback(feedback());
+    const second = await sendFeedback(feedback());
+    const sentEvents = sent.map(request => {
+      const header = JSON.parse(request.body.split('\n')[0]) as { event_id: string };
+      const payload = JSON.parse(items(request.body)[0].payload) as { event_id: string; tags: Record<string, string> };
+      return { header: header.event_id, payload };
+    });
+    for (const [index, result] of [first, second].entries()) {
+      if (!result.ok) throw new Error('not delivered');
+      const { header, payload } = sentEvents[index];
+      expect(payload.tags[FEEDBACK_CODE_TAG]).toBe(result.code);
+      expect(payload.event_id).toMatch(/^[0-9a-f]{32}$/);
+      expect(payload.event_id.slice(0, 8).toUpperCase()).toBe(result.code);
+      expect(header).toBe(payload.event_id);
+    }
+    expect(first.ok && second.ok && first.code !== second.code).toBe(true);
   });
 
   it('sends only the user\'s words when the tech info is left out', async () => {
