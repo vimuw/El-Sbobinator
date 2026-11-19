@@ -82,13 +82,41 @@ const ADTS_PAYLOAD = 90;
 const ADTS_FRAME = ADTS_PAYLOAD + 7;
 const ADTS_SEC = 1024 / 48000;
 
-function adtsFrames(count: number): Uint8Array<ArrayBuffer> {
-  const out = new Uint8Array(count * ADTS_FRAME).fill(0x21);
-  const n = ADTS_FRAME;
-  const header = [0xff, 0xf1, (1 << 6) | (3 << 2) | 0, (2 << 6) | (n >> 11), (n >> 3) & 0xff, ((n & 7) << 5) | 0x1f, 0xfc];
-  for (let i = 0; i < count; i += 1) out.set(header, i * ADTS_FRAME);
+interface AdtsShape {
+  /** Sample-rate index: 3 = 48 kHz, 4 = 44.1 kHz, 13+ is reserved. */
+  freqIndex?: number;
+  /** Channel configuration: 2 = stereo, 7 = 7.1 (8 channels). */
+  channels?: number;
+  /** protection_absent = 0: a 2-byte CRC follows the header, which is then 9 bytes. */
+  crc?: boolean;
+}
+
+/** A 7-byte ADTS header of AAC-LC for a frame of `length` bytes, header included. */
+function adtsHeader(length: number, { freqIndex = 3, channels = 2, crc = false }: AdtsShape = {}): number[] {
+  return [
+    0xff,
+    crc ? 0xf0 : 0xf1,
+    (1 << 6) | (freqIndex << 2) | ((channels >> 2) & 1),
+    ((channels & 3) << 6) | (length >> 11),
+    (length >> 3) & 0xff,
+    ((length & 7) << 5) | 0x1f,
+    0xfc,
+  ];
+}
+
+function adtsFrames(count: number, payload = ADTS_PAYLOAD, shape: AdtsShape = {}): Uint8Array<ArrayBuffer> {
+  const frame = payload + 7;
+  const out = new Uint8Array(count * frame).fill(0x21);
+  const header = adtsHeader(frame, shape);
+  for (let i = 0; i < count; i += 1) out.set(header, i * frame);
   return out;
 }
+
+const tagId3v1 = () => {
+  const tag = new Uint8Array(128);
+  tag.set([0x54, 0x41, 0x47]);
+  return tag;
+};
 
 describe('ADTS (raw AAC) chunking', () => {
   it('parses an ADTS header and tells it from an MP3 one', () => {
@@ -142,6 +170,92 @@ describe('ADTS (raw AAC) chunking', () => {
   it('still detects MP3 behind stacked ID3v2 tags and padding', async () => {
     expect(await detectFormat(new Blob([id3v2(50), id3v2(30), mp3Frames(100)]))).toBe('mp3');
     expect(await detectFormat(new Blob([id3v2(50), new Uint8Array(1000), mp3Frames(100)]))).toBe('mp3');
+  });
+
+  it('rejects ADTS headers with a reserved rate or a length shorter than the header', () => {
+    expect(parseAdtsHeader(adtsHeader(ADTS_FRAME, { freqIndex: 13 }))).toBeNull();
+    expect(parseAdtsHeader(adtsHeader(7))).toBeNull();
+    expect(parseAdtsHeader(adtsHeader(9, { crc: true }))).toBeNull(); // 7 + 2-byte CRC, no payload
+    expect(parseAdtsHeader(adtsHeader(10, { crc: true }))).toMatchObject({ length: 10 });
+    expect(parseAdtsHeader(adtsHeader(ADTS_FRAME, { channels: 7 }))).toMatchObject({ channelConfig: 7 });
+  });
+
+  it('stops before a truncated last frame and an ID3v1 tag, with CRC and 8 channels', async () => {
+    const shape = { channels: 7, crc: true };
+    const truncated = adtsFrames(1, ADTS_PAYLOAD, shape).slice(0, 50);
+    const file = new Blob([adtsFrames(300, ADTS_PAYLOAD, shape), truncated, tagId3v1()]);
+    expect(await detectFormat(file)).toBe('adts-aac');
+    const { info, chunks } = await chunkAudio(file); // default window
+    expect(info).toMatchObject({ format: 'adts-aac', channels: 8, sampleRate: 48000 });
+    expect(info.durationSec).toBeCloseTo(300 * ADTS_SEC, 6);
+    expect(info.notes.join(' ')).toMatch(/ID3v1/);
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0].sizeBytes).toBe(300 * ADTS_FRAME);
+  });
+
+  it('skips a foreign header before and inside the stream and trailing junk', async () => {
+    const foreign = adtsFrames(1, 13, { freqIndex: 4 }); // 20 bytes, 44.1 kHz instead of 48
+    const junk = new Uint8Array([0xff, 0xf1, 0x7c, 0, 0, 0, 0, 0, 0, 0]); // reserved rate index 15
+    const file = new Blob([foreign, adtsFrames(100), foreign, adtsFrames(100), junk]);
+    expect(await detectFormat(file)).toBe('adts-aac');
+    const { info, chunks } = await chunkAudio(file, { chunkSec: 900 });
+    expect(info.sampleRate).toBe(48000);
+    expect(info.durationSec).toBeCloseTo(200 * ADTS_SEC, 6);
+    expect(info.notes).toContain('20 byte non audio prima del primo frame');
+    expect(info.notes).toContain('20 byte non validi saltati (resync)');
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0].sizeBytes).toBe(200 * ADTS_FRAME + 20); // the junk tail stays out
+  });
+
+  it('refuses a file that starts like ADTS but holds no valid frame', async () => {
+    const file = new Blob([new Uint8Array([0xff, 0xf1, 0x7c]), new Uint8Array(200)]);
+    expect(await detectFormat(file)).toBe('adts-aac');
+    await expect(chunkAudio(file)).rejects.toMatchObject({ name: 'UnsupportedFormatError', message: 'Nessun frame AAC (ADTS) valido trovato' });
+  });
+
+  it('reads a file of a single ADTS frame', async () => {
+    const { info, chunks } = await chunkAudio(new Blob([adtsFrames(1)]));
+    expect(info.durationSec).toBeCloseTo(ADTS_SEC, 6);
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0].sizeBytes).toBe(ADTS_FRAME);
+  });
+
+  it('reports progress through a long ADTS file', async () => {
+    const payload = 8000; // ~8 KB frames: 1200 of them make ~9.6 MB, past one 8 MiB progress step
+    const progress: number[] = [];
+    const { info } = await chunkAudio(new Blob([adtsFrames(1200, payload)]), { chunkSec: 900, onProgress: p => progress.push(p) });
+    expect(info.durationSec).toBeCloseTo(1200 * ADTS_SEC, 6);
+    expect(progress.length).toBeGreaterThanOrEqual(2);
+    expect(progress[0]).toBeGreaterThan(0);
+    expect(progress[0]).toBeLessThan(1);
+    expect(progress.at(-1)).toBe(1);
+  });
+});
+
+describe('format detection behind ID3v2', () => {
+  it('takes a lone frame after the tag for what it is', async () => {
+    expect(await detectFormat(new Blob([id3v2(50), adtsFrames(1)]))).toBe('adts-aac');
+    expect(await detectFormat(new Blob([id3v2(50), mp3Frames(1)]))).toBe('mp3');
+  });
+
+  it('passes over an ADTS header that the next frame does not confirm', async () => {
+    const foreign = adtsFrames(1, 13, { freqIndex: 4 });
+    expect(await detectFormat(new Blob([id3v2(50), foreign, mp3Frames(100)]))).toBe('mp3');
+  });
+
+  it('falls back to MP3 when no frame follows the tag', async () => {
+    expect(await detectFormat(new Blob([id3v2(50), new Uint8Array(100)]))).toBe('mp3');
+    expect(await detectFormat(new Blob([id3v2(50), new Uint8Array([0xff])]))).toBe('mp3');
+  });
+
+  it('skips an ID3v2 tag with a footer', async () => {
+    const tag = id3v2(50);
+    tag[5] = 0x10; // footer present: 10 more bytes after the tag
+    const file = new Blob([tag, new Uint8Array(10), adtsFrames(50)]);
+    expect(await detectFormat(file)).toBe('adts-aac');
+    const { info } = await chunkAudio(file, { chunkSec: 900 });
+    expect(info.notes).toContain('ID3v2 di 70 byte saltato');
+    expect(info.durationSec).toBeCloseTo(50 * ADTS_SEC, 6);
   });
 });
 
