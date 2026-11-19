@@ -229,10 +229,12 @@ describe('privacy page of the web site', () => {
     expect(toWebDevStaticPageHtml(html)).toContain('<link rel="stylesheet" href="./src/web/pages/privacy.css" />');
   });
 
-  it('names the contact with a mailto link and no other address', () => {
+  it('names the controller by full name, with a mailto link and no other address', () => {
     expect(html).not.toContain('[NOME E EMAIL DI CONTATTO]');
     expect(html).toMatch(/BOZZA da far rivedere/);
-    expect(html).toContain('<a href="mailto:supporto@elsbobinator.com">supporto@elsbobinator.com</a>');
+    // GDPR art. 13(1)(a): the notice gives the controller's identity, not just a mailbox.
+    const controller = html.slice(html.indexOf('id="titolare"'), html.indexOf('id="browser"'));
+    expect(controller).toContain('<p>Vimukthi Wijesinghe, <a href="mailto:supporto@elsbobinator.com">supporto@elsbobinator.com</a></p>');
     expect(new Set(html.match(/[\w.+-]+@[\w-]+\.[\w.]+/g))).toEqual(new Set(['supporto@elsbobinator.com']));
   });
 
