@@ -132,6 +132,19 @@ function waitForDelivery(eventId: string): Promise<boolean> {
   });
 }
 
+/** The tag that holds the code the user is shown, so a code quoted in an email is one Sentry search away. */
+export const FEEDBACK_CODE_TAG = 'feedback.code';
+
+/** A Sentry event id (32 hex digits) chosen here, so the code is known before the event leaves. */
+function newEventId(): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/** What the user is shown and quotes: the first 8 digits of the event id. */
+function feedbackCode(eventId: string): string {
+  return eventId.slice(0, 8).toUpperCase();
+}
+
 export async function sendFeedback(input: FeedbackInput, now: number = Date.now()): Promise<FeedbackResult> {
   while (feedbackTimes.length && now - feedbackTimes[0] > FEEDBACK_WINDOW_MS) feedbackTimes.shift();
   if (feedbackTimes.length >= MAX_FEEDBACK) return { ok: false, reason: 'rate_limited' };
@@ -141,6 +154,8 @@ export async function sendFeedback(input: FeedbackInput, now: number = Date.now(
     attachments.push({ data: input.techReport, filename: 'info-tecniche.txt', contentType: 'text/plain' });
   }
   const email = input.email?.trim();
+  const requestedId = newEventId();
+  const code = feedbackCode(requestedId);
   const eventId = captureFeedback({
     message: input.message.trim(),
     ...(email ? { email } : {}),
@@ -148,8 +163,8 @@ export async function sendFeedback(input: FeedbackInput, now: number = Date.now(
     url: globalThis.location?.href,
     // The last error this page reported: what just went wrong, with its breadcrumbs.
     associatedEventId: input.techReport !== undefined ? lastErrorId : undefined,
-    tags: { 'feedback.kind': input.kind, [BARE_TAG]: input.techReport !== undefined ? 'on' : 'off' },
-  }, { attachments });
+    tags: { 'feedback.kind': input.kind, [BARE_TAG]: input.techReport !== undefined ? 'on' : 'off', [FEEDBACK_CODE_TAG]: code },
+  }, { attachments, event_id: requestedId });
   // The slot is taken while the report travels, so parallel sends still count, and given back if
   // it is not delivered: a failed try must not cost the user the next one, or the email link
   // that comes only with 'unavailable'.
@@ -160,7 +175,8 @@ export async function sendFeedback(input: FeedbackInput, now: number = Date.now(
     if (slot >= 0) feedbackTimes.splice(slot, 1);
     return { ok: false, reason: 'unavailable' };
   }
-  return { ok: true, code: eventId.slice(0, 8).toUpperCase() };
+  // The tagged code, which is also the start of the event id: Sentry keeps an id it is given.
+  return { ok: true, code };
 }
 
 /** Tests only: back to a fresh page. */
