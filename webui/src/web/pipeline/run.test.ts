@@ -345,6 +345,26 @@ describe('retryFailedSections', () => {
     expect(state.body).toBe('<h1>vecchio</h1>');
   });
 
+  const notFound = { status: 404, json: { error: { status: 'NOT_FOUND', message: 'models/gemini-2.5-flash is not found for API version v1beta.' } } };
+
+  it('skips a reserve key that lacks the model and revises with the next one', async () => {
+    const { calls } = mockGemini([quota, notFound, okText('## B\n\nSeconda rivista.'), okText('## C\n\nTerza rivista.')]);
+    const { env, warnings } = makeEnv(fakeAudio(1), { keys: ['KEY-1', 'KEY-2', 'KEY-3'] });
+    const result = await retryFailedSections(finished(), env);
+    expect(calls.map(call => call.key)).toEqual(['KEY-1', 'KEY-2', 'KEY-3', 'KEY-3']);
+    expect(result).toEqual({ retried: [1, 2], remaining: [], cancelled: false, quotaExhausted: false });
+    expect(warnings).toContainEqual(['fallback_key_model_missing', 'La chiave di riserva 2 non può usare Gemini 2.5 Flash: l’ho saltata']);
+  });
+
+  // Sentry ELSBOBINATOR-WEB-4: main key out of quota, the only reserve key without 2.5 Flash.
+  it('names the reserve key that lacks the model when no key can revise', async () => {
+    mockGemini([quota, notFound, notFound]);
+    const state = finished();
+    const result = await retryFailedSections(state, makeEnv(fakeAudio(1), { keys: ['KEY-1', 'KEY-2'] }).env);
+    expect(result).toEqual({ retried: [], remaining: [1, 2], cancelled: false, quotaExhausted: false, modelMissingKey: 2 });
+    expect(state.body).toBe('<h1>vecchio</h1>');
+  });
+
   it('stops on cancel and keeps what was already revised', async () => {
     const { env, controller } = makeEnv(fakeAudio(1));
     mockGemini([() => okText('## B\n\nSeconda rivista.')]);

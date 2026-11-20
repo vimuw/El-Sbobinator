@@ -197,6 +197,33 @@ describe('withKeyRotation', () => {
     expect(main.index).toBe(0);
   });
 
+  it('skips a fallback key whose project lacks the model, and surfaces it on the last key', async () => {
+    const missing = () => new ModelNotFoundError('404 not_found models/gemini-2.5-flash is not found for api version v1beta.');
+    const ring: KeyRing = { keys: ['k1', 'k2', 'k3'], index: 1 };
+    const rotations: string[] = [];
+    await expect(withKeyRotation(ring, async () => {
+      if (ring.index === 1) throw missing();
+      return 'ok';
+    }, (from, to, why) => rotations.push(`${from}->${to} ${why}`))).resolves.toBe('ok');
+    expect(rotations).toEqual(['1->2 modello mancante']);
+
+    // No key after it: the 404 surfaces with the key that got it, without asking for a new key.
+    const last: KeyRing = { keys: ['k1', 'k2'], index: 1 };
+    const requestNewKey = vi.fn(async () => 'k3');
+    const error = await withKeyRotation(last, async () => { throw missing(); }, () => {}, requestNewKey).catch(caught => caught);
+    expect(error).toBeInstanceOf(ModelNotFoundError);
+    expect(error.keyIndex).toBe(1);
+    expect(requestNewKey).not.toHaveBeenCalled();
+
+    // The main key's missing model stays webRun's to handle, and a missing uploaded file is no model.
+    const main: KeyRing = { keys: ['k1', 'k2'], index: 0 };
+    await expect(withKeyRotation(main, async () => { throw missing(); }, () => {})).rejects.toBeInstanceOf(ModelNotFoundError);
+    expect(main.index).toBe(0);
+    const file: KeyRing = { keys: ['k1', 'k2', 'k3'], index: 1 };
+    await expect(withKeyRotation(file, async () => { throw new ModelNotFoundError('404 not_found file files/abc not found'); }, () => {})).rejects.toBeInstanceOf(ModelNotFoundError);
+    expect(file.index).toBe(1);
+  });
+
   it('asks for a new key when every key has run out', async () => {
     const ring: KeyRing = { keys: ['k1'], index: 0 };
     const requestNewKey = vi.fn(async () => ' k2 ');

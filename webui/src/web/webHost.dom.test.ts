@@ -5,7 +5,7 @@ import { DESKTOP_CAPABILITIES, getHostCapabilities, setHostCapabilities } from '
 import { STORAGE_KEYS } from '../storageKeys';
 import type { BridgeEventName } from './fakePipeline';
 import { createApiUsageStore } from './apiUsage';
-import { createBridgeEmitter, createWebPywebviewApi, initWebHost, mainKeyModelUnavailable } from './webHost';
+import { createBridgeEmitter, createWebPywebviewApi, initWebHost, mainKeyModelUnavailable, modelMissingRetryMessage } from './webHost';
 import { loadUnavailableModels, loadWebModel, saveWebModel } from './webSettings';
 
 function recorder() {
@@ -256,5 +256,14 @@ describe('web host', () => {
     bridge = { updatePhase: (text: string) => received.push(text) } as unknown as Window['elSbobinatorBridge'];
     await vi.advanceTimersByTimeAsync(30);
     expect(received).toEqual(['uno', 'due']);
+  });
+
+  it('modelMissingRetryMessage: names the key to replace, never another model, since a retry keeps the session model', () => {
+    const main = modelMissingRetryMessage(1, 'gemini-2.5-flash');
+    expect(main).toBe('La chiave principale non può usare Gemini 2.5 Flash, il modello di questa sbobina: sostituiscila nelle impostazioni con una chiave che possa usarlo.');
+    expect(main).not.toContain('scegli un altro modello');
+    expect(modelMissingRetryMessage(2, 'gemini-2.5-flash')).toBe(
+      'La chiave di riserva 2 non può usare Gemini 2.5 Flash e la quota della chiave principale è esaurita: riprova domani o sostituisci la chiave di riserva nelle impostazioni.',
+    );
   });
 });

@@ -13,6 +13,7 @@ import {
   errorCode,
   errorText,
   isInvalidKey,
+  isModelAccessError,
   isQuotaRelated,
   retryWithQuota,
   withKeyRotation,
@@ -82,6 +83,7 @@ export interface PipelineReporter {
 export const RUN_WARNING = {
   fallbackKey: 'fallback_key_in_use',
   invalidFallbackKey: 'fallback_key_invalid',
+  modelMissingFallbackKey: 'fallback_key_model_missing',
   truncated: 'truncated_output',
   unrevised: 'unrevised_blocks',
 } as const;
@@ -161,6 +163,8 @@ export interface SectionRetryResult {
   remaining: number[];
   cancelled: boolean;
   quotaExhausted: boolean;
+  /** 1-based number of the key whose project lacks the model, when that is what failed the sections. */
+  modelMissingKey?: number;
 }
 
 /**
@@ -205,6 +209,9 @@ function createPipeline(state: SessionState, env: PipelineEnv) {
   };
   const truncatedBlocks: number[] = [];
   const invalidKeys: number[] = [];
+  const modelMissingKeys: number[] = [];
+  // The last key a section failed on for lacking the model (1-based), for the retry's message.
+  let modelMissingKey: number | undefined;
   const withKeys = <T>(run: () => Promise<T>) => withKeyRotation(ring, run, (from, to, why) => {
     client = new GeminiClient(ring.keys[to], env.geminiBase, env.usage);
     state.keyRotations += 1;
@@ -212,6 +219,12 @@ function createPipeline(state: SessionState, env: PipelineEnv) {
     if (why === 'quota') {
       reporter.console(`⚠ Quota giornaliera della chiave ${from + 1} esaurita: continuo con la chiave ${to + 1}/${ring.keys.length}.`);
       reporter.warning?.(RUN_WARNING.fallbackKey, `Quota giornaliera della chiave ${from + 1} esaurita: continuo con ${keyLabel}`);
+    } else if (why === 'modello mancante') {
+      reporter.console(`⚠ La chiave di riserva ${from + 1} non può usare ${model.label}: continuo con la chiave ${to + 1}/${ring.keys.length}.`);
+      modelMissingKeys.push(from + 1);
+      reporter.warning?.(RUN_WARNING.modelMissingFallbackKey, modelMissingKeys.length === 1
+        ? `La chiave di riserva ${modelMissingKeys[0]} non può usare ${model.label}: l’ho saltata`
+        : `Le chiavi di riserva ${numberList(modelMissingKeys)} non possono usare ${model.label}: le ho saltate`);
     } else {
       reporter.console(`⚠ Chiave di riserva ${from + 1} non valida: continuo con la chiave ${to + 1}/${ring.keys.length}.`);
       invalidKeys.push(from + 1);
@@ -272,7 +285,7 @@ function createPipeline(state: SessionState, env: PipelineEnv) {
     state.failedBlocks = [...failed].sort((a, b) => a - b);
     if (retried.length) await exportBody();
     else await save();
-    return { retried, remaining: state.failedBlocks, cancelled, quotaExhausted };
+    return { retried, remaining: state.failedBlocks, cancelled, quotaExhausted, modelMissingKey };
   }
 
   // ------------------------------------------------------------------ phase 1
@@ -514,6 +527,7 @@ function createPipeline(state: SessionState, env: PipelineEnv) {
       return true;
     } catch (error) {
       if (error instanceof QuotaDailyLimitError || error instanceof CancelledError) throw error;
+      if (isModelAccessError(error)) modelMissingKey = (error.keyIndex ?? 0) + 1;
       reporter.console(`⚠ Revisione della ${label} non riuscita: ${error instanceof Error ? error.message.slice(0, 200) : String(error)}`);
       return false;
     }

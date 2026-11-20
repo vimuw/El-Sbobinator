@@ -28,6 +28,9 @@ export class ModelNotFoundError extends Error {
   /** Position in the run's key ring of the key that got the 404 (0 = main key), set by withKeyRotation. */
   keyIndex?: number;
 }
+/** A 404 about the model itself (not a missing uploaded file): this key's project lacks it. */
+export const isModelAccessError = (error: unknown): error is ModelNotFoundError =>
+  error instanceof ModelNotFoundError && error.message.includes('model');
 export class CircuitBreakerExhaustedError extends Error {
   name = 'CircuitBreakerExhaustedError';
 }
@@ -195,13 +198,14 @@ export interface KeyRing {
   index: number;
 }
 
-export type RotationReason = 'quota' | 'chiave non valida';
+export type RotationReason = 'quota' | 'chiave non valida' | 'modello mancante';
 
 /**
  * Port of the rotation in retry_with_quota / try_rotate_key: when a key's daily quota is gone,
  * move to the next key and run the same unit again (same chunk, same section). A fallback key that
- * turns out invalid is skipped the same way. When every key is used up, `requestNewKey` (the
- * "Inserisci una nuova chiave" dialog) may add one; otherwise the error surfaces.
+ * turns out invalid, or whose project lacks the model, is skipped the same way. When every key is
+ * used up, `requestNewKey` (the "Inserisci una nuova chiave" dialog) may add one; otherwise the
+ * error surfaces.
  */
 export async function withKeyRotation<T>(
   ring: KeyRing,
@@ -215,10 +219,12 @@ export async function withKeyRotation<T>(
     } catch (error) {
       const quota = error instanceof QuotaDailyLimitError;
       // An invalid main key is the user's mistake to fix; an invalid fallback key is skipped.
-      const badFallback = error instanceof InvalidKeyError && ring.index > 0;
-      // Only the main key's missing models are remembered (webRun): a reserve key's project may differ.
+      const invalidFallback = error instanceof InvalidKeyError && ring.index > 0;
+      // A main key without the model is webRun's to handle (it switches model and remembers it);
+      // a fallback key without it is skipped while another key remains.
+      const modelMissingFallback = isModelAccessError(error) && ring.index > 0;
       if (error instanceof ModelNotFoundError) error.keyIndex ??= ring.index;
-      if (!quota && !badFallback) throw error;
+      if (!quota && !invalidFallback && !modelMissingFallback) throw error;
       if (ring.index + 1 >= ring.keys.length) {
         const added = quota && requestNewKey ? (await requestNewKey())?.trim() : null;
         if (!added) throw error;
@@ -226,7 +232,7 @@ export async function withKeyRotation<T>(
       }
       const from = ring.index;
       ring.index += 1;
-      onRotate(from, ring.index, quota ? 'quota' : 'chiave non valida');
+      onRotate(from, ring.index, quota ? 'quota' : invalidFallback ? 'chiave non valida' : 'modello mancante');
     }
   }
 }
