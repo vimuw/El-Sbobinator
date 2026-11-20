@@ -1,11 +1,12 @@
 import fs from 'node:fs';
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { expectPlaybackAudioReady, writeSilentWav } from './audioFixture';
 import { expectAutosaved } from './autosave';
 import type { Editor } from '@tiptap/core';
 
 async function openEditor(page: Page, info: TestInfo) {
   const audio = info.outputPath('three-bugs.wav');
-  fs.writeFileSync(audio, Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'));
+  writeSilentWav(audio);
   await expect.poll(async () => (await page.request.get('/api/bootstrap')).status()).toBe(200);
   await page.goto('/');
   const chooser = page.waitForEvent('filechooser');
@@ -15,6 +16,7 @@ async function openEditor(page: Page, info: TestInfo) {
   await expect(page.locator('.queue-card.is-completed').first()).toBeVisible({ timeout: 15000 });
   await page.locator('.queue-card.is-completed').first().getByRole('heading').click();
   await expect(page.locator('.tiptap-editor')).toBeVisible();
+  await expectPlaybackAudioReady(page);
 }
 
 test.beforeEach(async ({ page }, info) => openEditor(page, info));
@@ -89,6 +91,7 @@ test('toolbar, context menu and Ctrl+M insert user formulas directly in the page
   await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await page.locator('.queue-card.is-completed').first().getByRole('heading').click();
+  await expectPlaybackAudioReady(page);
   expect(await read()).toEqual(final);
 });
 
@@ -132,6 +135,7 @@ test('compact inline and block formula editing preserves cancel, typing, history
   await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await page.locator('.queue-card.is-completed').first().getByRole('heading').click();
+  await expectPlaybackAudioReady(page);
   expect(await read()).toEqual(final);
   expect(await editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getHTML())).not.toContain('math-editor');
 });
@@ -217,6 +221,7 @@ test('wrap typing after the figure reuses gaps while edits beside it measure a b
   await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await page.locator('.queue-card.is-completed').first().getByRole('heading').click();
+  await expectPlaybackAudioReady(page);
   expect(await editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON())).toEqual(final);
   expect(await editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getHTML())).not.toContain('image-wrap-gap');
   fs.writeFileSync(info.outputPath('wrap-typing.json'), JSON.stringify(measured));

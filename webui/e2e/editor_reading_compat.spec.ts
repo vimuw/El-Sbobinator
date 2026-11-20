@@ -1,5 +1,5 @@
-import fs from 'node:fs';
 import { test, expect, type Page } from '@playwright/test';
+import { expectPlaybackAudioReady, writeSilentWav } from './audioFixture';
 import { expectAutosaved } from './autosave';
 import type { Editor } from '@tiptap/core';
 
@@ -33,7 +33,7 @@ async function ink(page: Page, label: string) {
 test.beforeEach(async ({ context, page }, info) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const audio = info.outputPath('reading.wav');
-  fs.writeFileSync(audio, Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'));
+  writeSilentWav(audio);
   await page.goto('/');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
@@ -42,6 +42,7 @@ test.beforeEach(async ({ context, page }, info) => {
   await expect(page.locator('.queue-card.is-completed').first()).toBeVisible({ timeout: 15000 });
   await page.locator('.queue-card.is-completed').first().getByRole('heading').click();
   await expect(page.locator('.tiptap-editor')).toBeVisible();
+  await expectPlaybackAudioReady(page);
 });
 
 test('reading colors and highlight contrast change only the view, across themes and saved sessions', async ({ page }, info) => {
@@ -76,6 +77,7 @@ test('reading colors and highlight contrast change only the view, across themes 
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await page.locator('.queue-card.is-completed').first().getByRole('heading').click();
   await expect(page.locator('.tiptap-editor')).toBeVisible();
+  await expectPlaybackAudioReady(page);
   await expect.poll(snapshot).toEqual(original);
 });
 

@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { expectPlaybackAudioReady, writeSilentWav } from './audioFixture';
 import { expectAutosaved } from './autosave';
 import type { Editor } from '@tiptap/core';
 
@@ -7,7 +8,7 @@ test('two empty paragraphs between a list and table survive fallback copy, editi
   test.setTimeout(180000);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const audio = testInfo.outputPath('html-empty-paragraphs.wav');
-  fs.writeFileSync(audio, Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'));
+  writeSilentWav(audio);
   await expect.poll(async () => (await page.request.get('/api/bootstrap')).status()).toBe(200);
   await page.goto('/');
   const chooser = page.waitForEvent('filechooser');
@@ -17,6 +18,7 @@ test('two empty paragraphs between a list and table survive fallback copy, editi
   const completed = page.locator('.queue-card.is-completed', { hasText: 'html-empty-paragraphs.wav' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
+  await expectPlaybackAudioReady(page);
   const editor = page.locator('.tiptap-editor');
   const imageSource = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
   const fixture = fs.readFileSync(new URL('./fixtures/editor-parity-mixed.html', import.meta.url), 'utf8');
@@ -91,6 +93,7 @@ test('two empty paragraphs between a list and table survive fallback copy, editi
   await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await completed.getByRole('heading').click();
+  await expectPlaybackAudioReady(page);
   const reopened = await read();
   expect(reopened.text).toBe(pasted.text);
   expect(reopened.blocks).toEqual(pasted.blocks);

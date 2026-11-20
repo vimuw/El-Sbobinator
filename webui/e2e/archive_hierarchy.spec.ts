@@ -1,4 +1,6 @@
+import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { writeSilentWav } from './audioFixture';
 
 test('selected lesson titles remain accessible above a scrolling destination list', async ({ page }, testInfo) => {
   const names = ['Patologia generale - Lezione 11 - Infiammazione e risposta immunitaria', 'Fisiopatologia - Lezione 12 - Meccanismi di danno cellulare'];
@@ -71,7 +73,7 @@ test('organizes archive lessons in nested collections and persists moves across 
   const fixture = {
     name: 'Microbiologia - Lezione 11 - Meccanismi di resistenza agli antibiotici e risposta immunitaria.wav',
     mimeType: 'audio/wav',
-    buffer: Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'),
+    buffer: fs.readFileSync(writeSilentWav(testInfo.outputPath('hierarchy.wav'))),
   };
   await page.goto('/');
   const chooserPromise = page.waitForEvent('filechooser');

@@ -1,5 +1,5 @@
-import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { expectPlaybackAudioReady, writeSilentWav } from './audioFixture';
 import type { Editor } from '@tiptap/core';
 
 // As in Google Docs, opening the index never narrows the page: it moves the page right, and the
@@ -8,7 +8,7 @@ import type { Editor } from '@tiptap/core';
 test('the open index moves the page instead of narrowing it', async ({ page }, info) => {
   await page.setViewportSize({ width: 1000, height: 900 });
   const audio = info.outputPath('toc-page-shift.wav');
-  fs.writeFileSync(audio, Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'));
+  writeSilentWav(audio);
   await page.goto('/');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
@@ -17,6 +17,7 @@ test('the open index moves the page instead of narrowing it', async ({ page }, i
   const completed = page.locator('.queue-card.is-completed', { hasText: 'toc-page-shift.wav' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
+  await expectPlaybackAudioReady(page);
   await page.locator('.tiptap-editor').evaluate(root => {
     const content = '<h1>Fisiopatologia generale</h1>' + Array.from({ length: 20 }, (_, i) =>
       `<h2>Sezione ${i + 1}</h2><p>${'Il nefrone filtra il sangue e riassorbe i soluti lungo il tubulo. '.repeat(6)}</p>`).join('');

@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { expectPlaybackAudioReady, writeSilentWav } from './audioFixture';
 import { expectAutosaved } from './autosave';
 import type { Editor } from '@tiptap/core';
 
@@ -10,7 +11,7 @@ test('right caption image keeps geometry, pixels, history and saved content as a
   test.setTimeout(180000);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const audio = testInfo.outputPath('html-images.wav');
-  fs.writeFileSync(audio, Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'));
+  writeSilentWav(audio);
   await expect.poll(async () => (await page.request.get('/api/bootstrap')).status()).toBe(200);
   await page.goto('/');
   const chooser = page.waitForEvent('filechooser');
@@ -20,6 +21,7 @@ test('right caption image keeps geometry, pixels, history and saved content as a
   const completed = page.locator('.queue-card.is-completed', { hasText: 'html-images.wav' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
+  await expectPlaybackAudioReady(page);
   const editor = page.locator('.tiptap-editor');
   const imageSource = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
   const fixture = fs.readFileSync(new URL('./fixtures/editor-parity-mixed.html', import.meta.url), 'utf8');
@@ -103,6 +105,7 @@ test('right caption image keeps geometry, pixels, history and saved content as a
     await expectAutosaved(page);
     await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
     await completed.getByRole('heading').click();
+    await expectPlaybackAudioReady(page);
     await expect.poll(() => editor.evaluate(root => Boolean((root as HTMLElement & { editor?: Editor }).editor))).toBe(true);
     await expect.poll(() => editor.getByAltText('Campione sintetico').evaluate(img => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
     const reopened = await read();

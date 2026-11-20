@@ -1,10 +1,10 @@
-import fs from 'node:fs';
 import path from 'node:path';
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { writeSilentWav } from './audioFixture';
 
 function audioFixture(info: TestInfo, name: string): string {
   const fixture = info.outputPath(name);
-  fs.writeFileSync(fixture, Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'));
+  writeSilentWav(fixture);
   return fixture;
 }
 

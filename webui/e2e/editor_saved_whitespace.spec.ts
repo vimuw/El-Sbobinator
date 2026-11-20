@@ -1,11 +1,12 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { writeSilentWav } from './audioFixture';
 import { expectAutosaved } from './autosave';
 import type { Editor } from '@tiptap/core';
 
 test('authored paragraph and heading whitespace survives the actual preview reload', async ({ page }, testInfo) => {
   const audio = testInfo.outputPath('saved-whitespace.wav');
-  fs.writeFileSync(audio, Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'));
+  writeSilentWav(audio);
   await page.goto('/');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();

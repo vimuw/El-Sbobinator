@@ -1,16 +1,12 @@
 import fs from 'node:fs';
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { writeSilentWav } from './audioFixture';
 
 type BrowserScenario = 'success' | 'failure' | 'quota' | 'paused' | 'regenerate';
 
 function createAudioFixture(testInfo: TestInfo, name = 'lezione_test.wav'): string {
   const fixturePath = testInfo.outputPath(name);
-  const wavHeader = Buffer.from(
-    '524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000',
-    'hex',
-  );
-  fs.writeFileSync(fixturePath, wavHeader);
-  return fixturePath;
+  return writeSilentWav(fixturePath);
 }
 
 async function selectScenario(page: Page, scenario: BrowserScenario): Promise<void> {

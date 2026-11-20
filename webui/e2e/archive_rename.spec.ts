@@ -1,4 +1,6 @@
+import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { writeSilentWav } from './audioFixture';
 
 test('renames archived lessons in root and collections while preserving files and completion dates', async ({ page }, testInfo) => {
   await page.goto('/');
@@ -6,7 +8,7 @@ test('renames archived lessons in root and collections while preserving files an
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles({
     name: 'Lezione originale.wav', mimeType: 'audio/wav',
-    buffer: Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'),
+    buffer: fs.readFileSync(writeSilentWav(testInfo.outputPath('rename.wav'))),
   });
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
   await expect(page.getByRole('heading', { name: 'Recenti' })).toBeVisible({ timeout: 15_000 });

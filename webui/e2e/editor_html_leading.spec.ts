@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { expectPlaybackAudioReady, writeSilentWav } from './audioFixture';
 import { expectAutosaved } from './autosave';
 import type { Editor } from '@tiptap/core';
 
@@ -7,7 +8,7 @@ test('HTML fallback restores CSS leading, fonts, selections, history and saved c
   test.setTimeout(180000);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const audio = testInfo.outputPath('html-leading.wav');
-  fs.writeFileSync(audio, Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'));
+  writeSilentWav(audio);
   await expect.poll(async () => (await page.request.get('/api/bootstrap')).status()).toBe(200);
   await page.goto('/');
   const chooser = page.waitForEvent('filechooser');
@@ -17,6 +18,7 @@ test('HTML fallback restores CSS leading, fonts, selections, history and saved c
   const completed = page.locator('.queue-card.is-completed', { hasText: 'html-leading.wav' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
+  await expectPlaybackAudioReady(page);
   const editor = page.locator('.tiptap-editor');
   const source = '<h2>Titolo</h2><p>Normale<br>Seconda riga</p>' +
     '<p style="font-family:Arial;font-size:11pt;line-height:1.6">Arial<br>Seconda riga</p>' +
@@ -96,6 +98,7 @@ test('HTML fallback restores CSS leading, fonts, selections, history and saved c
   await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await completed.getByRole('heading').click();
+  await expectPlaybackAudioReady(page);
   await expect(editor).toBeVisible();
   const reopened = await read();
   expect(await emptySeparator()).toEqual({ tag: 'P', empty: true, next: 'TABLE' });

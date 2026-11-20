@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { test, expect, type Page, type TestInfo } from '@playwright/test';
+import { expectPlaybackAudioReady, writeSilentWav } from './audioFixture';
 import { expectAutosaved } from './autosave';
 
 // CI installs the locked dependencies only in .venv, not in the runner's python.
@@ -9,7 +10,7 @@ const projectPython = fileURLToPath(new URL(process.platform === 'win32' ? '../.
 
 async function openEditor(page: Page, info: TestInfo) {
   const audio = info.outputPath('reported_bugs.wav');
-  fs.writeFileSync(audio, Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'));
+  writeSilentWav(audio);
   await expect.poll(async () => (await page.request.get('/api/bootstrap')).status()).toBe(200);
   await page.goto('/');
   const chooser = page.waitForEvent('filechooser');
@@ -19,6 +20,7 @@ async function openEditor(page: Page, info: TestInfo) {
   await expect(page.locator('.queue-card.is-completed').first()).toBeVisible({ timeout: 15000 });
   await page.locator('.queue-card.is-completed').first().getByRole('heading').click();
   await expect(page.locator('.tiptap-editor')).toBeVisible();
+  await expectPlaybackAudioReady(page);
 }
 
 async function paste(page: Page, html: string) {
@@ -46,6 +48,7 @@ test('internal fallback copy keeps default headings readable in dark mode and pr
   await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await page.locator('.queue-card.is-completed').first().getByRole('heading').click();
+  await expectPlaybackAudioReady(page);
   await expect.poll(colors).toEqual(original);
   await page.screenshot({ path: info.outputPath('heading-colors-reopened.png') });
 });
@@ -96,6 +99,7 @@ test('internal image copies retain pixels, alpha, size changes and saved sources
   await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await page.locator('.queue-card.is-completed').first().getByRole('heading').click();
+  await expectPlaybackAudioReady(page);
   await expect.poll(read).toEqual(Array(3).fill({ src, width: 1600, height: 1000 }));
 });
 
@@ -144,6 +148,7 @@ test('Enter adds no automatic gap and a second Enter leaves exactly one blank li
   await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await page.locator('.queue-card.is-completed').first().getByRole('heading').click();
+  await expectPlaybackAudioReady(page);
   await expect.poll(lines).toEqual(geometry);
   await page.screenshot({ path: info.outputPath('enter-spacing.png') });
 });
@@ -194,6 +199,7 @@ test('generated block gaps survive save and copy without spreading to new paragr
   await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await page.locator('.queue-card.is-completed').first().getByRole('heading').click();
+  await expectPlaybackAudioReady(page);
   await expect.poll(read).toEqual(final);
   await page.screenshot({ path: info.outputPath('generated-spacing.png') });
 });
