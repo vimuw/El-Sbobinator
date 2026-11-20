@@ -460,6 +460,14 @@ describe('web host with the real pipeline', () => {
       });
     });
 
+    it('tells that nothing was recovered when the failure is neither quota nor a missing model', async () => {
+      const { api, done } = await finishedWithWarnings();
+      mockGemini([bad, bad]);
+      expect(await api.retry_failed_revision_blocks!(done.session_dir)).toMatchObject({
+        ok: false, quota_exhausted: false, remaining_failed_blocks: [1], error: 'Nessun blocco recuperato. Riprova più tardi.',
+      });
+    });
+
     it('answers for an unknown session', async () => {
       mockGemini([]);
       const { api } = host();

@@ -202,6 +202,11 @@ describe('useRevisionRetry', () => {
     const crash = new Error('bridge crashed');
     await expect(settleRevisionRetry(Promise.reject(crash))).resolves.toBeUndefined();
     expect(report).toHaveBeenCalledWith('Revision retry error:', crash);
+
+    // A refused retry without an error text (quota) still rejects with a message for "Riprova".
+    vi.mocked(window.pywebview!.api!.retry_failed_revision_blocks!).mockResolvedValueOnce({ ok: false, quota_exhausted: true } as never);
+    await expect(result.current.handleRetryFailedRevisionBlocks('/sessions/session_1', 'f1')).rejects.toThrow('Retry non riuscito.');
+    expect(addNotification).toHaveBeenLastCalledWith('Quota esaurita', 'Quota giornaliera esaurita: riprova domani.', 'warning', 'processing');
   });
 
   it('does not send notification when retry is cancelled with remaining blocks', async () => {

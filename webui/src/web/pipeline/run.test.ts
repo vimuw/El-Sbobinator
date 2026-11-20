@@ -356,6 +356,13 @@ describe('retryFailedSections', () => {
     expect(warnings).toContainEqual(['fallback_key_model_missing', 'La chiave di riserva 2 non può usare Gemini 2.5 Flash: l’ho saltata']);
   });
 
+  it('names every skipped reserve key in one warning', async () => {
+    mockGemini([quota, notFound, notFound, okText('## B\n\nSeconda rivista.'), okText('## C\n\nTerza rivista.')]);
+    const { env, warnings } = makeEnv(fakeAudio(1), { keys: ['KEY-1', 'KEY-2', 'KEY-3', 'KEY-4'] });
+    expect(await retryFailedSections(finished(), env)).toEqual({ retried: [1, 2], remaining: [], cancelled: false, quotaExhausted: false });
+    expect(warnings).toContainEqual(['fallback_key_model_missing', 'Le chiavi di riserva 2, 3 non possono usare Gemini 2.5 Flash: le ho saltate']);
+  });
+
   // Sentry ELSBOBINATOR-WEB-4: main key out of quota, the only reserve key without 2.5 Flash.
   it('names the reserve key that lacks the model when no key can revise', async () => {
     mockGemini([quota, notFound, notFound]);

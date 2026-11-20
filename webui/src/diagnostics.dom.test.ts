@@ -76,6 +76,12 @@ describe('support error collection', () => {
     const real = new Error('Cannot read properties of undefined');
     listeners[0](new ErrorEvent('error', { message: real.message, error: real }));
     expect(monitor).toHaveBeenCalledWith('window', real);
+
+    // A real error without an Error object (cross-origin scripts) still reaches the reports by its message.
+    listeners[0](new ErrorEvent('error', { message: 'Script error.' }));
+    expect(monitor).toHaveBeenLastCalledWith('window', 'Script error.');
+    listeners[0]({ error: null, message: undefined } as unknown as ErrorEvent);
+    expect(monitor).toHaveBeenCalledTimes(3);
   });
 
   it('bounds the queue and payloads while the bridge is unavailable', async () => {
