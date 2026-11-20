@@ -57,6 +57,27 @@ describe('support error collection', () => {
     expect(send.mock.calls.slice(4).map(call => call[1])).toEqual(['first: failure', 'second: failure', 'third: failure']);
   });
 
+  // Sentry ELSBOBINATOR-WEB-5: Chrome's resize observer notice reached the reports as an error.
+  it('leaves out the browser notice about resize observers, not real page errors', async () => {
+    vi.resetModules();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const listeners: Array<(event: ErrorEvent) => void> = [];
+    vi.spyOn(window, 'addEventListener').mockImplementation((name, listener) => {
+      if (name === 'error') listeners.push(listener as (event: ErrorEvent) => void);
+    });
+    const diagnostics = await import('./diagnostics');
+    const monitor = vi.fn();
+    diagnostics.setErrorMonitor(monitor);
+    diagnostics.installFrontendDiagnostics();
+
+    listeners[0](new ErrorEvent('error', { message: 'ResizeObserver loop completed with undelivered notifications.' }));
+    expect(monitor).not.toHaveBeenCalled();
+
+    const real = new Error('Cannot read properties of undefined');
+    listeners[0](new ErrorEvent('error', { message: real.message, error: real }));
+    expect(monitor).toHaveBeenCalledWith('window', real);
+  });
+
   it('bounds the queue and payloads while the bridge is unavailable', async () => {
     vi.resetModules();
     vi.spyOn(console, 'error').mockImplementation(() => {});
