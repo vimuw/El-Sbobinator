@@ -21,7 +21,13 @@ function requestedWorkers(): string | undefined {
   }
   return process.env.E2E_WORKERS;
 }
-const defaultWorkers = process.env.CI ? 1 : Math.max(1, Math.min(4, Math.floor(os.cpus().length / 3)));
+// Each worker is a Python backend plus a Chromium, about 600 MB and two busy
+// cores. On a 12-thread, 16 GB PC four workers kept the CPU at 100% and left
+// 0.3 GB of free memory, so the desktop lagged, for a suite only 24% faster
+// than with two (258 s against 339 s, system CPU 91% against 31% on average).
+// Locally use at most two, fewer on small machines or when memory is short.
+const localWorkers = Math.min(2, Math.floor(os.cpus().length / 4), Math.floor(os.freemem() / (1.5 * 2 ** 30)));
+const defaultWorkers = process.env.CI ? 1 : Math.max(1, localWorkers);
 const workersArg = requestedWorkers();
 const workers = workersArg === undefined ? defaultWorkers : Number(workersArg);
 if (!Number.isInteger(workers) || workers < 1 || workers > 9) {
