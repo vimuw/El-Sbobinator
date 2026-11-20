@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { expectPlaybackAudioReady, writeSilentWav } from './audioFixture';
 import { expectAutosaved } from './autosave';
 import type { Editor } from '@tiptap/core';
 
@@ -7,7 +8,7 @@ for (const { count, width } of [{ count: 2, width: 56 }, { count: 4, width: 56 }
   test.setTimeout(120000);
   await page.setViewportSize({ width: 1400, height: 1000 });
   const audio = info.outputPath('multiple-wrap.wav');
-  fs.writeFileSync(audio, Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'));
+  writeSilentWav(audio);
   await expect.poll(async () => (await page.request.get('/api/bootstrap')).status()).toBe(200);
   await page.goto('/');
   const chooser = page.waitForEvent('filechooser');
@@ -17,6 +18,7 @@ for (const { count, width } of [{ count: 2, width: 56 }, { count: 4, width: 56 }
   const completed = page.locator('.queue-card.is-completed', { hasText: 'multiple-wrap.wav' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
+  await expectPlaybackAudioReady(page);
   const editor = page.locator('.tiptap-editor');
   const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
   await page.evaluate(() => {
@@ -120,6 +122,7 @@ for (const { count, width } of [{ count: 2, width: 56 }, { count: 4, width: 56 }
   await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await completed.getByRole('heading').click();
+  await expectPlaybackAudioReady(page);
   expect(await read()).toEqual(final);
   await expect.poll(async () => Math.abs((await second.boundingBox())!.y - (await editor.boundingBox())!.y - geometry)).toBeLessThan(2);
   fs.writeFileSync(info.outputPath('multiple-wrap.json'), JSON.stringify({ placements: reports, typing: near }, null, 2));

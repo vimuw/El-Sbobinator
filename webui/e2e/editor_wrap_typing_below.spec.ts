@@ -1,12 +1,13 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { expectPlaybackAudioReady, writeSilentWav } from './audioFixture';
 import { expectAutosaved } from './autosave';
 import type { Editor } from '@tiptap/core';
 
 for (const zoom of [1, 1.1, 0.9]) test(`typing below two late wrap figures preserves layout without copying the preceding transcript at zoom ${zoom}`, async ({ page }, info) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   const audio = info.outputPath('late-wrap.wav');
-  fs.writeFileSync(audio, Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'));
+  writeSilentWav(audio);
   await expect.poll(async () => (await page.request.get('/api/bootstrap')).status()).toBe(200);
   await page.goto('/');
   const chooser = page.waitForEvent('filechooser');
@@ -16,6 +17,7 @@ for (const zoom of [1, 1.1, 0.9]) test(`typing below two late wrap figures prese
   const completed = page.locator('.queue-card.is-completed', { hasText: 'late-wrap.wav' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
+  await expectPlaybackAudioReady(page);
   const editor = page.locator('.tiptap-editor');
   await expect(editor).toBeVisible();
   await editor.focus();
@@ -86,6 +88,7 @@ for (const zoom of [1, 1.1, 0.9]) test(`typing below two late wrap figures prese
   await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await completed.getByRole('heading').click();
+  await expectPlaybackAudioReady(page);
   expect(await read()).toEqual(final);
   expect(await images()).toEqual(originalImages);
 });

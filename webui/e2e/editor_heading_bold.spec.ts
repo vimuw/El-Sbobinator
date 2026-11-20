@@ -1,5 +1,5 @@
-import fs from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
+import { writeSilentWav } from './audioFixture';
 import { expectAutosaved } from './autosave';
 import type { Editor } from '@tiptap/core';
 
@@ -25,7 +25,7 @@ async function readClipboardFormats(page: Page): Promise<Record<string, string>>
 test('Ctrl+B follows the visible heading weight through save, reopen and copy', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const audio = testInfo.outputPath('heading-bold.wav');
-  fs.writeFileSync(audio, Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'));
+  writeSilentWav(audio);
   await page.goto('/');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();

@@ -1,13 +1,15 @@
+import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { writeSilentWav } from './audioFixture';
 
-test('opening a full-text archive result highlights the query in the editor', async ({ page }) => {
+test('opening a full-text archive result highlights the query in the editor', async ({ page }, testInfo) => {
   await page.goto('/');
   const chooserPromise = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooserPromise).setFiles({
     name: 'Fisiologia.wav',
     mimeType: 'audio/wav',
-    buffer: Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'),
+    buffer: fs.readFileSync(writeSilentWav(testInfo.outputPath('fulltext-find.wav'))),
   });
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
   await expect(page.getByRole('heading', { name: 'Recenti' })).toBeVisible({ timeout: 15_000 });

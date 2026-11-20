@@ -1,11 +1,12 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { expectPlaybackAudioReady, writeSilentWav } from './audioFixture';
 import type { Editor } from '@tiptap/core';
 
 test('index fades out before its reopen button appears and supports interrupted closure', async ({ page }, info) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
   const audio = info.outputPath('toc-transition.wav');
-  fs.writeFileSync(audio, Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'));
+  writeSilentWav(audio);
   await page.goto('/');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
@@ -14,6 +15,7 @@ test('index fades out before its reopen button appears and supports interrupted 
   const completed = page.locator('.queue-card.is-completed', { hasText: 'toc-transition.wav' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
+  await expectPlaybackAudioReady(page);
   const editor = page.locator('.tiptap-editor');
   await editor.evaluate(root => {
     const content = '<h1>Fisiopatologia generale</h1>' + Array.from({ length: 35 }, (_, i) =>

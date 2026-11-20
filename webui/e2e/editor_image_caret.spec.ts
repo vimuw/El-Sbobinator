@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { expectPlaybackAudioReady, writeSilentWav } from './audioFixture';
 import { expectAutosaved } from './autosave';
 import type { Editor } from '@tiptap/core';
 
@@ -7,7 +8,7 @@ test('native caret beside images keeps text height, blinks, and preserves editin
   test.setTimeout(120000);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const audio = testInfo.outputPath('image-caret.wav');
-  fs.writeFileSync(audio, Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'));
+  writeSilentWav(audio);
   await expect.poll(async () => (await page.request.get('/api/bootstrap')).status()).toBe(200);
   await page.goto('/');
   const chooser = page.waitForEvent('filechooser');
@@ -18,6 +19,8 @@ test('native caret beside images keeps text height, blinks, and preserves editin
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
   const editor = page.locator('.tiptap-editor');
+  await expect(editor).toBeVisible();
+  await expectPlaybackAudioReady(page);
   const source = fs.readFileSync('e2e/fixtures/image-layout.jpg').toString('base64');
   const cdp = await context.newCDPSession(page);
   const read = () => editor.evaluate(root => {

@@ -31,6 +31,51 @@ describe('useEditorImageDrop Hook', () => {
     await waitFor(() => expect(ghost.isConnected).toBe(false));
     editor.destroy();
   });
+  it('lets ProseMirror start a text drag whose native target is a text node', () => {
+    // Chrome targets a text-selection dragstart at the Text node itself, which
+    // has no closest(): throwing there skipped ProseMirror's own drag setup, so
+    // the drop pasted a copy and left the original text in place.
+    const handlers: { dragstart?: (view: EditorView, event: DragEvent) => boolean } = {};
+    const editor = new Editor({
+      extensions: [StarterKit, FloatingImage],
+      content: '<p>Prima frase da spostare</p><p>Seconda</p>',
+      editorProps: { handleDOMEvents: { dragstart: (view, event) => handlers.dragstart?.(view, event) ?? false } },
+    });
+    const original = editor.getJSON();
+    const { result } = renderHook(() => useEditorImageDrop({ editorRef: { current: editor } }));
+    handlers.dragstart = result.current.handleDragStart;
+    editor.commands.setTextSelection({ from: 1, to: 6 });
+    vi.spyOn(editor.view, 'posAtCoords').mockReturnValue({ pos: 3, inside: 0 });
+    const text = editor.view.dom.querySelector('p')!.firstChild!;
+    expect(text.nodeType).toBe(Node.TEXT_NODE);
+    const data = new Map<string, string>();
+    const event = new Event('dragstart', { bubbles: true, cancelable: true });
+    Object.assign(event, { clientX: 0, clientY: 0, dataTransfer: {
+      files: [], effectAllowed: 'none', clearData: () => data.clear(), setData: (type: string, value: string) => data.set(type, value),
+    } });
+    const errors: unknown[] = [];
+    const onError = (e: ErrorEvent) => { errors.push(e.error); e.preventDefault(); };
+    window.addEventListener('error', onError);
+    try {
+      text.dispatchEvent(event);
+    } finally {
+      window.removeEventListener('error', onError);
+    }
+    expect(errors).toEqual([]);
+    expect(editor.view.dragging?.slice.content.textBetween(0, editor.view.dragging.slice.content.size)).toBe('Prima');
+    expect(data.get('text/plain')).toBe('Prima');
+    expect(editor.getJSON()).toEqual(original);
+    editor.view.dragging = null;
+    editor.destroy();
+  });
+  it('leaves a drag start without a DOM node target to ProseMirror', () => {
+    const editor = new Editor({ extensions: [StarterKit, FloatingImage], content: '<p>Testo</p>' });
+    const { result } = renderHook(() => useEditorImageDrop({ editorRef: { current: editor } }));
+    const event = { target: null, preventDefault: vi.fn() } as unknown as DragEvent;
+    expect(result.current.handleDragStart(editor.view, event)).toBe(false);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    editor.destroy();
+  });
   it('blocks native wrapping-image drag and leaves unrelated native drops to the editor', () => {
     const editor = new Editor({ extensions: [StarterKit, FloatingImage], content: '<p><span data-editor-image data-layout="wrap"><img src="drag.png"></span>Testo che segue</p>' });
     const original = editor.getJSON();

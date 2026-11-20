@@ -2,12 +2,13 @@ import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { expectAutosaved } from './autosave';
 import type { Page } from '@playwright/test';
+import { expectPlaybackAudioReady, writeSilentWav } from './audioFixture';
 import type { Editor } from '@tiptap/core';
 
 test('native clipboard exports the displayed positions of consecutive wrap images', async ({ page, context }, info) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const audio = info.outputPath('wrap-clipboard.wav');
-  fs.writeFileSync(audio, Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'));
+  writeSilentWav(audio);
   await expect.poll(async () => (await page.request.get('/api/bootstrap')).status()).toBe(200);
   await page.goto('/');
   const chooser = page.waitForEvent('filechooser');
@@ -17,6 +18,7 @@ test('native clipboard exports the displayed positions of consecutive wrap image
   const completed = page.locator('.queue-card.is-completed', { hasText: 'wrap-clipboard.wav' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
+  await expectPlaybackAudioReady(page);
   const editor = page.locator('.tiptap-editor');
   const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
   await editor.evaluate((root, src) => {
@@ -97,6 +99,7 @@ test('native clipboard exports the displayed positions of consecutive wrap image
   await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await completed.getByRole('heading').click();
+  await expectPlaybackAudioReady(page);
   await expect.poll(() => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON())).toEqual(saved);
   await expect.poll(async () => Math.abs((await geometry())[1].top - expectedSecond.top)).toBeLessThan(1);
 });

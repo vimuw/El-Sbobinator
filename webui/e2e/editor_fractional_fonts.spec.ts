@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { writeSilentWav } from './audioFixture';
 import { expectAutosaved } from './autosave';
 import type { Editor } from '@tiptap/core';
 
@@ -10,7 +11,7 @@ test('fractional fonts survive clipboard routing, history and saved content', as
   test.setTimeout(180000);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const audio = testInfo.outputPath('fractional-fonts.wav');
-  fs.writeFileSync(audio, Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'));
+  writeSilentWav(audio);
   await expect.poll(async () => (await page.request.get('/api/bootstrap')).status()).toBe(200);
   await page.goto('/');
   const chooser = page.waitForEvent('filechooser');

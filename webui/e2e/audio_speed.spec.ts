@@ -1,9 +1,9 @@
-import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { expectPlaybackAudioReady, writeSilentWav } from './audioFixture';
 
 test('changing playback speed keeps the scrubber and controls in place', async ({ page }, info) => {
   const fixture = info.outputPath('speed.wav');
-  fs.writeFileSync(fixture, Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'));
+  writeSilentWav(fixture);
   await page.goto('/');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
@@ -12,6 +12,7 @@ test('changing playback speed keeps the scrubber and controls in place', async (
   const completed = page.locator('.queue-card.is-completed', { hasText: 'speed.wav' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
+  await expectPlaybackAudioReady(page);
 
   const footer = page.locator('.editor-fullpage-footer');
   const panel = page.getByRole('dialog', { name: 'Velocità di riproduzione' });

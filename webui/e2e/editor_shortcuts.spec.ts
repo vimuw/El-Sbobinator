@@ -1,11 +1,11 @@
-import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { expectPlaybackAudioReady, writeSilentWav } from './audioFixture';
 import type { Editor } from '@tiptap/core';
 
 test('shared shortcuts live in the header and dismiss without closing or editing the document', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1680, height: 1000 });
   const audio = testInfo.outputPath('scorciatoie.wav');
-  fs.writeFileSync(audio, Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'));
+  writeSilentWav(audio);
   await page.goto('/');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
@@ -14,6 +14,7 @@ test('shared shortcuts live in the header and dismiss without closing or editing
   const completed = page.locator('.queue-card.is-completed', { hasText: 'scorciatoie.wav' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
+  await expectPlaybackAudioReady(page);
   const editor = page.locator('.tiptap-editor');
   await expect(editor).toBeVisible();
   const original = await editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON());

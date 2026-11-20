@@ -1,5 +1,5 @@
-import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { expectPlaybackAudioReady, writeSilentWav } from './audioFixture';
 import { expectAutosaved } from './autosave';
 import type { Editor } from '@tiptap/core';
 
@@ -7,7 +7,7 @@ test('Docs script shortcuts, buttons, clipboard geometry and saved reopen', asyn
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const audio = testInfo.outputPath('apice-pedice.wav');
-  fs.writeFileSync(audio, Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'));
+  writeSilentWav(audio);
   await page.goto('/');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
@@ -16,6 +16,7 @@ test('Docs script shortcuts, buttons, clipboard geometry and saved reopen', asyn
   const completed = page.locator('.queue-card.is-completed', { hasText: 'apice-pedice.wav' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
+  await expectPlaybackAudioReady(page);
   const editor = page.locator('.tiptap-editor');
   await editor.evaluate(root => {
     const instance = (root as HTMLElement & { editor: Editor }).editor;
@@ -135,6 +136,7 @@ test('Docs script shortcuts, buttons, clipboard geometry and saved reopen', asyn
   await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   await completed.getByRole('heading').click();
+  await expectPlaybackAudioReady(page);
   expect(await read()).toEqual(pasted);
   verifyGeometry(await geometry());
   const reopened = await read();
