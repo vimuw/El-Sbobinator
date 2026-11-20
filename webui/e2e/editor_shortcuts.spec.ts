@@ -74,12 +74,16 @@ test('shared shortcuts live in the header and dismiss without closing or editing
   await expect(dialog.getByText('F4', { exact: true })).toBeInViewport();
   await page.screenshot({ path: testInfo.outputPath('shortcuts-standard.png') });
   await page.keyboard.press('Escape');
+  // Phone layout (up to 640px): the header leaves out keyboard shortcuts.
   await page.setViewportSize({ width: 480, height: 640 });
+  await expect(trigger).toHaveCount(0);
+  // The narrowest window that still offers them gets the one-column dialog (max-width: 720px).
+  await page.setViewportSize({ width: 660, height: 640 });
   await trigger.click();
   await expect.poll(() => dialog.evaluate(element => element.scrollTop)).toBe(0);
   const narrow = await dialog.boundingBox();
   expect(narrow!.x).toBeGreaterThanOrEqual(0);
-  expect(narrow!.width).toBeLessThanOrEqual(480);
+  expect(narrow!.width).toBeLessThanOrEqual(660);
   expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
   const narrowEditor = await editorSection.boundingBox();
   const narrowAudio = await audioSection.boundingBox();

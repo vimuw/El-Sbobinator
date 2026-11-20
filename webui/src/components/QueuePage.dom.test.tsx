@@ -1,5 +1,5 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
 import { QueuePage, type QueuePageProps } from './QueuePage';
 import { credentialStorageWarning } from '../credentialStorage';
@@ -183,6 +183,26 @@ describe('QueuePage Component', () => {
     // The swapped content only fades; the shared slot owns the single height change.
     expect(bannerSlot.style.height).toBe('');
     expect(screen.getByTestId('processing-slot').contains(bannerSlot)).toBe(true);
+  });
+
+  // "Rivedi le sezioni" starts the same retry as the card: a failure already notified must not escape.
+  it('revises the failed sections from the outcome banner and settles a notified failure', async () => {
+    const { RevisionRetryError } = await import('../hooks/useRevisionRetry');
+    const doneFile: FileItem = { ...queuedFile, status: 'done', outputHtml: '/sessions/s1/sbobina.html', outputDir: '/sessions/s1', revisionFailedBlocks: [2] };
+    const handleRetryFailedRevisionBlocks = vi.fn(() => Promise.reject(new RevisionRetryError('Retry non riuscito.')));
+    const runOutcome = { kind: 'warning' as const, fileId: doneFile.id, fileName: doneFile.name, htmlPath: doneFile.outputHtml, sessionDir: '/sessions/s1', revisionFailedBlocks: [2], warnings: [] };
+    render(
+      <QueuePage
+        {...defaultProps}
+        files={[doneFile]}
+        progress={{ ...defaultProps.progress, runOutcome }}
+        actions={{ ...defaultProps.actions, handleRetryFailedRevisionBlocks }}
+      />,
+    );
+
+    fireEvent.click(within(screen.getByTestId('run-outcome-banner')).getByRole('button', { name: 'Rivedi le sezioni' }));
+    expect(handleRetryFailedRevisionBlocks).toHaveBeenCalledWith('/sessions/s1', doneFile.id);
+    await act(async () => { await Promise.resolve(); });
   });
 
   it('shows what the last run left above the dropzone, gives way to a new run and closes', async () => {

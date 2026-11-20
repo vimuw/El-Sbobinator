@@ -20,6 +20,7 @@ import { AutoHeight } from './AutoHeight';
 import { fade, fadeUp } from '../motion';
 import { ConsolePanel } from './ConsolePanel';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { settleRevisionRetry } from '../hooks/useRevisionRetry';
 
 const SetupPage = React.lazy(() => import('./SetupPage').then(m => ({ default: m.SetupPage })));
 
@@ -190,9 +191,10 @@ export function QueuePage({
   const pendingFiles = useMemo(() => getPendingFiles(files), [files]);
   const doneFiles = useMemo(() => getDoneFiles(files), [files]);
   // Web: only sbobine whose kept audio was actually read are known; an unread or missing one claims nothing.
-  const keptAudioByDir = useMemo(() => new Map(archiveSessions
-    .filter(session => typeof session.kept_audio_bytes === 'number')
-    .map(session => [normalizeSessionPath(session.session_dir), (session.kept_audio_bytes ?? 0) > 0])), [archiveSessions]);
+  const keptAudioByDir = useMemo(() => new Map(archiveSessions.flatMap(session => {
+    const bytes = session.kept_audio_bytes;
+    return typeof bytes === 'number' ? [[normalizeSessionPath(session.session_dir), bytes > 0] as const] : [];
+  })), [archiveSessions]);
   const { queuedCount, failedCount } = useMemo(() => {
     let queued = 0;
     let failed = 0;
@@ -236,7 +238,7 @@ export function QueuePage({
     onOpenSettings: handleOpenSettings,
     onOpenStorage: handleOpenStorageSettings ?? handleOpenSettings,
     onOpenSbobina: (htmlPath, title, sessionDir) => openPreview(htmlPath, title, undefined, undefined, sessionDir),
-    onReviseSections: (sessionDir, fileId) => { void handleRetryFailedRevisionBlocks(sessionDir, fileId); },
+    onReviseSections: (sessionDir, fileId) => { void settleRevisionRetry(handleRetryFailedRevisionBlocks(sessionDir, fileId)); },
     onDismiss: () => handleDismissRunOutcome?.(),
   }), [handleQueueRetry, requestRemoveFile, handleOpenSettings, handleOpenStorageSettings, openPreview, handleRetryFailedRevisionBlocks, handleDismissRunOutcome]);
   const showRunOutcome = Boolean(runOutcome) && !showProcessingBanner;

@@ -1,6 +1,7 @@
 import type { FileDescriptor } from '../appState';
 import type { ArchiveSession, PywebviewApi, StorageUsagePart, ValidationResult } from '../bridge';
 import { APP_VERSION, WEB_PREVIEW_BUILD } from '../branding';
+import { profileModel } from '../generationProfile';
 import { type HostCapabilities, setHostCapabilities } from '../hostCapabilities';
 import { STORAGE_KEYS } from '../storageKeys';
 import { GEMINI_KEY_PATTERN, formatSize } from '../utils';
@@ -48,6 +49,15 @@ import {
   saveWebKeys,
   saveWebModel,
 } from './webSettings';
+
+// Why a section retry recovered nothing when a key lacks the session's model. A retry always uses
+// the model saved with the sbobina, never the Settings one, so the only fix is a key that has it.
+// The retry reaches a reserve key only after the main key's daily quota ran out, back tomorrow.
+export function modelMissingRetryMessage(key: number, model: string): string {
+  const label = profileModel(model).label;
+  if (key <= 1) return `La chiave principale non può usare ${label}, il modello di questa sbobina: sostituiscila nelle impostazioni con una chiave che possa usarlo.`;
+  return `La chiave di riserva ${key} non può usare ${label} e la quota della chiave principale è esaurita: riprova domani o sostituisci la chiave di riserva nelle impostazioni.`;
+}
 
 // Third host: the whole app runs in this page (static site, no backend). It implements the same
 // PywebviewApi contract as pywebview and the FastAPI dev host, and delivers bridge events by calling
@@ -671,7 +681,10 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
           if (!result.cancelled && !result.quotaExhausted && !remaining.length) {
             return { ok: true, retried_blocks: [], remaining_failed_blocks: [], html_path: htmlPath, session_dir: sessionDir };
           }
-          const error = result.cancelled ? 'Operazione annullata.' : result.quotaExhausted ? 'Quota giornaliera esaurita: riprova domani.' : 'Nessun blocco recuperato. Riprova piu tardi.';
+          const error = result.cancelled ? 'Operazione annullata.'
+            : result.quotaExhausted ? 'Quota giornaliera esaurita: riprova domani.'
+            : result.modelMissingKey ? modelMissingRetryMessage(result.modelMissingKey, state.settings.model)
+            : 'Nessun blocco recuperato. Riprova più tardi.';
           return { ok: false, error, retried_blocks: [], remaining_failed_blocks: remaining, session_dir: sessionDir, ...flags };
         }
         const completionStatus = remaining.length ? 'completed_with_warnings' as const : 'completed' as const;

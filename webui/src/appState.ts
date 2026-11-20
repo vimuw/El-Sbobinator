@@ -142,7 +142,7 @@ export type RunOutcome = {
 // Only about the run in progress: meaningless once it has ended.
 const RUN_ONLY_WARNING_CODES = new Set(['web_keep_page_open']);
 // Still worth reading after a sbobina is done (the rest only explain how the run went).
-const AFTER_DONE_WARNING_CODES = new Set(['truncated_output', 'unrevised_blocks', 'fallback_key_invalid']);
+const AFTER_DONE_WARNING_CODES = new Set(['truncated_output', 'unrevised_blocks', 'fallback_key_invalid', 'fallback_key_model_missing']);
 const OUTCOME_RANK: Record<RunOutcome['kind'], number> = { warning: 1, paused: 2, error: 3 };
 
 function keepOutcome(current: RunOutcome | null, next: RunOutcome): RunOutcome {

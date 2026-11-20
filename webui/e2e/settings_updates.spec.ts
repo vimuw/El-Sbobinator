@@ -42,7 +42,10 @@ for (const viewport of [{ width: 1024, height: 720 }, { width: 390, height: 844 
     // Subpixel layout can report a fully shown element as 0.9999997 visible.
     await expect(installButton).toBeInViewport({ ratio: 0.99 });
     await expect(section.getByRole('button', { name: 'Cerca aggiornamenti' })).toHaveCount(0);
-    await expect(section.getByRole('link', { name: 'Note di rilascio ↗' })).toBeInViewport({ ratio: 0.99 });
+    // The arrow is a decorative icon (ExternalLinkIcon), not part of the link name.
+    const releaseNotes = section.getByRole('link', { name: 'Note di rilascio', exact: true });
+    await expect(releaseNotes).toBeInViewport({ ratio: 0.99 });
+    await expect(releaseNotes.getByTestId('external-link-icon')).toBeVisible();
     await expect(section.getByRole('status')).toHaveText('È disponibile la versione v9.9.9.');
     await expect(page.getByRole('button', { name: 'Mostra aggiornamento' })).toHaveCount(0);
     const notice = page.getByRole('region', { name: 'Aggiornamento applicazione' });

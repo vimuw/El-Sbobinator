@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import os
 
+import keyring
 import pytest
+from keyring.backend import KeyringBackend
+from keyring.errors import PasswordDeleteError
 
 os.environ["EL_SBOBINATOR_TESTING"] = "1"
 
@@ -44,3 +47,35 @@ def isolate_credential_runtime():
     config_service._credential_overrides.clear()
     yield
     config_service._credential_overrides.clear()
+
+
+class InMemoryKeyring(KeyringBackend):
+    """A keyring that lives for one test only."""
+
+    priority = 1  # type: ignore[assignment]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.passwords: dict[tuple[str, str], str] = {}
+
+    def get_password(self, service: str, username: str) -> str | None:
+        return self.passwords.get((service, username))
+
+    def set_password(self, service: str, username: str, password: str) -> None:
+        self.passwords[(service, username)] = password
+
+    def delete_password(self, service: str, username: str) -> None:
+        if self.passwords.pop((service, username), None) is None:
+            raise PasswordDeleteError(username)
+
+
+@pytest.fixture(autouse=True)
+def isolate_os_keyring():
+    # On macOS and Linux save_config stores the API key in the OS keyring. Without
+    # this, a test that saves "fake-key" writes it into the runner's (or the
+    # developer's) real Keychain, and later tests in that process read it back.
+    previous = keyring.get_keyring()
+    backend = InMemoryKeyring()
+    keyring.set_keyring(backend)
+    yield backend
+    keyring.set_keyring(previous)

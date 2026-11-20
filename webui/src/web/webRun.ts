@@ -15,6 +15,7 @@ import {
   PermanentError,
   QuotaDailyLimitError,
   isLostFileError,
+  isModelAccessError,
 } from './pipeline/retry';
 import { FileMismatchError, defaultSettings, runPipeline, type AudioSource, type PageState, type PipelineEnv, type PipelineReporter } from './pipeline/run';
 import { webSessionHtmlPath } from './webSessions';
@@ -159,9 +160,6 @@ function switchCandidates(model: string): string[] {
   return [RELIABLE_MODEL, ALTERNATE_MODEL];
 }
 const modelLabel = (model: string) => profileModel(model).label;
-
-/** A 404 about the model itself (not a missing uploaded file): this key's project lacks it. */
-export const isModelAccessError = (error: unknown): boolean => error instanceof ModelNotFoundError && error.message.includes('model');
 
 /** The model a fresh run starts with: the chosen one, unless the key is known not to have it. */
 export function startModel(preferred: string, unavailable: readonly string[]): string {

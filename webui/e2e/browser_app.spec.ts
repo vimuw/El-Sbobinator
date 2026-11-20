@@ -86,14 +86,27 @@ test.describe('El Sbobinator Browser Host E2E', () => {
       await uploadFromDropzone(page, fixturePath);
       await startScenario(page);
 
+      // What the user sees in place: the outcome banner or the dialog that asks for a choice.
       const expected = {
-        failure: /Errore simulato|file audio danneggiato/i,
-        paused: /Elaborazione in pausa|Capacità Google Gemini temporaneamente esaurita/i,
-        quota: /Chiavi.*esaurite|limite API|nuova chiave/i,
-        regenerate: /già completato|rigenerare|versione pronta/i,
+        failure: page.getByText(/Errore simulato|file audio danneggiato/i).first(),
+        paused: page.getByRole('status').filter({ has: page.getByRole('heading', { name: 'Sbobina in pausa: Gemini è sovraccarico' }) }),
+        quota: page.getByRole('heading', { name: 'Esaurimento quota' }),
+        regenerate: page.getByText(/già completato|rigenerare|versione pronta/i).first(),
       }[scenario];
-      await expect(page.getByText(expected).first()).toBeVisible({ timeout: 10_000 });
+      await expect(expected).toBeVisible({ timeout: 10_000 });
+      if (scenario === 'paused') await expect(expected.getByRole('button', { name: 'Riprendi' })).toBeVisible();
+      if (scenario === 'quota') await expect(page.getByRole('button', { name: 'Sospendi elaborazione' })).toBeVisible();
       await page.screenshot({ path: testInfo.outputPath(`${scenario}.png`) });
+
+      // The closed notification panel is hidden; its history entry shows once it opens.
+      const notificationTitle = { paused: 'Elaborazione in pausa', quota: 'Chiavi esaurite' }[scenario as 'paused' | 'quota'];
+      if (notificationTitle) {
+        const notification = page.getByRole('heading', { name: notificationTitle, exact: true });
+        await expect(notification).toBeHidden();
+        if (scenario === 'quota') await page.getByRole('button', { name: 'Sospendi elaborazione' }).click();
+        await page.getByRole('button', { name: 'Apri notifiche' }).click();
+        await expect(notification).toBeVisible();
+      }
     });
   }
 

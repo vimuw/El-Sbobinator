@@ -1,6 +1,9 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useRevisionRetry } from './useRevisionRetry';
+import { reportClientError } from '../diagnostics';
+import { RevisionRetryError, settleRevisionRetry, useRevisionRetry } from './useRevisionRetry';
+
+vi.mock('../diagnostics', () => ({ reportClientError: vi.fn() }));
 import { type FileItem, type FileDonePayload } from '../appState';
 import { type ArchiveSession, type PywebviewApi } from '../bridge';
 
@@ -162,6 +165,48 @@ describe('useRevisionRetry', () => {
     expect(addNotification).not.toHaveBeenCalled();
     expect(dispatch).toHaveBeenCalledWith({ type: 'queue/set_retrying_blocks', id: 'f1', value: false });
     expect(dispatch).toHaveBeenCalledWith({ type: 'app/set_status', status: 'idle' });
+  });
+
+  // Sentry ELSBOBINATOR-WEB-4: "Rivedi sezioni" let the notified failure escape as an unhandled rejection.
+  it('settles a failure the user was already told about, and reports any other error', async () => {
+    window.pywebview = {
+      api: {
+        retry_failed_revision_blocks: vi.fn().mockResolvedValue({ ok: false, error: 'Nessun blocco recuperato.' }),
+      } as unknown as PywebviewApi,
+    };
+    const addNotification = vi.fn();
+    const { result } = renderHook(() =>
+      useRevisionRetry({
+        filesRef: { current: [] },
+        archiveSessionsRef: { current: [] },
+        normalizeSessionDir: (d: string) => d,
+        dispatch: vi.fn(),
+        setArchiveSessions: vi.fn(),
+        refreshArchiveSessions: vi.fn().mockResolvedValue(undefined),
+        addNotification,
+        setConfirmAction: vi.fn(),
+      }),
+    );
+    const report = vi.mocked(reportClientError);
+
+    // The bare retry still rejects, for the notification's "Riprova" to show the message.
+    const failed = result.current.handleRetryFailedRevisionBlocks('/sessions/session_1', 'f1');
+    await expect(failed).rejects.toBeInstanceOf(RevisionRetryError);
+    expect(addNotification).toHaveBeenCalledWith('Errore di revisione', 'Nessun blocco recuperato.', 'error', 'processing');
+
+    await act(async () => {
+      await expect(settleRevisionRetry(result.current.handleRetryFailedRevisionBlocks('/sessions/session_1', 'f1'))).resolves.toBeUndefined();
+    });
+    expect(report).not.toHaveBeenCalled();
+
+    const crash = new Error('bridge crashed');
+    await expect(settleRevisionRetry(Promise.reject(crash))).resolves.toBeUndefined();
+    expect(report).toHaveBeenCalledWith('Revision retry error:', crash);
+
+    // A refused retry without an error text (quota) still rejects with a message for "Riprova".
+    vi.mocked(window.pywebview!.api!.retry_failed_revision_blocks!).mockResolvedValueOnce({ ok: false, quota_exhausted: true } as never);
+    await expect(result.current.handleRetryFailedRevisionBlocks('/sessions/session_1', 'f1')).rejects.toThrow('Retry non riuscito.');
+    expect(addNotification).toHaveBeenLastCalledWith('Quota esaurita', 'Quota giornaliera esaurita: riprova domani.', 'warning', 'processing');
   });
 
   it('does not send notification when retry is cancelled with remaining blocks', async () => {

@@ -73,12 +73,23 @@ export function reportFrontendReady() {
   enqueue({ kind: 'ready', message: '', stack: '' });
 }
 
+// Chrome's notice that a resize observer changed the layout it was measuring: it delivers the rest on
+// the next frame, nothing breaks. It comes as an error event with no Error object.
+const BENIGN_WINDOW_MESSAGES = ['ResizeObserver loop completed with undelivered notifications', 'ResizeObserver loop limit exceeded'];
+
+function isBenignWindowError(event: ErrorEvent): boolean {
+  return !event.error && BENIGN_WINDOW_MESSAGES.some(message => String(event.message ?? '').includes(message));
+}
+
 export function installFrontendDiagnostics() {
   if (installed) return;
   installed = true;
   document.documentElement.dataset.diagnosticsReady = 'true';
   window.addEventListener('pywebviewready', () => { void drain(); });
-  window.addEventListener('error', event => reportClientError('window', event.error || event.message));
+  window.addEventListener('error', event => {
+    if (isBenignWindowError(event)) return;
+    reportClientError('window', event.error || event.message);
+  });
   window.addEventListener('unhandledrejection', event => {
     const reason = event.reason;
     notifyMonitor('unhandledrejection', reason);

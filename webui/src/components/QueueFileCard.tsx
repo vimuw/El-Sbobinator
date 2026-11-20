@@ -11,6 +11,7 @@ import { errorLabel, formatDuration, formatRelativeTime, formatSize, isPausedErr
 import { FolderIndicatorChip } from './FolderChip';
 import { MiddleTruncate } from './MiddleTruncate';
 import { usePhoneLayout } from '../hooks/usePhoneLayout';
+import { settleRevisionRetry } from '../hooks/useRevisionRetry';
 
 interface QueueFileCardProps {
   file: FileItem;
@@ -238,10 +239,10 @@ function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetry
   const canRetryBlocks = failedBlockCount > 0 && Boolean(file.outputDir) && Boolean(onRetryFailedRevisionBlocks);
   const handleRetryBlocks = async (event: React.MouseEvent) => {
     event.stopPropagation();
-    if (!canRetryBlocks || !file.outputDir || isRetrying) return;
+    if (!canRetryBlocks || !onRetryFailedRevisionBlocks || !file.outputDir || isRetrying) return;
     setIsRetryingBlocks(true);
     try {
-      await onRetryFailedRevisionBlocks?.(file.outputDir, file.id);
+      await settleRevisionRetry(onRetryFailedRevisionBlocks(file.outputDir, file.id));
     } finally {
       setIsRetryingBlocks(false);
     }

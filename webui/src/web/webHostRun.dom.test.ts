@@ -433,6 +433,41 @@ describe('web host with the real pipeline', () => {
       expect((await api.read_html_content!(done.html_path)).content).toBe(before);
     });
 
+    // Sentry ELSBOBINATOR-WEB-4: "Nessun blocco recuperato. Riprova più tardi." when the main key was
+    // out of quota and the reserve key's project lacked the model, which no later retry could fix.
+    it('names the reserve key that lacks the model instead of asking to retry later', async () => {
+      const { api, done } = await finishedWithWarnings();
+      localStorage.setItem(STORAGE_KEYS.WEB_GEMINI_KEYS_V1, `${KEY}\nAIzaSyBackup1234567890123456`);
+      const notFound: Reply = { status: 404, json: { error: { status: 'NOT_FOUND', message: 'models/gemini-2.5-flash is not found for API version v1beta.' } } };
+      mockGemini([quota, notFound]);
+      expect(await api.retry_failed_revision_blocks!(done.session_dir)).toMatchObject({
+        ok: false,
+        remaining_failed_blocks: [1],
+        error: 'La chiave di riserva 2 non può usare Gemini 2.5 Flash e la quota della chiave principale è esaurita: riprova domani o sostituisci la chiave di riserva nelle impostazioni.',
+      });
+    });
+
+    // A retry always uses the session's model, so the run-level advice to pick another model in
+    // Settings changed nothing: the user got the same 404 and the same text on every retry.
+    it('tells to replace the main key when it lacks the session model', async () => {
+      const { api, done } = await finishedWithWarnings();
+      const notFound: Reply = { status: 404, json: { error: { status: 'NOT_FOUND', message: 'models/gemini-2.5-flash is not found for API version v1beta.' } } };
+      mockGemini([notFound]);
+      expect(await api.retry_failed_revision_blocks!(done.session_dir)).toMatchObject({
+        ok: false,
+        remaining_failed_blocks: [1],
+        error: 'La chiave principale non può usare Gemini 2.5 Flash, il modello di questa sbobina: sostituiscila nelle impostazioni con una chiave che possa usarlo.',
+      });
+    });
+
+    it('tells that nothing was recovered when the failure is neither quota nor a missing model', async () => {
+      const { api, done } = await finishedWithWarnings();
+      mockGemini([bad, bad]);
+      expect(await api.retry_failed_revision_blocks!(done.session_dir)).toMatchObject({
+        ok: false, quota_exhausted: false, remaining_failed_blocks: [1], error: 'Nessun blocco recuperato. Riprova più tardi.',
+      });
+    });
+
     it('answers for an unknown session', async () => {
       mockGemini([]);
       const { api } = host();

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import { DndContext } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { describe, expect, it, vi } from 'vitest';
@@ -539,6 +539,28 @@ describe('CompletedFileCard open affordance', () => {
     );
     expect(screen.getByText('Completata con avvisi').className).toContain('--warning-text');
     expect(screen.getByText(/1 blocco non revisionato/).className).toContain('--warning-text');
+  });
+
+  // A retry the hook already explained must end at the button, not as an unhandled rejection.
+  it('retries the failed revision blocks once and settles a failure the user was told about', async () => {
+    const { RevisionRetryError } = await import('../hooks/useRevisionRetry');
+    let reject!: (error: Error) => void;
+    const retry = vi.fn(() => new Promise<void>((_resolve, fail) => { reject = fail; }));
+    render(
+      <CompletedFileCard
+        file={makeFile({ status: 'done', outputHtml: '/out/file.html', outputDir: '/out/session', completionStatus: 'completed_with_warnings', revisionFailedBlocks: [2] })}
+        onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} onRetryFailedRevisionBlocks={retry}
+      />,
+    );
+    const button = screen.getByRole('button', { name: 'Riprova revisione' });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(retry).toHaveBeenCalledTimes(1);
+    expect(retry).toHaveBeenCalledWith('/out/session', expect.any(String));
+
+    await act(async () => { reject(new RevisionRetryError('Retry non riuscito.')); });
+    fireEvent.click(button);
+    expect(retry).toHaveBeenCalledTimes(2);
   });
 
   it('wraps the meta line on wider screens instead of cutting "6 ore fa" to "6 ore f"', () => {
