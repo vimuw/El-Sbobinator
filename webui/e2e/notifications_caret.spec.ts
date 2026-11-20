@@ -24,6 +24,10 @@ for (const theme of ['light', 'dark']) {
     await page.getByRole('button', { name: 'Apri notifiche', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Notifiche' });
     await expect(dialog).toHaveCSS('opacity', '1');
+    // Opacity is full at 60% of the opening; the panel, with its pointer, still slides and
+    // scales until the end. Measure the pointer once it has settled.
+    await expect(dialog).toHaveCSS('transform', 'none');
+    await expect(dialog).toHaveCSS('filter', 'none');
     const panel = dialog.locator('.notification-dropdown-panel');
     const list = dialog.locator('.overflow-y-auto');
     await expect(list.locator('[data-notification-id]')).toHaveCount(9);

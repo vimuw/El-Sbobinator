@@ -30,7 +30,11 @@ test('context menu stays inside the viewport and its final action is reachable w
     await page.mouse.click(bounds!.x + bounds!.width - 8, bounds!.y + bounds!.height - 8, { button: 'right' });
     const menu = page.locator('.editor-context-menu');
     await expect(menu).toBeVisible();
-    const geometry = await menu.evaluate(el => ({ rect: el.getBoundingClientRect().toJSON(), scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }));
+    // Measure where the menu settles: dropdownPop opens it scaled down and 4px higher.
+    const geometry = await menu.evaluate(async el => {
+      await Promise.all(el.getAnimations().map(animation => animation.finished));
+      return { rect: el.getBoundingClientRect().toJSON(), scrollHeight: el.scrollHeight, clientHeight: el.clientHeight };
+    });
     expect(geometry.rect.top).toBeGreaterThanOrEqual(12);
     expect(geometry.rect.bottom).toBeLessThanOrEqual(height - 12);
     expect(geometry.rect.right).toBeLessThanOrEqual(1280 - 12);
