@@ -68,6 +68,14 @@ describe('useEditorImageDrop Hook', () => {
     editor.view.dragging = null;
     editor.destroy();
   });
+  it('leaves a drag start without a DOM node target to ProseMirror', () => {
+    const editor = new Editor({ extensions: [StarterKit, FloatingImage], content: '<p>Testo</p>' });
+    const { result } = renderHook(() => useEditorImageDrop({ editorRef: { current: editor } }));
+    const event = { target: null, preventDefault: vi.fn() } as unknown as DragEvent;
+    expect(result.current.handleDragStart(editor.view, event)).toBe(false);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    editor.destroy();
+  });
   it('blocks native wrapping-image drag and leaves unrelated native drops to the editor', () => {
     const editor = new Editor({ extensions: [StarterKit, FloatingImage], content: '<p><span data-editor-image data-layout="wrap"><img src="drag.png"></span>Testo che segue</p>' });
     const original = editor.getJSON();
