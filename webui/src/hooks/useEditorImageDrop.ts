@@ -52,8 +52,10 @@ export function useEditorImageDrop({ editorRef }: UseEditorImageDropOptions) {
   const handleDragStart = useCallback((view: EditorView, event: DragEvent): boolean => {
     dragCleanupRef.current?.();
     draggedImageRef.current = null;
-    const target = event.target as HTMLElement | null;
-    const imageNodeView = target?.closest('.editor-image-node') as HTMLElement | null;
+    // A text-selection drag targets the Text node, which has no closest().
+    const target = event.target instanceof Node ? event.target : null;
+    const element = target instanceof Element ? target : target?.parentElement;
+    const imageNodeView = element?.closest<HTMLElement>('.editor-image-node') ?? null;
     if (imageNodeView) {
       try {
         const pos = view.posAtDOM(imageNodeView, 0);
