@@ -1,6 +1,15 @@
+import json
+import os
 import re
+import subprocess
+import sys
+import textwrap
 from pathlib import Path
 from typing import NamedTuple
+
+import pytest
+
+from scripts import ci_change_scope
 
 WORKFLOW = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "build.yml"
 
@@ -213,3 +222,170 @@ def test_web_staging_is_manual_and_never_deploys_production():
         "contents: write",
     ):
         assert public not in staging
+
+
+@pytest.mark.parametrize(
+    ("paths", "desktop_checks"),
+    [
+        (["webui/src/App.tsx", "webui/package-lock.json"], False),
+        (["functions/api/report.ts", ".github/workflows/web-release.yml"], False),
+        ([".github/dependabot.yml", ".github/workflows/web-staging.yml"], False),
+        (["webui/src/App.tsx", "docs/web/STATO.md", "README.md"], False),
+        (["webui/src/App.tsx", "el_sbobinator/pipeline.py"], True),
+        (["webui/src/App.tsx", "brand-new-file.cfg"], True),
+        (["webui"], True),
+        (["webui/src/App.tsx", ".github/workflows/build.yml"], True),
+        (["webui/src/App.tsx", "uv.lock"], True),
+        ([], True),
+        (None, True),
+    ],
+)
+def test_desktop_checks_are_skipped_only_when_every_change_is_web_only(
+    paths, desktop_checks
+):
+    assert ci_change_scope.classify(paths)["desktop_checks"] is desktop_checks
+
+
+def test_documentation_only_changes_keep_their_exemption():
+    assert ci_change_scope.classify(["README.md", "docs/guide.md"]) == {
+        "docs_only": True,
+        "desktop_checks": False,
+    }
+    assert (
+        ci_change_scope.classify(["docs/guide.md", "webui/a.ts"])["docs_only"] is False
+    )
+    assert ci_change_scope.classify(["docs/diagram.png"])["docs_only"] is False
+
+
+@pytest.mark.parametrize(
+    "env",
+    [
+        {"EVENT_NAME": "schedule", "CURRENT_SHA": "a" * 40},
+        {"EVENT_NAME": "workflow_dispatch", "CURRENT_SHA": "a" * 40},
+        {
+            "EVENT_NAME": "push",
+            "EVENT_REF": "refs/tags/v2.7.4",
+            "BEFORE_SHA": "b" * 40,
+            "CURRENT_SHA": "a" * 40,
+        },
+        {
+            "EVENT_NAME": "push",
+            "EVENT_REF": "refs/heads/main",
+            "BEFORE_SHA": "0" * 40,
+            "CURRENT_SHA": "a" * 40,
+        },
+        {"EVENT_NAME": "pull_request", "PR_BASE_SHA": "", "PR_HEAD_SHA": "a" * 40},
+    ],
+)
+def test_runs_without_a_change_range_check_the_desktop_app(env):
+    revisions = ci_change_scope.revision_range(env)
+    assert revisions is None
+    assert ci_change_scope.classify(ci_change_scope.changed_paths(revisions)) == {
+        "docs_only": False,
+        "desktop_checks": True,
+    }
+
+
+def test_pull_requests_and_branch_pushes_compare_their_change_range():
+    assert (
+        ci_change_scope.revision_range(
+            {"EVENT_NAME": "pull_request", "PR_BASE_SHA": "b", "PR_HEAD_SHA": "h"}
+        )
+        == "b...h"
+    )
+    assert (
+        ci_change_scope.revision_range(
+            {
+                "EVENT_NAME": "push",
+                "EVENT_REF": "refs/heads/main",
+                "BEFORE_SHA": "b",
+                "CURRENT_SHA": "h",
+            }
+        )
+        == "b..h"
+    )
+
+
+def test_an_unavailable_change_range_checks_the_desktop_app(monkeypatch):
+    def missing_range(command):
+        raise subprocess.CalledProcessError(128, command)
+
+    monkeypatch.setattr(ci_change_scope.subprocess, "check_output", missing_range)
+    assert ci_change_scope.changed_paths("missing...range") is None
+
+
+def _gate(**results: str) -> subprocess.CompletedProcess[str]:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    gate = text.split("\n  dependency-gate:\n", 1)[1]
+    script = textwrap.dedent(
+        gate.split("<<'PY'\n", 1)[1].split("\n          PY\n", 1)[0]
+    )
+    outputs = {
+        "docs_only": results.pop("docs_only"),
+        "desktop_checks": results.pop("desktop_checks"),
+        "full_e2e": "false",
+    }
+    needs = {"change-scope": {"result": "success", "outputs": outputs}}
+    needs["browser-e2e"] = {"result": "skipped", "outputs": {}}
+    needs.update(
+        {name: {"result": result, "outputs": {}} for name, result in results.items()}
+    )
+    return subprocess.run(
+        [sys.executable, "-c", script],
+        env={**os.environ, "RESULTS": json.dumps(needs)},
+        capture_output=True,
+        text=True,
+    )
+
+
+WEB_ONLY_RUN = {
+    "checks": "success",
+    "web-checks": "success",
+    "audit": "success",
+    "checks-windows": "skipped",
+    "checks-macos": "skipped",
+}
+
+
+def test_desktop_checks_run_and_gate_only_for_desktop_changes():
+    jobs = workflow_jobs()
+    for name in ("checks-windows", "checks-macos"):
+        assert jobs[name].needs == ["change-scope"]
+        assert "needs.change-scope.outputs.docs_only != 'true'" in jobs[name].condition
+        assert (
+            "needs.change-scope.outputs.desktop_checks == 'true'"
+            in jobs[name].condition
+        )
+        assert name in jobs["dependency-gate"].needs
+    # The web site and the security audit still run for every change.
+    for name in ("checks", "web-checks", "audit"):
+        assert "desktop_checks" not in jobs[name].condition
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "check_jobs = ['checks', 'web-checks', 'audit']" in text
+    assert "run: python scripts/ci_change_scope.py" in text
+
+    assert (
+        _gate(docs_only="false", desktop_checks="false", **WEB_ONLY_RUN).returncode == 0
+    )
+    desktop_run = {
+        **WEB_ONLY_RUN,
+        "checks-windows": "success",
+        "checks-macos": "success",
+    }
+    assert (
+        _gate(docs_only="false", desktop_checks="true", **desktop_run).returncode == 0
+    )
+    # A desktop change whose desktop jobs were skipped or failed must not pass the gate.
+    assert _gate(docs_only="false", desktop_checks="true", **WEB_ONLY_RUN).returncode
+    failed = {**desktop_run, "checks-macos": "failure"}
+    assert _gate(docs_only="false", desktop_checks="true", **failed).returncode
+    # Nor may a web-only change pass when the always-on checks are skipped.
+    assert _gate(
+        docs_only="false",
+        desktop_checks="false",
+        **{**WEB_ONLY_RUN, "web-checks": "skipped"},
+    ).returncode
+    # A missing desktop scope fails closed.
+    assert _gate(docs_only="false", desktop_checks="", **desktop_run).returncode
+    docs_run = dict.fromkeys(WEB_ONLY_RUN, "skipped")
+    assert _gate(docs_only="true", desktop_checks="false", **docs_run).returncode == 0
