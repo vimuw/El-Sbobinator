@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { expectPlaybackAudioReady, writeSilentWav } from './audioFixture';
 import { expectAutosaved } from './autosave';
 import type { Page } from '@playwright/test';
 import type { Editor } from '@tiptap/core';
@@ -11,7 +12,7 @@ const columnPx = (percent: number) => Math.round(EDITOR_CONTENT_WIDTH_PX * perce
 const nativeWrapLeft = (widthPercent: number, position: number) => (EDITOR_CONTENT_WIDTH_PX - columnPx(widthPercent)) * position / 100 * 0.75 - 12;
 
 async function openImageEditor(page: Page, audio: string) {
-  fs.writeFileSync(audio, Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'));
+  writeSilentWav(audio);
   // Vite can become ready before FastAPI; opening the app in that window leaves
   // bootstrap at HTTP 502 and prevents the editor fixture from starting.
   await expect.poll(async () => (await page.request.get('/api/bootstrap')).status()).toBe(200);
@@ -24,6 +25,7 @@ async function openImageEditor(page: Page, audio: string) {
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
   await expect(page.locator('.tiptap-editor')).toBeVisible();
+  await expectPlaybackAudioReady(page);
 }
 
 // Saves now instead of after the autosave debounce, then ends the undo group so
@@ -2014,7 +2016,7 @@ test('native copy preserves paragraph and list gaps with converted line spacing'
 test('inline and arbitrary image wrap preserve text, editing, undo and native clipboard', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const audio = testInfo.outputPath('image_layout.wav');
-  fs.writeFileSync(audio, Buffer.from('524946462400000057415645666d7420100000000100010044ac000088580100020010006461746100000000', 'hex'));
+  writeSilentWav(audio);
   await page.goto('/');
   const chooserPromise = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
@@ -2026,6 +2028,7 @@ test('inline and arbitrary image wrap preserve text, editing, undo and native cl
   await completed.getByRole('heading', { name: 'image_layout.wav' }).click();
   const editor = page.locator('.tiptap-editor');
   await expect(editor).toBeVisible();
+  await expectPlaybackAudioReady(page);
   const imageSrc = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
   const source = `<p>Prima dell'immagine</p><p><span data-editor-image="true" data-width="35"><img alt="Immagine di verifica" src="${imageSrc}"></span>${'Testo che deve scorrere a fianco della figura, mantenendo la leggibilita. '.repeat(12)}</p><p>Ultimo paragrafo</p>`;
   await page.evaluate(async html => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }) })]); }, source);
