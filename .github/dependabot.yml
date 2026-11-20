@@ -1,6 +1,8 @@
 version: 2
-# Weekly: one batch of grouped updates to review instead of a daily stream. Security
-# updates do not follow this schedule and still open as soon as an advisory appears.
+# The web site (webui) gets a weekly batch of grouped updates; the desktop backup's
+# Python environment gets security updates only, and tooling is checked monthly.
+# Security updates follow no schedule and have their own limit, so they still open
+# as soon as an advisory appears, including for the security-only ecosystems.
 updates:
   - package-ecosystem: uv
     directory: /
@@ -8,7 +10,8 @@ updates:
       - dependency-type: all
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+    # Security-only: 0 disables version updates for the frozen desktop backup.
+    open-pull-requests-limit: 0
     labels: [dependencies]
     groups:
       python:
@@ -18,6 +21,8 @@ updates:
     directory: /requirements
     schedule:
       interval: weekly
+    # Security-only, like the uv environment above.
+    open-pull-requests-limit: 0
     labels: [dependencies]
     groups:
       bootstrap:
@@ -43,12 +48,12 @@ updates:
   - package-ecosystem: pre-commit
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
     labels: [dependencies]
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
     labels: [dependencies]
     groups:
       actions:
