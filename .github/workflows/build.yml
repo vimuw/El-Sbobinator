@@ -1,4 +1,8 @@
-name: Build and Release El Sbobinator
+name: CI and desktop release
+
+# Checks every pull request and push for the web site and the desktop backup; a v* tag
+# (or a manual run with a tag) also packages and releases the desktop app. The web site
+# is deployed by web-release.yml on web-v* tags.
 
 on:
   push:
@@ -8,7 +12,11 @@ on:
       - 'v*' # Trigger build only when a new version tag (e.g. v1.0.0) is pushed
   pull_request:
   schedule:
-    - cron: "20 6 * * *"
+    # Monday: every check, including the Windows and macOS checks of the desktop backup.
+    - cron: "20 6 * * 1"
+    # Other days: the web site, audits and the complete browser suite; the desktop
+    # checks still run on every pull request that touches desktop code.
+    - cron: "20 6 * * 0,2-6"
   workflow_dispatch:
     inputs:
       release_tag:
@@ -50,7 +58,8 @@ jobs:
           fetch-depth: 0
 
       # Schedule, tag and manual runs have no change range: the classifier needs only
-      # its own script and then runs every check.
+      # its own script and then runs every check (the daily schedule without the
+      # desktop checks, which run on the weekly one).
       - name: Checkout the classifier
         if: ${{ !(github.event_name == 'pull_request' || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/'))) }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -64,6 +73,7 @@ jobs:
           BEFORE_SHA: ${{ github.event.before }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          SCHEDULE: ${{ github.event.schedule }}
         run: python scripts/ci_change_scope.py
 
       - name: Detect editor engine dependency changes

@@ -286,6 +286,47 @@ def test_runs_without_a_change_range_check_the_desktop_app(env):
     }
 
 
+@pytest.mark.parametrize(
+    ("env", "desktop_checks"),
+    [
+        (
+            {"EVENT_NAME": "schedule", "SCHEDULE": ci_change_scope.DAILY_WEB_SCHEDULE},
+            False,
+        ),
+        (
+            {
+                "EVENT_NAME": "schedule",
+                "SCHEDULE": ci_change_scope.WEEKLY_DESKTOP_SCHEDULE,
+            },
+            True,
+        ),
+        # An unknown or missing schedule string fails closed.
+        ({"EVENT_NAME": "schedule", "SCHEDULE": "0 0 * * *"}, True),
+        ({"EVENT_NAME": "schedule"}, True),
+        # The schedule string means nothing outside scheduled runs.
+        (
+            {
+                "EVENT_NAME": "workflow_dispatch",
+                "SCHEDULE": ci_change_scope.DAILY_WEB_SCHEDULE,
+            },
+            True,
+        ),
+    ],
+)
+def test_only_the_weekly_schedule_checks_the_desktop_backup(env, desktop_checks):
+    scope = ci_change_scope.scope_for(env, None)
+    assert scope == {"docs_only": False, "desktop_checks": desktop_checks}
+
+
+def test_the_workflow_schedules_match_the_classifier():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    crons = re.findall(r'^    - cron: "([^"]+)"$', text, re.M)
+    assert sorted(crons) == sorted(
+        [ci_change_scope.WEEKLY_DESKTOP_SCHEDULE, ci_change_scope.DAILY_WEB_SCHEDULE]
+    )
+    assert "SCHEDULE: ${{ github.event.schedule }}" in text
+
+
 def test_pull_requests_and_branch_pushes_compare_their_change_range():
     assert (
         ci_change_scope.revision_range(
