@@ -1,4 +1,3 @@
-import { reportClientError } from '../diagnostics';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ArchiveFolder, ArchiveSession } from '../bridge';
 import type { FileItem, ProcessingAction } from '../appState';
@@ -6,6 +5,7 @@ import { filterArchiveSessionsByInputPath } from '../duplicateDetection';
 import { getFolderPresentation } from '../archiveFolders';
 import type { ActivePage } from '../components/NavSidebar';
 import { getHostCapabilities } from '../hostCapabilities';
+import { settleRevisionRetry } from './useRevisionRetry';
 
 export type PendingArchiveReplacement = {
   fileName: string;
@@ -314,9 +314,7 @@ export function useArchiveSync({
       dispatch({ type: 'queue/set_retrying_blocks', id: fileId, value: true });
     }
     try {
-      await handleRetryFailedRevisionBlocks(session.session_dir, fileId);
-    } catch (err) {
-      reportClientError('Archive retry error:', err);
+      await settleRevisionRetry(handleRetryFailedRevisionBlocks(session.session_dir, fileId), 'Archive retry error:');
     } finally {
       dispatch({ type: 'queue/set_retrying_blocks', id: fileId, value: false });
     }

@@ -13,6 +13,7 @@ import { KebabMenu, type KebabMenuItem } from '../KebabMenu';
 import { FolderIndicatorChip } from '../FolderChip';
 import { MiddleTruncate } from '../MiddleTruncate';
 import { usePhoneLayout } from '../../hooks/usePhoneLayout';
+import { settleRevisionRetry } from '../../hooks/useRevisionRetry';
 import { type ArchivePageProps, getOpenedAtMs, DEFAULT_FOLDER_COLOR } from './types';
 
 interface SessionCardMetaProps {
@@ -138,10 +139,10 @@ export function DraggableSessionCard({
 
   const handleRetryBlocks = async (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
-    if (!canRetryBlocks || isRetryingBlocks) return;
+    if (!canRetryBlocks || !onRetryFailedRevisionBlocks || isRetryingBlocks) return;
     setIsRetryingBlocks(true);
     try {
-      await onRetryFailedRevisionBlocks?.(session.session_dir);
+      await settleRevisionRetry(onRetryFailedRevisionBlocks(session.session_dir));
     } finally {
       setIsRetryingBlocks(false);
     }
@@ -375,10 +376,10 @@ export function SortableSessionCard({
 
   const handleRetryBlocks = async (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
-    if (!canRetryBlocks || isRetryingBlocks) return;
+    if (!canRetryBlocks || !onRetryFailedRevisionBlocks || isRetryingBlocks) return;
     setIsRetryingBlocks(true);
     try {
-      await onRetryFailedRevisionBlocks?.(session.session_dir);
+      await settleRevisionRetry(onRetryFailedRevisionBlocks(session.session_dir));
     } finally {
       setIsRetryingBlocks(false);
     }

@@ -20,6 +20,7 @@ import { AutoHeight } from './AutoHeight';
 import { fade, fadeUp } from '../motion';
 import { ConsolePanel } from './ConsolePanel';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { settleRevisionRetry } from '../hooks/useRevisionRetry';
 
 const SetupPage = React.lazy(() => import('./SetupPage').then(m => ({ default: m.SetupPage })));
 
@@ -237,7 +238,7 @@ export function QueuePage({
     onOpenSettings: handleOpenSettings,
     onOpenStorage: handleOpenStorageSettings ?? handleOpenSettings,
     onOpenSbobina: (htmlPath, title, sessionDir) => openPreview(htmlPath, title, undefined, undefined, sessionDir),
-    onReviseSections: (sessionDir, fileId) => { void handleRetryFailedRevisionBlocks(sessionDir, fileId); },
+    onReviseSections: (sessionDir, fileId) => { void settleRevisionRetry(handleRetryFailedRevisionBlocks(sessionDir, fileId)); },
     onDismiss: () => handleDismissRunOutcome?.(),
   }), [handleQueueRetry, requestRemoveFile, handleOpenSettings, handleOpenStorageSettings, openPreview, handleRetryFailedRevisionBlocks, handleDismissRunOutcome]);
   const showRunOutcome = Boolean(runOutcome) && !showProcessingBanner;

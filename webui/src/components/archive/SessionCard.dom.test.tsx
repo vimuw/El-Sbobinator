@@ -1,8 +1,12 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { act, render, screen, fireEvent } from '@testing-library/react';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+import { reportClientError } from '../../diagnostics';
+import { RevisionRetryError } from '../../hooks/useRevisionRetry';
 import type { ArchiveFolder, ArchiveSession } from '../../bridge';
 import { DraggableSessionCard, SortableSessionCard } from './SessionCard';
 import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../../hostCapabilities';
+
+vi.mock('../../diagnostics', () => ({ reportClientError: vi.fn() }));
 
 vi.mock('@dnd-kit/sortable', () => ({
   useSortable: () => ({
@@ -454,5 +458,91 @@ describe('SessionCard meta line', () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+// Sentry ELSBOBINATOR-WEB-4: in the Archivio, "Riprova revisione" let a failure the user was already
+// told about (RevisionRetryError, thrown after the hook's notification) escape as an unhandled rejection.
+describe('SessionCard revision retry button', () => {
+  const variants = [
+    ['DraggableSessionCard', (onRetry: (dir: string) => Promise<void>) => (
+      <DraggableSessionCard
+        session={mockWarningSession}
+        allFolders={mockFolders}
+        selected={false}
+        onToggleSelect={vi.fn()}
+        onAssignToFolder={vi.fn()}
+        onRemoveFromFolder={vi.fn()}
+        onPreview={vi.fn()}
+        onOpenFile={vi.fn()}
+        onDeleteSession={vi.fn()}
+        onRetryFailedRevisionBlocks={onRetry}
+      />
+    )],
+    ['SortableSessionCard', (onRetry: (dir: string) => Promise<void>) => (
+      <SortableSessionCard
+        session={mockWarningSession}
+        folderColor="#3d6b3a"
+        disabled={false}
+        selected={false}
+        onRemove={vi.fn()}
+        onPreview={vi.fn()}
+        onOpenFile={vi.fn()}
+        onDeleteSession={vi.fn()}
+        onRetryFailedRevisionBlocks={onRetry}
+      />
+    )],
+  ] as const;
+
+  const unhandled: unknown[] = [];
+  const onUnhandled = (reason: unknown) => { unhandled.push(reason); };
+  beforeEach(() => {
+    unhandled.length = 0;
+    vi.mocked(reportClientError).mockClear();
+    process.on('unhandledRejection', onUnhandled);
+  });
+  afterEach(() => {
+    process.off('unhandledRejection', onUnhandled);
+  });
+
+  // Lets Node notice a rejection nobody handled before the test checks for one.
+  const flushRejections = () => new Promise(resolve => setTimeout(resolve, 0));
+
+  it.each(variants)('%s ends a notified failure quietly and lets the button be used again', async (_name, renderCard) => {
+    let rejectRetry: (error: unknown) => void = () => {};
+    const onRetry = vi.fn((_dir: string) => new Promise<void>((_resolve, reject) => { rejectRetry = reject; }));
+    render(renderCard(onRetry));
+
+    const button = screen.getByRole('button', { name: 'Riprova revisione' });
+    fireEvent.click(button);
+    expect(onRetry).toHaveBeenCalledWith('/sessions/s1');
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    expect(button.textContent).toBe('Riprovo…');
+
+    await act(async () => {
+      rejectRetry(new RevisionRetryError('Nessun blocco recuperato.'));
+      await flushRejections();
+    });
+
+    expect(unhandled).toEqual([]);
+    expect(reportClientError).not.toHaveBeenCalled();
+    expect((button as HTMLButtonElement).disabled).toBe(false);
+    expect(button.textContent).toBe('Riprova revisione');
+  });
+
+  it.each(variants)('%s reports an unexpected retry error instead of leaving it unhandled', async (_name, renderCard) => {
+    const crash = new Error('bridge crashed');
+    const onRetry = vi.fn((_dir: string) => Promise.reject(crash));
+    render(renderCard(onRetry));
+
+    const button = screen.getByRole('button', { name: 'Riprova revisione' });
+    await act(async () => {
+      fireEvent.click(button);
+      await flushRejections();
+    });
+
+    expect(unhandled).toEqual([]);
+    expect(reportClientError).toHaveBeenCalledWith('Revision retry error:', crash);
+    expect((button as HTMLButtonElement).disabled).toBe(false);
   });
 });

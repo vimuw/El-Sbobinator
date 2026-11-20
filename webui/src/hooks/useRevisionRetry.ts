@@ -3,6 +3,23 @@ import { type ArchiveSession } from '../bridge';
 import { type FileItem, type FileDonePayload, type ProcessingAction } from '../appState';
 import { type ConfirmActionState } from './useConfirmModal';
 import { type AddNotificationOptions, type NotificationCategory, type NotificationType } from './useNotifications';
+import { reportClientError } from '../diagnostics';
+
+/** A retry that failed after the hook told the user why, in a notification. */
+export class RevisionRetryError extends Error {
+  name = 'RevisionRetryError';
+}
+
+/**
+ * For the buttons that start a retry: a failure the user was already told about ends here, anything
+ * else is reported. Without it a click leaves an unhandled rejection. The notification's "Riprova"
+ * awaits the retry itself instead, to show the message under the notification.
+ */
+export function settleRevisionRetry(retry: Promise<void>, source = 'Revision retry error:'): Promise<void> {
+  return retry.catch(error => {
+    if (!(error instanceof RevisionRetryError)) reportClientError(source, error);
+  });
+}
 
 export interface UseRevisionRetryOptions {
   filesRef: React.MutableRefObject<FileItem[]>;
@@ -67,7 +84,7 @@ export function useRevisionRetry({
         } else {
           addNotification('Errore di revisione', res?.error ?? 'Impossibile completare la revisione dei blocchi.', 'error', 'processing');
         }
-        throw new Error(res?.error ?? 'Retry non riuscito.');
+        throw new RevisionRetryError(res?.error ?? 'Retry non riuscito.');
       }
       const normalizedSessionDir = res.session_dir ?? sessionDir;
       const remaining = Array.isArray(res.remaining_failed_blocks) ? res.remaining_failed_blocks : [];
