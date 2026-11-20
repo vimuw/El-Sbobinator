@@ -114,5 +114,25 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Dependabot cannot update this pin: change it in web-release.yml and web-staging.yml together.
           wranglerVersion: '4.149.0'
           command: pages deploy webui/dist-web --project-name=elsbobinator --branch=main --commit-hash=${{ github.sha }}
+
+      # The deploy step succeeding is not the site serving it: wait until the official
+      # address answers with this build's version (version.json is never cached).
+      - name: Check that elsbobinator.com serves the new version
+        working-directory: webui
+        run: |
+          expected=$(node -p "require('./dist-web/version.json').version")
+          for attempt in $(seq 1 12); do
+            served=$(curl -fsS --max-time 10 "https://elsbobinator.com/version.json?check=${GITHUB_SHA}-${attempt}" \
+              | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).version)}catch{console.log('')}})" || true)
+            if [ "$served" = "$expected" ]; then
+              echo "elsbobinator.com serves version $served"
+              exit 0
+            fi
+            echo "Attempt $attempt: elsbobinator.com serves '${served}', expected '${expected}'"
+            sleep 10
+          done
+          echo "::error::elsbobinator.com does not serve version $expected after 12 attempts (two to four minutes) since the deploy."
+          exit 1

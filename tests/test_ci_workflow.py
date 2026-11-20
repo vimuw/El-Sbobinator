@@ -93,8 +93,17 @@ def test_web_release_pins_actions_and_deploys_only_after_tests_and_build():
         web.index("npm run test:e2e:web"),
         web.index("npm run build:web"),
         web.index("cloudflare/wrangler-action@"),
+        web.index("- name: Check that elsbobinator.com serves the new version"),
     ]
     assert order == sorted(order)
+    assert "https://elsbobinator.com/version.json" in web
+    served_check = web.split(
+        "- name: Check that elsbobinator.com serves the new version", 1
+    )[1].split("\n      - name:", 1)[0]
+    # Every attempt gives up on its own: a stalled connection must not hold the loop
+    # until the job's timeout.
+    curls = re.findall(r"curl [^\n]*", served_check)
+    assert curls and all(re.search(r"--max-time \d+\b", curl) for curl in curls)
     assert "EL_SBOBINATOR_WEB_VERSION: ${{ github.ref_name }}" in web
     assert (
         "secrets.CLOUDFLARE_API_TOKEN" in web and "secrets.CLOUDFLARE_ACCOUNT_ID" in web
