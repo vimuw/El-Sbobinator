@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   NOTICE_PREFIX,
@@ -10,10 +9,6 @@ import {
   parseWaitSecs,
   phaseText,
 } from './phaseLabels';
-
-function pythonSource(relativePath: string): string {
-  return readFileSync(new URL(`../../el_sbobinator/${relativePath}`, import.meta.url), 'utf8');
-}
 
 describe('phaseLabels', () => {
   it('recognizes every stage the builders produce', () => {
@@ -45,27 +40,5 @@ describe('phaseLabels', () => {
     expect(phaseText.genericRetry(true, 5, 1, 3).startsWith(NOTICE_PREFIX.emptyResponse)).toBe(true);
     expect(phaseText.genericRetry(false, 5, 1, 3).startsWith(NOTICE_PREFIX.temporaryError)).toBe(true);
     expect(phaseText.invalidOutput(4).startsWith(NOTICE_PREFIX.invalidOutput)).toBe(true);
-  });
-
-  // The desktop pipeline writes the same texts in Python; a rename on either side must fail here.
-  it('matches the phase texts the desktop pipeline emits', () => {
-    const pipeline = pythonSource('pipeline/pipeline.py');
-    expect(pipeline).toContain(`"${phaseText.analysis()}"`);
-    expect(pipeline).toContain(`"${phaseText.transcription()}"`);
-    expect(pipeline).toContain(`"${phaseText.revision()}"`);
-    expect(pipeline).toContain(`"${phaseText.export()}"`);
-    expect(pipeline).toContain(`"${phaseText.completed()}"`);
-    expect(pythonSource('pipeline/pipeline_session.py')).toContain(`"${phaseText.preconversion()}"`);
-    expect(pythonSource('services/phase1_service.py')).toContain(
-      phaseText.transcriptionChunk(0, 0).replace('chunk 0/0', 'chunk {chunk_idx}/{total_chunks}'),
-    );
-    const revision = pythonSource('services/revision_service.py');
-    expect(revision).toContain(phaseText.revisionBlock(0, 0).replace('0/0', '{index}/{macro_total}'));
-    expect(revision).toContain(phaseText.revisionRetryBlock(0, 0).replace('0/0', '{index}/{macro_total}'));
-    const generation = pythonSource('services/generation_service.py');
-    for (const prefix of [NOTICE_PREFIX.serverBusy, NOTICE_PREFIX.offline, NOTICE_PREFIX.emptyResponse, NOTICE_PREFIX.temporaryError]) {
-      expect(generation).toContain(prefix);
-    }
-    expect(generation).toContain(`${NOTICE_PREFIX.rateLimit}: attesa`);
   });
 });

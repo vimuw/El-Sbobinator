@@ -1,7 +1,6 @@
-import profile from '../../el_sbobinator/generation_profile.json';
+import profile from './profiles/generation_profile.json';
 
-// Prompts and model defaults, read from the same file as the desktop pipeline
-// (el_sbobinator/core/generation_profile.py). The browser pipeline sends exactly these texts.
+// Prompts and model defaults. The browser pipeline sends exactly these texts.
 
 export interface ProfileModelOption {
   id: string;

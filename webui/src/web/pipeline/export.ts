@@ -10,7 +10,7 @@
 //    reaches the output.
 
 import { Marked, type Token, type Tokens } from 'marked';
-import FMT from '../../../../el_sbobinator/document_formatting.json';
+import FMT from '../../profiles/document_formatting.json';
 
 export const REVISION_WARNING_TEXT = 'Attenzione: alcune sezioni sono state incluse senza revisione AI.';
 

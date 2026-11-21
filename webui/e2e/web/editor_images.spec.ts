@@ -6,7 +6,7 @@ import type { Page } from '@playwright/test';
 import type { Editor } from '@tiptap/core';
 
 // Playwright's Node loader cannot import the shared JSON profile without import attributes.
-const { contentWidthPx: EDITOR_CONTENT_WIDTH_PX } = JSON.parse(fs.readFileSync(new URL('../../../el_sbobinator/document_formatting.json', import.meta.url), 'utf8')) as { contentWidthPx: number };
+const { contentWidthPx: EDITOR_CONTENT_WIDTH_PX } = JSON.parse(fs.readFileSync(new URL('../../src/profiles/document_formatting.json', import.meta.url), 'utf8')) as { contentWidthPx: number };
 const columnPx = (percent: number) => Math.round(EDITOR_CONTENT_WIDTH_PX * percent / 100);
 // Native Wrap X: the free column share at a position, in points, minus the 12pt wrap margin.
 const nativeWrapLeft = (widthPercent: number, position: number) => (EDITOR_CONTENT_WIDTH_PX - columnPx(widthPercent)) * position / 100 * 0.75 - 12;

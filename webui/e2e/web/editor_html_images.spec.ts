@@ -5,7 +5,7 @@ import { expectAutosaved } from '../autosave';
 import type { Editor } from '@tiptap/core';
 
 // Playwright's Node loader cannot import the shared JSON profile without import attributes.
-const { contentWidthPx: EDITOR_CONTENT_WIDTH_PX } = JSON.parse(fs.readFileSync(new URL('../../../el_sbobinator/document_formatting.json', import.meta.url), 'utf8')) as { contentWidthPx: number };
+const { contentWidthPx: EDITOR_CONTENT_WIDTH_PX } = JSON.parse(fs.readFileSync(new URL('../../src/profiles/document_formatting.json', import.meta.url), 'utf8')) as { contentWidthPx: number };
 
 test('right caption image keeps geometry, pixels, history and saved content as a native block figure', async ({ page, context }, testInfo) => {
   test.setTimeout(180000);
