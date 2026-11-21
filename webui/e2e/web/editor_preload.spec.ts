@@ -1,17 +1,17 @@
-import { expect, test } from '@playwright/test';
-import { writeSilentWav } from './audioFixture';
+import { expect, test } from './keyedTest';
+import { writeSilentWav } from '../audioFixture';
 
 test('the first opened transcript skips the editor and player loading placeholders', async ({ page }, info) => {
-  const fixture = info.outputPath('preload.wav');
+  const fixture = info.outputPath('preload.mp3');
   writeSilentWav(fixture);
   const editorChunk = page.waitForRequest(/RichTextEditor/, { timeout: 10_000 }).catch(() => null);
 
-  await page.goto('/');
+  await page.goto('/?simulazione=1');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(fixture);
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  const completed = page.locator('.queue-card.is-completed', { hasText: 'preload.wav' });
+  const completed = page.locator('.queue-card.is-completed', { hasText: 'preload.mp3' });
   await expect(completed).toBeVisible({ timeout: 15_000 });
   await editorChunk;
   await page.waitForLoadState('networkidle');

@@ -1,18 +1,18 @@
 import fs from 'node:fs';
-import { expect, test } from '@playwright/test';
-import { writeSilentWav } from './audioFixture';
-import { expectAutosaved } from './autosave';
+import { expect, test } from './keyedTest';
+import { writeSilentWav } from '../audioFixture';
+import { expectAutosaved } from '../autosave';
 import type { Editor } from '@tiptap/core';
 
 test('authored paragraph and heading whitespace survives the actual preview reload', async ({ page }, testInfo) => {
-  const audio = testInfo.outputPath('saved-whitespace.wav');
+  const audio = testInfo.outputPath('saved-whitespace.mp3');
   writeSilentWav(audio);
-  await page.goto('/');
+  await page.goto('/?simulazione=1');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(audio);
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  const completed = page.locator('.queue-card.is-completed', { hasText: 'saved-whitespace.wav' });
+  const completed = page.locator('.queue-card.is-completed', { hasText: 'saved-whitespace.mp3' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
   const editor = page.locator('.tiptap-editor');

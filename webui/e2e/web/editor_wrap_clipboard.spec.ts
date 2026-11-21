@@ -1,26 +1,25 @@
 import fs from 'node:fs';
-import { expect, test } from '@playwright/test';
-import { expectAutosaved } from './autosave';
+import { expect, test } from './keyedTest';
+import { expectAutosaved } from '../autosave';
 import type { Page } from '@playwright/test';
-import { expectPlaybackAudioReady, writeSilentWav } from './audioFixture';
+import { expectPlaybackAudioReady, writeSilentWav } from '../audioFixture';
 import type { Editor } from '@tiptap/core';
 
 test('native clipboard exports the displayed positions of consecutive wrap images', async ({ page, context }, info) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  const audio = info.outputPath('wrap-clipboard.wav');
+  const audio = info.outputPath('wrap-clipboard.mp3');
   writeSilentWav(audio);
-  await expect.poll(async () => (await page.request.get('/api/bootstrap')).status()).toBe(200);
-  await page.goto('/');
+  await page.goto('/?simulazione=1');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(audio);
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  const completed = page.locator('.queue-card.is-completed', { hasText: 'wrap-clipboard.wav' });
+  const completed = page.locator('.queue-card.is-completed', { hasText: 'wrap-clipboard.mp3' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
   await expectPlaybackAudioReady(page);
   const editor = page.locator('.tiptap-editor');
-  const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
+  const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('../fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
   await editor.evaluate((root, src) => {
     const image = (offset: number, alt: string) => `<span data-editor-image data-width="59" data-layout="wrap" data-position="100" data-offset-y="${offset}" data-aspect-ratio="1.33"><img src="${src}" alt="${alt}"></span>`;
     (root as HTMLElement & { editor: Editor }).editor.commands.setContent(`<h2>Prima sezione</h2><p>${image(32.25, 'Prima figura')}${'Il testo descrive la prima figura e continua nel paragrafo. '.repeat(12)}</p><h3>Seconda sezione</h3><p>${image(240.63, 'Seconda figura')}${'La seconda figura accompagna questo testo e deve restare nella sua sezione. '.repeat(8)}</p><h2>Sezione successiva</h2><p>${'Questo testo appartiene alla sezione successiva. '.repeat(12)}</p>`);

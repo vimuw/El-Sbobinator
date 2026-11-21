@@ -1,20 +1,19 @@
 import fs from 'node:fs';
-import { expect, test } from '@playwright/test';
-import { expectPlaybackAudioReady, writeSilentWav } from './audioFixture';
-import { expectAutosaved } from './autosave';
+import { expect, test } from './keyedTest';
+import { expectPlaybackAudioReady, writeSilentWav } from '../audioFixture';
+import { expectAutosaved } from '../autosave';
 import type { Editor } from '@tiptap/core';
 
 for (const zoom of [1, 1.1, 0.9]) test(`typing below two late wrap figures preserves layout without copying the preceding transcript at zoom ${zoom}`, async ({ page }, info) => {
   await page.setViewportSize({ width: 1280, height: 900 });
-  const audio = info.outputPath('late-wrap.wav');
+  const audio = info.outputPath('late-wrap.mp3');
   writeSilentWav(audio);
-  await expect.poll(async () => (await page.request.get('/api/bootstrap')).status()).toBe(200);
-  await page.goto('/');
+  await page.goto('/?simulazione=1');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(audio);
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  const completed = page.locator('.queue-card.is-completed', { hasText: 'late-wrap.wav' });
+  const completed = page.locator('.queue-card.is-completed', { hasText: 'late-wrap.mp3' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
   await expectPlaybackAudioReady(page);
@@ -24,7 +23,7 @@ for (const zoom of [1, 1.1, 0.9]) test(`typing below two late wrap figures prese
   await page.keyboard.press('Control+0');
   if (zoom !== 1) await page.keyboard.press(zoom > 1 ? 'Control+=' : 'Control+-');
   await expect(page.locator('.editor-page')).toHaveCSS('zoom', String(zoom));
-  const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
+  const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('../fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
   await page.evaluate(() => {
     const probe = { blocks: [] as number[] };
     (window as unknown as { lateWrapProbe: typeof probe }).lateWrapProbe = probe;

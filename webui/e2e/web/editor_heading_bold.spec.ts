@@ -1,6 +1,7 @@
-import { expect, test, type Page } from '@playwright/test';
-import { writeSilentWav } from './audioFixture';
-import { expectAutosaved } from './autosave';
+import { expect, test } from './keyedTest';
+import type { Page } from '@playwright/test';
+import { writeSilentWav } from '../audioFixture';
+import { expectAutosaved } from '../autosave';
 import type { Editor } from '@tiptap/core';
 
 type EditorElement = HTMLElement & { editor: Editor };
@@ -24,14 +25,14 @@ async function readClipboardFormats(page: Page): Promise<Record<string, string>>
 
 test('Ctrl+B follows the visible heading weight through save, reopen and copy', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  const audio = testInfo.outputPath('heading-bold.wav');
+  const audio = testInfo.outputPath('heading-bold.mp3');
   writeSilentWav(audio);
-  await page.goto('/');
+  await page.goto('/?simulazione=1');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(audio);
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  const completed = page.locator('.queue-card.is-completed', { hasText: 'heading-bold.wav' });
+  const completed = page.locator('.queue-card.is-completed', { hasText: 'heading-bold.mp3' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
   const editor = page.locator('.tiptap-editor');
@@ -77,7 +78,7 @@ test('Ctrl+B follows the visible heading weight through save, reopen and copy', 
 
   await select(1, 13);
   await page.keyboard.press('Control+b');
-  await expect.poll(() => weight('Titolo')).toBe('700');
-  expect(await weight(' prova')).toBe('700');
+  // Both halves now carry the same marks, so they join into one text node.
+  await expect.poll(() => weight('Titolo prova')).toBe('700');
   await expect(bold).toHaveClass(/is-active/);
 });

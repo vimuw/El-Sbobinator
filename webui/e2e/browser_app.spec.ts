@@ -39,7 +39,8 @@ test.describe('El Sbobinator Browser Host E2E', () => {
     await selectScenario(page, 'success');
   });
 
-  test('happy path covers upload, phases, console, archive, and editor', async ({ page }, testInfo) => {
+  // The desktop host's smoke case (test:e2e:smoke) while the desktop suite still exists.
+  test('happy path covers upload, phases, console, archive, and editor', { tag: '@ci-smoke' }, async ({ page }, testInfo) => {
     const fixturePath = createAudioFixture(testInfo);
     await page.goto('/');
     await expect(page.locator('body')).toBeVisible();

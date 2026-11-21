@@ -1,27 +1,26 @@
 import fs from 'node:fs';
-import { expect, test } from '@playwright/test';
-import { expectPlaybackAudioReady, writeSilentWav } from './audioFixture';
-import { expectAutosaved } from './autosave';
+import { expect, test } from './keyedTest';
+import { expectPlaybackAudioReady, writeSilentWav } from '../audioFixture';
+import { expectAutosaved } from '../autosave';
 import type { Editor } from '@tiptap/core';
 
 test('styled empty paragraphs retain separate typography and typing marks through fallback and reopen', async ({ page, context }, testInfo) => {
   test.setTimeout(180000);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  const audio = testInfo.outputPath('html-styled-empty.wav');
+  const audio = testInfo.outputPath('html-styled-empty.mp3');
   writeSilentWav(audio);
-  await expect.poll(async () => (await page.request.get('/api/bootstrap')).status()).toBe(200);
-  await page.goto('/');
+  await page.goto('/?simulazione=1');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(audio);
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  const completed = page.locator('.queue-card.is-completed', { hasText: 'html-styled-empty.wav' });
+  const completed = page.locator('.queue-card.is-completed', { hasText: 'html-styled-empty.mp3' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
   await expectPlaybackAudioReady(page);
   const editor = page.locator('.tiptap-editor');
-  const imageSource = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
-  const fixture = fs.readFileSync(new URL('./fixtures/editor-parity-mixed.html', import.meta.url), 'utf8');
+  const imageSource = `data:image/jpeg;base64,${fs.readFileSync(new URL('../fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
+  const fixture = fs.readFileSync(new URL('../fixtures/editor-parity-mixed.html', import.meta.url), 'utf8');
   const source = fixture.replace('__IMAGE_SOURCE__', imageSource).replace('<table>', '<p style="font-family:Georgia;font-size:18pt;line-height:1.6;margin-top:8pt" data-editor-empty-marks="[{&quot;type&quot;:&quot;bold&quot;}]"></p><p style="font-family:Courier New;font-size:10pt;line-height:1.8;margin-bottom:10pt" data-editor-empty-marks="[{&quot;type&quot;:&quot;italic&quot;}]"></p><table>') +
     // An image without readable dimensions still forces the HTML fallback.
     '<p><img src="http://127.0.0.1:9/offline.png" alt="Immagine non raggiungibile"></p><p>Dopo la matrice.</p>';

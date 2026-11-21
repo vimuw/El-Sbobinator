@@ -1,15 +1,15 @@
-import { expect, test } from '@playwright/test';
-import { expectPlaybackAudioReady, writeSilentWav } from './audioFixture';
+import { expect, test } from './keyedTest';
+import { expectPlaybackAudioReady, writeSilentWav } from '../audioFixture';
 
 test('changing playback speed keeps the scrubber and controls in place', async ({ page }, info) => {
-  const fixture = info.outputPath('speed.wav');
+  const fixture = info.outputPath('speed.mp3');
   writeSilentWav(fixture);
-  await page.goto('/');
+  await page.goto('/?simulazione=1');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(fixture);
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  const completed = page.locator('.queue-card.is-completed', { hasText: 'speed.wav' });
+  const completed = page.locator('.queue-card.is-completed', { hasText: 'speed.mp3' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
   await expectPlaybackAudioReady(page);

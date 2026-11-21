@@ -1,21 +1,20 @@
 import fs from 'node:fs';
-import { expect, test } from '@playwright/test';
-import { expectPlaybackAudioReady, writeSilentWav } from './audioFixture';
-import { expectAutosaved } from './autosave';
+import { expect, test } from './keyedTest';
+import { expectPlaybackAudioReady, writeSilentWav } from '../audioFixture';
+import { expectAutosaved } from '../autosave';
 import type { Editor } from '@tiptap/core';
 
 test('native caret beside images keeps text height, blinks, and preserves editing', async ({ page, context }, testInfo) => {
   test.setTimeout(120000);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  const audio = testInfo.outputPath('image-caret.wav');
+  const audio = testInfo.outputPath('image-caret.mp3');
   writeSilentWav(audio);
-  await expect.poll(async () => (await page.request.get('/api/bootstrap')).status()).toBe(200);
-  await page.goto('/');
+  await page.goto('/?simulazione=1');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(audio);
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  const completed = page.locator('.queue-card.is-completed', { hasText: 'image-caret.wav' });
+  const completed = page.locator('.queue-card.is-completed', { hasText: 'image-caret.mp3' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
   const editor = page.locator('.tiptap-editor');

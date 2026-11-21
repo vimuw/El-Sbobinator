@@ -1,14 +1,14 @@
 import fs from 'node:fs';
-import { expect, test, type Page, type TestInfo } from '@playwright/test';
-import { expectPlaybackAudioReady, writeSilentWav } from './audioFixture';
-import { expectAutosaved } from './autosave';
+import { expect, test } from './keyedTest';
+import type { Page, TestInfo } from '@playwright/test';
+import { expectPlaybackAudioReady, writeSilentWav } from '../audioFixture';
+import { expectAutosaved } from '../autosave';
 import type { Editor } from '@tiptap/core';
 
 async function openEditor(page: Page, info: TestInfo) {
-  const audio = info.outputPath('three-bugs.wav');
+  const audio = info.outputPath('three-bugs.mp3');
   writeSilentWav(audio);
-  await expect.poll(async () => (await page.request.get('/api/bootstrap')).status()).toBe(200);
-  await page.goto('/');
+  await page.goto('/?simulazione=1');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(audio);
@@ -173,7 +173,7 @@ test('inline formula drafts preserve selected text until confirmation and return
 });
 
 test('wrap typing after the figure reuses gaps while edits beside it measure a bounded region and preserve history and reopen', async ({ page }, info) => {
-  const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
+  const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('../fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
   const editor = page.locator('.tiptap-editor');
   await editor.evaluate((root, src) => {
     const editor = (root as HTMLElement & { editor: Editor }).editor;

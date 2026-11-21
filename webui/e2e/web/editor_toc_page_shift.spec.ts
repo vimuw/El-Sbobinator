@@ -1,5 +1,5 @@
-import { expect, test } from '@playwright/test';
-import { expectPlaybackAudioReady, writeSilentWav } from './audioFixture';
+import { expect, test } from './keyedTest';
+import { expectPlaybackAudioReady, writeSilentWav } from '../audioFixture';
 import type { Editor } from '@tiptap/core';
 
 // As in Google Docs, opening the index never narrows the page: it moves the page right, and the
@@ -7,14 +7,14 @@ import type { Editor } from '@tiptap/core';
 // line being read stays where it was.
 test('the open index moves the page instead of narrowing it', async ({ page }, info) => {
   await page.setViewportSize({ width: 1000, height: 900 });
-  const audio = info.outputPath('toc-page-shift.wav');
+  const audio = info.outputPath('toc-page-shift.mp3');
   writeSilentWav(audio);
-  await page.goto('/');
+  await page.goto('/?simulazione=1');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(audio);
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  const completed = page.locator('.queue-card.is-completed', { hasText: 'toc-page-shift.wav' });
+  const completed = page.locator('.queue-card.is-completed', { hasText: 'toc-page-shift.mp3' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
   await expectPlaybackAudioReady(page);

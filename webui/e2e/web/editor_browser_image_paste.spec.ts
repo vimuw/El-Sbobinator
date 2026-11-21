@@ -1,13 +1,12 @@
-import { expect, test } from '@playwright/test';
-import { expectAutosaved } from './autosave';
+import { expect, test } from './keyedTest';
+import { expectAutosaved } from '../autosave';
 import type { Page } from '@playwright/test';
-import { writeSilentWav } from './audioFixture';
+import { writeSilentWav } from '../audioFixture';
 import type { Editor } from '@tiptap/core';
 
 async function openEditor(page: Page, audio: string) {
   writeSilentWav(audio);
-  await expect.poll(async () => (await page.request.get('/api/bootstrap')).status()).toBe(200);
-  await page.goto('/');
+  await page.goto('/?simulazione=1');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(audio);
@@ -37,7 +36,7 @@ async function writeImageClipboard(page: Page, html: string) {
 test('browser Copy image and screenshot paste embed pixels, support undo and survive saved reopen', async ({ page, context }, testInfo) => {
   test.setTimeout(120000);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openEditor(page, testInfo.outputPath('browser_copy_image.wav'));
+  await openEditor(page, testInfo.outputPath('browser_copy_image.mp3'));
   const editor = page.locator('.tiptap-editor');
   const readHtml = () => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getHTML());
   // The persistence sanitizer drops IMG title; compare all saved content and
@@ -72,7 +71,7 @@ test('browser Copy image and screenshot paste embed pixels, support undo and sur
     await expect.poll(readHtml).toBe(pasted);
     await expectAutosaved(page);
     await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
-    await page.locator('.queue-card.is-completed', { hasText: 'browser_copy_image.wav' }).getByRole('heading').click();
+    await page.locator('.queue-card.is-completed', { hasText: 'browser_copy_image.mp3' }).getByRole('heading').click();
     await expect(editor).toBeVisible();
     await expect.poll(persistedHtml).toBe(pasted.replace(/ title="[^"]*"/g, ''));
     await expect.poll(() => editor.locator('img.editor-image-asset').evaluate(node => (node as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
@@ -82,7 +81,7 @@ test('browser Copy image and screenshot paste embed pixels, support undo and sur
 
 test('image pixels alongside a mixed HTML document retain its text, formatting and image layout', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openEditor(page, testInfo.outputPath('mixed_image_clipboard.wav'));
+  await openEditor(page, testInfo.outputPath('mixed_image_clipboard.mp3'));
   const editor = page.locator('.tiptap-editor');
   await writeImageClipboard(page, '<p><strong>Testo prima</strong></p><p><span data-editor-image data-layout="wrap" data-align="left" data-width="35"><img src="EMBEDDED_IMAGE"></span></p><p>Testo dopo</p>');
   await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');

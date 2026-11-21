@@ -1,14 +1,14 @@
 import fs from 'node:fs';
-import { expect, test } from '@playwright/test';
-import { writeSilentWav } from './audioFixture';
+import { expect, test } from './keyedTest';
+import { writeSilentWav } from '../audioFixture';
 
 test('renames archived lessons in root and collections while preserving files and completion dates', async ({ page }, testInfo) => {
-  await page.goto('/');
+  await page.goto('/?simulazione=1');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles({
-    name: 'Lezione originale.wav', mimeType: 'audio/wav',
-    buffer: fs.readFileSync(writeSilentWav(testInfo.outputPath('rename.wav'))),
+    name: 'Lezione originale.mp3', mimeType: 'audio/wav',
+    buffer: fs.readFileSync(writeSilentWav(testInfo.outputPath('rename.mp3'))),
   });
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
   await expect(page.getByRole('heading', { name: 'Recenti' })).toBeVisible({ timeout: 15_000 });
@@ -74,7 +74,10 @@ test('renames archived lessons in root and collections while preserving files an
     input_path: original.session.input_path, input_name: original.session.input_name,
     completed_at_iso: original.session.completed_at_iso,
   });
-  expect(persisted.html).toEqual(original.html);
+  // The web host builds the page shell from the archive: only its <title> follows the new name.
+  const withoutTitle = (html: unknown) => JSON.stringify(html).replace(/<title>.*?<\/title>/, '');
+  expect(withoutTitle(persisted.html)).toEqual(withoutTitle(original.html));
+  expect(JSON.stringify(persisted.html)).toContain(`<title>${persisted.session.name}</title>`);
   expect(persisted.folders?.folders?.[0].session_dirs).toEqual([original.session.session_dir]);
   await page.reload();
   await page.getByRole('button', { name: 'Archivio', exact: true }).click();

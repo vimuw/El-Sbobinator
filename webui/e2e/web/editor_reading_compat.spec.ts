@@ -1,6 +1,7 @@
-import { test, expect, type Page } from '@playwright/test';
-import { expectPlaybackAudioReady, writeSilentWav } from './audioFixture';
-import { expectAutosaved } from './autosave';
+import { test, expect } from './keyedTest';
+import type { Page } from '@playwright/test';
+import { expectPlaybackAudioReady, writeSilentWav } from '../audioFixture';
+import { expectAutosaved } from '../autosave';
 import type { Editor } from '@tiptap/core';
 
 type EditorRoot = HTMLElement & { editor: Editor };
@@ -32,9 +33,9 @@ async function ink(page: Page, label: string) {
 
 test.beforeEach(async ({ context, page }, info) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  const audio = info.outputPath('reading.wav');
+  const audio = info.outputPath('reading.mp3');
   writeSilentWav(audio);
-  await page.goto('/');
+  await page.goto('/?simulazione=1');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(audio);

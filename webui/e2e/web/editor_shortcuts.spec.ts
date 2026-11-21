@@ -1,17 +1,17 @@
-import { expect, test } from '@playwright/test';
-import { expectPlaybackAudioReady, writeSilentWav } from './audioFixture';
+import { expect, test } from './keyedTest';
+import { expectPlaybackAudioReady, writeSilentWav } from '../audioFixture';
 import type { Editor } from '@tiptap/core';
 
 test('shared shortcuts live in the header and dismiss without closing or editing the document', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1680, height: 1000 });
-  const audio = testInfo.outputPath('scorciatoie.wav');
+  const audio = testInfo.outputPath('scorciatoie.mp3');
   writeSilentWav(audio);
-  await page.goto('/');
+  await page.goto('/?simulazione=1');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(audio);
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  const completed = page.locator('.queue-card.is-completed', { hasText: 'scorciatoie.wav' });
+  const completed = page.locator('.queue-card.is-completed', { hasText: 'scorciatoie.mp3' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
   await expectPlaybackAudioReady(page);
@@ -96,11 +96,11 @@ test('shared shortcuts live in the header and dismiss without closing or editing
   await page.screenshot({ path: testInfo.outputPath('shortcuts-narrow.png') });
   await page.keyboard.press('Escape');
   await expect(editor).toBeVisible();
-  // The same help stays available after unlinking audio.
+  // The same help stays available without audio: the web keeps no copy by default, so after a
+  // reload the reopened sbobina has none until the file is chosen again.
   await page.setViewportSize({ width: 1280, height: 720 });
-  await page.getByRole('button', { name: 'Opzioni audio collegato' }).click();
-  await page.getByRole('button', { name: 'Rimuovi audio collegato', exact: true }).click();
-  await page.getByRole('button', { name: 'Rimuovi audio', exact: true }).click();
+  await page.reload();
+  await expect(editor).toBeVisible();
   await expect(page.locator('audio')).toHaveCount(0);
   await trigger.click();
   await expect(dialog.getByText('Collega un file audio per usare questi comandi.')).toBeVisible();

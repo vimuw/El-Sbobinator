@@ -1,12 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test.beforeEach(async ({ page }) => {
-  await page.route('**/api/rpc/load_settings', async route => {
-    const response = await route.fetch();
-    const settings = await response.json();
-    await route.fulfill({ response, json: { ...settings, api_key: '', has_protected_key: false } });
-  });
-});
+// No key saved in this browser: the app opens on the key setup page.
 
 test('the setup cactus greets on click and both logos return to rest', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });

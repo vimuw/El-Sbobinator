@@ -1,6 +1,7 @@
 import path from 'node:path';
-import { expect, test, type Page, type TestInfo } from '@playwright/test';
-import { writeSilentWav } from './audioFixture';
+import { expect, test } from './keyedTest';
+import type { Page, TestInfo } from '@playwright/test';
+import { writeSilentWav } from '../audioFixture';
 
 function audioFixture(info: TestInfo, name: string): string {
   const fixture = info.outputPath(name);
@@ -9,7 +10,7 @@ function audioFixture(info: TestInfo, name: string): string {
 }
 
 async function queueFile(page: Page, fixture: string): Promise<void> {
-  await page.goto('/');
+  await page.goto('/?simulazione=1');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(fixture);
@@ -18,7 +19,7 @@ async function queueFile(page: Page, fixture: string): Promise<void> {
 }
 
 test('the queue slides down instead of jumping when processing starts', async ({ page }, info) => {
-  await queueFile(page, audioFixture(info, 'slide.wav'));
+  await queueFile(page, audioFixture(info, 'slide.mp3'));
   await page.waitForTimeout(400);
 
   const tops = page.evaluate(() => new Promise<number[]>(resolve => {
@@ -50,9 +51,9 @@ test('the player stays at the bottom while the editor is loading', async ({ page
     await editorGate;
     await route.continue();
   });
-  await queueFile(page, audioFixture(info, 'loading.wav'));
+  await queueFile(page, audioFixture(info, 'loading.mp3'));
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  const completed = page.locator('.queue-card.is-completed', { hasText: 'loading.wav' });
+  const completed = page.locator('.queue-card.is-completed', { hasText: 'loading.mp3' });
   await expect(completed).toBeVisible({ timeout: 15_000 });
   await completed.getByRole('heading').click();
 

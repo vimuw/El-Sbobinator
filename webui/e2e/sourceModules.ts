@@ -3,5 +3,6 @@
 export * as formatting from '../src/utils';
 export * as clipboard from '../src/editorClipboard';
 export * as spacing from '../src/editorLineSpacing';
+export * as webExport from '../src/web/pipeline/export';
 // Same module instance as the app's editor, so its history plugin honours it.
 export { closeHistory } from '@tiptap/pm/history';

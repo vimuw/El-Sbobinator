@@ -1,26 +1,25 @@
 import fs from 'node:fs';
-import { expect, test } from '@playwright/test';
-import { writeSilentWav } from './audioFixture';
-import { expectAutosaved } from './autosave';
+import { expect, test } from './keyedTest';
+import { writeSilentWav } from '../audioFixture';
+import { expectAutosaved } from '../autosave';
 import type { Editor } from '@tiptap/core';
 
 test('mixed equation clipboard routes preserve editable source through HTML paste and reopen', async ({ page, context }, testInfo) => {
   test.setTimeout(180000);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  const audio = testInfo.outputPath('html-equations.wav');
+  const audio = testInfo.outputPath('html-equations.mp3');
   writeSilentWav(audio);
-  await expect.poll(async () => (await page.request.get('/api/bootstrap')).status()).toBe(200);
-  await page.goto('/');
+  await page.goto('/?simulazione=1');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(audio);
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  const completed = page.locator('.queue-card.is-completed', { hasText: 'html-equations.wav' });
+  const completed = page.locator('.queue-card.is-completed', { hasText: 'html-equations.mp3' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
   const editor = page.locator('.tiptap-editor');
-  const imageSource = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
-  const fixture = fs.readFileSync(new URL('./fixtures/editor-parity-mixed.html', import.meta.url), 'utf8');
+  const imageSource = `data:image/jpeg;base64,${fs.readFileSync(new URL('../fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
+  const fixture = fs.readFileSync(new URL('../fixtures/editor-parity-mixed.html', import.meta.url), 'utf8');
   const source = fixture.replace('__IMAGE_SOURCE__', imageSource) +
     '<p>Radice e indici: <span data-math="x_i^2+\\sqrt{y}">formula</span>.</p>' +
     '<div data-math-block="\\sum_{i=0}^{n}i">formula</div><p>Prima della matrice.</p>' +

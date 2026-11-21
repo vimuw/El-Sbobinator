@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './keyedTest';
 
 for (const theme of ['light', 'dark']) {
   test(`notification pointer stays joined to its frame while rows scroll (${theme})`, async ({ page }, testInfo) => {
@@ -17,7 +17,7 @@ for (const theme of ['light', 'dark']) {
         }))
       ));
     }, theme);
-    await page.goto('/');
+    await page.goto('/?simulazione=1');
     await expect(page.getByRole('button', { name: 'Apri notifiche', exact: true })).toBeVisible();
     // The browser host clears notifications for a new instance; seed again on reload.
     await page.reload();

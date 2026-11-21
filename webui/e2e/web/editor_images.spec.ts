@@ -1,12 +1,12 @@
 import fs from 'node:fs';
-import { expect, test } from '@playwright/test';
-import { expectPlaybackAudioReady, writeSilentWav } from './audioFixture';
-import { expectAutosaved } from './autosave';
+import { expect, test } from './keyedTest';
+import { expectPlaybackAudioReady, writeSilentWav } from '../audioFixture';
+import { expectAutosaved } from '../autosave';
 import type { Page } from '@playwright/test';
 import type { Editor } from '@tiptap/core';
 
 // Playwright's Node loader cannot import the shared JSON profile without import attributes.
-const { contentWidthPx: EDITOR_CONTENT_WIDTH_PX } = JSON.parse(fs.readFileSync(new URL('../../el_sbobinator/document_formatting.json', import.meta.url), 'utf8')) as { contentWidthPx: number };
+const { contentWidthPx: EDITOR_CONTENT_WIDTH_PX } = JSON.parse(fs.readFileSync(new URL('../../../el_sbobinator/document_formatting.json', import.meta.url), 'utf8')) as { contentWidthPx: number };
 const columnPx = (percent: number) => Math.round(EDITOR_CONTENT_WIDTH_PX * percent / 100);
 // Native Wrap X: the free column share at a position, in points, minus the 12pt wrap margin.
 const nativeWrapLeft = (widthPercent: number, position: number) => (EDITOR_CONTENT_WIDTH_PX - columnPx(widthPercent)) * position / 100 * 0.75 - 12;
@@ -15,8 +15,7 @@ async function openImageEditor(page: Page, audio: string) {
   writeSilentWav(audio);
   // Vite can become ready before FastAPI; opening the app in that window leaves
   // bootstrap at HTTP 502 and prevents the editor fixture from starting.
-  await expect.poll(async () => (await page.request.get('/api/bootstrap')).status()).toBe(200);
-  await page.goto('/');
+  await page.goto('/?simulazione=1');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(audio);
@@ -43,7 +42,7 @@ async function commitEdit(page: Page) {
 test('soft breaks replace selections using the first selected styles and persist through copy', async ({ page, context }, testInfo) => {
   test.setTimeout(240000);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('parity_soft_selection.wav'));
+  await openImageEditor(page, testInfo.outputPath('parity_soft_selection.mp3'));
   const editor = page.locator('.tiptap-editor');
   const styled = (text: string) => `<span style="font-family:Georgia;font-size:18pt;color:#123abc"><mark data-color="#ffee00" style="background-color:#ffee00"><strong><em><u><s>${text}</s></u></em></strong></mark></span>`;
   const read = () => editor.evaluate(root => {
@@ -111,7 +110,7 @@ test('soft breaks replace selections using the first selected styles and persist
     await commitEdit(page);
     if (profile === profiles.at(-1)) {
       await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
-      await page.locator('.queue-card.is-completed', { hasText: 'parity_soft_selection.wav' }).getByRole('heading').click();
+      await page.locator('.queue-card.is-completed', { hasText: 'parity_soft_selection.mp3' }).getByRole('heading').click();
       await expect(editor).toBeVisible();
     } else {
       await editor.evaluate(root => { const instance = (root as HTMLElement & { editor: Editor }).editor; instance.chain().setMeta('addToHistory', false).setContent(instance.getHTML()).run(); });
@@ -129,7 +128,7 @@ test('soft breaks replace selections using the first selected styles and persist
 test('soft breaks preserve combined styles, list structure, history and saved clipboard', async ({ page, context }, testInfo) => {
   test.setTimeout(120000);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('parity_soft_break.wav'));
+  await openImageEditor(page, testInfo.outputPath('parity_soft_break.mp3'));
   const editor = page.locator('.tiptap-editor');
   const styled = '<span style="font-family:Georgia;font-size:18pt;color:#123abc"><mark data-color="#ffee00" style="background-color:#ffee00"><strong><em><u><s>Prima</s></u></em></strong></mark></span>';
   const html = () => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getHTML().replaceAll('data-color="#ffee00"', 'data-color="rgb(255, 238, 0)"'));
@@ -180,7 +179,7 @@ test('soft breaks preserve combined styles, list structure, history and saved cl
     await commitEdit(page);
     if (offset === 5 && count === 2) {
       await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
-      await page.locator('.queue-card.is-completed', { hasText: 'parity_soft_break.wav' }).getByRole('heading').click();
+      await page.locator('.queue-card.is-completed', { hasText: 'parity_soft_break.mp3' }).getByRole('heading').click();
       await expect(editor).toBeVisible();
     } else {
       await editor.evaluate(root => { const instance = (root as HTMLElement & { editor: Editor }).editor; instance.chain().setMeta('addToHistory', false).setContent(instance.getHTML()).run(); });
@@ -198,7 +197,7 @@ test('soft breaks preserve combined styles, list structure, history and saved cl
 test('combined empty-line styles survive keyboard return, second Enter, autosave and reopen', async ({ page, context }, testInfo) => {
   test.setTimeout(90000);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('parity_empty_styles.wav'));
+  await openImageEditor(page, testInfo.outputPath('parity_empty_styles.mp3'));
   const editor = page.locator('.tiptap-editor');
   // CSS parsing canonicalizes the equivalent highlight hex value on reopen.
   const html = () => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getHTML().replaceAll('data-color="#ffee00"', 'data-color="rgb(255, 238, 0)"'));
@@ -241,7 +240,7 @@ test('combined empty-line styles survive keyboard return, second Enter, autosave
     await expectAutosaved(page);
     await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
     await expect(editor).not.toBeVisible();
-    await page.locator('.queue-card.is-completed', { hasText: 'parity_empty_styles.wav' }).getByRole('heading').click();
+    await page.locator('.queue-card.is-completed', { hasText: 'parity_empty_styles.mp3' }).getByRole('heading').click();
     await expect(editor).toBeVisible();
     await expect.poll(html).toBe(emptyHtml);
     let typedHtml = '';
@@ -280,7 +279,7 @@ test('combined empty-line styles survive keyboard return, second Enter, autosave
     fs.writeFileSync(testInfo.outputPath(`empty-styles-${name}-typed-clipboard.json`), JSON.stringify(await readClipboardFormats(page)));
     await expectAutosaved(page);
     await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
-    await page.locator('.queue-card.is-completed', { hasText: 'parity_empty_styles.wav' }).getByRole('heading').click();
+    await page.locator('.queue-card.is-completed', { hasText: 'parity_empty_styles.mp3' }).getByRole('heading').click();
     await expect(editor).toBeVisible(); await expect.poll(html).toBe(typedHtml);
     await page.screenshot({ path: testInfo.outputPath(`empty-styles-${name}-editor.png`) });
   }
@@ -288,7 +287,7 @@ test('combined empty-line styles survive keyboard return, second Enter, autosave
 
 test('list second Enter on an empty parent exits one level and retains descendant geometry', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('parity_empty_enter.wav'));
+  await openImageEditor(page, testInfo.outputPath('parity_empty_enter.mp3'));
   const editor = page.locator('.tiptap-editor');
   const getDocument = () => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON());
   const geometry = () => editor.locator('p').evaluateAll(nodes => nodes.map(node => ({ text: node.textContent, left: node.getBoundingClientRect().left, top: node.getBoundingClientRect().top })));
@@ -328,7 +327,7 @@ test('list second Enter on an empty parent exits one level and retains descendan
     await expectAutosaved(page);
     await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
     await expect(editor).not.toBeVisible();
-    await page.locator('.queue-card.is-completed', { hasText: 'parity_empty_enter.wav' }).getByRole('heading').click();
+    await page.locator('.queue-card.is-completed', { hasText: 'parity_empty_enter.mp3' }).getByRole('heading').click();
     await expect(editor).toBeVisible();
     await expect.poll(() => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.isInitialized)).toBe(true);
     await expect.poll(getDocument).toEqual(exited); expect(await geometry()).toEqual(after);
@@ -347,7 +346,7 @@ test('list second Enter on an empty parent exits one level and retains descendan
 
 test('list Enter on a parent keeps its child list with the second item and separates undo', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('parity_enter_subtree.wav'));
+  await openImageEditor(page, testInfo.outputPath('parity_enter_subtree.mp3'));
   const editor = page.locator('.tiptap-editor');
   const getDocument = () => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON());
   const geometry = () => editor.locator('p').evaluateAll(nodes => nodes.map(node => ({ text: node.textContent, left: node.getBoundingClientRect().left, top: node.getBoundingClientRect().top })));
@@ -386,7 +385,7 @@ test('list Enter on a parent keeps its child list with the second item and separ
 
 test('list child Backspace after ancestor merge releases the last hidden shell and separates undo', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('parity_backspace_children.wav'));
+  await openImageEditor(page, testInfo.outputPath('parity_backspace_children.mp3'));
   const editor = page.locator('.tiptap-editor');
   const getDocument = () => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON());
   const geometry = () => editor.locator('p').evaluateAll(nodes => nodes.map(node => ({ text: node.textContent, left: node.getBoundingClientRect().left, top: node.getBoundingClientRect().top })));
@@ -433,7 +432,7 @@ test('list child Backspace after ancestor merge releases the last hidden shell a
 
 test('list third Backspace on the first child branch joins ancestor text and preserves child depth', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('parity_backspace_first_merge.wav'));
+  await openImageEditor(page, testInfo.outputPath('parity_backspace_first_merge.mp3'));
   const editor = page.locator('.tiptap-editor');
   const getDocument = () => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON());
   for (const nested of [false, true]) {
@@ -478,7 +477,7 @@ test('list third Backspace on the first child branch joins ancestor text and pre
 
 test('list second Backspace on the first child branch resets only its indent and separates undo', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('parity_backspace_first_followup.wav'));
+  await openImageEditor(page, testInfo.outputPath('parity_backspace_first_followup.mp3'));
   const editor = page.locator('.tiptap-editor');
   const getDocument = () => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON());
   for (const nested of [false, true]) {
@@ -518,7 +517,7 @@ test('list second Backspace on the first child branch resets only its indent and
 
 test('list Backspace on the first child branch retains geometry and following numbering', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('parity_backspace_first_subtree.wav'));
+  await openImageEditor(page, testInfo.outputPath('parity_backspace_first_subtree.mp3'));
   const editor = page.locator('.tiptap-editor');
   const getDocument = () => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON());
   for (const nested of [false, true]) {
@@ -554,7 +553,7 @@ test('list Backspace on the first child branch retains geometry and following nu
 
 test('list Backspace between two child branches retains geometry and continues numbering', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('parity_backspace_two_branches.wav'));
+  await openImageEditor(page, testInfo.outputPath('parity_backspace_two_branches.mp3'));
   const editor = page.locator('.tiptap-editor');
   const getDocument = () => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON());
   for (const nested of [false, true]) {
@@ -596,7 +595,7 @@ test('list Backspace between two child branches retains geometry and continues n
 
 test('list Backspace retains a child branch and removes only its parent marker', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('parity_backspace_subtree.wav'));
+  await openImageEditor(page, testInfo.outputPath('parity_backspace_subtree.mp3'));
   const editor = page.locator('.tiptap-editor');
   const getDocument = () => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON());
   for (const nested of [false, true]) {
@@ -636,7 +635,7 @@ test('list Backspace retains a child branch and removes only its parent marker',
 
 test('cross-level list Delete joins text and continues child numbering with separate history', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('parity_delete_levels.wav'));
+  await openImageEditor(page, testInfo.outputPath('parity_delete_levels.mp3'));
   const editor = page.locator('.tiptap-editor');
   const html = '<ol><li><p>Madre</p><ol type="a"><li><p><strong>Figlia</strong></p></li><li><p>Sorella</p></li></ol></li><li><p>Seconda</p><ol type="a"><li><p>Nipote</p></li><li><p>Altra</p></li></ol></li><li><p>Ultima</p></li></ol><p></p>';
   const getDocument = () => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON());
@@ -681,7 +680,7 @@ test('cross-level list Delete joins text and continues child numbering with sepa
 
 test('list Delete joins sibling text with separate typing history and native transfer', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('parity_delete.wav'));
+  await openImageEditor(page, testInfo.outputPath('parity_delete.mp3'));
   const editor = page.locator('.tiptap-editor');
   const document = () => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON());
   const paste = async (html: string) => {
@@ -731,7 +730,7 @@ test('list Delete joins sibling text with separate typing history and native tra
 
 test('third list Backspace joins previous text with independent undo and persistent list structure', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('parity_third_backspace.wav'));
+  await openImageEditor(page, testInfo.outputPath('parity_third_backspace.mp3'));
   const editor = page.locator('.tiptap-editor');
   const document = () => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON());
   const paste = async (html: string) => {
@@ -775,7 +774,7 @@ test('third list Backspace joins previous text with independent undo and persist
 
 test('second list Backspace resets root and nested indents without joining text', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('parity_second_backspace.wav'));
+  await openImageEditor(page, testInfo.outputPath('parity_second_backspace.mp3'));
   const editor = page.locator('.tiptap-editor');
   const document = () => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON());
   const paste = async (html: string) => {
@@ -823,7 +822,7 @@ test('second list Backspace resets root and nested indents without joining text'
 
 test('list Backspace removes a marker while preserving paragraphs, indents and numbering', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('parity_backspace.wav'));
+  await openImageEditor(page, testInfo.outputPath('parity_backspace.mp3'));
   const editor = page.locator('.tiptap-editor');
   const paste = async (html: string) => {
     await page.evaluate(async value => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]); }, html);
@@ -899,9 +898,9 @@ test('list Backspace removes a marker while preserving paragraphs, indents and n
 
 test('ordered lists preserve markers, continuation paragraphs and keyboard history', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('parity_lists.wav'));
+  await openImageEditor(page, testInfo.outputPath('parity_lists.mp3'));
   const editor = page.locator('.tiptap-editor');
-  const html = fs.readFileSync(new URL('./fixtures/editor-parity-lists.html', import.meta.url), 'utf8');
+  const html = fs.readFileSync(new URL('../fixtures/editor-parity-lists.html', import.meta.url), 'utf8');
   const paste = async (value: string) => {
     await page.evaluate(async markup => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([markup], { type: 'text/html' }) })]); }, value);
     await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
@@ -970,7 +969,7 @@ test('ordered lists preserve markers, continuation paragraphs and keyboard histo
 
 test('new nested markers and partial list copies follow the selected text and numbering', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('list_selections.wav'));
+  await openImageEditor(page, testInfo.outputPath('list_selections.mp3'));
   const editor = page.locator('.tiptap-editor');
   const key = async (value: string) => {
     await page.keyboard.press(value);
@@ -1023,9 +1022,9 @@ test('new nested markers and partial list copies follow the selected text and nu
 
 test('native equations retain named functions, operator limits and surrounding formatting', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('parity_equations.wav'));
+  await openImageEditor(page, testInfo.outputPath('parity_equations.mp3'));
   const editor = page.locator('.tiptap-editor');
-  const html = fs.readFileSync(new URL('./fixtures/editor-parity-equations.html', import.meta.url), 'utf8');
+  const html = fs.readFileSync(new URL('../fixtures/editor-parity-equations.html', import.meta.url), 'utf8');
   await page.evaluate(async value => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]); }, html);
   await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
   await expect(editor.locator('h2')).toHaveText('Funzioni e limiti');
@@ -1074,10 +1073,10 @@ test('native equations retain named functions, operator limits and surrounding f
 test('representative mixed document preserves edits, merged table widths, image and equation after save and reopen', async ({ page, context }, testInfo) => {
   test.setTimeout(90000);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('parity_representative.wav'));
+  await openImageEditor(page, testInfo.outputPath('parity_representative.mp3'));
   const editor = page.locator('.tiptap-editor');
-  const imageSource = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
-  const source = fs.readFileSync(new URL('./fixtures/editor-parity-mixed.html', import.meta.url), 'utf8').replace('__IMAGE_SOURCE__', imageSource);
+  const imageSource = `data:image/jpeg;base64,${fs.readFileSync(new URL('../fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
+  const source = fs.readFileSync(new URL('../fixtures/editor-parity-mixed.html', import.meta.url), 'utf8').replace('__IMAGE_SOURCE__', imageSource);
   await page.evaluate(async value => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]); }, source);
   await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
   await expect(editor.locator('h1')).toHaveText('Lezione sintetica: energia e misure');
@@ -1118,7 +1117,7 @@ test('representative mixed document preserves edits, merged table widths, image 
   await editor.focus(); await page.keyboard.press('Control+z'); expect((await read()).html).toBe(edited.html);
   await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
-  await page.locator('.queue-card.is-completed', { hasText: 'parity_representative.wav' }).getByRole('heading').click();
+  await page.locator('.queue-card.is-completed', { hasText: 'parity_representative.mp3' }).getByRole('heading').click();
   await expect(editor).toBeVisible();
   const reopened = await read();
   expect(reopened.html.replaceAll('rgb(255, 238, 0)', '#ffee00')).toBe(edited.html.replaceAll('rgb(255, 238, 0)', '#ffee00'));
@@ -1140,10 +1139,10 @@ test('representative mixed document preserves edits, merged table widths, image 
 test('mixed wrap images and captions preserve surrounding content through history, save and native clipboard', async ({ page, context }, testInfo) => {
   test.setTimeout(180000);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('parity_mixed_wrap.wav'));
+  await openImageEditor(page, testInfo.outputPath('parity_mixed_wrap.mp3'));
   const editor = page.locator('.tiptap-editor');
-  const imageSource = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
-  const fixture = fs.readFileSync(new URL('./fixtures/editor-parity-mixed.html', import.meta.url), 'utf8');
+  const imageSource = `data:image/jpeg;base64,${fs.readFileSync(new URL('../fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
+  const fixture = fs.readFileSync(new URL('../fixtures/editor-parity-mixed.html', import.meta.url), 'utf8');
   const nativeMime = 'application/x-vnd.google-docs-document-slice-clip+wrapped';
   const read = () => editor.evaluate(root => {
     const instance = (root as HTMLElement & { editor: Editor }).editor;
@@ -1195,7 +1194,7 @@ test('mixed wrap images and captions preserve surrounding content through histor
     await editor.focus(); await page.keyboard.press('Control+z'); expect((await read()).html).toBe(edited.html);
     await expectAutosaved(page);
     await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
-    await page.locator('.queue-card.is-completed', { hasText: 'parity_mixed_wrap.wav' }).getByRole('heading').click();
+    await page.locator('.queue-card.is-completed', { hasText: 'parity_mixed_wrap.mp3' }).getByRole('heading').click();
     await expect(editor).toBeVisible();
     await expect.poll(() => editor.evaluate(root => Boolean((root as HTMLElement & { editor?: Editor }).editor))).toBe(true);
     const reopened = await read();
@@ -1221,7 +1220,7 @@ test('mixed wrap images and captions preserve surrounding content through histor
 
 test('copy and cut keep the same formats for a mixed document and undo restores it', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('parity_cut.wav'));
+  await openImageEditor(page, testInfo.outputPath('parity_cut.mp3'));
   const editor = page.locator('.tiptap-editor');
   const html = '<h2><span style="font-family:Georgia;font-size:18pt;color:#123abc">Titolo scelto</span></h2><p>ana<strong>tom</strong>ia<br>seconda riga</p><ol start="4"><li><p>Quarta voce</p></li><li><p><mark data-color="#ffee00" style="background-color:#ffee00">Evidenziato</mark></p></li></ol><table><tr><td><p>Cella uno</p></td><td><p>Cella due</p></td></tr></table>';
   await page.evaluate(async value => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]); }, html);
@@ -1248,7 +1247,7 @@ test('copy and cut keep the same formats for a mixed document and undo restores 
 
 test('context paste preserves HTML and plain paste preserves angle brackets', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('parity_paste.wav'));
+  await openImageEditor(page, testInfo.outputPath('parity_paste.mp3'));
   const editor = page.locator('.tiptap-editor');
   await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Backspace');
   await page.keyboard.type('Da sostituire'); await page.keyboard.press('Control+a');
@@ -1267,7 +1266,7 @@ test('context paste preserves HTML and plain paste preserves angle brackets', as
 
 test('document defaults and direct colors agree with clipboard and all clear formatting controls preserve structure', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('parity_profile.wav'));
+  await openImageEditor(page, testInfo.outputPath('parity_profile.mp3'));
   const editor = page.locator('.tiptap-editor');
   const html = '<h2>Titolo predefinito</h2><p><span style="color:#123abc"><mark data-color="#ffee00" style="background-color:#ffee00">Blu evidenziato</mark></span></p><h4>Quarto livello</h4><h2 style="font-family:Georgia;font-size:24px;font-weight:700;color:#bc321a;line-height:2;margin:30pt 0 12pt">Esplicito</h2><p>Fine</p>';
   await page.evaluate(async value => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]); }, html);
@@ -1292,8 +1291,10 @@ test('document defaults and direct colors agree with clipboard and all clear for
   await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
   await expect(editor.locator('table')).toBeVisible();
   const original = await editor.evaluate(element => (element as HTMLElement & { editor: Editor }).editor.getJSON());
+  // The pasted <strong> matches the heading's own weight, so the paste drops it.
+  await expect(editor.locator('h2 strong')).toHaveCount(0);
   for (const control of ['toolbar', 'keyboard', 'context', 'bubble']) {
-    await editor.locator('h2 strong').click();
+    await editor.locator('h2').click();
     await page.keyboard.press('Control+Home');
     // Flush the browser selectionchange from navigation before selecting all.
     await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
@@ -1304,7 +1305,7 @@ test('document defaults and direct colors agree with clipboard and all clear for
     else if (control === 'context') {
       const selected = await editor.evaluate(element => { const { from, to } = (element as HTMLElement & { editor: Editor }).editor.state.selection; return { from, to }; });
       expect(await editor.evaluate(element => (element as HTMLElement & { editor: Editor }).editor.state.selection.empty), 'document is selected before right click').toBe(false);
-      await editor.locator('h2 strong').click({ button: 'right' });
+      await editor.locator('h2').click({ button: 'right' });
       expect(await editor.evaluate(element => { const { from, to } = (element as HTMLElement & { editor: Editor }).editor.state.selection; return { from, to }; }), 'context keeps the complete selection').toEqual(selected);
       expect(await editor.evaluate(element => (element as HTMLElement & { editor: Editor }).editor.state.selection.empty), 'context menu keeps the selected document').toBe(false);
       await page.locator('.editor-context-menu').getByRole('button', { name: 'Rimuovi formattazione' }).click();
@@ -1322,7 +1323,7 @@ test('document defaults and direct colors agree with clipboard and all clear for
 
 test('partial clear and empty caret preserve paragraph layout, future typing and undo', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('parity_partial_clear.wav'));
+  await openImageEditor(page, testInfo.outputPath('parity_partial_clear.mp3'));
   const editor = page.locator('.tiptap-editor');
   const html = '<p data-document-line-spacing="1.6" style="font-family:Georgia;font-size:18pt;font-weight:700;font-style:italic;color:#123abc;text-align:center;line-height:1.92;margin-top:8pt;margin-bottom:10pt">Prima SCELTA dopo</p>';
   await page.evaluate(async value => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]); }, html);
@@ -1383,10 +1384,10 @@ for (const layout of ['inline', 'wrap']) {
     // OS network changes must not prevent reaching the editor under test.
     await page.addInitScript(() => Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => true }));
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-    const audio = testInfo.outputPath(`${layout}_resize_outside.wav`);
+    const audio = testInfo.outputPath(`${layout}_resize_outside.mp3`);
     await openImageEditor(page, audio);
     const editor = page.locator('.tiptap-editor');
-    const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
+    const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('../fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
     const html = `<p>Paragrafo prima della figura.</p><p><span data-editor-image data-layout="${layout}" data-width="35" data-position="45" data-offset-y="${layout === 'wrap' ? 40 : 0}"><img src="${src}" alt="Resize fuori pagina"></span>${' Testo attorno.'.repeat(30)}</p><p>Fine documento.</p>`;
     const image = editor.getByAltText('Resize fuori pagina');
     const node = editor.locator('.editor-image-node');
@@ -1456,9 +1457,9 @@ for (const layout of ['inline', 'wrap']) {
   test(`${layout} resize keeps opposite edges fixed for all eight handles`, async ({ page, context }, testInfo) => {
     test.setTimeout(120000);
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-    await openImageEditor(page, testInfo.outputPath(`${layout}_anchors.wav`));
+    await openImageEditor(page, testInfo.outputPath(`${layout}_anchors.mp3`));
     const editor = page.locator('.tiptap-editor');
-    const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
+    const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('../fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
     const html = `<p>Paragrafo prima dell'immagine.</p><p>Prima <span data-editor-image data-layout="${layout}" data-width="35" data-position="45" data-offset-y="${layout === 'wrap' ? 80 : 0}"><img src="${src}" alt="Resize ancorato"></span>${' Testo attorno alla figura.'.repeat(20)}</p><p>Fine documento.</p>`;
     await page.evaluate(async value => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]); }, html);
     await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
@@ -1511,9 +1512,9 @@ for (const layout of ['inline', 'wrap']) {
 
   test(`${layout} resize previews without changing document layout until release`, async ({ page, context }, testInfo) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-    await openImageEditor(page, testInfo.outputPath(`${layout}_resize.wav`));
+    await openImageEditor(page, testInfo.outputPath(`${layout}_resize.mp3`));
     const editor = page.locator('.tiptap-editor');
-    const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
+    const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('../fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
     const html = `<p><span data-editor-image data-layout="${layout}" data-width="35"><img src="${src}" alt="Resize fluido"></span>${'Testo attorno alla figura. '.repeat(40)}</p>${`<p>${'Documento lungo da impaginare. '.repeat(30)}</p>`.repeat(25)}`;
     await page.evaluate(async value => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]); }, html);
     await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
@@ -1555,9 +1556,9 @@ for (const layout of ['inline', 'wrap']) {
 
 test('wrap guides snap to all three text alignments and clear on drop and Escape', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('alignment_guides.wav'));
+  await openImageEditor(page, testInfo.outputPath('alignment_guides.mp3'));
   const editor = page.locator('.tiptap-editor');
-  const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
+  const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('../fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
   const html = `<p><span data-editor-image data-layout="wrap" data-width="35"><img src="${src}" alt="Guide allineamento"></span>${'Testo attorno alla figura. '.repeat(30)}</p><p>Fine documento</p>`;
   await page.evaluate(async value => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]); }, html);
   await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
@@ -1604,10 +1605,10 @@ test('wrap guides snap to all three text alignments and clear on drop and Escape
 for (const layout of ['inline', 'wrap']) {
   test(`${layout} image drag scrolls both edges with a stationary pointer and stops on release`, async ({ page, context }, testInfo) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-    await openImageEditor(page, testInfo.outputPath(`${layout}_scroll.wav`));
+    await openImageEditor(page, testInfo.outputPath(`${layout}_scroll.mp3`));
     const editor = page.locator('.tiptap-editor');
     const viewport = page.locator('.editor-page-container');
-    const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
+    const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('../fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
     const html = `<p><span data-editor-image data-layout="${layout}" data-width="35"><img src="${src}" alt="Scroll drag"></span>${'Testo iniziale. '.repeat(20)}</p>${`<p>${'Contenuto del documento lungo. '.repeat(20)}</p>`.repeat(35)}`;
     await page.evaluate(async value => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]); }, html);
     await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
@@ -1645,9 +1646,9 @@ for (const layout of ['inline', 'wrap']) {
 
 test('inline selection keeps the image and its handles at the same position after wrap', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('selection.wav'));
+  await openImageEditor(page, testInfo.outputPath('selection.mp3'));
   const editor = page.locator('.tiptap-editor');
-  const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
+  const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('../fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
   const html = `<p>Prima della figura</p><p><span data-editor-image data-width="35"><img src="${src}" alt="Selezione stabile"></span>${' Dopo la figura. '.repeat(30)}</p><p>Paragrafo seguente</p>`;
   await page.evaluate(async value => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]); }, html);
   await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
@@ -1700,9 +1701,9 @@ test('inline selection keeps the image and its handles at the same position afte
 
 test('Wrap images pasted into table cells stay inline, as in Docs, through copy and saved reopen', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('table_drag_anchor.wav'));
+  await openImageEditor(page, testInfo.outputPath('table_drag_anchor.mp3'));
   const editor = page.locator('.tiptap-editor');
-  const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
+  const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('../fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
   const html = `<table><tr><td colwidth="300"><p>Prima cella</p></td><td colwidth="300"><p><span data-editor-image data-layout="wrap" data-position="60" data-offset-y="12" data-width="35"><img src="${src}" alt="Figura nella seconda cella"></span>${'Testo nella seconda cella. '.repeat(12)}</p></td></tr></table><p>Fine</p>`;
   await page.evaluate(async value => navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]), html);
   await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
@@ -1735,7 +1736,7 @@ test('Wrap images pasted into table cells stay inline, as in Docs, through copy 
   expect(model.dsl_entitypositionmap.inline.filter(Boolean)).toHaveLength(1);
   await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
-  await page.locator('.queue-card.is-completed', { hasText: 'table_drag_anchor.wav' }).getByRole('heading').click();
+  await page.locator('.queue-card.is-completed', { hasText: 'table_drag_anchor.mp3' }).getByRole('heading').click();
   await expect.poll(read).toEqual(original);
   await expect(figure).toHaveAttribute('data-layout', 'inline');
 });
@@ -1746,10 +1747,10 @@ for (const zoom of [{ key: 'Control+=', value: '1.1' }, { key: 'Control+-', valu
   }, async ({ page, context }, testInfo) => {
     await page.setViewportSize({ width: 1400, height: 1000 });
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-    const audio = testInfo.outputPath('drag_zoom.wav');
+    const audio = testInfo.outputPath('drag_zoom.mp3');
     await openImageEditor(page, audio);
     const editor = page.locator('.tiptap-editor');
-    const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
+    const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('../fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
     const html = `<p><span data-editor-image data-layout="wrap" data-width="35"><img src="${src}" alt="Figura zoom"></span>${'Testo accanto alla figura. '.repeat(60)}</p><p>Fine</p>`;
     await page.evaluate(async value => navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]), html);
     await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
@@ -1794,7 +1795,7 @@ for (const zoom of [{ key: 'Control+=', value: '1.1' }, { key: 'Control+-', valu
     await expect.poll(read).toEqual(moved);
     await expectAutosaved(page);
     await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
-    await page.locator('.queue-card.is-completed', { hasText: 'drag_zoom.wav' }).getByRole('heading').click();
+    await page.locator('.queue-card.is-completed', { hasText: 'drag_zoom.mp3' }).getByRole('heading').click();
     await expect(editor).toBeVisible();
     await expect.poll(read).toEqual(moved);
     await expect.poll(async () => {
@@ -1807,9 +1808,9 @@ for (const zoom of [{ key: 'Control+=', value: '1.1' }, { key: 'Control+-', valu
 
 test('wrap dragging moves immediately without cloning the document on pointer movement', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('drag_preview.wav'));
+  await openImageEditor(page, testInfo.outputPath('drag_preview.mp3'));
   const editor = page.locator('.tiptap-editor');
-  const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
+  const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('../fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
   const html = `<p><span data-editor-image data-layout="wrap" data-width="35"><img src="${src}" alt="Anteprima fluida"></span>${'Testo vicino alla figura. '.repeat(40)}</p>${`<p>${'Documento lungo da impaginare. '.repeat(40)}</p>`.repeat(30)}`;
   await page.evaluate(async value => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]); }, html);
   await editor.focus(); await page.keyboard.press('Control+a'); await page.keyboard.press('Control+v');
@@ -1859,7 +1860,7 @@ async function readClipboardFormats(page: Page): Promise<Record<string, string>>
 for (const native of [true, false]) {
   test(`Ctrl+C preserves HTML image pixels for ${native ? 'native format' : 'HTML fallback'} copy`, async ({ page, context }, testInfo) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-    await openImageEditor(page, testInfo.outputPath(`resample_${native}.wav`));
+    await openImageEditor(page, testInfo.outputPath(`resample_${native}.mp3`));
     const source = await page.evaluate(() => {
       const canvas = document.createElement('canvas');
       canvas.width = 1600;
@@ -1920,7 +1921,7 @@ for (const native of [true, false]) {
 
 test('text-only copy exports standalone styles through keyboard, button and browser paste', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('portable_text.wav'));
+  await openImageEditor(page, testInfo.outputPath('portable_text.mp3'));
   const html = '<h3>Sezione portabile</h3><p>Primo <strong>grassetto</strong> e <span style="font-family:Georgia;font-size:16pt;color:#123abc">personalizzato</span>.</p><p>Secondo paragrafo</p><ul><li><p>Voce uno</p></li><li><p>Voce due</p></li></ul><table><tr><td><p>Cella A</p><p>Cella B</p></td><td><p>Cella C</p></td></tr></table>';
   await page.evaluate(async value => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]); }, html);
   const editor = page.locator('.tiptap-editor');
@@ -1941,7 +1942,7 @@ test('text-only copy exports standalone styles through keyboard, button and brow
   fs.writeFileSync(testInfo.outputPath('portable-text-clipboard.json'), JSON.stringify(buttonFormats));
   // A separate document with no app stylesheet verifies the portable HTML path.
   const destination = await context.newPage();
-  await destination.goto('/');
+  await destination.goto('/?simulazione=1');
   await destination.setContent('<html><body><div contenteditable="true" id="destination"></div></body></html>');
   await destination.locator('#destination').focus();
   await destination.keyboard.press('Control+v');
@@ -1961,8 +1962,8 @@ test('text-only copy exports standalone styles through keyboard, button and brow
 
 test('native copy retains body leading and a small vertical wrap offset', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('leading_wrap.wav'));
-  const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
+  await openImageEditor(page, testInfo.outputPath('leading_wrap.mp3'));
+  const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('../fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
   const text = 'Il documento di prova contiene un paragrafo abbastanza lungo per osservare come il testo scorre accanto alla figura. La conversione conserva il font, la distanza fra le righe e la separazione dei paragrafi. Le prime righe devono occupare lo stesso spazio previsto nell’editor, anche quando la figura parte poco sotto l’inizio del paragrafo. La verifica comprende il titolo successivo e un elenco con voci di lunghezza diversa.';
   const html = `<h1>Verifica formattazione comune</h1><h2>Testo e immagine</h2><p><span data-editor-image data-layout="wrap" data-align="right" data-position="100" data-width="56" data-offset-y="18"><img src="${src}" alt="Figura per interlinea"></span>${text}</p><p></p><h3>Sezione successiva</h3><p>Il testo continua dopo il primo paragrafo e conserva la stessa interlinea.</p><ul><li><p>Prima voce con testo breve.</p></li><li><p>Seconda voce con testo abbastanza lungo da andare a capo nella pagina e verificare anche l’interlinea degli elenchi.</p></li></ul>`;
   await page.evaluate(async value => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]); }, html);
@@ -1984,8 +1985,8 @@ test('native copy retains body leading and a small vertical wrap offset', async 
 
 test('native copy preserves paragraph and list gaps with converted line spacing', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await openImageEditor(page, testInfo.outputPath('paragraph_spacing.wav'));
-  const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
+  await openImageEditor(page, testInfo.outputPath('paragraph_spacing.mp3'));
+  const src = `data:image/jpeg;base64,${fs.readFileSync(new URL('../fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
   const html = `<h3>Struttura e Filosofia dell'Esame</h3><p>${'Gli esami si svolgono in una sessione orale. Le domande collegano le diverse discipline e richiedono una comprensione dei meccanismi. '.repeat(3)}</p><p>L'esame consiste in tre domande: due con risposta dettagliata e una con risposta concisa.</p><ul><li><p><strong>Esempio di domanda breve:</strong> descrivere un deficit vitaminico.</p></li><li><p><strong>Esempio di domanda grande:</strong> descrivere un processo e le sue conseguenze, collegando gli argomenti del corso.</p></li></ul><p><span data-editor-image="true" data-layout="wrap" data-align="right" data-position="100" data-width="20"><img src="${src}" alt="Figura di prova"></span>${'Alcuni argomenti vengono introdotti in anticipo. Gli studenti devono collegare i contenuti delle lezioni e ripassare i vari argomenti. '.repeat(2)}</p><p>${'Per gli studenti in difficoltà sono previste altre possibilità di concordare un esame. La preparazione richiede una comprensione completa dei contenuti. '.repeat(2)}</p>`;
   await page.evaluate(async value => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([value], { type: 'text/html' }) })]); }, html);
   const editor = page.locator('.tiptap-editor');
@@ -2015,21 +2016,21 @@ test('native copy preserves paragraph and list gaps with converted line spacing'
 
 test('inline and arbitrary image wrap preserve text, editing, undo and native clipboard', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  const audio = testInfo.outputPath('image_layout.wav');
+  const audio = testInfo.outputPath('image_layout.mp3');
   writeSilentWav(audio);
-  await page.goto('/');
+  await page.goto('/?simulazione=1');
   const chooserPromise = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooserPromise).setFiles(audio);
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  const completed = page.locator('.queue-card.is-completed', { hasText: 'image_layout.wav' });
+  const completed = page.locator('.queue-card.is-completed', { hasText: 'image_layout.mp3' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await expect(completed).toHaveClass(/cursor-pointer/);
-  await completed.getByRole('heading', { name: 'image_layout.wav' }).click();
+  await completed.getByRole('heading', { name: 'image_layout.mp3' }).click();
   const editor = page.locator('.tiptap-editor');
   await expect(editor).toBeVisible();
   await expectPlaybackAudioReady(page);
-  const imageSrc = `data:image/jpeg;base64,${fs.readFileSync(new URL('./fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
+  const imageSrc = `data:image/jpeg;base64,${fs.readFileSync(new URL('../fixtures/image-layout.jpg', import.meta.url)).toString('base64')}`;
   const source = `<p>Prima dell'immagine</p><p><span data-editor-image="true" data-width="35"><img alt="Immagine di verifica" src="${imageSrc}"></span>${'Testo che deve scorrere a fianco della figura, mantenendo la leggibilita. '.repeat(12)}</p><p>Ultimo paragrafo</p>`;
   await page.evaluate(async html => { await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }) })]); }, source);
   await editor.focus();

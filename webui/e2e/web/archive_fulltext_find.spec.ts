@@ -1,18 +1,28 @@
 import fs from 'node:fs';
-import { expect, test } from '@playwright/test';
-import { writeSilentWav } from './audioFixture';
+import { expect, test } from './keyedTest';
+import type { Editor } from '@tiptap/core';
+import { writeSilentWav } from '../audioFixture';
+import { expectAutosaved } from '../autosave';
 
 test('opening a full-text archive result highlights the query in the editor', async ({ page }, testInfo) => {
-  await page.goto('/');
+  await page.goto('/?simulazione=1');
   const chooserPromise = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooserPromise).setFiles({
-    name: 'Fisiologia.wav',
+    name: 'Fisiologia.mp3',
     mimeType: 'audio/wav',
-    buffer: fs.readFileSync(writeSilentWav(testInfo.outputPath('fulltext-find.wav'))),
+    buffer: fs.readFileSync(writeSilentWav(testInfo.outputPath('fulltext-find.mp3'))),
   });
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  await expect(page.getByRole('heading', { name: 'Recenti' })).toBeVisible({ timeout: 15_000 });
+  const completed = page.locator('.queue-card.is-completed', { hasText: 'Fisiologia.mp3' });
+  await expect(completed).toBeVisible({ timeout: 20_000 });
+  // The web sample lesson has no medical terms: give it four mentions of "cardiac".
+  await completed.getByRole('heading').click();
+  await page.locator('.tiptap-editor').evaluate(root => {
+    (root as HTMLElement & { editor: Editor }).editor.commands.setContent('<h1>Fisiologia</h1><p>Il muscolo cardiaco si contrae.</p><p>La frequenza cardiaca aumenta.</p><p>Il ciclo cardiaco ha due fasi.</p><p>La gittata cardiaca dipende dal volume.</p>');
+  });
+  await expectAutosaved(page);
+  await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
   // A fresh app loads the editor lazily, as when reopening the archive later.
   await page.reload();
 

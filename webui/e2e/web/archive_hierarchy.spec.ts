@@ -1,18 +1,17 @@
 import fs from 'node:fs';
-import { expect, test } from '@playwright/test';
-import { writeSilentWav } from './audioFixture';
+import { expect, test } from './keyedTest';
+import { writeSilentWav } from '../audioFixture';
 
 test('selected lesson titles remain accessible above a scrolling destination list', async ({ page }, testInfo) => {
   const names = ['Patologia generale - Lezione 11 - Infiammazione e risposta immunitaria', 'Fisiopatologia - Lezione 12 - Meccanismi di danno cellulare'];
-  const sessions = names.map((name, index) => ({
-    name, session_dir: `/sessions/move-${index}`, html_path: `/sessions/move-${index}/out.html`,
-    input_path: `/audio/move-${index}.wav`, completed_at_iso: '2026-10-10T10:00:00Z', effective_model: 'gemini-2.5-flash',
-  }));
-  // The offline pipeline reuses one simulated session directory; supply two
-  // distinct archive records to exercise the real multiselection UI.
-  await page.route('**/api/rpc/get_completed_sessions', route => route.fulfill({ json: { ok: true, sessions, total: sessions.length } }));
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Archivio', exact: true }).waitFor();
+  const sessions = names.map(name => ({ name }));
+  // Two simulated runs make two archive records for the real multiselection UI.
+  await page.goto('/?simulazione=1');
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
+  await (await chooser).setFiles(names.map(name => ({ name: `${name}.mp3`, mimeType: 'audio/mpeg', buffer: Buffer.alloc(2048) })));
+  await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
+  for (const name of names) await expect(page.locator('.queue-card.is-completed', { hasText: `${name}.mp3` })).toBeVisible({ timeout: 30_000 });
   await page.evaluate(async () => {
     await window.pywebview?.api?.save_archive_folders?.(Array.from({ length: 24 }, (_, index) => ({ id: `destination-${index}`, name: `Raccolta ${index + 1}`, color: '', session_dirs: [] })));
   });
@@ -47,7 +46,7 @@ test('selected lesson titles remain accessible above a scrolling destination lis
 });
 
 test('Enter opens collection options without navigating and still opens a focused collection', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?simulazione=1');
   await page.getByRole('button', { name: 'Archivio', exact: true }).waitFor();
   await page.evaluate(async () => {
     await window.pywebview?.api?.save_archive_folders?.([
@@ -71,11 +70,11 @@ test('Enter opens collection options without navigating and still opens a focuse
 test('organizes archive lessons in nested collections and persists moves across reloads', async ({ page }, testInfo) => {
   // Preserve the long display name without a Windows MAX_PATH-sensitive file path.
   const fixture = {
-    name: 'Microbiologia - Lezione 11 - Meccanismi di resistenza agli antibiotici e risposta immunitaria.wav',
+    name: 'Microbiologia - Lezione 11 - Meccanismi di resistenza agli antibiotici e risposta immunitaria.mp3',
     mimeType: 'audio/wav',
-    buffer: fs.readFileSync(writeSilentWav(testInfo.outputPath('hierarchy.wav'))),
+    buffer: fs.readFileSync(writeSilentWav(testInfo.outputPath('hierarchy.mp3'))),
   };
-  await page.goto('/');
+  await page.goto('/?simulazione=1');
   const chooserPromise = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooserPromise).setFiles(fixture);

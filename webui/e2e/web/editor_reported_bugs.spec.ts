@@ -1,18 +1,13 @@
 import fs from 'node:fs';
-import { execFileSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-import { test, expect, type Page, type TestInfo } from '@playwright/test';
-import { expectPlaybackAudioReady, writeSilentWav } from './audioFixture';
-import { expectAutosaved } from './autosave';
-
-// CI installs the locked dependencies only in .venv, not in the runner's python.
-const projectPython = fileURLToPath(new URL(process.platform === 'win32' ? '../../.venv/Scripts/python.exe' : '../../.venv/bin/python', import.meta.url));
+import { test, expect } from './keyedTest';
+import type { Page, TestInfo } from '@playwright/test';
+import { expectPlaybackAudioReady, writeSilentWav } from '../audioFixture';
+import { expectAutosaved } from '../autosave';
 
 async function openEditor(page: Page, info: TestInfo) {
-  const audio = info.outputPath('reported_bugs.wav');
+  const audio = info.outputPath('reported_bugs.mp3');
   writeSilentWav(audio);
-  await expect.poll(async () => (await page.request.get('/api/bootstrap')).status()).toBe(200);
-  await page.goto('/');
+  await page.goto('/?simulazione=1');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(audio);
@@ -154,7 +149,12 @@ test('Enter adds no automatic gap and a second Enter leaves exactly one blank li
 });
 
 test('generated block gaps survive save and copy without spreading to new paragraphs or list items', async ({ page }, info) => {
-  const generated = execFileSync(projectPython, ['-c', "from el_sbobinator.utils.html_export import build_html_document; print(build_html_document('Lezione', 'Prima\\n\\nSeconda\\n\\n- Uno\\n- Due\\n\\nDopo elenco'))"], { cwd: '..', encoding: 'utf8' });
+  // The page the web pipeline stores for this text, built with the shipped export functions.
+  const generated = await page.evaluate(async () => {
+    const { webExport } = await import('/e2e-modules.js' /* @vite-ignore */);
+    const body = webExport.buildBody(webExport.buildFinalMarkdown('Lezione', ['Prima\n\nSeconda\n\n- Uno\n- Due\n\nDopo elenco']), false);
+    return `<!doctype html><html lang="it"><head><meta charset="utf-8"><title>Lezione</title></head><body>${body}</body></html>`;
+  });
   await paste(page, generated);
   const editor = page.locator('.tiptap-editor');
   const read = () => editor.locator('p').evaluateAll(paragraphs => paragraphs.map(p => ({ text: p.textContent, top: p.getBoundingClientRect().top, height: p.getBoundingClientRect().height, before: getComputedStyle(p).marginTop, after: getComputedStyle(p).marginBottom })));
