@@ -28,6 +28,7 @@ import { EditorLinkCard } from './EditorLinkCard';
 import { openDocumentLink } from '../editorLinks';
 import { EditorMathComposer } from './EditorMathComposer';
 import { handleEditorClipboardEvent } from '../editorSelectionClipboard';
+import { EditorPasteStyle } from '../editorPasteStyle';
 import { editorFormattingVariables } from '../documentFormatting';
 import { EditorDocumentStyle } from '../editorDocumentStyle';
 import { EditorListItem, EditorOrderedList } from '../editorLists';
@@ -168,6 +169,7 @@ export function RichTextEditor({
     EditorParagraphTab,
     FloatingImage,
     EditorTextStyle,
+    EditorPasteStyle,
     Color,
     FontFamily.configure({ types: ['textStyle'] }),
     FontSize,

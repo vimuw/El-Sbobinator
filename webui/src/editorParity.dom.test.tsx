@@ -32,7 +32,8 @@ describe('Editor parity: clipboard and logical text', () => {
     const { editor } = await openEditor('<p></p>');
     act(() => { editor.view.pasteHTML('<b id="docs-internal-guid-test"><p><span style="color:#000000;background-color:#fef08a;font-size:11pt">Giallo nero</span> <span style="background-color:#fef08a"><span style="color:#123abc">Giallo blu</span></span><span style="background-color:transparent">Normale</span></p></b>', new Event('paste') as ClipboardEvent); });
     const text = (label: string) => (editor.getJSON() as JSONContent).content![0].content!.find(node => node.text === label)!;
-    expect(text('Giallo nero').marks).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'highlight', attrs: { color: 'rgb(254, 240, 138)' } }), expect.objectContaining({ type: 'textStyle', attrs: expect.objectContaining({ color: 'rgb(0, 0, 0)', fontSize: '11pt' }) })]));
+    // 11pt is what the target paragraph already gives: inherited, as in Docs.
+    expect(text('Giallo nero').marks).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'highlight', attrs: { color: 'rgb(254, 240, 138)' } }), expect.objectContaining({ type: 'textStyle', attrs: expect.objectContaining({ color: 'rgb(0, 0, 0)', fontSize: null }) })]));
     expect(text('Giallo blu').marks).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'highlight' }), expect.objectContaining({ type: 'textStyle', attrs: expect.objectContaining({ color: '#123abc' }) })]));
     expect(text('Normale').marks?.some(mark => mark.type === 'highlight')).toBeFalsy();
     const saved = editor.getHTML(); act(() => { editor.commands.setContent(normalizePreviewHtmlContent(saved)); });
@@ -64,6 +65,140 @@ describe('Editor parity: clipboard and logical text', () => {
       act(() => { editor.commands.setContent(normalizePreviewHtmlContent(editor.getHTML())); });
       expect(editor.getJSON()).toEqual(saved);
     }
+  });
+
+  // Observed in Google Docs on 20 November 2026: only what differs from the new block stays explicit.
+  it.each([
+    { label: 'heading into the same heading', source: '<h2>Prima scelta dopo</h2>', target: '<h2>Due</h2>', types: [], size: undefined },
+    { label: 'heading into a larger heading', source: '<h2>Prima scelta dopo</h2>', target: '<h1>Uno</h1>', types: ['textStyle'], size: '16pt' },
+    { label: 'heading into a paragraph', source: '<h2>Prima scelta dopo</h2>', target: '<p>Uno</p>', types: ['bold', 'textStyle'], size: '16pt' },
+    { label: 'bold italic text into a paragraph', source: '<p>Prima <strong><em>scelta</em></strong> dopo</p>', target: '<p>Uno</p>', types: ['bold', 'italic'], size: undefined },
+    { label: 'paragraph text into a heading', source: '<p>Prima scelta dopo</p>', target: '<h2>Due</h2>', types: ['textStyle', 'unbold'], size: '11pt' },
+  ])('pastes $label keeping only the typography that differs from the new block', async ({ source, target, types, size }) => {
+    const { editor, element } = await openEditor(source + target);
+    act(() => { editor.commands.setTextSelection({ from: 7, to: 13 }); });
+    const { formats } = transfer(element, 'copy');
+    // End of the target block; a trailing empty paragraph may follow a heading.
+    const targetEnd = () => editor.state.doc.child(0).nodeSize + editor.state.doc.child(1).nodeSize - 1;
+    const paste = () => { editor.commands.setTextSelection(targetEnd()); editor.view.pasteHTML(formats['text/html'], new Event('paste') as ClipboardEvent); };
+    const original = editor.getJSON();
+    act(paste);
+    // Without differences the pasted word joins the target text node.
+    const pasted = (editor.getJSON() as JSONContent).content![1].content!.find(node => node.text?.endsWith('scelta'))!;
+    expect((pasted.marks ?? []).map(mark => mark.type).sort()).toEqual(types);
+    const style = pasted.marks?.find(mark => mark.type === 'textStyle');
+    expect(style?.attrs?.fontSize ?? undefined).toBe(size);
+    expect(style?.attrs?.fontFamily || undefined).toBeUndefined();
+    const saved = editor.getJSON();
+    // The typography pass belongs to the paste: one undo removes both.
+    act(() => { editor.commands.undo(); });
+    expect(editor.getJSON()).toEqual(original);
+    act(() => { editor.commands.setContent(saved); editor.commands.setContent(normalizePreviewHtmlContent(editor.getHTML())); });
+    expect(editor.getJSON()).toEqual(saved);
+  });
+
+  // Per-run mark steps made large pastes (and their undo) grow quadratically.
+  it('cleans up a multi-run, multi-block rich paste with at most one step per block', async () => {
+    const { editor } = await openEditor('<p>Uno</p>');
+    const runs = '<span style="font-size:14pt">Alfa</span> <span style="font-family:Georgia">beta</span> <span style="font-size:9pt;font-weight:700">gamma</span>';
+    const blocks = Array.from({ length: 12 }, (_, i) => (i % 4 === 3 ? `<h2>${runs}</h2>` : `<p>${runs}</p>`));
+    const original = editor.getJSON();
+    const appended: number[] = [];
+    const listen = ({ appendedTransactions }: { appendedTransactions: Array<{ steps: unknown[] }> }) => { appended.push(...appendedTransactions.map(tr => tr.steps.length)); };
+    editor.on('transaction', listen);
+    act(() => { editor.commands.setTextSelection(4); editor.view.pasteHTML(blocks.join(''), new Event('paste') as ClipboardEvent); });
+    editor.off('transaction', listen);
+    // The typography cleanup is the largest appended transaction (other plugins append a step or so).
+    expect(Math.max(0, ...appended)).toBeGreaterThan(0);
+    expect(Math.max(0, ...appended)).toBeLessThanOrEqual(blocks.length);
+    const root = (editor.getJSON() as JSONContent).content!;
+    expect(root.slice(0, blocks.length).map(node => node.type)).toEqual(blocks.map(html => (html.startsWith('<h2') ? 'heading' : 'paragraph')));
+    const marks = (block: number, text: string) => root[block].content!.find(node => node.text === text)!.marks
+      ?.map(mark => (mark.type === 'textStyle' ? { type: mark.type, fontSize: mark.attrs?.fontSize, fontFamily: mark.attrs?.fontFamily } : { type: mark.type }));
+    [0, 3].forEach(block => {
+      expect(marks(block, 'Alfa')).toEqual([{ type: 'textStyle', fontSize: '14pt', fontFamily: '' }]);
+      expect(marks(block, 'beta')).toEqual([{ type: 'textStyle', fontSize: null, fontFamily: 'Georgia' }]);
+      expect(marks(block, ' ')).toBeUndefined();
+    });
+    // 9pt bold differs from a body paragraph in both; an H2 already gives the weight.
+    expect(marks(0, 'gamma')).toEqual([{ type: 'textStyle', fontSize: '9pt', fontFamily: '' }, { type: 'bold' }]);
+    expect(marks(3, 'gamma')).toEqual([{ type: 'textStyle', fontSize: '9pt', fontFamily: '' }]);
+    const saved = editor.getJSON();
+    // The typography pass belongs to the paste: one undo removes both.
+    act(() => { editor.commands.undo(); });
+    expect(editor.getJSON()).toEqual(original);
+    act(() => { editor.commands.setContent(saved); editor.commands.setContent(normalizePreviewHtmlContent(editor.getHTML())); });
+    expect(editor.getJSON()).toEqual(saved);
+  });
+
+  // A soft break owns a character style in Docs: it gets the same pass as the text around it.
+  it.each([
+    { label: 'a Docs heading line break into the same heading', source: '<b id="docs-internal-guid-test" style="font-weight:normal"><h2 dir="ltr"><span style="font-size:16pt;font-family:Arial,sans-serif;font-weight:700">Prima<br>dopo</span></h2></b>', target: '<h2>Due</h2>', types: [], size: undefined },
+    { label: 'a heading line break into a paragraph', source: '<h2>Prima<br>dopo</h2>', target: '<p>Uno</p>', types: ['bold', 'textStyle'], size: '16pt' },
+  ])('pastes $label with the same typography as the text after it', async ({ source, target, types, size }) => {
+    const { editor } = await openEditor(target);
+    const original = editor.getJSON();
+    act(() => { editor.commands.setTextSelection(4); editor.view.pasteHTML(source, new Event('paste') as ClipboardEvent); });
+    const runs = (editor.getJSON() as JSONContent).content![0].content!;
+    const index = runs.findIndex(node => node.type === 'hardBreak');
+    expect(index).toBeGreaterThan(0);
+    const typography = (node: JSONContent) => (node.marks ?? [])
+      .map(mark => (mark.type === 'textStyle' ? { type: mark.type, fontSize: mark.attrs?.fontSize ?? undefined, fontFamily: mark.attrs?.fontFamily || undefined } : { type: mark.type }))
+      .sort((a, b) => a.type.localeCompare(b.type));
+    expect(runs[index + 1].text).toBe('dopo');
+    expect(typography(runs[index]).map(mark => mark.type)).toEqual(types);
+    expect(typography(runs[index]).find(mark => mark.type === 'textStyle')?.fontSize).toBe(size);
+    expect(typography(runs[index])).toEqual(typography(runs[index + 1]));
+    const saved = editor.getJSON();
+    // The typography pass belongs to the paste: one undo removes both.
+    act(() => { editor.commands.undo(); });
+    expect(editor.getJSON()).toEqual(original);
+    act(() => { editor.commands.setContent(saved); editor.commands.setContent(normalizePreviewHtmlContent(editor.getHTML())); });
+    expect(editor.getJSON()).toEqual(saved);
+  });
+
+  it('pastes plain text into a heading with the heading typography only', async () => {
+    const { editor } = await openEditor('<h2>Due</h2>');
+    act(() => { editor.commands.setTextSelection(4); editor.view.pasteText(' scelta', new Event('paste') as ClipboardEvent); });
+    expect(editor.getJSON().content![0]).toEqual(expect.objectContaining({ type: 'heading', content: [{ type: 'text', text: 'Due scelta' }] }));
+  });
+
+  // The table plugin inserts these pastes itself; they still get the paste typography pass.
+  it.each([
+    { label: 'copied cells into another table cell', source: '<table><tbody><tr><td><p>Uno</p></td><td><p>Due</p></td></tr></tbody></table>', texts: ['Uno', 'Due'], marks: [] },
+    { label: 'paragraph text over selected cells', source: '<p>Prima scelta dopo</p>', texts: ['scelta', 'scelta'], marks: [{ type: 'textStyle', fontSize: '11pt' }] },
+  ])('pastes $label keeping only the typography that differs from the cells', async ({ source, texts, marks }) => {
+    const { editor, element } = await openEditor(`${source}<table><tbody><tr><td><p>Tre</p></td><td><p>Quattro</p></td></tr></tbody></table>`);
+    const cells = (tableIndex: number) => {
+      const positions: number[] = [];
+      editor.state.doc.child(tableIndex).descendants((node, pos) => { if (node.type.name === 'tableCell') positions.push(editor.state.doc.child(0).nodeSize * tableIndex + 1 + pos); });
+      return positions;
+    };
+    const [firstSource, lastSource] = cells(0);
+    act(() => {
+      if (source.startsWith('<table')) editor.view.dispatch(editor.state.tr.setSelection(CellSelection.create(editor.state.doc, firstSource, lastSource)));
+      else editor.commands.setTextSelection({ from: 7, to: 13 });
+    });
+    const { formats } = transfer(element, 'copy');
+    const [firstTarget, lastTarget] = cells(1);
+    const original = editor.getJSON();
+    act(() => {
+      if (source.startsWith('<table')) editor.commands.setTextSelection(firstTarget + 2);
+      else editor.view.dispatch(editor.state.tr.setSelection(CellSelection.create(editor.state.doc, firstTarget, lastTarget)));
+      editor.view.pasteHTML(formats['text/html'], new Event('paste') as ClipboardEvent);
+    });
+    const pasted = (editor.getJSON() as JSONContent).content![1].content![0].content!.map(cell => cell.content![0].content!);
+    expect(pasted.map(runs => runs.map(run => run.text).join(''))).toEqual(texts);
+    pasted.forEach(runs => runs.forEach(run => {
+      expect((run.marks ?? []).map(mark => ({ type: mark.type, ...(mark.attrs?.fontSize ? { fontSize: mark.attrs.fontSize } : {}) }))).toEqual(marks);
+      expect(run.marks?.find(mark => mark.type === 'textStyle')?.attrs?.fontFamily || undefined).toBeUndefined();
+    }));
+    const saved = editor.getJSON();
+    // The typography pass belongs to the paste: one undo removes both.
+    act(() => { editor.commands.undo(); });
+    expect(editor.getJSON()).toEqual(original);
+    act(() => { editor.commands.setContent(saved); editor.commands.setContent(normalizePreviewHtmlContent(editor.getHTML())); });
+    expect(editor.getJSON()).toEqual(saved);
   });
 
   it('keeps a partial default heading inline without turning its default ink into authored black', async () => {
