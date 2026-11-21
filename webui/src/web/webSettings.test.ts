@@ -34,9 +34,8 @@ describe('web settings', () => {
     expect(parseKeyLines(' a \r\n\nb\na\n')).toEqual(['a', 'b']);
   });
 
-  it('offers the same models as the desktop registry', () => {
-    // model_registry.py builds MODEL_OPTIONS from this file.
-    const profile = JSON.parse(readFileSync(new URL('../../../el_sbobinator/generation_profile.json', import.meta.url), 'utf8')) as {
+  it('offers the models of the generation profile', () => {
+    const profile = JSON.parse(readFileSync(new URL('../profiles/generation_profile.json', import.meta.url), 'utf8')) as {
       models: { default: string; options: Array<{ id: string }> };
     };
     expect(WEB_MODEL_OPTIONS.map(option => option.id)).toEqual(profile.models.options.map(option => option.id));

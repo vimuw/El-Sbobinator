@@ -1,11 +1,9 @@
 import fs from 'node:fs';
 import { expect, type Page } from '@playwright/test';
 
-// Two seconds of 16 kHz mono silence. FFmpeg can encode it, so opening the
-// sbobina makes its internal playback copy. A header-only WAV cannot be encoded:
-// the editor then shows the "Copia audio interna non salvata" banner, which
-// arrives whenever FFmpeg gives up and, on a loaded PC, moves the page by its
-// height in the middle of a geometry measurement.
+// Two seconds of 16 kHz mono silence, as a WAV the player can actually play. The specs
+// name the file .mp3, since the web site accepts only .mp3, .m4a and .mp4; Chromium plays
+// it by its content.
 export function writeSilentWav(file: string): string {
   const samples = 32000;
   const wav = Buffer.alloc(44 + samples * 2);

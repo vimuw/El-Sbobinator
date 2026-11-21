@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   PROFILE_DEFAULT_MODEL,
@@ -55,10 +54,5 @@ describe('generation profile', () => {
     expect(sanitizeModelName('gemini-3.7-flash')).toBe('gemini-3.8-flash');
     expect(sanitizeModelName(' gemini-2.5-flash ')).toBe('gemini-2.5-flash');
     expect(sanitizeModelName('gemini-1.5-pro')).toBe(PROFILE_DEFAULT_MODEL);
-  });
-
-  it('is the file Python loads', () => {
-    const python = readFileSync(new URL('../../el_sbobinator/core/generation_profile.py', import.meta.url), 'utf8');
-    expect(python).toContain('"generation_profile.json"');
   });
 });

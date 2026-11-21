@@ -79,14 +79,14 @@ Tutti i dettagli sono nell'[**informativa sulla privacy**](https://elsbobinator.
 
 ## Versione desktop (riserva)
 
-La versione desktop **2.7.3** per Windows e macOS resta disponibile come riserva, da usare solo se la versione web ti dà problemi. Non riceve più aggiornamenti.
+La versione desktop **2.7.3** per Windows e macOS resta disponibile come riserva, da usare solo se la versione web ti dà problemi. Non riceve più aggiornamenti. Su Mac consigliamo la versione web, perché l'app desktop dà ancora problemi su alcuni sistemi macOS.
 
 | Sistema Operativo | Pacchetto | Installazione |
 | :--- | :--- | :--- |
 | **Windows 10/11** | [**El-Sbobinator-Setup-v2.7.3.exe**](https://github.com/vimuw/El-Sbobinator/releases/download/v2.7.3/El-Sbobinator-Setup-v2.7.3.exe) | Avvia l'installer e segui la procedura guidata. |
 | **macOS** | [**El-Sbobinator-v2.7.3.dmg**](https://github.com/vimuw/El-Sbobinator/releases/download/v2.7.3/El-Sbobinator-v2.7.3.dmg) | Apri il file `.dmg` e trascina *El Sbobinator* in **Applicazioni**. |
 
-È un'app separata dal sito: le sbobine fatte con una versione non compaiono nell'altra.
+È un'app separata dal sito: le sbobine fatte con una versione non compaiono nell'altra. Il codice sorgente della versione desktop è nella branch [`desktop-2.7`](https://github.com/vimuw/El-Sbobinator/tree/desktop-2.7).
 
 <details>
 <summary><strong>Windows: avviso SmartScreen ("PC protetto da Windows")</strong></summary>

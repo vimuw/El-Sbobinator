@@ -4,7 +4,7 @@ import { STORAGE_KEYS } from '../storageKeys';
 import { DEFAULT_MODEL } from '../utils';
 import { hashKey } from './apiUsage';
 
-// Same list as the desktop registry: both read el_sbobinator/generation_profile.json.
+// The models listed in src/profiles/generation_profile.json.
 export const WEB_MODEL_OPTIONS: ModelOption[] = PROFILE_MODEL_OPTIONS.map(option => ({
   id: option.id,
   label: option.label,

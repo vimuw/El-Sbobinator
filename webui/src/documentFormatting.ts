@@ -1,7 +1,6 @@
-import formatting from '../../el_sbobinator/document_formatting.json';
+import formatting from './profiles/document_formatting.json';
 import { applyEmptyTextMarks } from './emptyTextMarks';
 
-// The same profile is read by Python's standalone HTML export.
 export const DOCUMENT_FORMATTING = formatting;
 export const EDITOR_CONTENT_WIDTH_PX = formatting.contentWidthPx;
 

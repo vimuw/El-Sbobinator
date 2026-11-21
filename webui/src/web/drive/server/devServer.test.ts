@@ -45,7 +45,7 @@ describe('Drive login on the web dev server', () => {
     vi.stubEnv('GOOGLE_CLIENT_SECRET', 'segreto-di-prova');
     vi.stubEnv('DRIVE_COOKIE_KEY', COOKIE_KEY);
     const { createViteConfig } = await import('../../../../vite.config');
-    const config = createViteConfig('web');
+    const config = createViteConfig();
     const plugin = config.plugins?.find(item => item && typeof item === 'object' && 'name' in item && item.name === 'web-dev-drive');
     if (!plugin || typeof plugin !== 'object' || !('configureServer' in plugin) || typeof plugin.configureServer !== 'function') {
       throw new Error('Drive dev server plugin missing');
@@ -72,7 +72,7 @@ describe('Drive login on the web dev server', () => {
   it('is not there without a client ID, where the site has no Drive either', async () => {
     vi.stubEnv('EL_SBOBINATOR_GOOGLE_CLIENT_ID', '');
     const { createViteConfig } = await import('../../../../vite.config');
-    const names = (createViteConfig('web').plugins ?? []).map(item => (item && typeof item === 'object' && 'name' in item ? item.name : null));
+    const names = (createViteConfig().plugins ?? []).map(item => (item && typeof item === 'object' && 'name' in item ? item.name : null));
     expect(names).not.toContain('web-dev-drive');
   });
 

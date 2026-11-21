@@ -2,10 +2,9 @@ name: Publish El Sbobinator Web
 
 # Production of the static web site (webui/src/web) on Cloudflare Pages, project
 # elsbobinator (https://elsbobinator.pages.dev/). Only a web-v* tag on a commit of
-# main publishes; the desktop release workflow (build.yml) listens to v* tags and
-# never sees these. It deploys to Cloudflare only: no GitHub Release and no uploaded
-# artifacts, so nothing about the web site appears on the repository's Releases page
-# or for the desktop updater.
+# main publishes. It deploys to Cloudflare only: no GitHub Release and no uploaded
+# artifacts, so nothing about the web site appears on the repository's Releases page,
+# which the installed desktop app (2.7.3) checks for updates.
 # Google Drive sync is optional: the build includes it only when the repository variable
 # EL_SBOBINATOR_GOOGLE_CLIENT_ID holds the site's OAuth client ID (public, not a secret).
 on:

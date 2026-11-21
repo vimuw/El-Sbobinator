@@ -2,7 +2,8 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
 
-// The static web build (vite.web.config.ts) needs no backend: the runner builds it once and
+// The static web build needs no backend: the runner builds it once (vite.web.e2e.config.ts, the web
+// build plus the e2e-modules entry some specs import) and
 // serves it with vite preview. Chromium only — this is not Safari or an iPad.
 // A second build carries a made-up Google client ID: the drive*.spec.ts tests run on it, with
 // Google answered by page.route; the OAuth route sends the login back to the build's /drive-auth page.
@@ -16,6 +17,9 @@ const driveDist = path.join(cache, `dist-web-drive-${portOffset}`);
 const vite = path.join(import.meta.dirname, 'node_modules', 'vite', 'bin', 'vite.js');
 // Playwright matches the whole path: only the file name counts, a checkout folder may say "drive".
 const DRIVE_SPECS = /(?:^|[\\/])drive[^\\/]*\.spec\.ts$/;
+// Frame-by-frame layout measurements: with other workers busy, dropped frames look like jumps.
+// They run alone, after the other projects (a focused run of these files can skip those with --no-deps).
+const TIMING_SPECS = /(?:^|[\\/])processing_transitions\.spec\.ts$/;
 
 function build(outDir: string, clientId: string | undefined) {
   const env = { ...process.env };
@@ -23,7 +27,7 @@ function build(outDir: string, clientId: string | undefined) {
   // No Sentry: the tests never send reports, and "Segnala un problema" writes an email.
   delete env.EL_SBOBINATOR_SENTRY_DSN;
   if (clientId) env.EL_SBOBINATOR_GOOGLE_CLIENT_ID = clientId;
-  execFileSync(process.execPath, [vite, 'build', '--config', 'vite.web.config.ts', '--outDir', outDir, '--logLevel', 'error'], {
+  execFileSync(process.execPath, [vite, 'build', '--config', 'vite.web.e2e.config.ts', '--outDir', outDir, '--logLevel', 'error'], {
     cwd: import.meta.dirname,
     stdio: 'inherit',
     env,
@@ -56,8 +60,15 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   projects: [
-    { name: 'web-chromium', testIgnore: DRIVE_SPECS, use: { ...devices['Desktop Chrome'], baseURL: `http://localhost:${port}` } },
+    { name: 'web-chromium', testIgnore: [DRIVE_SPECS, TIMING_SPECS], use: { ...devices['Desktop Chrome'], baseURL: `http://localhost:${port}` } },
     { name: 'web-drive-chromium', testMatch: DRIVE_SPECS, use: { ...devices['Desktop Chrome'], baseURL: `http://localhost:${drivePort}` } },
+    {
+      name: 'web-timing-chromium',
+      testMatch: TIMING_SPECS,
+      dependencies: ['web-chromium', 'web-drive-chromium'],
+      workers: 1,
+      use: { ...devices['Desktop Chrome'], baseURL: `http://localhost:${port}` },
+    },
   ],
   webServer: [preview(dist, port), preview(driveDist, drivePort)],
 });

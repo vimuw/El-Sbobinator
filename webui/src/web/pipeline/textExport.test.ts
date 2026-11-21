@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { REVISION_WARNING_TEXT, buildBody, buildFinalMarkdown, markdownToHtmlBody, normalizeInlineStarLists } from './export';
 import { buildMacroBlocks, detectDegenerateOutput, localMacroCleanup, safeOutputBasename, sequenceRatio } from './text';
@@ -76,8 +75,6 @@ describe('Markdown export', () => {
     expect(body.indexOf('revision-warning-banner')).toBeGreaterThan(body.indexOf('</h1>'));
     expect(body).toContain(REVISION_WARNING_TEXT);
     expect(buildBody('# Titolo\n\nTesto.', false)).not.toContain('revision-warning-banner');
-    const python = readFileSync(new URL('../../../../el_sbobinator/services/export_service.py', import.meta.url), 'utf8');
-    expect(python).toContain(`"${REVISION_WARNING_TEXT.slice(0, 30)}`);
   });
 
   it('falls back to the phase 1 text when no section was revised', () => {

@@ -1,0 +1,110 @@
+import { expect, test } from './keyedTest';
+import { expectPlaybackAudioReady, writeSilentWav } from '../audioFixture';
+import type { Editor } from '@tiptap/core';
+
+test('shared shortcuts live in the header and dismiss without closing or editing the document', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1680, height: 1000 });
+  const audio = testInfo.outputPath('scorciatoie.mp3');
+  writeSilentWav(audio);
+  await page.goto('/?simulazione=1');
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
+  await (await chooser).setFiles(audio);
+  await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
+  const completed = page.locator('.queue-card.is-completed', { hasText: 'scorciatoie.mp3' });
+  await expect(completed).toBeVisible({ timeout: 15000 });
+  await completed.getByRole('heading').click();
+  await expectPlaybackAudioReady(page);
+  const editor = page.locator('.tiptap-editor');
+  await expect(editor).toBeVisible();
+  const original = await editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON());
+  const trigger = page.getByRole('button', { name: 'Scorciatoie da tastiera', exact: true });
+  await expect(trigger).toHaveCount(1);
+  await expect(page.locator('.editor-fullpage-header').getByRole('button', { name: 'Scorciatoie da tastiera' })).toBeVisible();
+  expect(await page.locator('.editor-fullpage-footer').getByRole('button', { name: 'Scorciatoie da tastiera' }).count()).toBe(0);
+  await trigger.click();
+  const dialog = page.getByRole('dialog', { name: 'Scorciatoie da tastiera' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('region', { name: 'Editor', exact: true })).toBeVisible();
+  await expect(dialog.getByText('Ctrl+.')).toBeVisible();
+  await expect(dialog.getByText('Ctrl+,')).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Chiudi scorciatoie' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  expect(await page.evaluate(() => Boolean(document.activeElement?.closest('dialog')))).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(dialog).not.toBeVisible();
+  await expect(editor).toBeVisible();
+  await expect(trigger).toBeFocused();
+  expect(await editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON())).toEqual(original);
+  await trigger.click();
+  const bounds = await dialog.boundingBox();
+  expect(bounds!.x).toBeGreaterThanOrEqual(0);
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(1680);
+  expect(bounds!.width).toBe(820);
+  expect(bounds!.height).toBeLessThanOrEqual(720);
+  const editorSection = dialog.getByRole('region', { name: 'Editor', exact: true });
+  const audioSection = dialog.getByRole('region', { name: 'Audio', exact: true });
+  const editorBounds = await editorSection.boundingBox();
+  const audioBounds = await audioSection.boundingBox();
+  expect(Math.abs(audioBounds!.x - editorBounds!.x)).toBeLessThan(1);
+  expect(audioBounds!.y + audioBounds!.height).toBeLessThan(editorBounds!.y);
+  for (const group of ['Modifica', 'Formattazione', 'Ricerca e documento']) {
+    await expect(editorSection.getByRole('heading', { name: group, exact: true })).toBeVisible();
+  }
+  await expect(dialog.getByText('F4', { exact: true })).toBeInViewport();
+  const gap = await editorSection.locator('dl > div').first().evaluate(row => row.querySelector('dd')!.getBoundingClientRect().left - row.querySelector('dt')!.getBoundingClientRect().right);
+  expect(gap).toBeLessThanOrEqual(12);
+  await page.screenshot({ path: testInfo.outputPath('shortcuts-editor.png') });
+  await dialog.screenshot({ path: testInfo.outputPath('shortcuts-wide.png') });
+  // Keyboard scrolling still works from the close control, and the sticky
+  // title remains available while the shortcut groups move.
+  await page.keyboard.press('PageDown');
+  await expect.poll(() => dialog.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+  await dialog.getByText('Ctrl+0', { exact: true }).scrollIntoViewIfNeeded();
+  await expect(dialog.getByRole('button', { name: 'Chiudi scorciatoie' })).toBeInViewport();
+  await expect(dialog.getByRole('heading', { name: 'Scorciatoie da tastiera', exact: true })).toBeInViewport();
+  await expect(dialog.getByText('F4', { exact: true })).toBeVisible();
+  await expect(dialog.getByText(/Spazio e frecce controllano l’audio/)).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('shortcuts-scrolled.png') });
+  await dialog.getByRole('button', { name: 'Chiudi scorciatoie' }).click();
+  await expect(dialog).not.toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await trigger.click();
+  await expect.poll(() => dialog.evaluate(element => element.scrollTop)).toBe(0);
+  expect((await dialog.boundingBox())!.height).toBeLessThanOrEqual(576);
+  await expect(dialog.getByText('F4', { exact: true })).toBeInViewport();
+  await page.screenshot({ path: testInfo.outputPath('shortcuts-standard.png') });
+  await page.keyboard.press('Escape');
+  // Phone layout (up to 640px): the header leaves out keyboard shortcuts.
+  await page.setViewportSize({ width: 480, height: 640 });
+  await expect(trigger).toHaveCount(0);
+  // The narrowest window that still offers them gets the one-column dialog (max-width: 720px).
+  await page.setViewportSize({ width: 660, height: 640 });
+  await trigger.click();
+  await expect.poll(() => dialog.evaluate(element => element.scrollTop)).toBe(0);
+  const narrow = await dialog.boundingBox();
+  expect(narrow!.x).toBeGreaterThanOrEqual(0);
+  expect(narrow!.width).toBeLessThanOrEqual(660);
+  expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+  const narrowEditor = await editorSection.boundingBox();
+  const narrowAudio = await audioSection.boundingBox();
+  expect(Math.abs(narrowAudio!.x - narrowEditor!.x)).toBeLessThan(1);
+  expect(narrowAudio!.y + narrowAudio!.height).toBeLessThan(narrowEditor!.y);
+  await dialog.evaluate(element => { element.scrollTop = 0; });
+  await expect(dialog.getByText('F4', { exact: true })).toBeInViewport();
+  await expect(dialog.getByRole('button', { name: 'Chiudi scorciatoie' })).toBeInViewport();
+  await page.screenshot({ path: testInfo.outputPath('shortcuts-narrow.png') });
+  await page.keyboard.press('Escape');
+  await expect(editor).toBeVisible();
+  // The same help stays available without audio: the web keeps no copy by default, so after a
+  // reload the reopened sbobina has none until the file is chosen again.
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.reload();
+  await expect(editor).toBeVisible();
+  await expect(page.locator('audio')).toHaveCount(0);
+  await trigger.click();
+  await expect(dialog.getByText('Collega un file audio per usare questi comandi.')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(editor).toBeVisible();
+  expect(await editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getJSON())).toEqual(original);
+});

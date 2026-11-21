@@ -8,31 +8,12 @@ afterEach(() => {
   vi.resetModules();
 });
 
-describe('desktop build version', () => {
-  it.each([
-    [undefined, packageVersion],
-    ['2.7.3', '2.7.3'],
-    ['v2.7.3', '2.7.3'],
-  ])('uses %s consistently for the bundle and desktop manifest', async (override, expected) => {
-    vi.stubEnv('EL_SBOBINATOR_BUILD_VERSION', override);
+describe('web preview build', () => {
+  it('labels a build without a version tag as a preview of the package version', async () => {
+    vi.stubEnv('EL_SBOBINATOR_WEB_VERSION', '');
     const config = (await import('../vite.config')).default;
-    expect(config.define?.__APP_VERSION__).toBe(JSON.stringify(`v${expected}`));
-    const plugin = config.plugins?.find(plugin =>
-      plugin && typeof plugin === 'object' && 'name' in plugin && plugin.name === 'desktop-build-version');
-    if (!plugin || typeof plugin !== 'object' || !('generateBundle' in plugin)
-      || typeof plugin.generateBundle !== 'function') throw new Error('Desktop manifest plugin missing');
-    const emitFile = vi.fn();
-    Reflect.apply(plugin.generateBundle, { emitFile }, [{}, {}, false]);
-    expect(emitFile).toHaveBeenCalledOnce();
-    const asset = emitFile.mock.calls[0][0];
-    expect(asset.type).toBe('asset');
-    expect(asset.fileName).toBe('desktop-build.json');
-    const manifest = JSON.parse(asset.source);
-    expect(manifest.version).toBe(expected);
-    expect(manifest.dependencies).toEqual({
-      python_lock_sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
-      npm_lock_sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
-    });
+    expect(config.define?.__APP_VERSION__).toBe(JSON.stringify(`v${packageVersion}`));
+    expect(config.define?.__WEB_PREVIEW__).toBe('true');
   });
 });
 
@@ -43,7 +24,7 @@ describe('web release build', () => {
     vi.stubEnv('EL_SBOBINATOR_WEB_VERSION', 'web-v1.3.0');
     vi.stubEnv('EL_SBOBINATOR_GOOGLE_CLIENT_ID', clientId);
     const { createViteConfig } = await import('../vite.config');
-    const config = createViteConfig('web');
+    const config = createViteConfig();
     expect(config.define?.__APP_VERSION__).toBe(JSON.stringify('v1.3.0'));
     expect(config.define?.__WEB_PREVIEW__).toBe('false');
     expect(config.define?.__GOOGLE_CLIENT_ID__).toBe(JSON.stringify(clientId));
@@ -54,7 +35,7 @@ describe('web release build', () => {
     vi.stubEnv('EL_SBOBINATOR_WEB_VERSION', 'web-v1.3.0');
     vi.stubEnv('EL_SBOBINATOR_GOOGLE_CLIENT_ID', '');
     const { createViteConfig } = await import('../vite.config');
-    const config = createViteConfig('web');
+    const config = createViteConfig();
     expect(config.define?.__GOOGLE_CLIENT_ID__).toBe('""');
     expect(Object.keys(config.build?.rolldownOptions?.input ?? {})).not.toContain('drive-auth');
   });
