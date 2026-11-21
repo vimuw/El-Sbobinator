@@ -22,13 +22,14 @@ test('the queue slides down instead of jumping when processing starts', async ({
   await queueFile(page, audioFixture(info, 'slide.mp3'));
   await page.waitForTimeout(400);
 
-  const tops = page.evaluate(() => new Promise<number[]>(resolve => {
-    const samples: number[] = [];
+  // Long enough for the dropzone's fade-out and the slot's 320 ms height animation to end.
+  const tops = page.evaluate(() => new Promise<Array<{ top: number; at: number }>>(resolve => {
+    const samples: Array<{ top: number; at: number }> = [];
     const startedAt = performance.now();
-    const sample = () => {
+    const sample = (now: number) => {
       const card = document.querySelector('.queue-card');
-      if (card) samples.push(Math.round(card.getBoundingClientRect().top));
-      if (performance.now() - startedAt < 450) requestAnimationFrame(sample);
+      if (card) samples.push({ top: Math.round(card.getBoundingClientRect().top), at: now });
+      if (now - startedAt < 800) requestAnimationFrame(sample);
       else resolve(samples);
     };
     requestAnimationFrame(sample);
@@ -37,9 +38,16 @@ test('the queue slides down instead of jumping when processing starts', async ({
   const samples = await tops;
 
   // The banner pushes the queue down by a few hundred pixels; it must not do so in one frame.
-  expect(samples[samples.length - 1] - samples[0]).toBeGreaterThan(100);
-  const largestStep = Math.max(...samples.slice(1).map((top, index) => Math.abs(top - samples[index])));
-  expect(largestStep).toBeLessThan(100);
+  // Measured in time, not pixels per frame: the ease-out moves 50-60 px in each early frame, so
+  // one frame dropped by a slow machine already looked like a jump.
+  const start = samples[0].top;
+  const end = samples[samples.length - 1].top;
+  expect(end - start).toBeGreaterThan(100);
+  const moved = samples.find(sample => Math.abs(sample.top - start) > 2)!;
+  const arrived = samples.find(sample => Math.abs(end - sample.top) <= 2)!;
+  expect(arrived.at - moved.at).toBeGreaterThanOrEqual(100);
+  const between = new Set(samples.filter(sample => Math.abs(sample.top - start) > 2 && Math.abs(end - sample.top) > 2).map(sample => sample.top));
+  expect(between.size).toBeGreaterThanOrEqual(2);
 });
 
 test('the player stays at the bottom while the editor is loading', async ({ page }, info) => {
