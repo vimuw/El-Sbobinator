@@ -1,7 +1,7 @@
 
 // Shortcut labels are written the Windows way ("Ctrl+Shift+V"). On an iPad or a Mac the same
-// shortcuts run with ⌘ (the handlers accept metaKey / TipTap's Mod-), so the web build shows the
-// Apple glyphs there. The desktop app keeps its labels.
+// shortcuts run with ⌘ (the handlers accept metaKey / TipTap's Mod-), so the labels show the
+// Apple glyphs there.
 
 /** iPhone, iPad (which reports itself as a Mac with touch) or Mac. */
 export function isApplePlatform(): boolean {

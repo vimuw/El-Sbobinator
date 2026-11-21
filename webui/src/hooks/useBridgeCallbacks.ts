@@ -4,7 +4,7 @@ import { createBridge, type ElSbobinatorBridge, type PreferredModelChangedPayloa
 import type { AppStatus, FileDescriptor, FileDonePayload, FileItem, ProcessDonePayload, ProcessingAction } from '../appState';
 import { errorLabel, isPausedError, shortModelName } from '../utils';
 
-// On the web the dialog itself takes the new key, for this run only; the desktop points to the settings.
+// The dialog itself takes the new key, for this run only.
 function newKeyNotice(): string {
   return 'Limite API raggiunto: le tue chiavi Gemini hanno esaurito la quota gratuita. Incolla un’altra chiave nella finestra che si è aperta per continuare: vale solo per questa elaborazione.';
 }

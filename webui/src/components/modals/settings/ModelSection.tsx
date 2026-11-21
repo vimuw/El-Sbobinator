@@ -5,8 +5,8 @@ import { CustomSelect } from './CustomSelect';
 import { Cpu } from 'lucide-react';
 import { SettingsSectionHeading } from './SettingsLayout';
 
-// Google gives 2.5 Flash only to projects that already used it. The web build then moves the key to
-// 3.6 Flash by itself (webRun.ts); the desktop has no such switch.
+// Google gives 2.5 Flash only to projects that already used it. The site then moves the key to
+// 3.6 Flash by itself (webRun.ts).
 export const MODEL_25_ACCESS_NOTE_WEB = 'Google consente l’uso solo a chi ha già usato questo modello. Se la tua chiave non può usarlo, passo da solo a Gemini 3.6 Flash.';
 
 interface ModelSectionProps {

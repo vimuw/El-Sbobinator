@@ -73,7 +73,7 @@ export function toWebIndexHtml(html: string, drive = false): string {
 }
 
 /**
- * The web dev server keeps the permissive desktop policy (HMR needs inline scripts and websockets)
+ * The web dev server keeps the permissive policy of index.html (HMR needs inline scripts and websockets)
  * but must still reach Gemini, or every request fails as "Failed to fetch", and play the audio the
  * user picks, which the web build hands the player as a blob: URL. Without it the player never
  * learns the duration and its ±10 s buttons move the thumb over an empty track.

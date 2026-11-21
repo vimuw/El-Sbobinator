@@ -59,9 +59,9 @@ export function modelMissingRetryMessage(key: number, model: string): string {
   return `La chiave di riserva ${key} non può usare ${label} e la quota della chiave principale è esaurita: riprova domani o sostituisci la chiave di riserva nelle impostazioni.`;
 }
 
-// Third host: the whole app runs in this page (static site, no backend). It implements the same
-// PywebviewApi contract as pywebview and the FastAPI dev host, and delivers bridge events by calling
-// window.elSbobinatorBridge directly. Methods left out are features the web build hides.
+// The host: the whole app runs in this page (static site, no backend). It implements the
+// PywebviewApi contract (bridge.ts) and delivers bridge events by calling
+// window.elSbobinatorBridge directly. Methods left out are features the site does not have.
 
 // A file picked a moment ago may not be in the saved queue yet: its copy is never pruned that soon.
 const MEDIA_PRUNE_GRACE_MS = 10 * 60_000;
@@ -979,7 +979,7 @@ export async function initWebHost(): Promise<boolean> {
   // The trash comes with the Drive sync: hidden, like it, in the released site.
   setHostCapabilities({ permanentDelete: !driveEnabled(), reportByEmail: !monitoringEnabled() });
   adoptSpikeKeys();
-  // Lets index.css size controls for touch on tablets without touching the desktop app.
+  // Lets index.css size controls for touch on tablets.
   document.documentElement.dataset.host = 'web';
   const emit = createBridgeEmitter(() => window.elSbobinatorBridge);
   window.pywebview = { api: createWebPywebviewApi(emit, { simulation }) };

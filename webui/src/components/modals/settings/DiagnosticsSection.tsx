@@ -12,7 +12,6 @@ import { SUPPORT_EMAIL } from '../../../branding';
 import { getHostCapabilities } from '../../../hostCapabilities';
 import { loadAutoReports, saveAutoReports } from '../../../monitoring/config';
 import { MAX_REPORT_HISTORY, REPORT_MAX_AGE_DAYS, loadReportHistory, subscribeReportHistory, type SentReport } from '../../../feedback/history';
-import { CustomSelect } from './CustomSelect';
 import { SettingsRow, SettingsSectionHeading } from './SettingsLayout';
 
 const REPORT_KIND_LABELS: Record<SentReport['kind'], string> = { bug: 'Bug', idea: 'Suggerimento', altro: 'Altro' };
@@ -20,8 +19,7 @@ const REPORT_CODE_CLASS = 'font-mono font-semibold tracking-wide select-all';
 const REPORT_DATE = new Intl.DateTimeFormat('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 interface DiagnosticsSectionProps {
-  onCopyReport: (sessionDir?: string) => Promise<void>;
-  // FFmpeg, disk and session-folder checks only exist on desktop.
+  onCopyReport: () => Promise<void>;
 }
 
 export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(({
@@ -29,26 +27,14 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
 }) => {
   const [copiedToast, setCopiedToast] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
-  const [sessions, setSessions] = useState<Array<{ path: string; label: string }>>([]);
-  const [sessionDir, setSessionDir] = useState('');
   const [supportError, setSupportError] = useState('');
-
-  useEffect(() => {
-    let active = true;
-    if (window.pywebview?.api?.list_diagnostic_sessions) {
-      void window.pywebview.api.list_diagnostic_sessions().then(result => {
-        if (active && result.ok) setSessions(result.sessions || []);
-      }).catch(() => {});
-    }
-    return () => { active = false; };
-  }, []);
 
   const handleCopyReport = async () => {
     if (isCopying) return;
     setIsCopying(true);
     setSupportError('');
     try {
-      await onCopyReport(sessionDir || undefined);
+      await onCopyReport();
       setCopiedToast(true);
       setTimeout(() => setCopiedToast(false), 2500);
     } catch (e) {
@@ -89,7 +75,7 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
     const next = !autoReports;
     setAutoReportsState(next);
     saveAutoReports(next);
-    // Loaded with the page in web builds with reports; Vite drops the SDK from the desktop bundle.
+    // Loaded with the page in builds with reports.
     // A chunk that does not load (blocked, offline) leaves the saved choice for the next page.
     if (import.meta.env.MODE === 'web') {
       void import('../../../monitoring/sentry')
@@ -179,23 +165,8 @@ export const DiagnosticsSection: React.FC<DiagnosticsSectionProps> = React.memo(
               <span>{copiedToast ? 'Copiato' : 'Copia'}</span>
             </button>
           </SettingsRow>
-          {sessions.length > 0 && (
-            <div className="flex flex-col gap-2 pb-2">
-              <label htmlFor="diagnostic-session" className="text-xs text-[var(--text-secondary)]">Sbobina con il problema (facoltativa)</label>
-              <CustomSelect
-                id="diagnostic-session"
-                value={sessionDir}
-                disabled={isCopying}
-                onChange={setSessionDir}
-                options={[
-                  { value: '', label: 'Nessuna in particolare' },
-                  ...sessions.map(session => ({ value: session.path, label: session.label })),
-                ]}
-              />
-            </div>
-          )}
-          {/* The address in sight: without a mail app the button opens nothing (the browser stays
-              silent, the desktop app only logs the failure). */}
+          {/* The address in sight: without a mail app the button opens nothing and the browser
+              stays silent. */}
           <SettingsRow
             title="2. Scrivimi un’email"
             description={<>Descrivi il problema e incolla il report. Se non si apre nulla, scrivi a <span className="font-semibold text-[var(--text-primary)] select-all whitespace-nowrap">{SUPPORT_EMAIL}</span>.</>}

@@ -156,8 +156,7 @@ export interface ArchiveSession {
   /** Web previews with the trash: when the sbobina was moved to the trash (gone for good 30 days later). */
   trashed_at?: string;
   /** Web: bytes of the lecture audio kept in this browser for the sbobina, counted when the archive
-   *  is read and never stored; 0 when it keeps none, absent when the audio couldn't be read (and on
-   *  desktop, whose audio stays on disk). */
+   *  is read and never stored; 0 when it keeps none, absent when the audio couldn't be read. */
   kept_audio_bytes?: number;
 }
 
@@ -311,7 +310,6 @@ export interface PywebviewApi {
   /** Web: a file for the editor's player, held by the page only (no copy in the browser). */
   ask_editor_media_file?: () => Promise<FileDescriptor | null>;
   check_path_exists?: (path: string) => Promise<{ ok: boolean; exists: boolean }>;
-  collect_dropped_files?: (names: string[]) => Promise<{ ok: boolean }>;
   start_processing?: (
     files: FileDescriptor[],
     apiKey: string,
@@ -374,10 +372,6 @@ export interface PywebviewApi {
   /** Web: keeps (or stops keeping) a copy of the sbobina's audio in this browser. */
   set_session_audio_kept?: (sessionDir: string, keep: boolean) => Promise<{ ok: boolean; audio_kept?: boolean; error?: string }>;
   touch_session_opened?: (sessionDir: string) => Promise<{ ok: boolean; last_opened_at_iso?: string; error?: string }>;
-  open_session_folder?: () => Promise<{ ok: boolean; error?: string }>;
-  ask_session_folder?: () => Promise<{ ok: boolean; path?: string; cancelled?: boolean; error?: string }>;
-  move_session_root?: (newPath: string) => Promise<{ ok: boolean; started?: boolean; error?: string }>;
-  get_session_move_status?: () => Promise<{ status: string; moved?: number; total?: number; error?: string | null; old_root?: string; new_root?: string }>;
   save_theme_preference?: (theme: 'light' | 'dark') => Promise<void>;
   get_archive_folders?: () => Promise<{ ok: boolean; folders: ArchiveFolder[]; error?: string }>;
   save_archive_folders?: (folders: ArchiveFolder[]) => Promise<{ ok: boolean; error?: string }>;
@@ -410,11 +404,8 @@ export interface PywebviewApi {
     sessionDir?: string,
     frontendVersion?: string,
   ) => Promise<{ ok: boolean; report?: string; error?: string }>;
-  list_diagnostic_sessions?: () => Promise<{ ok: boolean; sessions?: Array<{ path: string; label: string }>; error?: string }>;
-  export_diagnostics?: (sessionDir?: string, frontendVersion?: string) => Promise<{ ok: boolean; target_path?: string; cancelled?: boolean; error?: string }>;
   record_frontend_event?: (kind: string, message?: string, stack?: string) => Promise<{ ok: boolean; error?: string }>;
   upload_browser_files?: (files: File[]) => Promise<FileDescriptor[]>;
-  set_browser_scenario?: (scenario: string) => Promise<{ ok: boolean; scenario?: string; error?: string }>;
 }
 
 declare global {

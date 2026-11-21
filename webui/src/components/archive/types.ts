@@ -45,7 +45,7 @@ export const SORT_OPTIONS: { id: SortOption; label: string }[] = [
 /** Web: offered only while some sbobina keeps its audio in this browser. */
 export const AUDIO_SIZE_SORT_OPTION: { id: SortOption; label: string } = { id: 'audio_size', label: 'Audio più pesante' };
 
-/** Bytes of audio a sbobina keeps in this browser (0 on desktop and without a kept copy). */
+/** Bytes of audio a sbobina keeps in this browser (0 without a kept copy). */
 export function keptAudioBytes(session: ArchiveSession): number {
   return session.kept_audio_bytes && session.kept_audio_bytes > 0 ? session.kept_audio_bytes : 0;
 }

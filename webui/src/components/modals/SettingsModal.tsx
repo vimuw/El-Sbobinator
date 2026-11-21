@@ -270,11 +270,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setSaveError(null);
   };
 
-  const handleCopyReport = async (sessionDir?: string) => {
+  const handleCopyReport = async () => {
     if (!window.pywebview?.api?.get_diagnostic_report) return;
-    const res = await window.pywebview.api.get_diagnostic_report(
-      undefined, undefined, undefined, sessionDir, APP_VERSION,
-    );
+    const res = await window.pywebview.api.get_diagnostic_report(undefined, undefined, undefined, undefined, APP_VERSION);
     if (res?.ok && res.report) {
       await navigator.clipboard.writeText(res.report);
       appendConsole('📋 Report diagnostico copiato negli appunti.');

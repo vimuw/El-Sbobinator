@@ -36,7 +36,7 @@ async function loadTechReport(): Promise<string | null> {
 }
 
 async function sendThroughSentry(input: FeedbackInput): Promise<FeedbackResult> {
-  // Only the web build reports: Vite drops the SDK from the desktop bundle.
+  // Only the site build reports: other modes (the unit tests) never load the SDK.
   if (import.meta.env.MODE !== 'web') return { ok: false, reason: 'unavailable' };
   const { sendFeedback } = await import('../../monitoring/sentry');
   return sendFeedback(input);
@@ -344,7 +344,7 @@ export function FeedbackModal({ onClose, send = sendThroughSentry, encodeImage =
                         rel="noopener noreferrer"
                         className="font-semibold text-[var(--accent-text)] underline"
                         onClick={event => {
-                          // Through the helper: the desktop app opens it with its bridge, a browser in a new tab.
+                          // Through the helper: a new-tab link, so the page and a running sbobina stay.
                           event.preventDefault();
                           openReportEmail();
                         }}

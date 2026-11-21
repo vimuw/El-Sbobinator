@@ -166,7 +166,7 @@ describe('App', () => {
       bridgeDelayed: true,
     });
     await act(async () => { render(<App />); });
-    expect(await screen.findByText(/Il motore dell'applicazione/)).toBeTruthy();
+    expect(await screen.findByText(/Il caricamento sta impiegando più tempo del previsto/)).toBeTruthy();
   });
 
   it('renders footer with GitHub link', async () => {
@@ -919,11 +919,9 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
 
     it('handles drag over, leave, and drop events', async () => {
       vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
-      const collectDroppedFiles = vi.fn().mockResolvedValue({ ok: true });
       setPywebview({
         get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [] }),
         get_archive_folders: vi.fn().mockResolvedValue({ ok: true, folders: [] }),
-        collect_dropped_files: collectDroppedFiles,
       });
 
       await act(async () => { render(<App />); });

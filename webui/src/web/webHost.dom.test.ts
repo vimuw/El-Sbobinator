@@ -99,7 +99,6 @@ describe('web host', () => {
     expect(api?.start_processing).toBeTypeOf('function');
     // Hidden features have no method, so the UI never offers them.
     expect(api?.stream_media_file).toBeTypeOf('function');
-    expect(api?.export_diagnostics).toBeUndefined();
   });
 
   it('tells the app when a main-key 404 changes the saved model, so Settings shows it', () => {

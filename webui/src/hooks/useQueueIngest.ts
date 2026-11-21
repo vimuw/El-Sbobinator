@@ -11,14 +11,6 @@ import type { AlreadyProcessedMatch, DuplicatePrompt } from '../components/modal
 import type { PendingArchiveReplacement } from './useArchiveSync';
 import { releaseQueueFiles } from '../queueFileRelease';
 
-type WebViewHostWindow = Window & {
-  chrome?: {
-    webview?: {
-      postMessageWithAdditionalObjects?: (message: string, additionalObjects: FileList) => void;
-    };
-  };
-};
-
 interface UseQueueIngestOptions {
   filesRef: React.MutableRefObject<FileItem[]>;
   archiveSessionsRef: React.MutableRefObject<ArchiveSession[]>;
@@ -62,7 +54,7 @@ export function useQueueIngest({
     return `meta:${String(file.name || '').trim().toLowerCase()}::${Number(file.size || 0)}::${Math.round(Number(file.duration || 0))}`;
   }, []);
 
-  // A path a queued file still reads is never released (a desktop path picked twice is the same one).
+  // A path a queued file still reads is never released.
   const releaseRejectedFiles = useCallback((rejected: FileItem[]) => {
     const queuedPaths = new Set(filesRef.current.map(file => file.path).filter(Boolean));
     releaseQueueFiles(rejected.filter(file => !queuedPaths.has(file.path)));
@@ -241,13 +233,6 @@ export function useQueueIngest({
       setIsDragging(false);
       if (appStateRef.current === 'canceling') return;
       try {
-        const w = window as WebViewHostWindow;
-        if (w.chrome?.webview?.postMessageWithAdditionalObjects) {
-          const names = Array.from(e.dataTransfer.files).map((f: File) => f.name);
-          w.chrome.webview.postMessageWithAdditionalObjects('FilesDropped', e.dataTransfer.files);
-          window.pywebview?.api?.collect_dropped_files?.(names);
-          return;
-        }
         const files = Array.from(e.dataTransfer.files);
         if (files.length > 0 && window.pywebview?.api?.upload_browser_files) {
           const uploaded = await window.pywebview.api.upload_browser_files(files);

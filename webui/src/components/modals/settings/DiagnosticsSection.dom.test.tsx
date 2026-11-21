@@ -26,20 +26,13 @@ const baseProps = {
 };
 
 describe('DiagnosticsSection', () => {
-  it('keeps support to an email and a copied report, scoped to the selected sbobina', async () => {
-    const exportBundle = vi.fn();
-    window.pywebview = { api: {
-      list_diagnostic_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [{ path: 'archive/lesson', label: 'Lezione' }] }),
-      export_diagnostics: exportBundle,
-    } } as unknown as NonNullable<typeof window.pywebview>;
+  it('keeps support to an email and a copied report', async () => {
     const copy = vi.fn().mockResolvedValue(undefined);
     render(<DiagnosticsSection {...baseProps} onCopyReport={copy} />);
-    await screen.findByText('Lezione');
 
     const support = within(screen.getByRole('region', { name: 'Segnala un problema' }));
     const emailLink = support.getByRole('link', { name: 'Segnala un problema' });
     const copyButton = support.getByRole('button', { name: 'Copia report diagnostico' });
-    expect(support.getByLabelText('Sbobina con il problema (facoltativa)')).toBeTruthy();
     // Two numbered steps in the order they are done, each button on its own row's right.
     expect(copyButton.previousElementSibling?.textContent).toContain('1. Copia il report');
     expect(emailLink.previousElementSibling?.textContent).toContain('2. Scrivimi un’email');
@@ -51,14 +44,11 @@ describe('DiagnosticsSection', () => {
     // The email has no automatic reports to turn off.
     expect(screen.queryByRole('region', { name: 'Report automatici' })).toBeNull();
 
-    fireEvent.click(screen.getByLabelText('Sbobina con il problema (facoltativa)'));
-    fireEvent.click(screen.getByRole('option', { name: 'Lezione' }));
     await act(async () => { fireEvent.click(support.getByRole('button', { name: 'Copia report diagnostico' })); });
-    expect(copy).toHaveBeenCalledWith('archive/lesson');
-    expect(exportBundle).not.toHaveBeenCalled();
+    expect(copy).toHaveBeenCalledTimes(1);
   });
 
-  it('hides the sbobina picker when there is nothing to choose', () => {
+  it('has no sbobina picker: the report covers this browser', () => {
     render(<DiagnosticsSection {...baseProps} />);
     expect(screen.queryByLabelText('Sbobina con il problema (facoltativa)')).toBeNull();
   });

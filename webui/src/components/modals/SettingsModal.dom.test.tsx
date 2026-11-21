@@ -716,7 +716,7 @@ describe('SettingsModal on the web host', () => {
     setHostCapabilities(DEFAULT_CAPABILITIES);
   });
 
-  it('lists the keys like the desktop, with the shared-device warning and no desktop-only sections', () => {
+  it('lists the keys with the shared-device warning and no app-only sections', () => {
     render(<SettingsModal {...makeProps({ apiKey: 'AIzaSyPrimary1234567890123', fallbackKeys: ['AIzaSyReserve1234567890456'] })} />);
 
     // Same key section as the desktop: rows with a menu and the add field, not a free text box.
@@ -823,7 +823,7 @@ describe('SettingsModal on the web host', () => {
     expect(screen.queryByText(/pronta a trascrivere/)).toBeNull();
   });
 
-  it('adds a reserve key from the add field, as on the desktop', () => {
+  it('adds a reserve key from the add field', () => {
     const setFallbackKeys = vi.fn();
     render(<SettingsModal {...makeProps({ apiKey: 'AIzaSyPrimary1234567890123', setFallbackKeys })} />);
 

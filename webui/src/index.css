@@ -6191,7 +6191,7 @@ input::-webkit-contacts-auto-fill-button {
 /* ═══ TOUCH (web build on tablets) ═══
    A finger needs about 44px (Apple HIG). Dense rows (sidebar, editor toolbar, player) keep their
    look: an invisible ::after, centred on the control, widens only the area that takes the tap.
-   Web build only (data-host is set by the web host): the desktop app keeps its mouse sizing. */
+   data-host is set by the web host once it starts; mouse windows keep their sizing. */
 @media (pointer: coarse) {
   :root[data-host="web"] :is(
     .sidebar-nav-item,
@@ -6482,7 +6482,7 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 /* iPhone Safari zooms the page into any field whose text is under 16px and leaves it zoomed.
-   Web build on touch phones only: the desktop app and mouse windows keep their compact fields. */
+   Touch phones only: mouse windows keep their compact fields. */
 @media (max-width: 640px) and (pointer: coarse) {
   :root[data-host="web"] :is(input:not([type="range"], [type="checkbox"], [type="radio"], [type="file"]), textarea, select) {
     font-size: 16px !important;

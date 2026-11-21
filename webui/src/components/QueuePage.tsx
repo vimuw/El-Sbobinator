@@ -318,8 +318,8 @@ export function QueuePage({
                 {...fade}
                 className="alert-card is-error p-3 rounded-lg text-xs leading-relaxed max-w-sm mt-2 text-[var(--error-text)]"
               >
-                Il motore dell'applicazione sta impiegando più tempo del previsto.
-                Verifica se l'app è bloccata o prova a riavviare.
+                Il caricamento sta impiegando più tempo del previsto.
+                Prova a ricaricare la pagina.
               </motion.div>
             )}
           </motion.div>

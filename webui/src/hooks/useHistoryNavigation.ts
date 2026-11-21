@@ -2,8 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import type { ActivePage } from '../components/NavSidebar';
 
 // The web build keeps the current screen in the URL hash and in the browser history, so Back/Forward
-// (and the iPad edge swipe) move between screens and a reload reopens the same one. The desktop
-// window has no address bar or Back button: there the hook does nothing.
+// (and the iPad edge swipe) move between screens and a reload reopens the same one.
 
 export interface Screen {
   page: ActivePage;
