@@ -8,7 +8,8 @@ Describe the change clearly and briefly.
 
 ## How to test
 
-- [ ] `python scripts/build_release.py check --skip-npm-install`
+- [ ] Web site: `npm --prefix webui run build:web` and `npm --prefix webui run test:e2e:web`
+- [ ] Lint, types and tests: `python scripts/build_release.py check --skip-npm-install` (`--skip-python` only for a change confined to `webui/` or `functions/` whose file names no Python test in `tests/` mentions)
 - [ ] Additional manual verification performed if needed
 
 ## Checklist

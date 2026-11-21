@@ -74,5 +74,6 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Dependabot cannot update this pin: change it in web-release.yml and web-staging.yml together.
           wranglerVersion: '4.149.0'
           command: pages deploy webui/dist-web --project-name=elsbobinator --branch=staging --commit-hash=${{ github.sha }}

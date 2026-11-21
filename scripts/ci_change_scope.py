@@ -18,6 +18,11 @@ WEB_FILES = {
     ".github/workflows/web-staging.yml",
     ".github/dependabot.yml",
 }
+# The desktop app is a frozen backup: the nightly run on the other days skips its
+# Windows and macOS checks, the weekly one keeps them. Both must match build.yml;
+# any other schedule string runs them (fails closed).
+WEEKLY_DESKTOP_SCHEDULE = "20 6 * * 1"
+DAILY_WEB_SCHEDULE = "20 6 * * 0,2-6"
 
 
 def is_documentation(path: PurePosixPath) -> bool:
@@ -44,6 +49,16 @@ def classify(paths: Iterable[str] | None) -> dict[str, bool]:
         "docs_only": all(is_documentation(path) for path in changed),
         "desktop_checks": not all(is_web_only(path) for path in changed),
     }
+
+
+def scope_for(env: Mapping[str, str], paths: Iterable[str] | None) -> dict[str, bool]:
+    scope = classify(paths)
+    if (
+        env.get("EVENT_NAME") == "schedule"
+        and env.get("SCHEDULE", "") == DAILY_WEB_SCHEDULE
+    ):
+        scope["desktop_checks"] = False
+    return scope
 
 
 def revision_range(env: Mapping[str, str]) -> str | None:
@@ -77,7 +92,7 @@ def changed_paths(revisions: str | None) -> list[str] | None:
 
 
 def main() -> None:
-    scope = classify(changed_paths(revision_range(os.environ)))
+    scope = scope_for(os.environ, changed_paths(revision_range(os.environ)))
     with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
         for name, value in scope.items():
             output.write(f"{name}={str(value).lower()}\n")

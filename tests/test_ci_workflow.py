@@ -93,8 +93,17 @@ def test_web_release_pins_actions_and_deploys_only_after_tests_and_build():
         web.index("npm run test:e2e:web"),
         web.index("npm run build:web"),
         web.index("cloudflare/wrangler-action@"),
+        web.index("- name: Check that elsbobinator.com serves the new version"),
     ]
     assert order == sorted(order)
+    assert "https://elsbobinator.com/version.json" in web
+    served_check = web.split(
+        "- name: Check that elsbobinator.com serves the new version", 1
+    )[1].split("\n      - name:", 1)[0]
+    # Every attempt gives up on its own: a stalled connection must not hold the loop
+    # until the job's timeout.
+    curls = re.findall(r"curl [^\n]*", served_check)
+    assert curls and all(re.search(r"--max-time \d+\b", curl) for curl in curls)
     assert "EL_SBOBINATOR_WEB_VERSION: ${{ github.ref_name }}" in web
     assert (
         "secrets.CLOUDFLARE_API_TOKEN" in web and "secrets.CLOUDFLARE_ACCOUNT_ID" in web
@@ -284,6 +293,47 @@ def test_runs_without_a_change_range_check_the_desktop_app(env):
         "docs_only": False,
         "desktop_checks": True,
     }
+
+
+@pytest.mark.parametrize(
+    ("env", "desktop_checks"),
+    [
+        (
+            {"EVENT_NAME": "schedule", "SCHEDULE": ci_change_scope.DAILY_WEB_SCHEDULE},
+            False,
+        ),
+        (
+            {
+                "EVENT_NAME": "schedule",
+                "SCHEDULE": ci_change_scope.WEEKLY_DESKTOP_SCHEDULE,
+            },
+            True,
+        ),
+        # An unknown or missing schedule string fails closed.
+        ({"EVENT_NAME": "schedule", "SCHEDULE": "0 0 * * *"}, True),
+        ({"EVENT_NAME": "schedule"}, True),
+        # The schedule string means nothing outside scheduled runs.
+        (
+            {
+                "EVENT_NAME": "workflow_dispatch",
+                "SCHEDULE": ci_change_scope.DAILY_WEB_SCHEDULE,
+            },
+            True,
+        ),
+    ],
+)
+def test_only_the_weekly_schedule_checks_the_desktop_backup(env, desktop_checks):
+    scope = ci_change_scope.scope_for(env, None)
+    assert scope == {"docs_only": False, "desktop_checks": desktop_checks}
+
+
+def test_the_workflow_schedules_match_the_classifier():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    crons = re.findall(r'^    - cron: "([^"]+)"$', text, re.M)
+    assert sorted(crons) == sorted(
+        [ci_change_scope.WEEKLY_DESKTOP_SCHEDULE, ci_change_scope.DAILY_WEB_SCHEDULE]
+    )
+    assert "SCHEDULE: ${{ github.event.schedule }}" in text
 
 
 def test_pull_requests_and_branch_pushes_compare_their_change_range():
