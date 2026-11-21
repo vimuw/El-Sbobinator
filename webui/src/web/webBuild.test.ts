@@ -24,7 +24,6 @@ describe('web build page policy', () => {
 
     const csp = /<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]+)"/i.exec(html)?.[1];
     expect(csp).toBe(WEB_CSP);
-    expect(html).not.toContain('startup-guard.js');
     expect(html).toContain('<script src="./boot-theme.js"></script>');
     expect(html).toContain('src="/src/main.tsx"');
     expect(html).toContain('<link rel="icon" type="image/png" href="./icon.png" />');

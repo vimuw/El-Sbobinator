@@ -1,10 +1,8 @@
 import { reportClientError } from '../diagnostics';
-import { beginDesktopSettingsLoad, completeDesktopStartup } from '../desktopStartup';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ModelOption, SettingsPayload } from '../bridge';
 import { credentialStorageWarning } from '../credentialStorage';
 import { DEFAULT_MODEL } from '../utils';
-import { getHostCapabilities } from '../hostCapabilities';
 
 export function useApiReady(appendConsole: (msg: string) => void) {
   const [apiReady, setApiReady] = useState(false);
@@ -67,16 +65,12 @@ export function useApiReady(appendConsole: (msg: string) => void) {
       inFlightRef.current = true;
       const attempt = ++bootstrapAttemptRef.current;
       try {
-        await beginDesktopSettingsLoad();
-        if (!alive || attempt !== bootstrapAttemptRef.current) return;
         const cfg = await window.pywebview.api.load_settings();
-        if (!alive || attempt !== bootstrapAttemptRef.current) return;
-        await completeDesktopStartup();
         if (!alive || attempt !== bootstrapAttemptRef.current) return;
         initDoneRef.current = true;
         setBridgeDelayed(false);
         setApiReady(true);
-        appendConsoleRef.current(getHostCapabilities().kind === 'web' ? 'Pronto.' : 'Connesso a Python.');
+        appendConsoleRef.current('Pronto.');
         applySettings(cfg);
       } catch (e) {
         reportClientError('Load settings failed:', e);
