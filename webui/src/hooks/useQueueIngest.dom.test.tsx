@@ -3,7 +3,6 @@ import { renderHook, act } from '@testing-library/react';
 import { useQueueIngest } from './useQueueIngest';
 import type { FileItem } from '../appState';
 import type { ArchiveSession } from '../bridge';
-import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 
 describe('useQueueIngest', () => {
   const dispatch = vi.fn();
@@ -293,7 +292,7 @@ describe('useQueueIngest', () => {
     }));
   });
 
-  it('web: reports dropped files in a format the host refused', async () => {
+  it('reports dropped files in a format the host refused', async () => {
     const uploadBrowserFiles = vi.fn().mockResolvedValue([
       { id: 'uploaded', name: 'lezione.mp3', path: 'local://1/lezione.mp3', size: 3 },
     ]);
@@ -320,18 +319,9 @@ describe('useQueueIngest', () => {
       dataTransfer: { files: [new File(['a'], 'lezione.mp3'), new File(['b'], 'registrazione.wav')] },
     } as unknown as React.DragEvent;
 
-    const desktop = render();
-    await act(async () => { await desktop.current.handleDrop(drop); });
-    expect(onFilesRejected).not.toHaveBeenCalled();
-
-    setHostCapabilities({ kind: 'web' });
-    try {
-      const web = render();
-      await act(async () => { await web.current.handleDrop(drop); });
-      expect(onFilesRejected).toHaveBeenCalledWith(['registrazione.wav']);
-    } finally {
-      setHostCapabilities(DESKTOP_CAPABILITIES);
-    }
+    const web = render();
+    await act(async () => { await web.current.handleDrop(drop); });
+    expect(onFilesRejected).toHaveBeenCalledWith(['registrazione.wav']);
   });
 
   it('handleDuplicateAddAgain registers pending replacement and enqueues file without direct archive mutation', async () => {

@@ -2,8 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EditorFullPage } from './EditorFullPage';
-import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
-import { WEB_CAPABILITIES } from '../web/webHost';
+import { DEFAULT_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 
 const editorMockState = vi.hoisted(() => ({ html: '<p>editor content</p>' }));
 const audioPlayerProps = vi.hoisted(() => ({ current: null as Record<string, unknown> | null }));
@@ -104,7 +103,7 @@ it('draws the empty dock while checking a sbobina that had no audio last time, i
   }} />);
   expect(await screen.findByText('Nessun audio collegato')).toBeTruthy();
   expect(screen.queryByText('Preparazione audio della sbobina...')).toBeNull();
-  expect((screen.getByRole('button', { name: /Aggiungi audio/ }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole('button', { name: /Scegli il file audio/ }) as HTMLButtonElement).disabled).toBe(true);
   expect(container.querySelector('.editor-player-dock > .audio-dock-empty')).not.toBeNull();
 });
 
@@ -114,7 +113,7 @@ it('keeps the folded empty dock as its headphones pill while checking, not the p
     src: null, relinkNeeded: false, loading: true, expected: 'missing',
     onRelink: vi.fn(), init: {}, onStateChange: vi.fn(),
   }} />);
-  expect(await screen.findByRole('button', { name: 'Mostra la barra audio (audio non trovato)' })).toBeTruthy();
+  expect(await screen.findByRole('button', { name: 'Mostra la barra audio (audio non salvato)' })).toBeTruthy();
   expect(container.querySelector('.audio-dock-pill-badge')).not.toBeNull();
   expect(container.querySelector('.player-pill-ring')).toBeNull();
   localStorage.removeItem('el-sbobinator.audio-player.v1');
@@ -286,15 +285,14 @@ describe('EditorFullPage autosave', () => {
     }
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { write } });
     Object.defineProperty(globalThis, 'ClipboardItem', { configurable: true, value: TestClipboardItem });
-    // The macOS desktop app runs in WKWebView (Apple vendor too): it keeps the Docs-native formats.
-    const vendor = vi.spyOn(navigator, 'vendor', 'get').mockReturnValue('Apple Computer, Inc.');
+    // Chromium copies synchronously through the copy event: it keeps the Docs-native formats.
+    const vendor = vi.spyOn(navigator, 'vendor', 'get').mockReturnValue('Google Inc.');
     try {
       editorMockState.html = '<h2>Appunti corretti</h2><p>Testo <strong>importante</strong></p>';
       render(<EditorFullPage {...baseProps} />);
       await waitFor(() => expect(screen.getByTestId('rich-text-editor')).toBeTruthy());
-      fireEvent.click(screen.getByRole('button', { name: 'Copia documento' }));
-      // Safari rejects clipboard writes that start after the click handler has returned.
-      expect(formats['text/html']).toBeTruthy();
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Copia documento' })); });
+      await waitFor(() => expect(formats['text/html']).toBeTruthy());
       const copied = new DOMParser().parseFromString(formats['text/html'], 'text/html');
       expect(copied.querySelector('strong')?.textContent).toBe('importante');
       expect(copied.querySelector('h2')?.style.fontSize).toBe('16pt');
@@ -325,7 +323,6 @@ describe('EditorFullPage autosave', () => {
     Object.defineProperty(document, 'execCommand', { configurable: true, value: execCommand });
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { write } });
     Object.defineProperty(globalThis, 'ClipboardItem', { configurable: true, value: TestClipboardItem });
-    setHostCapabilities({ kind: 'web' });
     try {
       editorMockState.html = '<h2>Appunti corretti</h2><p>Testo <strong>importante</strong></p><ul><li><p>uno</p><ul><li><p>due</p></li></ul></li></ul>';
       render(<EditorFullPage {...baseProps} />);
@@ -345,7 +342,7 @@ describe('EditorFullPage autosave', () => {
       // Without images the copy is complete: no pointer to the .docx.
       expect(screen.queryByTestId('editor-export-notice')).toBeNull();
     } finally {
-      setHostCapabilities(DESKTOP_CAPABILITIES);
+      setHostCapabilities(DEFAULT_CAPABILITIES);
       vendor.mockRestore();
       if (clipboardDescriptor) Object.defineProperty(navigator, 'clipboard', clipboardDescriptor);
       else Reflect.deleteProperty(navigator, 'clipboard');
@@ -365,7 +362,6 @@ describe('EditorFullPage autosave', () => {
     Object.defineProperty(globalThis, 'ClipboardItem', { configurable: true, value: class { constructor(public data: Record<string, Blob>) {} } });
     const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:docx');
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
-    setHostCapabilities({ kind: 'web' });
     try {
       editorMockState.html = '<p>Testo</p><div data-editor-image="true" data-width="35" data-layout="inline"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" alt="Figura"></div>';
       render(<EditorFullPage {...baseProps} previewTitle="Anatomia" />);
@@ -380,7 +376,7 @@ describe('EditorFullPage autosave', () => {
       expect((createObjectURL.mock.calls[0][0] as Blob).type).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
       expect(screen.queryByTestId('editor-export-notice')).toBeNull();
     } finally {
-      setHostCapabilities(DESKTOP_CAPABILITIES);
+      setHostCapabilities(DEFAULT_CAPABILITIES);
       vendor.mockRestore();
       createObjectURL.mockRestore();
       click.mockRestore();
@@ -401,7 +397,6 @@ describe('EditorFullPage autosave', () => {
     }));
     const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:docx');
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
-    setHostCapabilities({ kind: 'web' });
     const setThemeMode = vi.fn();
     try {
       const title = 'PATOLOGIA GENERALE 1, LEZIONE 7';
@@ -451,7 +446,7 @@ describe('EditorFullPage autosave', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Tema chiaro' }));
       expect(setThemeMode).toHaveBeenCalledTimes(1);
     } finally {
-      setHostCapabilities(DESKTOP_CAPABILITIES);
+      setHostCapabilities(DEFAULT_CAPABILITIES);
       createObjectURL.mockRestore();
       click.mockRestore();
       vi.unstubAllGlobals();
@@ -476,7 +471,6 @@ describe('EditorFullPage autosave', () => {
       return true;
     });
     Object.defineProperty(document, 'execCommand', { configurable: true, value: exec });
-    setHostCapabilities({ kind: 'web' });
     try {
       editorMockState.html = '<p>Testo</p><div data-editor-image="true" data-width="35" data-layout="inline"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" alt="Figura"></div>';
       render(<EditorFullPage {...baseProps} />);
@@ -494,18 +488,12 @@ describe('EditorFullPage autosave', () => {
       // The header has no download icon here: the image notice points to the menu instead.
       expect(screen.getByTestId('editor-export-notice').textContent).toContain('Scarica .docx” dal menu “…”');
     } finally {
-      setHostCapabilities(DESKTOP_CAPABILITIES);
+      setHostCapabilities(DEFAULT_CAPABILITIES);
       vendor.mockRestore();
       vi.unstubAllGlobals();
       if (execDescriptor) Object.defineProperty(document, 'execCommand', execDescriptor);
       else Reflect.deleteProperty(document, 'execCommand');
     }
-  });
-
-  it('desktop has no .docx button: its copy already carries the images', async () => {
-    render(<EditorFullPage {...baseProps} />);
-    await waitFor(() => expect(screen.getByTestId('rich-text-editor')).toBeTruthy());
-    expect(screen.queryByRole('button', { name: 'Scarica .docx' })).toBeNull();
   });
 
   it('shows the pressed copy before the blocking clipboard work and ignores repeated clicks', async () => {
@@ -593,47 +581,7 @@ describe('EditorFullPage autosave', () => {
     expect(saveControllerRef.current?.getDirtyContent()).toBeNull();
   });
 
-  it('renders Rimuovi audio button when audioRelinkNeeded is true and onRemoveAudio is provided', async () => {
-    const onRemoveAudio = vi.fn().mockResolvedValue(undefined);
-    render(
-      <EditorFullPage
-        {...baseProps}
-        audio={{
-          src: null,
-          relinkNeeded: true,
-          onRelink: vi.fn(),
-          onRemoveAudio,
-          init: {},
-          onStateChange: vi.fn(),
-        }}
-        onClose={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByText('Audio non trovato')).toBeTruthy();
-    const removeBtn = screen.getByText('Rimuovi audio');
-    expect(removeBtn).toBeTruthy();
-    // Both footer actions are outline pills, like the secondary settings actions.
-    for (const action of [removeBtn, screen.getByRole('button', { name: 'Ricollega audio' })]) {
-      expect(action.classList.contains('app-button-secondary')).toBe(true);
-      expect(action.classList.contains('is-settings-action')).toBe(true);
-      expect(action.classList.contains('premium-button-secondary')).toBe(false);
-    }
-
-    await act(async () => {
-      fireEvent.click(removeBtn);
-    });
-    expect(screen.getByText("Rimuovere l'audio mancante?")).toBeTruthy();
-
-    const modal = screen.getByText("Rimuovere l'audio mancante?").closest('.modal-card') as HTMLElement;
-    const confirmBtn = within(modal).getByRole('button', { name: 'Rimuovi audio' });
-    await act(async () => {
-      fireEvent.click(confirmBtn);
-    });
-    expect(onRemoveAudio).toHaveBeenCalledTimes(1);
-  });
-
-  it('renders empty audio bar with "Nessun audio collegato" and "Aggiungi audio" button when no audio is present', async () => {
+  it('renders empty audio bar with "Nessun audio collegato" and a file picker when no audio is present', async () => {
     const onRelink = vi.fn().mockResolvedValue(true);
     render(
       <EditorFullPage
@@ -650,8 +598,7 @@ describe('EditorFullPage autosave', () => {
     );
 
     expect(screen.getByText('Nessun audio collegato')).toBeTruthy();
-    expect(screen.getByText('Aggiungi un file audio: una copia verrà conservata nella sbobina.')).toBeTruthy();
-    const addBtn = screen.getByRole('button', { name: /Aggiungi audio/i });
+    const addBtn = screen.getByRole('button', { name: /Scegli il file audio/i });
     expect(addBtn).toBeTruthy();
     expect(addBtn.classList.contains('settings-pill-button')).toBe(true);
     expect(addBtn.classList.contains('premium-button')).toBe(false);
@@ -783,10 +730,9 @@ describe('EditorFullPage title rename', () => {
 });
 
 describe('EditorFullPage on hosts without session audio', () => {
-  afterEach(() => setHostCapabilities(DESKTOP_CAPABILITIES));
+  afterEach(() => setHostCapabilities(DEFAULT_CAPABILITIES));
 
   it('shows no audio dock and no player shortcuts', async () => {
-    setHostCapabilities({ kind: 'web', editorAudio: false });
     render(<EditorFullPage {...baseProps} audio={{ src: null, relinkNeeded: true, onRelink: vi.fn(), init: {}, onStateChange: vi.fn() }} />);
     await waitFor(() => expect(screen.getByTestId('rich-text-editor')).toBeTruthy());
 
@@ -798,10 +744,9 @@ describe('EditorFullPage on hosts without session audio', () => {
 });
 
 describe('EditorFullPage on the web build', () => {
-  afterEach(() => setHostCapabilities(DESKTOP_CAPABILITIES));
+  afterEach(() => setHostCapabilities(DEFAULT_CAPABILITIES));
 
   it('docks the player for the audio of the sbobina, and offers to choose the file when there is none', async () => {
-    setHostCapabilities(WEB_CAPABILITIES);
     const { container, rerender } = render(<EditorFullPage {...baseProps} audioSrc="blob:https://web.test/1" onClose={vi.fn()} />);
     expect(container.querySelector('.editor-player-dock [data-testid="audio-player"]')).not.toBeNull();
 
@@ -816,21 +761,15 @@ describe('EditorFullPage on the web build', () => {
   });
 
   it('gives the web player the switch to keep the audio in the browser instead of removing it', () => {
-    setHostCapabilities(WEB_CAPABILITIES);
     const onKeepChange = vi.fn();
-    render(<EditorFullPage {...baseProps} audio={{ src: 'blob:test/1', relinkNeeded: false, onRelink: vi.fn(), onRemoveAudio: vi.fn(), kept: true, size: 2048, onKeepChange, init: {}, onStateChange: vi.fn() }} />);
-    expect(audioPlayerProps.current).toMatchObject({ onRemoveAudio: undefined, keep: { kept: true, size: 2048, onChange: onKeepChange } });
-
-    setHostCapabilities(DESKTOP_CAPABILITIES);
-    const onRemoveAudio = vi.fn();
-    render(<EditorFullPage {...baseProps} audio={{ src: '/audio.mp3', relinkNeeded: false, onRelink: vi.fn(), onRemoveAudio, onKeepChange, init: {}, onStateChange: vi.fn() }} />);
-    expect(audioPlayerProps.current).toMatchObject({ onRemoveAudio, keep: undefined });
+    render(<EditorFullPage {...baseProps} audio={{ src: 'blob:test/1', relinkNeeded: false, onRelink: vi.fn(), kept: true, size: 2048, onKeepChange, init: {}, onStateChange: vi.fn() }} />);
+    expect(audioPlayerProps.current).toMatchObject({ keep: { kept: true, size: 2048, onChange: onKeepChange } });
+    expect(audioPlayerProps.current?.onRemoveAudio).toBeUndefined();
   });
 
   it('asks for the lecture file the browser does not keep, with nothing to remove', async () => {
-    setHostCapabilities(WEB_CAPABILITIES);
     const onRelink = vi.fn().mockResolvedValue(true);
-    render(<EditorFullPage {...baseProps} audio={{ src: null, relinkNeeded: true, onRelink, onRemoveAudio: vi.fn(), init: {}, onStateChange: vi.fn() }} />);
+    render(<EditorFullPage {...baseProps} audio={{ src: null, relinkNeeded: true, onRelink, init: {}, onStateChange: vi.fn() }} />);
 
     expect(screen.getByText('Audio non salvato')).toBeTruthy();
     expect(screen.getByText('Scegli il file della lezione per riascoltarla mentre rileggi.')).toBeTruthy();
@@ -849,7 +788,6 @@ describe('EditorFullPage on the web build', () => {
     const viewport = Object.assign(new EventTarget(), { height: 1180, offsetTop: 0, scale: 1 });
     vi.stubGlobal('visualViewport', viewport);
     try {
-      setHostCapabilities(WEB_CAPABILITIES);
       const { container } = render(<EditorFullPage {...baseProps} audioSrc="blob:https://web.test/1" />);
       await waitFor(() => expect(screen.getByTestId('rich-text-editor')).toBeTruthy());
       // Queried each time: the motion mock remounts the element on every render.
@@ -868,20 +806,6 @@ describe('EditorFullPage on the web build', () => {
         viewport.dispatchEvent(new Event('resize'));
       });
       expect(page().style.bottom).toBe('');
-    } finally {
-      vi.unstubAllGlobals();
-    }
-  });
-});
-
-describe('EditorFullPage on the desktop with a visual viewport', () => {
-  it('keeps the full window: pywebview resizes the page itself', () => {
-    vi.stubGlobal('innerHeight', 1180);
-    const viewport = Object.assign(new EventTarget(), { height: 700, offsetTop: 0, scale: 1 });
-    vi.stubGlobal('visualViewport', viewport);
-    try {
-      const { container } = render(<EditorFullPage {...baseProps} />);
-      expect(container.querySelector<HTMLElement>('.editor-fullpage')!.style.bottom).toBe('');
     } finally {
       vi.unstubAllGlobals();
     }

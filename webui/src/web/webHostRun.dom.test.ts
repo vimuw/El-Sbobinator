@@ -2,7 +2,7 @@ import { IDBFactory } from 'fake-indexeddb';
 import { Blob as NodeBlob, File as NodeFile } from 'node:buffer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FileDescriptor } from '../appState';
-import { DESKTOP_CAPABILITIES, getHostCapabilities, setHostCapabilities } from '../hostCapabilities';
+import { DEFAULT_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 import { STORAGE_KEYS } from '../storageKeys';
 import { createCheckpointStore } from './checkpointStore';
 import { createDriveApi } from './drive/driveApi';
@@ -97,7 +97,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-  setHostCapabilities(DESKTOP_CAPABILITIES);
+  setHostCapabilities(DEFAULT_CAPABILITIES);
   delete window.pywebview;
   window.elSbobinatorBridge = null;
   window.history.replaceState(null, '', '/');
@@ -109,7 +109,6 @@ describe('web host with the real pipeline', () => {
     vi.stubGlobal('indexedDB', database);
     window.elSbobinatorBridge = {} as Window['elSbobinatorBridge'];
     await initWebHost();
-    expect(getHostCapabilities().realPipeline).toBe(true);
 
     window.history.replaceState(null, '', '/?simulazione=1');
     await initWebHost();

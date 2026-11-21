@@ -10,11 +10,11 @@ import {
 } from './SettingsModal';
 import type { ModelOption } from '../../bridge';
 import { STORAGE_KEYS } from '../../storageKeys';
-import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../../hostCapabilities';
+import { DEFAULT_CAPABILITIES, setHostCapabilities } from '../../hostCapabilities';
 import { IDBFactory } from 'fake-indexeddb';
 import { createApiUsageStore } from '../../web/apiUsage';
-import { WEB_CAPABILITIES, createWebPywebviewApi } from '../../web/webHost';
-import { MODEL_25_ACCESS_NOTE, MODEL_25_ACCESS_NOTE_WEB } from './settings/ModelSection';
+import { createWebPywebviewApi } from '../../web/webHost';
+import { MODEL_25_ACCESS_NOTE_WEB } from './settings/ModelSection';
 import { APP_VERSION } from '../../branding';
 import { BACKDROP_SHAKE_MS } from '../../hooks/useBackdropDismiss';
 import { UNSAVED_CHANGES_HINT } from './UnsavedChangesHint';
@@ -605,13 +605,13 @@ describe('SettingsModal — model section', () => {
     // The closed select shows only the choice; the Default badge appears while choosing
     expect(trigger.textContent).not.toContain('Default');
     fireEvent.click(trigger);
-    const selectedOption = screen.getByRole('option', { name: /Gemini 3.6 Flash/i });
+    const selectedOption = screen.getByRole('option', { name: /^Gemini 3.6 Flash/i });
     expect(selectedOption.getAttribute('aria-selected')).toBe('true');
     expect(selectedOption.textContent).not.toContain('Default');
     expect(screen.getAllByRole('option')).toHaveLength(3);
     expect(screen.queryByRole('option', { name: /Gemini 3\.5 Flash|Gemini 3\.7 Flash/i })).toBeNull();
     const legacyOption = screen.getByRole('option', { name: /Gemini 2.5 Flash.*Default/i });
-    const accessNote = MODEL_25_ACCESS_NOTE;
+    const accessNote = MODEL_25_ACCESS_NOTE_WEB;
     expect(legacyOption.querySelector('[title]')?.getAttribute('title')).toBe(accessNote);
     expect(screen.queryByText(accessNote)).toBeNull();
     fireEvent.click(trigger);
@@ -622,8 +622,6 @@ describe('SettingsModal — model section', () => {
   });
 
   it('tells web users that a key without 2.5 Flash moves to 3.6 Flash by itself', async () => {
-    setHostCapabilities(WEB_CAPABILITIES);
-    onTestFinished(() => setHostCapabilities(DESKTOP_CAPABILITIES));
     const models = [
       { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: '', default_chunk_minutes: 15 },
       { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: '', default_chunk_minutes: 15 },
@@ -656,7 +654,7 @@ describe('SettingsModal — model section', () => {
     });
     const trigger = screen.getByRole('button', { name: /Gemini 2.5 Flash/i });
     fireEvent.click(trigger);
-    const option = screen.getByRole('option', { name: /Gemini 3.6 Flash/i });
+    const option = screen.getByRole('option', { name: /^Gemini 3.6 Flash/i });
     fireEvent.click(option);
     expect(setPreferredModel).toHaveBeenCalledWith('gemini-3.6-flash');
   });
@@ -713,10 +711,9 @@ describe('SettingsModal — tabs and footer', () => {
 
 describe('SettingsModal on the web host', () => {
   beforeEach(() => {
-    setHostCapabilities(WEB_CAPABILITIES);
   });
   afterEach(() => {
-    setHostCapabilities(DESKTOP_CAPABILITIES);
+    setHostCapabilities(DEFAULT_CAPABILITIES);
   });
 
   it('lists the keys like the desktop, with the shared-device warning and no desktop-only sections', () => {

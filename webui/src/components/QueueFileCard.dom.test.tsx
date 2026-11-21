@@ -3,7 +3,6 @@ import { DndContext } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { describe, expect, it, vi } from 'vitest';
 import type { FileItem } from '../appState';
-import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 import { CompletedFileCard, QueueFileCard } from './QueueFileCard';
 
 function makeFile(overrides: Partial<FileItem> = {}): FileItem {
@@ -33,7 +32,7 @@ describe('QueueFileCard', () => {
   it('renders file name', () => {
     render(
       <QueueWrapper>
-        <QueueFileCard file={makeFile()} appState="idle" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} />
+        <QueueFileCard file={makeFile()} appState="idle" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} />
       </QueueWrapper>,
     );
     expect(screen.getByText('lezione.mp3')).toBeTruthy();
@@ -42,7 +41,7 @@ describe('QueueFileCard', () => {
   it('shows drag handle when idle+queued', () => {
     render(
       <QueueWrapper>
-        <QueueFileCard file={makeFile()} appState="idle" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} />
+        <QueueFileCard file={makeFile()} appState="idle" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} />
       </QueueWrapper>,
     );
     expect(screen.getByLabelText('Trascina per riordinare')).toBeTruthy();
@@ -51,7 +50,7 @@ describe('QueueFileCard', () => {
   it('shows drag handle for error file when idle and showDragHandle is true', () => {
     render(
       <QueueWrapper>
-        <QueueFileCard file={makeFile({ status: 'error', errorText: 'timeout' })} appState="idle" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} showDragHandle={true} />
+        <QueueFileCard file={makeFile({ status: 'error', errorText: 'timeout' })} appState="idle" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} showDragHandle={true} />
       </QueueWrapper>,
     );
     expect(screen.getByLabelText('Trascina per riordinare')).toBeTruthy();
@@ -60,7 +59,7 @@ describe('QueueFileCard', () => {
   it('shows drag handle for paused file when idle and showDragHandle is true', () => {
     render(
       <QueueWrapper>
-        <QueueFileCard file={makeFile({ status: 'paused', errorText: 'circuit_breaker_paused' })} appState="idle" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} showDragHandle={true} />
+        <QueueFileCard file={makeFile({ status: 'paused', errorText: 'circuit_breaker_paused' })} appState="idle" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} showDragHandle={true} />
       </QueueWrapper>,
     );
     expect(screen.getByLabelText('Trascina per riordinare')).toBeTruthy();
@@ -75,7 +74,6 @@ describe('QueueFileCard', () => {
           onRemove={vi.fn()}
           onRetry={vi.fn()}
           onPreview={vi.fn()}
-          onOpenFile={vi.fn()}
           showDragHandle={false}
         />
       </QueueWrapper>,
@@ -87,7 +85,7 @@ describe('QueueFileCard', () => {
     const onRemove = vi.fn();
     render(
       <QueueWrapper>
-        <QueueFileCard file={makeFile()} appState="idle" onRemove={onRemove} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} />
+        <QueueFileCard file={makeFile()} appState="idle" onRemove={onRemove} onRetry={vi.fn()} onPreview={vi.fn()} />
       </QueueWrapper>,
     );
     const btns = screen.getAllByRole('button');
@@ -101,7 +99,7 @@ describe('QueueFileCard', () => {
         <QueueFileCard
           file={makeFile({ status: 'processing' })}
           appState="processing"
-          onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()}
+          onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()}
         />
       </QueueWrapper>,
     );
@@ -115,7 +113,7 @@ describe('QueueFileCard', () => {
         <QueueFileCard
           file={makeFile({ status: 'processing' })}
           appState="canceling"
-          onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()}
+          onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()}
         />
       </QueueWrapper>,
     );
@@ -129,7 +127,7 @@ describe('QueueFileCard', () => {
         <QueueFileCard
           file={makeFile({ status: 'processing', isRetryingBlocks: true })}
           appState="processing"
-          onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()}
+          onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()}
         />
       </QueueWrapper>,
     );
@@ -139,8 +137,8 @@ describe('QueueFileCard', () => {
   it('shows the active file with the transcription icon and waiting files with a clock', () => {
     render(
       <QueueWrapper>
-        <QueueFileCard file={makeFile({ id: 'f1', status: 'processing' })} appState="processing" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} />
-        <QueueFileCard file={makeFile({ id: 'f2' })} appState="processing" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} />
+        <QueueFileCard file={makeFile({ id: 'f1', status: 'processing' })} appState="processing" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} />
+        <QueueFileCard file={makeFile({ id: 'f2' })} appState="processing" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} />
       </QueueWrapper>,
     );
     expect(screen.getAllByTestId('queue-icon-active')).toHaveLength(1);
@@ -150,8 +148,8 @@ describe('QueueFileCard', () => {
   it('puts the drag handle in the status icon slot instead of reserving a column for it', () => {
     const { container } = render(
       <QueueWrapper>
-        <QueueFileCard file={makeFile({ id: 'f1', status: 'processing' })} appState="processing" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} showDragHandle />
-        <QueueFileCard file={makeFile({ id: 'f2' })} appState="processing" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} showDragHandle />
+        <QueueFileCard file={makeFile({ id: 'f1', status: 'processing' })} appState="processing" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} showDragHandle />
+        <QueueFileCard file={makeFile({ id: 'f2' })} appState="processing" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} showDragHandle />
       </QueueWrapper>,
     );
     expect(container.querySelector('.drag-handle-spacer')).toBeNull();
@@ -170,7 +168,7 @@ describe('QueueFileCard', () => {
         <QueueFileCard
           file={makeFile()}
           appState="idle"
-          onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()}
+          onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()}
         />
       </QueueWrapper>,
     );
@@ -185,7 +183,7 @@ describe('QueueFileCard', () => {
         <QueueFileCard
           file={makeFile()}
           appState="idle"
-          onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()}
+          onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()}
         />
       </QueueWrapper>,
     );
@@ -202,7 +200,7 @@ describe('QueueFileCard', () => {
         <QueueFileCard
           file={makeFile({ status: 'error', errorText: 'quota_daily_limit_phase1' })}
           appState="idle"
-          onRemove={vi.fn()} onRetry={onRetry} onPreview={vi.fn()} onOpenFile={vi.fn()}
+          onRemove={vi.fn()} onRetry={onRetry} onPreview={vi.fn()}
         />
       </QueueWrapper>,
     );
@@ -218,7 +216,7 @@ describe('QueueFileCard', () => {
         <QueueFileCard
           file={makeFile({ status: 'paused', retryable: true, retryReason: 'circuit_breaker_paused' })}
           appState="idle"
-          onRemove={vi.fn()} onRetry={onRetry} onPreview={vi.fn()} onOpenFile={vi.fn()}
+          onRemove={vi.fn()} onRetry={onRetry} onPreview={vi.fn()}
         />
       </QueueWrapper>,
     );
@@ -234,7 +232,7 @@ describe('QueueFileCard', () => {
         <QueueFileCard
           file={makeFile({ status: 'error', errorText: 'regenerate_prompt_timeout' })}
           appState="idle"
-          onRemove={vi.fn()} onRetry={onRetry} onPreview={vi.fn()} onOpenFile={vi.fn()}
+          onRemove={vi.fn()} onRetry={onRetry} onPreview={vi.fn()}
         />
       </QueueWrapper>,
     );
@@ -252,7 +250,7 @@ describe('QueueFileCard', () => {
         <QueueFileCard
           file={makeFile({ status: 'error', errorText: 'phase1_chunk_failed_3', errorDetail: 'FFmpeg error: disk full' })}
           appState="idle"
-          onRemove={vi.fn()} onRetry={onRetry} onPreview={vi.fn()} onOpenFile={vi.fn()}
+          onRemove={vi.fn()} onRetry={onRetry} onPreview={vi.fn()}
         />
       </QueueWrapper>,
     );
@@ -270,7 +268,7 @@ describe('QueueFileCard', () => {
         <QueueFileCard
           file={makeFile({ status: 'error', errorText: 'html_export_failed' })}
           appState="idle"
-          onRemove={vi.fn()} onRetry={onRetry} onPreview={vi.fn()} onOpenFile={vi.fn()}
+          onRemove={vi.fn()} onRetry={onRetry} onPreview={vi.fn()}
         />
       </QueueWrapper>,
     );
@@ -283,7 +281,7 @@ describe('QueueFileCard', () => {
     const onRemove = vi.fn();
     render(
       <QueueWrapper>
-        <QueueFileCard file={makeFile()} appState="idle" onRemove={onRemove} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} />
+        <QueueFileCard file={makeFile()} appState="idle" onRemove={onRemove} onRetry={vi.fn()} onPreview={vi.fn()} />
       </QueueWrapper>,
     );
     fireEvent.click(screen.getByLabelText('Rimuovi'));
@@ -294,7 +292,7 @@ describe('QueueFileCard', () => {
     const onRemove = vi.fn();
     render(
       <QueueWrapper>
-        <QueueFileCard file={makeFile({ status: 'queued' })} appState="processing" onRemove={onRemove} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} showDragHandle={true} />
+        <QueueFileCard file={makeFile({ status: 'queued' })} appState="processing" onRemove={onRemove} onRetry={vi.fn()} onPreview={vi.fn()} showDragHandle={true} />
       </QueueWrapper>,
     );
     expect(screen.getByLabelText('Trascina per riordinare')).toBeTruthy();
@@ -304,7 +302,7 @@ describe('QueueFileCard', () => {
   it('does not show drag handle or remove button for actively processing file', () => {
     render(
       <QueueWrapper>
-        <QueueFileCard file={makeFile({ status: 'processing' })} appState="processing" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} showDragHandle={true} />
+        <QueueFileCard file={makeFile({ status: 'processing' })} appState="processing" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} showDragHandle={true} />
       </QueueWrapper>,
     );
     expect(screen.queryByLabelText('Trascina per riordinare')).toBeNull();
@@ -314,7 +312,7 @@ describe('QueueFileCard', () => {
   it('formats size and duration', () => {
     render(
       <QueueWrapper>
-        <QueueFileCard file={makeFile()} appState="idle" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} />
+        <QueueFileCard file={makeFile()} appState="idle" onRemove={vi.fn()} onRetry={vi.fn()} onPreview={vi.fn()} />
       </QueueWrapper>,
     );
     expect(screen.getByText('1,0 MB')).toBeTruthy();
@@ -328,7 +326,7 @@ describe('CompletedFileCard', () => {
     render(
       <CompletedFileCard
         file={makeFile({ status: 'done', outputHtml: '/out/file.html', title: 'Cardio 1' })}
-        onRemove={vi.fn()} onPreview={onPreview} onOpenFile={vi.fn()}
+        onRemove={vi.fn()} onPreview={onPreview}
       />,
     );
     expect(screen.getByText('Cardio 1')).toBeTruthy();
@@ -341,7 +339,7 @@ describe('CompletedFileCard', () => {
     render(
       <CompletedFileCard
         file={makeFile({ status: 'done', outputHtml: '/out/file.html' })}
-        onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()}
+        onRemove={vi.fn()} onPreview={vi.fn()}
       />,
     );
     expect(screen.getByText('lezione.mp3')).toBeTruthy();
@@ -352,7 +350,7 @@ describe('CompletedFileCard', () => {
       <CompletedFileCard
         file={makeFile({ status: 'done', outputHtml: '/out/file.html' })}
         isNewest={false}
-        onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()}
+        onRemove={vi.fn()} onPreview={vi.fn()}
       />,
     );
     expect(screen.queryByLabelText('Altre opzioni')).toBeNull();
@@ -365,7 +363,7 @@ describe('CompletedFileCard', () => {
       <CompletedFileCard
         file={makeFile({ status: 'done', outputHtml: '/out/file.html' })}
         isNewest={false}
-        onRemove={vi.fn()} onPreview={onPreview} onOpenFile={vi.fn()}
+        onRemove={vi.fn()} onPreview={onPreview}
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Apri' }));
@@ -379,7 +377,7 @@ describe('CompletedFileCard', () => {
       <CompletedFileCard
         file={makeFile({ status: 'done', outputHtml: '/out/file.html' })}
         isNewest={false}
-        onRemove={onRemove} onPreview={onPreview} onOpenFile={vi.fn()}
+        onRemove={onRemove} onPreview={onPreview}
       />,
     );
     const remove = screen.getByRole('button', { name: 'Rimuovi dai Recenti' });
@@ -396,7 +394,7 @@ describe('CompletedFileCard', () => {
       <CompletedFileCard
         file={makeFile({ status: 'done', outputHtml: '/out/file.html', path: '/src/f.mp3' })}
         isNewest={false}
-        onRemove={vi.fn()} onPreview={onPreview} onOpenFile={vi.fn()}
+        onRemove={vi.fn()} onPreview={onPreview}
       />,
     );
     fireEvent.click(screen.getByText('lezione.mp3'));
@@ -409,7 +407,7 @@ describe('CompletedFileCard', () => {
       <CompletedFileCard
         file={makeFile({ status: 'done', outputHtml: '/out/file.html', outputDir: '/sessions/s1', path: '/src/f.mp3' })}
         isNewest={false}
-        onRemove={vi.fn()} onPreview={onPreview} onOpenFile={vi.fn()}
+        onRemove={vi.fn()} onPreview={onPreview}
       />,
     );
     fireEvent.click(screen.getByText('lezione.mp3'));
@@ -421,36 +419,24 @@ describe('CompletedFileCard', () => {
       <CompletedFileCard
         file={makeFile({ status: 'done', outputHtml: '/out/file.html' })}
         isNewest={false}
-        onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()}
+        onRemove={vi.fn()} onPreview={vi.fn()}
         currentFolder={{ name: 'Corso A', color: '#4D96FF' }}
       />,
     );
     expect(screen.getByTitle('Raccolta: Corso A')).toBeTruthy();
   });
 
-  it('offers Apri cartella as an icon on desktop and leaves it out on the web', () => {
-    const onOpenFile = vi.fn();
-    const renderCard = () => render(
+  it('offers no Apri cartella: the sbobine are in the browser, not in a folder', () => {
+    render(
       <CompletedFileCard
         file={makeFile({ status: 'done', outputHtml: '/out/file.html', outputDir: '/out' })}
         isNewest={false}
-        onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={onOpenFile}
+        onRemove={vi.fn()} onPreview={vi.fn()}
       />,
     );
-    const first = renderCard();
     expect(screen.queryByText('Apri nel browser')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Apri cartella' }));
-    expect(onOpenFile).toHaveBeenCalledWith('/out');
-    first.unmount();
-
-    setHostCapabilities({ kind: 'web', openLocalPath: false });
-    try {
-      renderCard();
-      expect(screen.queryByRole('button', { name: 'Apri cartella' })).toBeNull();
-      expect(screen.getByRole('button', { name: 'Rimuovi dai Recenti' })).toBeTruthy();
-    } finally {
-      setHostCapabilities(DESKTOP_CAPABILITIES);
-    }
+    expect(screen.queryByRole('button', { name: 'Apri cartella' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Rimuovi dai Recenti' })).toBeTruthy();
   });
 
   it('shows the effective model for a regenerated legacy queue entry without a fallback badge', () => {
@@ -458,7 +444,7 @@ describe('CompletedFileCard', () => {
       <CompletedFileCard
         file={makeFile({ status: 'done', effectiveModel: 'gemini-2.5-flash' })}
         isNewest={false}
-        onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()}
+        onRemove={vi.fn()} onPreview={vi.fn()}
       />,
     );
     expect(screen.getByText('2.5-flash')).toBeTruthy();
@@ -472,7 +458,7 @@ describe('CompletedFileCard fresh highlight', () => {
     const { container } = render(
       <CompletedFileCard
         file={makeFile({ status: 'done', outputHtml: '/out/file.html', completedAt: Date.now() })}
-        onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()}
+        onRemove={vi.fn()} onPreview={vi.fn()}
       />,
     );
     expect(container.querySelector('.queue-card.is-fresh')).toBeTruthy();
@@ -482,7 +468,7 @@ describe('CompletedFileCard fresh highlight', () => {
     const { container } = render(
       <CompletedFileCard
         file={makeFile({ status: 'done', outputHtml: '/out/file.html', completedAt: Date.now() - 60_000 })}
-        onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()}
+        onRemove={vi.fn()} onPreview={vi.fn()}
       />,
     );
     expect(container.querySelector('.queue-card.is-fresh')).toBeNull();
@@ -494,7 +480,7 @@ describe('CompletedFileCard open affordance', () => {
 
   it('shows an Apri button that opens the editor once, next to the remove icon', () => {
     const onPreview = vi.fn();
-    render(<CompletedFileCard file={openableFile()} onRemove={vi.fn()} onPreview={onPreview} onOpenFile={vi.fn()} />);
+    render(<CompletedFileCard file={openableFile()} onRemove={vi.fn()} onPreview={onPreview} />);
     const openButton = screen.getByRole('button', { name: 'Apri' });
     expect(openButton.className).toContain('completed-open-button');
     expect(screen.getByRole('button', { name: 'Rimuovi dai Recenti' })).toBeTruthy();
@@ -505,7 +491,7 @@ describe('CompletedFileCard open affordance', () => {
 
   it('makes the card focusable and opens the editor with Enter or Space', () => {
     const onPreview = vi.fn();
-    const { container } = render(<CompletedFileCard file={openableFile()} onRemove={vi.fn()} onPreview={onPreview} onOpenFile={vi.fn()} />);
+    const { container } = render(<CompletedFileCard file={openableFile()} onRemove={vi.fn()} onPreview={onPreview} />);
     const card = container.querySelector('.queue-card') as HTMLElement;
     expect(card.tabIndex).toBe(0);
     expect(card.getAttribute('aria-label')).toBe("Apri lezione.mp3 nell'editor");
@@ -516,26 +502,26 @@ describe('CompletedFileCard open affordance', () => {
 
   it('leaves Enter on inner buttons to their own action', () => {
     const onPreview = vi.fn();
-    render(<CompletedFileCard file={openableFile()} onRemove={vi.fn()} onPreview={onPreview} onOpenFile={vi.fn()} />);
+    render(<CompletedFileCard file={openableFile()} onRemove={vi.fn()} onPreview={onPreview} />);
     fireEvent.keyDown(screen.getByRole('button', { name: 'Rimuovi dai Recenti' }), { key: 'Enter' });
     expect(onPreview).not.toHaveBeenCalled();
   });
 
   it('offers no open affordance or focus stop without an output', () => {
-    const { container } = render(<CompletedFileCard file={makeFile({ status: 'done' })} onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} />);
+    const { container } = render(<CompletedFileCard file={makeFile({ status: 'done' })} onRemove={vi.fn()} onPreview={vi.fn()} />);
     expect(screen.queryByRole('button', { name: 'Apri' })).toBeNull();
     expect((container.querySelector('.queue-card') as HTMLElement).hasAttribute('tabindex')).toBe(false);
   });
 
   it('keeps the meta line quiet and the warning prominent', () => {
     const { container, rerender } = render(
-      <CompletedFileCard file={makeFile({ status: 'done', outputHtml: '/out/file.html', completedAt: Date.now() - 3_600_000 })} onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} />,
+      <CompletedFileCard file={makeFile({ status: 'done', outputHtml: '/out/file.html', completedAt: Date.now() - 3_600_000 })} onRemove={vi.fn()} onPreview={vi.fn()} />,
     );
     const meta = container.querySelector('.queue-card-meta') as HTMLElement;
     expect(meta).toBeTruthy();
     expect(meta.innerHTML).not.toContain('--success-text');
     rerender(
-      <CompletedFileCard file={makeFile({ status: 'done', outputHtml: '/out/file.html', completionStatus: 'completed_with_warnings', revisionFailedBlocks: [2] })} onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} />,
+      <CompletedFileCard file={makeFile({ status: 'done', outputHtml: '/out/file.html', completionStatus: 'completed_with_warnings', revisionFailedBlocks: [2] })} onRemove={vi.fn()} onPreview={vi.fn()} />,
     );
     expect(screen.getByText('Completata con avvisi').className).toContain('--warning-text');
     expect(screen.getByText(/1 blocco non revisionato/).className).toContain('--warning-text');
@@ -549,7 +535,7 @@ describe('CompletedFileCard open affordance', () => {
     render(
       <CompletedFileCard
         file={makeFile({ status: 'done', outputHtml: '/out/file.html', outputDir: '/out/session', completionStatus: 'completed_with_warnings', revisionFailedBlocks: [2] })}
-        onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} onRetryFailedRevisionBlocks={retry}
+        onRemove={vi.fn()} onPreview={vi.fn()} onRetryFailedRevisionBlocks={retry}
       />,
     );
     const button = screen.getByRole('button', { name: 'Riprova revisione' });
@@ -565,7 +551,7 @@ describe('CompletedFileCard open affordance', () => {
 
   it('wraps the meta line on wider screens instead of cutting "6 ore fa" to "6 ore f"', () => {
     const { container } = render(
-      <CompletedFileCard file={makeFile({ status: 'done', outputHtml: '/out/file.html', size: 293_400_000, effectiveModel: 'gemini-2.5-flash', completedAt: Date.now() - 6 * 3_600_000 })} onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} />,
+      <CompletedFileCard file={makeFile({ status: 'done', outputHtml: '/out/file.html', size: 293_400_000, effectiveModel: 'gemini-2.5-flash', completedAt: Date.now() - 6 * 3_600_000 })} onRemove={vi.fn()} onPreview={vi.fn()} />,
     );
     const meta = container.querySelector('.queue-card-meta') as HTMLElement;
     expect(meta.textContent).toContain('6 ore fa');
@@ -577,7 +563,7 @@ describe('CompletedFileCard open affordance', () => {
     vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(max-width: 640px)' }));
     try {
       const { container } = render(
-        <CompletedFileCard file={makeFile({ status: 'done', outputHtml: '/out/file.html', size: 293_400_000, effectiveModel: 'gemini-2.5-flash', completedAt: Date.now() - 6 * 3_600_000 })} onRemove={vi.fn()} onPreview={vi.fn()} onOpenFile={vi.fn()} />,
+        <CompletedFileCard file={makeFile({ status: 'done', outputHtml: '/out/file.html', size: 293_400_000, effectiveModel: 'gemini-2.5-flash', completedAt: Date.now() - 6 * 3_600_000 })} onRemove={vi.fn()} onPreview={vi.fn()} />,
       );
       const meta = container.querySelector('.queue-card-meta') as HTMLElement;
       expect(meta.classList.contains('flex-nowrap')).toBe(true);

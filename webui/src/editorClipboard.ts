@@ -3,7 +3,6 @@ import { clipboardPlainText, DOCUMENT_FORMATTING, EDITOR_CONTENT_WIDTH_PX, forma
 import { createClipboardEquation, type ClipboardEquation } from './clipboardEquations';
 import { nativeLineSpacingReader, prepareHtmlLineSpacing } from './editorLineSpacing';
 import { videoLink } from './editorLinks';
-import { getHostCapabilities } from './hostCapabilities';
 
 // Docs ignores CSS floats on HTML paste. Its native clipboard slice carries the
 // positioned entities. Keep this adapter separate from saved editor HTML.
@@ -478,8 +477,7 @@ export function setClipboardFormats(event: ClipboardEvent, formats: ClipboardFor
  * HTML anyway. There the copy goes through navigator.clipboard.write, started inside the tap.
  */
 function prefersAsyncClipboard(): boolean {
-  return getHostCapabilities().kind === 'web'
-    && typeof navigator !== 'undefined' && /Apple/.test(navigator.vendor ?? '')
+  return typeof navigator !== 'undefined' && /Apple/.test(navigator.vendor ?? '')
     && typeof ClipboardItem !== 'undefined' && typeof navigator.clipboard?.write === 'function';
 }
 

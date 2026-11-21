@@ -2,14 +2,11 @@ import { type Dispatch, useEffect, useLayoutEffect, useRef } from 'react';
 import type React from 'react';
 import { createBridge, type ElSbobinatorBridge, type PreferredModelChangedPayload } from '../bridge';
 import type { AppStatus, FileDescriptor, FileDonePayload, FileItem, ProcessDonePayload, ProcessingAction } from '../appState';
-import { getHostCapabilities } from '../hostCapabilities';
 import { errorLabel, isPausedError, shortModelName } from '../utils';
 
 // On the web the dialog itself takes the new key, for this run only; the desktop points to the settings.
 function newKeyNotice(): string {
-  return getHostCapabilities().kind === 'web'
-    ? 'Limite API raggiunto: le tue chiavi Gemini hanno esaurito la quota gratuita. Incolla un’altra chiave nella finestra che si è aperta per continuare: vale solo per questa elaborazione.'
-    : 'Limite API raggiunto. Le tue chiavi Gemini hanno esaurito i crediti gratuiti o la capacità temporanea. Aggiungi una chiave nelle impostazioni per continuare.';
+  return 'Limite API raggiunto: le tue chiavi Gemini hanno esaurito la quota gratuita. Incolla un’altra chiave nella finestra che si è aperta per continuare: vale solo per questa elaborazione.';
 }
 
 // Web: the audio copy goes when the sbobina is done, and the page's File goes at the next reload.
@@ -196,7 +193,7 @@ export function useBridgeCallbacks(options: {
             const elapsed = currentFile.startedAt ? Math.round((Date.now() - currentFile.startedAt) / 60000) : null;
             const elapsedPart = elapsed !== null && elapsed > 0 ? ` · ${elapsed} min` : '';
             // Only a sbobina made by this run surely has no audio kept: an existing one may keep it.
-            const audioNote = getHostCapabilities().sessionKeepsAudio || data.reused_existing ? '' : ` ${WEB_AUDIO_NOT_KEPT_NOTE}`;
+            const audioNote = data.reused_existing ? '' : ` ${WEB_AUDIO_NOT_KEPT_NOTE}`;
             addNotificationRef.current(
               'Sbobina pronta',
               `"${currentFile.name}" completata con successo${modelPart}${elapsedPart}.${audioNote}`,

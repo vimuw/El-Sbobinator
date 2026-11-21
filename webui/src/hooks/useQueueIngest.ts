@@ -9,7 +9,6 @@ import {
 } from '../duplicateDetection';
 import type { AlreadyProcessedMatch, DuplicatePrompt } from '../components/modals/DuplicateFileModal';
 import type { PendingArchiveReplacement } from './useArchiveSync';
-import { getHostCapabilities } from '../hostCapabilities';
 import { releaseQueueFiles } from '../queueFileRelease';
 
 type WebViewHostWindow = Window & {
@@ -212,9 +211,7 @@ export function useQueueIngest({
   const handleBrowseClick = async () => {
     if (appState === 'canceling') return;
     if (!apiReady || !window.pywebview || !window.pywebview.api) {
-      appendConsole(getHostCapabilities().kind === 'web'
-        ? '⚠ L’app non è ancora pronta... riprova tra un momento.'
-        : '⚠ In attesa della connessione con Python... riprova tra un momento.');
+      appendConsole('⚠ L’app non è ancora pronta... riprova tra un momento.');
       return;
     }
     try {
@@ -255,7 +252,7 @@ export function useQueueIngest({
         if (files.length > 0 && window.pywebview?.api?.upload_browser_files) {
           const uploaded = await window.pywebview.api.upload_browser_files(files);
           ingestDescriptors(uploaded);
-          if (getHostCapabilities().kind === 'web' && uploaded.length < files.length) {
+          if (uploaded.length < files.length) {
             const accepted = new Set(uploaded.map(descriptor => descriptor.name));
             onFilesRejected?.(files.map(file => file.name).filter(name => !accepted.has(name)));
           }

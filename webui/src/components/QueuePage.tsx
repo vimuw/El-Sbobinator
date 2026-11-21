@@ -74,7 +74,6 @@ export interface QueueActionProps {
   handleQueueRetry: (id: string) => void;
   handleQueueResumeAll?: () => void;
   openPreview: (htmlPath: string, title?: string, inputPath?: string, placeholder?: string, sessionDir?: string) => void;
-  openFile: (path: string) => void;
   handleQueueStart: () => void;
   handleQueueStop: () => void;
   handleOpenSettings: () => void;
@@ -167,7 +166,6 @@ export function QueuePage({
     handleQueueRetry,
     handleQueueResumeAll,
     openPreview,
-    openFile,
     handleQueueStart,
     handleQueueStop,
     handleOpenSettings,
@@ -413,7 +411,6 @@ export function QueuePage({
                 onRetry: handleQueueRetry,
                 onResumeAll: handleQueueResumeAll,
                 onPreview: openPreview,
-                onOpenFile: openFile,
                 onStart: handleQueueStart,
                 onOpenSettings: handleOpenSettings,
                 onAddFiles: handleBrowseClick,
@@ -424,7 +421,6 @@ export function QueuePage({
               doneFiles={doneFiles}
               onRemove={handleRemoveDoneFile}
               onPreview={openPreview}
-              onOpenFile={openFile}
               onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
               sessionFolderMap={completedSessionFolderMap}
               keptAudioByDir={keptAudioByDir}

@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useConfirmModal } from './useConfirmModal';
 import type { FileItem } from '../appState';
-import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
+import { DEFAULT_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 
 describe('useConfirmModal', () => {
   const dispatch = vi.fn();
@@ -174,7 +174,7 @@ describe('useConfirmModal', () => {
     );
   });
 
-  it('says the sbobina is deleted from the disk on desktop and from this browser on the web', () => {
+  it('says the sbobina is deleted from this browser, or moved to the trash where there is one', () => {
     const render = () => renderHook(() =>
       useConfirmModal({
         dispatch,
@@ -190,23 +190,14 @@ describe('useConfirmModal', () => {
         appendConsole,
       }),
     ).result;
-    const desktop = render();
-    act(() => desktop.current.setConfirmAction({ type: 'delete-archive-session', sessionDir: '/s/one', name: 'Uno' }));
-    expect(desktop.current.confirmModalCopy?.description).toContain('eliminati definitivamente dal disco');
-
-    setHostCapabilities({ kind: 'web' });
-    try {
-      const web = render();
-      act(() => web.current.setConfirmAction({ type: 'delete-archive-session', sessionDir: 'web-session://a', name: 'Uno' }));
-      expect(web.current.confirmModalCopy?.description).toContain('eliminati definitivamente da questo browser');
-      act(() => web.current.setConfirmAction({ type: 'delete-multiple-archive-sessions', sessions: [{ sessionDir: 'web-session://a', name: 'Uno' }, { sessionDir: 'web-session://b', name: 'Due' }] }));
-      expect(web.current.confirmModalCopy?.description).not.toContain('disco');
-    } finally {
-      setHostCapabilities(DESKTOP_CAPABILITIES);
-    }
+    const web = render();
+    act(() => web.current.setConfirmAction({ type: 'delete-archive-session', sessionDir: 'web-session://a', name: 'Uno' }));
+    expect(web.current.confirmModalCopy?.description).toContain('eliminati definitivamente da questo browser');
+    act(() => web.current.setConfirmAction({ type: 'delete-multiple-archive-sessions', sessions: [{ sessionDir: 'web-session://a', name: 'Uno' }, { sessionDir: 'web-session://b', name: 'Due' }] }));
+    expect(web.current.confirmModalCopy?.description).toContain('eliminati definitivamente da questo browser');
 
     // Web previews with the trash: nothing is deleted for good, the sbobine go to the trash.
-    setHostCapabilities({ kind: 'web', permanentDelete: false });
+    setHostCapabilities({ permanentDelete: false });
     try {
       const trash = render();
       act(() => trash.current.setConfirmAction({ type: 'delete-archive-session', sessionDir: 'web-session://a', name: 'Uno' }));
@@ -217,7 +208,7 @@ describe('useConfirmModal', () => {
       act(() => trash.current.setConfirmAction({ type: 'delete-multiple-archive-sessions', sessions: [{ sessionDir: 'web-session://a', name: 'Uno' }, { sessionDir: 'web-session://b', name: 'Due' }] }));
       expect(trash.current.confirmModalCopy).toMatchObject({ confirmLabel: 'Sposta nel cestino', description: expect.stringContaining('Le 2 sbobine selezionate vanno nel cestino') });
     } finally {
-      setHostCapabilities(DESKTOP_CAPABILITIES);
+      setHostCapabilities(DEFAULT_CAPABILITIES);
     }
   });
 

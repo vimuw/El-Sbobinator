@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ArchiveSession } from '../bridge';
 import { WelcomeDashboard } from './WelcomeDashboard';
-import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
+import { DEFAULT_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 
 function makeSession(overrides: Partial<ArchiveSession> = {}): ArchiveSession {
   return {
@@ -32,13 +32,12 @@ describe('WelcomeDashboard', () => {
 
   it('says to pick a file, not drag it, on a touch screen with the web build', () => {
     vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(pointer: coarse)' }));
-    setHostCapabilities({ kind: 'web' });
     try {
       render(<WelcomeDashboard archiveSessions={[]} />);
       expect(screen.getByText('Scegli un file audio o video per iniziare la prima sbobinatura.')).toBeTruthy();
       expect(screen.queryByText(/Trascina/)).toBeNull();
     } finally {
-      setHostCapabilities(DESKTOP_CAPABILITIES);
+      setHostCapabilities(DEFAULT_CAPABILITIES);
       vi.unstubAllGlobals();
     }
   });

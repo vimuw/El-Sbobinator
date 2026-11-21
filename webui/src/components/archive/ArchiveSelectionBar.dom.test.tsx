@@ -124,7 +124,7 @@ describe('ArchiveSelectionBar component', () => {
       />,
     );
 
-    const deleteBtn = screen.getByTitle('Elimina le sbobine selezionate dal disco');
+    const deleteBtn = screen.getByTitle('Elimina le sbobine selezionate da questo browser');
     fireEvent.click(deleteBtn);
     expect(handleDelete).toHaveBeenCalledTimes(1);
 
@@ -154,7 +154,7 @@ describe('ArchiveSelectionBar component', () => {
       'Seleziona tutte le 5 sbobine',
       'Aggiungi le sbobine selezionate a una raccolta',
       'Rimuovi le sbobine selezionate dalla raccolta',
-      'Elimina le sbobine selezionate dal disco',
+      'Elimina le sbobine selezionate da questo browser',
       'Annulla selezione',
     ]) {
       const button = screen.getByTitle(title);

@@ -3,7 +3,6 @@ import { motion } from 'motion/react';
 import { AlertCircle, ArrowRight, CheckCircle2, ExternalLink, Eye, EyeOff, Loader2 } from 'lucide-react';
 import type { ValidationCheck } from '../bridge';
 import { GEMINI_KEY_PATTERN } from '../utils';
-import { getHostCapabilities } from '../hostCapabilities';
 import { BrandLogo } from './BrandLogo';
 import { SetupErrorNotice } from './SetupErrorNotice';
 import { enterTransition } from '../motion';
@@ -170,7 +169,7 @@ export function SetupPage({
           <SetupErrorNotice check={setupKeyError} apiKey={trimmedKey} />
         )}
 
-        {getHostCapabilities().keyStorage === 'browser' && (
+        {(
           <p className="text-xs text-[var(--text-muted)]" data-testid="setup-browser-key-note">
             La chiave resta solo in questo browser e viene inviata solo a Google. Su un dispositivo condiviso rimuovila da Impostazioni quando hai finito.
           </p>

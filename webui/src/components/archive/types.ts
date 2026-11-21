@@ -15,7 +15,6 @@ export interface ArchivePageProps {
   folders: ArchiveFolder[];
   onFoldersChange: (folders: ArchiveFolder[]) => void;
   onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string, sessionDir?: string, searchTerm?: string) => void;
-  onOpenFile: (path: string) => void;
   onDeleteSession: (sessionDir: string, name: string) => void;
   onRenameSession?: (sessionDir: string, name: string) => Promise<unknown>;
   onDeleteMultipleSessions?: (sessions: { sessionDir: string; name: string }[]) => void;

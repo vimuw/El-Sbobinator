@@ -46,7 +46,6 @@ function renderArchive(overrides: Partial<{
       folders={overrides.folders ?? []}
       onFoldersChange={overrides.onFoldersChange ?? vi.fn()}
       onPreview={vi.fn()}
-      onOpenFile={vi.fn()}
       onDeleteSession={vi.fn()}
     />,
   );
@@ -61,7 +60,7 @@ describe('ArchivePage audio kept in this browser', () => {
     { ...makeSession('s3', 'Chimica'), kept_audio_bytes: 300 * MB },
   ];
   const listed = () => Array.from(document.querySelectorAll('.archive-session-list .archive-session-card p.text-sm')).map(row => row.textContent);
-  const baseProps = { folders: [] as ArchiveFolder[], onFoldersChange: vi.fn(), onPreview: vi.fn(), onOpenFile: vi.fn(), onDeleteSession: vi.fn() };
+  const baseProps = { folders: [] as ArchiveFolder[], onFoldersChange: vi.fn(), onPreview: vi.fn(), onDeleteSession: vi.fn() };
 
   it('keeps the toolbar as it was: the size order is in the sort menu, only while some sbobina keeps its audio', () => {
     const { unmount } = renderArchive({ sessions: [makeSession('s1'), makeSession('s2')] });
@@ -145,7 +144,7 @@ describe('ArchivePage', () => {
     const onRenameSession = vi.fn().mockResolvedValue(undefined);
     const onPreview = vi.fn();
     render(<ArchivePage sessions={[session]} folders={insideFolder ? [{ id: 'f1', name: 'Anatomia', color: '', session_dirs: [session.session_dir] }] : []}
-      onFoldersChange={vi.fn()} onPreview={onPreview} onOpenFile={vi.fn()} onDeleteSession={vi.fn()} onRenameSession={onRenameSession} />);
+      onFoldersChange={vi.fn()} onPreview={onPreview} onDeleteSession={vi.fn()} onRenameSession={onRenameSession} />);
     if (insideFolder) fireEvent.click(within(screen.getByRole('region', { name: 'Raccolte' })).getByText('Anatomia'));
     fireEvent.click(screen.getAllByRole('button', { name: 'Altre opzioni' }).at(-1)!);
     fireEvent.click(screen.getByRole('button', { name: 'Rinomina' }));
@@ -163,7 +162,7 @@ describe('ArchivePage', () => {
   it('keeps the rename dialog and typed name after a failed save, and allows retry', async () => {
     const onRenameSession = vi.fn().mockRejectedValueOnce(new Error('Disco pieno')).mockResolvedValueOnce(undefined);
     render(<ArchivePage sessions={[makeSession('s1')]} folders={[]} onFoldersChange={vi.fn()} onPreview={vi.fn()}
-      onOpenFile={vi.fn()} onDeleteSession={vi.fn()} onRenameSession={onRenameSession} />);
+      onDeleteSession={vi.fn()} onRenameSession={onRenameSession} />);
     fireEvent.click(screen.getByRole('button', { name: 'Altre opzioni' }));
     fireEvent.click(screen.getByRole('button', { name: 'Rinomina' }));
     fireEvent.change(screen.getByLabelText('Nome sbobina'), { target: { value: 'Nuovo nome' } });
@@ -179,7 +178,7 @@ describe('ArchivePage', () => {
     let finish!: () => void;
     const onRenameSession = vi.fn().mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
     render(<ArchivePage sessions={[makeSession('s1')]} folders={[]} onFoldersChange={vi.fn()} onPreview={vi.fn()}
-      onOpenFile={vi.fn()} onDeleteSession={vi.fn()} onRenameSession={onRenameSession} />);
+      onDeleteSession={vi.fn()} onRenameSession={onRenameSession} />);
     const menu = screen.getByRole('button', { name: 'Altre opzioni' });
     fireEvent.click(menu);
     fireEvent.click(screen.getByRole('button', { name: 'Rinomina' }));
@@ -378,7 +377,6 @@ describe('ArchivePage', () => {
         folders={[]}
         onFoldersChange={vi.fn()}
         onPreview={onPreview}
-        onOpenFile={vi.fn()}
         onDeleteSession={vi.fn()}
       />,
     );
@@ -508,7 +506,6 @@ describe('ArchivePage', () => {
         folders={[]}
         onFoldersChange={vi.fn()}
         onPreview={vi.fn()}
-        onOpenFile={vi.fn()}
         onDeleteSession={vi.fn()}
         onDeleteMultipleSessions={onDeleteMultipleSessions}
       />,
@@ -520,7 +517,7 @@ describe('ArchivePage', () => {
     fireEvent.click(selectButtons[1]);
 
     // Click Elimina
-    const deleteBtn = screen.getByTitle('Elimina le sbobine selezionate dal disco');
+    const deleteBtn = screen.getByTitle('Elimina le sbobine selezionate da questo browser');
     fireEvent.click(deleteBtn);
 
     // onDeleteMultipleSessions called with selected items
@@ -546,7 +543,6 @@ describe('ArchivePage', () => {
         folders={[]}
         onFoldersChange={vi.fn()}
         onPreview={vi.fn()}
-        onOpenFile={vi.fn()}
         onDeleteSession={onDeleteSession}
         onDeleteMultipleSessions={onDeleteMultipleSessions}
       />,
@@ -556,7 +552,7 @@ describe('ArchivePage', () => {
     const clickRowMenuDelete = (rowIndex: number) => {
       fireEvent.click(screen.getAllByLabelText('Altre opzioni')[rowIndex]);
       const menuDelete = screen.getAllByRole('button', { name: 'Elimina' })
-        .find(btn => btn.getAttribute('title') !== 'Elimina le sbobine selezionate dal disco');
+        .find(btn => btn.getAttribute('title') !== 'Elimina le sbobine selezionate da questo browser');
       fireEvent.click(menuDelete!);
     };
 
@@ -693,7 +689,6 @@ describe('ArchivePage without .sbobina packages', () => {
         folders={[]}
         onFoldersChange={vi.fn()}
         onPreview={vi.fn()}
-        onOpenFile={vi.fn()}
         onDeleteSession={vi.fn()}
       />,
     );

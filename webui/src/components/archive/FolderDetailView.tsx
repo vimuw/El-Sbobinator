@@ -43,7 +43,6 @@ export interface FolderDetailViewProps {
   onAssignMultipleToFolder?: (dirs: string[], targetFolderId: string) => void;
   onNewFolder?: () => void;
   onPreview: ArchivePageProps['onPreview'];
-  onOpenFile: ArchivePageProps['onOpenFile'];
   onDeleteSession: ArchivePageProps['onDeleteSession'];
   onDeleteMultipleSessions?: ArchivePageProps['onDeleteMultipleSessions'];
   onRetryFailedRevisionBlocks?: ArchivePageProps['onRetryFailedRevisionBlocks'];
@@ -70,7 +69,6 @@ export function FolderDetailView({
   onAssignMultipleToFolder,
   onNewFolder,
   onPreview,
-  onOpenFile,
   onDeleteSession,
   onDeleteMultipleSessions,
   onRetryFailedRevisionBlocks,
@@ -430,7 +428,6 @@ export function FolderDetailView({
                         editorSessionsMap={editorSessionsMap}
                         onRemove={() => onRemoveSession(session.session_dir)}
                         onPreview={onPreview}
-                        onOpenFile={onOpenFile}
                         onDeleteSession={(sessionDir, name) => {
                           if (deleteSelectedFolderSessions && selectedFolderSessionDirs.size > 1 && selectedFolderSessionDirs.has(sessionDir)) {
                             deleteSelectedFolderSessions();

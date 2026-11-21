@@ -4,7 +4,7 @@ import React from 'react';
 import { QueuePage, type QueuePageProps } from './QueuePage';
 import type { FileItem } from '../appState';
 import type { ArchiveSession } from '../bridge';
-import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
+import { DEFAULT_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 import { STORAGE_KEYS } from '../storageKeys';
 
 vi.mock('../branding', async importOriginal => ({
@@ -56,7 +56,6 @@ describe('QueuePage Component', () => {
       handleClearAll: vi.fn(),
       handleQueueRetry: vi.fn(),
       openPreview: vi.fn(),
-      openFile: vi.fn(),
       handleQueueStart: vi.fn(),
       handleQueueStop: vi.fn(),
       handleOpenSettings: vi.fn(),
@@ -219,7 +218,6 @@ describe('QueuePage Component', () => {
       ...(keptAudioBytes === undefined ? {} : { kept_audio_bytes: keptAudioBytes }),
     });
     const claims = () => screen.queryAllByTestId('completed-audio-not-kept').map(label => label.closest('.queue-card')?.textContent ?? '');
-    setHostCapabilities({ kind: 'web', sessionKeepsAudio: false });
     try {
       // The browser's saved audio couldn't be read: the sbobine come back unmarked.
       const { rerender } = render(<QueuePage {...defaultProps} files={files} archiveSessions={[session('/sessions/kept'), session('/sessions/gone')]} />);
@@ -232,7 +230,7 @@ describe('QueuePage Component', () => {
       expect(claims()).toHaveLength(1);
       expect(claims()[0]).toContain('persa.mp3');
     } finally {
-      setHostCapabilities(DESKTOP_CAPABILITIES);
+      setHostCapabilities(DEFAULT_CAPABILITIES);
     }
   });
 

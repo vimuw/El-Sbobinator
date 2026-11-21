@@ -4,7 +4,6 @@ import type { FileItem, ProcessingAction } from '../appState';
 import { filterArchiveSessionsByInputPath } from '../duplicateDetection';
 import { getFolderPresentation } from '../archiveFolders';
 import type { ActivePage } from '../components/NavSidebar';
-import { getHostCapabilities } from '../hostCapabilities';
 import { settleRevisionRetry } from './useRevisionRetry';
 
 export type PendingArchiveReplacement = {
@@ -122,9 +121,7 @@ export function useArchiveSync({
   const handleOpenFailed = useCallback((_htmlPath: string, sessionDir: string) => {
     addNotification(
       'File non disponibile',
-      getHostCapabilities().kind === 'web'
-        ? 'La sbobina non è più in questo browser: forse è stata eliminata o il browser ha svuotato i dati del sito.'
-        : 'La sbobina non è più disponibile: il file è stato eliminato dal disco.',
+      'La sbobina non è più in questo browser: forse è stata eliminata o il browser ha svuotato i dati del sito.',
       'warning',
       'system',
     );

@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, act, within, waitFor } from '@testing-library/react';
-import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../../../hostCapabilities';
+import { DEFAULT_CAPABILITIES, setHostCapabilities } from '../../../hostCapabilities';
 import { AUTO_REPORTS_KEY } from '../../../monitoring/config';
 import { BUG_REPORT_URL, SUPPORT_EMAIL } from '../../../branding';
 import { rememberReport, resetReportHistoryForTests } from '../../../feedback/history';
@@ -16,7 +16,7 @@ function pinClockNearReports() {
 afterEach(() => {
   vi.useRealTimers();
   delete window.pywebview;
-  setHostCapabilities(DESKTOP_CAPABILITIES);
+  setHostCapabilities(DEFAULT_CAPABILITIES);
   localStorage.clear();
   resetReportHistoryForTests();
 });
@@ -86,7 +86,7 @@ describe('DiagnosticsSection', () => {
   });
 
   it('sends reports from the app in web builds with Sentry, and lets the user stop the automatic ones', async () => {
-    setHostCapabilities({ kind: 'web', reportByEmail: false, environmentCheck: false });
+    setHostCapabilities({ reportByEmail: false });
     render(<DiagnosticsSection {...baseProps} />);
 
     const support = within(screen.getByRole('region', { name: 'Segnala un problema' }));
@@ -112,7 +112,7 @@ describe('DiagnosticsSection', () => {
 
   it('lists the codes of the reports sent from this browser, a new one at once', () => {
     pinClockNearReports();
-    setHostCapabilities({ kind: 'web', reportByEmail: false, environmentCheck: false });
+    setHostCapabilities({ reportByEmail: false });
     rememberReport({ code: 'A1B2C3D4', sentAt: '2026-11-17T10:30:00.000Z', kind: 'bug' });
     render(<DiagnosticsSection {...baseProps} />);
 
@@ -135,7 +135,7 @@ describe('DiagnosticsSection', () => {
   // Regression: code, type and date alone did not say which report a code was for.
   it('names each report by what the user wrote, with its code beside type and date', () => {
     pinClockNearReports();
-    setHostCapabilities({ kind: 'web', reportByEmail: false, environmentCheck: false });
+    setHostCapabilities({ reportByEmail: false });
     rememberReport({ code: 'A1B2C3D4', sentAt: '2026-11-17T10:30:00.000Z', kind: 'bug' });
     rememberReport({ code: 'E5F60718', sentAt: '2026-11-17T11:00:00.000Z', kind: 'idea', excerpt: 'Il titolo della lezione non si salva' });
     render(<DiagnosticsSection {...baseProps} />);
@@ -153,7 +153,7 @@ describe('DiagnosticsSection', () => {
 
   it('copies a report code with its own button, and says when it cannot', async () => {
     pinClockNearReports();
-    setHostCapabilities({ kind: 'web', reportByEmail: false, environmentCheck: false });
+    setHostCapabilities({ reportByEmail: false });
     rememberReport({ code: 'A1B2C3D4', sentAt: '2026-11-17T10:30:00.000Z', kind: 'bug' });
     const writeText = vi.fn(async (_text: string) => {});
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
@@ -206,7 +206,7 @@ describe('DiagnosticsSection', () => {
     vi.doMock('../../../monitoring/sentry', () => { throw blocked; });
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
-      setHostCapabilities({ kind: 'web', reportByEmail: false, environmentCheck: false });
+      setHostCapabilities({ reportByEmail: false });
       render(<DiagnosticsSection {...baseProps} />);
 
       fireEvent.click(screen.getByRole('switch', { name: 'Invia report automatici degli errori' }));

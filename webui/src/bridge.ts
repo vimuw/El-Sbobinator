@@ -326,7 +326,6 @@ export interface PywebviewApi {
   is_processing_active?: () => Promise<{ ok: boolean; active?: boolean }>;
   answer_regenerate?: (regenerate: boolean | null) => Promise<{ ok: boolean }>;
   answer_new_key?: (key: string) => Promise<{ ok: boolean }>;
-  open_file?: (path: string) => Promise<{ ok: boolean; error?: string }>;
   open_url?: (url: string) => Promise<{ ok: boolean; error?: string }>;
   open_link?: (url: string) => Promise<{ ok: boolean; error?: string }>;
   read_html_content?: (path: string) => Promise<{ ok: boolean; content?: string; error?: string }>;

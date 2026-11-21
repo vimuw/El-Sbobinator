@@ -1,4 +1,3 @@
-import { getHostCapabilities } from './hostCapabilities';
 
 // Shortcut labels are written the Windows way ("Ctrl+Shift+V"). On an iPad or a Mac the same
 // shortcuts run with ⌘ (the handlers accept metaKey / TipTap's Mod-), so the web build shows the
@@ -28,5 +27,5 @@ export function appleShortcutLabel(label: string): string {
 
 /** The label for this device: Apple glyphs on the web build on Apple devices, unchanged elsewhere. */
 export function shortcutLabel(label: string): string {
-  return getHostCapabilities().kind === 'web' && isApplePlatform() ? appleShortcutLabel(label) : label;
+  return isApplePlatform() ? appleShortcutLabel(label) : label;
 }

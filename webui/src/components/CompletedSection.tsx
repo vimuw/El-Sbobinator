@@ -12,7 +12,6 @@ interface CompletedSectionProps {
   doneFiles: FileItem[];
   onRemove: (id: string) => void;
   onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string, sessionDir?: string) => void;
-  onOpenFile: (path: string) => void;
   onRetryFailedRevisionBlocks?: (sessionDir: string, fileId?: string) => Promise<void>;
   sessionFolderMap?: Map<string, ArchiveFolder>;
   // Web: normalized session dir -> whether this browser keeps its audio, for sbobine whose audio was read.
@@ -20,7 +19,7 @@ interface CompletedSectionProps {
   onOpenArchive?: () => void;
 }
 
-export const CompletedSection = memo(function CompletedSection({ doneFiles, onRemove, onPreview, onOpenFile, onRetryFailedRevisionBlocks, sessionFolderMap, keptAudioByDir, onOpenArchive }: CompletedSectionProps) {
+export const CompletedSection = memo(function CompletedSection({ doneFiles, onRemove, onPreview, onRetryFailedRevisionBlocks, sessionFolderMap, keptAudioByDir, onOpenArchive }: CompletedSectionProps) {
   const warningCount = doneFiles.filter(f => f.completionStatus === 'completed_with_warnings' || (f.revisionFailedBlocks?.length ?? 0) > 0).length;
 
   return (
@@ -60,7 +59,6 @@ export const CompletedSection = memo(function CompletedSection({ doneFiles, onRe
                   file={file}
                   onRemove={onRemove}
                   onPreview={onPreview}
-                  onOpenFile={onOpenFile}
                   onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
                   currentFolder={file.outputDir ? sessionFolderMap?.get(normalizeSessionPath(file.outputDir)) : undefined}
                   audioKept={file.outputDir ? keptAudioByDir?.get(normalizeSessionPath(file.outputDir)) : undefined}

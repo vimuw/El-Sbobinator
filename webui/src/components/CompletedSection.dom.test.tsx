@@ -1,7 +1,6 @@
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { FileItem } from '../appState';
-import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 import { CompletedSection } from './CompletedSection';
 
 function makeFile(overrides: Partial<FileItem> = {}): FileItem {
@@ -20,7 +19,6 @@ function makeFile(overrides: Partial<FileItem> = {}): FileItem {
 const baseProps = {
   onRemove: vi.fn(),
   onPreview: vi.fn(),
-  onOpenFile: vi.fn(),
 };
 
 describe('CompletedSection', () => {
@@ -68,32 +66,23 @@ describe('CompletedSection', () => {
     expect(screen.getByTitle('Raccolta: Corso A')).toBeTruthy();
   });
 
-  it('shows "Audio non salvato" instead of the size on the web when the browser keeps no copy', () => {
+  it('shows "Audio non salvato" instead of the size when the browser keeps no copy', () => {
     const files = [
       makeFile({ id: 'kept', name: 'tenuta.mp3', outputDir: '/sessions/kept', size: 5 * 1024 * 1024 }),
       makeFile({ id: 'gone', name: 'persa.mp3', outputDir: '/sessions/gone', size: 147 * 1024 * 1024 }),
     ];
     const card = (name: string) => screen.getByText(name).closest('.queue-card') as HTMLElement;
-    setHostCapabilities({ kind: 'web', sessionKeepsAudio: false });
-    try {
-      const { rerender, unmount } = render(<CompletedSection {...baseProps} doneFiles={files} keptAudioByDir={new Map([['/sessions/kept', true], ['/sessions/gone', false]])} />);
-      expect(within(card('persa.mp3')).getByTestId('completed-audio-not-kept').textContent).toBe('Audio non salvato');
-      expect(within(card('persa.mp3')).queryByText('147,0 MB')).toBeNull();
-      expect(within(card('tenuta.mp3')).queryByTestId('completed-audio-not-kept')).toBeNull();
-      expect(within(card('tenuta.mp3')).getByText('5,0 MB')).toBeTruthy();
-      // Until the archive loads nothing is claimed: the size stays.
-      rerender(<CompletedSection {...baseProps} doneFiles={files} />);
-      expect(screen.queryByTestId('completed-audio-not-kept')).toBeNull();
-      // Nor for a sbobina whose kept audio wasn't read.
-      rerender(<CompletedSection {...baseProps} doneFiles={files} keptAudioByDir={new Map([['/sessions/kept', true]])} />);
-      expect(screen.queryByTestId('completed-audio-not-kept')).toBeNull();
-      unmount();
-    } finally {
-      setHostCapabilities(DESKTOP_CAPABILITIES);
-    }
-    render(<CompletedSection {...baseProps} doneFiles={files} keptAudioByDir={new Map([['/sessions/gone', false]])} />);
+    const { rerender } = render(<CompletedSection {...baseProps} doneFiles={files} keptAudioByDir={new Map([['/sessions/kept', true], ['/sessions/gone', false]])} />);
+    expect(within(card('persa.mp3')).getByTestId('completed-audio-not-kept').textContent).toBe('Audio non salvato');
+    expect(within(card('persa.mp3')).queryByText('147,0 MB')).toBeNull();
+    expect(within(card('tenuta.mp3')).queryByTestId('completed-audio-not-kept')).toBeNull();
+    expect(within(card('tenuta.mp3')).getByText('5,0 MB')).toBeTruthy();
+    // Until the archive loads nothing is claimed: the size stays.
+    rerender(<CompletedSection {...baseProps} doneFiles={files} />);
     expect(screen.queryByTestId('completed-audio-not-kept')).toBeNull();
-    expect(screen.getByText('147,0 MB')).toBeTruthy();
+    // Nor for a sbobina whose kept audio wasn't read.
+    rerender(<CompletedSection {...baseProps} doneFiles={files} keptAudioByDir={new Map([['/sessions/kept', true]])} />);
+    expect(screen.queryByTestId('completed-audio-not-kept')).toBeNull();
   });
 
   it('renders a bounded scrollable container for completed items with natural scroll chaining', () => {

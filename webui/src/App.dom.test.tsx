@@ -1024,7 +1024,7 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
       // Regression: the email opened in place (location.href = mailto:). Chromium fired
       // beforeunload, so mid-run the browser asked "Leave site?"; with a web mail handler (Gmail,
       // Outlook) the app tab itself became the mail site and the run stopped.
-      setHostCapabilities({ kind: 'web', reportByEmail: true });
+      setHostCapabilities({ reportByEmail: true });
       vi.mocked(useQueuePersistence).mockImplementation((_files, _structuralVersion, dispatch) => {
         React.useEffect(() => {
           dispatch({
@@ -1067,7 +1067,6 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
       } finally {
         window.removeEventListener('beforeunload', countUnload);
         click.mockRestore();
-        setHostCapabilities({});
       }
     });
 

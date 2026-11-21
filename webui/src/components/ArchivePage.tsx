@@ -57,7 +57,7 @@ export { FullTextResultList } from './archive/FullTextResults';
 
 export function ArchivePage({
   sessions, total, folders, onFoldersChange,
-  onPreview, onOpenFile, onDeleteSession, onDeleteMultipleSessions, onRefresh,
+  onPreview, onDeleteSession, onDeleteMultipleSessions, onRefresh,
   onRetryFailedRevisionBlocks, onRenameSession,
   showKeptAudioRequest, onShowKeptAudioHandled,
 }: ArchivePageProps) {
@@ -348,7 +348,6 @@ export function ArchivePage({
           onAssignMultipleToFolder={(dirs, fId) => bulkAssignToFolder(fId, dirs)}
           onNewFolder={() => setFolderModal({ type: 'create', parentId: selectedFolder.id })}
           onPreview={onPreview}
-          onOpenFile={onOpenFile}
           onDeleteSession={onDeleteSession}
           onDeleteMultipleSessions={handleOpenDeleteMultiple}
           onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
@@ -619,7 +618,6 @@ export function ArchivePage({
                       if (f) removeFromFolder(session.session_dir, f.id);
                     }}
                     onPreview={onPreview}
-                    onOpenFile={onOpenFile}
                     onDeleteSession={handleRowDeleteSession}
                     onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
                     onRenameSession={onRenameSession ? setRenamingSession : undefined}

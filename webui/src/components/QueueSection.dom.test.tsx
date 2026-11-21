@@ -76,7 +76,6 @@ function makeProps(overrides: TestOverrides = {}): QueueSectionProps {
       onRetry: overrides.onRetry ?? vi.fn(),
       onResumeAll: overrides.onResumeAll,
       onPreview: overrides.onPreview ?? vi.fn(),
-      onOpenFile: overrides.onOpenFile ?? vi.fn(),
       onStart: overrides.onStart ?? vi.fn(),
       onOpenSettings: overrides.onOpenSettings,
       onAddFiles: overrides.onAddFiles,

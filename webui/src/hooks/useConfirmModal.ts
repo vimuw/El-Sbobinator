@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { ArchiveFolder, ArchiveSession, LowDiskWarning } from '../bridge';
 import type { FileItem, ProcessingAction } from '../appState';
-import { deletedFrom, getHostCapabilities } from '../hostCapabilities';
+import { getHostCapabilities } from '../hostCapabilities';
 import { releaseQueueFiles } from '../queueFileRelease';
 
 export type ConfirmActionState =
@@ -108,7 +108,7 @@ export function useConfirmModal({
         title: 'Eliminare questa sbobina?',
         description: !getHostCapabilities().permanentDelete
           ? `"${confirmAction.name}" va nel cestino: puoi ripristinarla per 30 giorni da Impostazioni → Archiviazione.`
-          : `"${confirmAction.name}" e tutti i suoi dati di sessione verranno eliminati definitivamente ${deletedFrom()}. L'operazione è irreversibile.`,
+          : `"${confirmAction.name}" e tutti i suoi dati di sessione verranno eliminati definitivamente da questo browser. L'operazione è irreversibile.`,
         confirmLabel: !getHostCapabilities().permanentDelete ? 'Sposta nel cestino' : 'Elimina definitivamente',
         cancelLabel: 'Annulla',
       };
@@ -121,7 +121,7 @@ export function useConfirmModal({
           ? count === 1
             ? 'La sbobina selezionata va nel cestino: puoi ripristinarla per 30 giorni da Impostazioni → Archiviazione.'
             : `Le ${count} sbobine selezionate vanno nel cestino: puoi ripristinarle per 30 giorni da Impostazioni → Archiviazione.`
-          : `Tutti i file e i dati di sessione relativi alle ${count} sbobine selezionate verranno eliminati definitivamente ${deletedFrom()}. L'operazione è irreversibile.`,
+          : `Tutti i file e i dati di sessione relativi alle ${count} sbobine selezionate verranno eliminati definitivamente da questo browser. L'operazione è irreversibile.`,
         confirmLabel: !getHostCapabilities().permanentDelete ? 'Sposta nel cestino' : count === 1 ? 'Elimina definitivamente' : `Elimina ${count} sbobine`,
         cancelLabel: 'Annulla',
       };

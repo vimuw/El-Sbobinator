@@ -14,7 +14,6 @@ import { useTheme } from './hooks/useTheme';
 import { loadPersistedQueue, useQueuePersistence } from './hooks/useQueuePersistence';
 import { useApiReady } from './hooks/useApiReady';
 import { useBridgeCallbacks } from './hooks/useBridgeCallbacks';
-import { getHostCapabilities } from './hostCapabilities';
 import { useBodyScrollLock } from './hooks/useBodyScrollLock';
 import { useHistoryNavigation } from './hooks/useHistoryNavigation';
 import { usePreview } from './hooks/usePreview';
@@ -266,7 +265,7 @@ export default function App() {
     refreshArchiveSessions,
   });
 
-  const { preview, openPreview, closePreview, markChangedElsewhere, setPreviewTitle, relinkPreviewAudio, removePreviewAudio, setPreviewAudioKept, handleAudioStateChange, handleScrollTopChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed, onArchiveRefresh: refreshArchiveSessions });
+  const { preview, openPreview, closePreview, markChangedElsewhere, setPreviewTitle, relinkPreviewAudio, setPreviewAudioKept, handleAudioStateChange, handleScrollTopChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed, onArchiveRefresh: refreshArchiveSessions });
 
   // The editor's title renames the sbobina like "Rinomina" in the archive (only the title changes).
   const renamePreview = useCallback(async (name: string) => {
@@ -292,7 +291,7 @@ export default function App() {
   }, [closePreview]);
   const editorSessionDir = preview.content !== null ? preview.sessionDir || null : null;
   useHistoryNavigation({
-    enabled: getHostCapabilities().kind === 'web',
+    enabled: true,
     screen: useMemo(() => ({ page: activePage, settings: isSettingsOpen, editor: editorSessionDir }), [activePage, isSettingsOpen, editorSessionDir]),
     ready: apiReady && isArchiveLoaded,
     setPage: setActivePage,
@@ -342,13 +341,9 @@ export default function App() {
   const isApiKeyValid = GEMINI_KEY_PATTERN.test(apiKey.trim());
   const isConsoleDisabled = !hasApiKey || !isApiKeyValid || !(files.length > 0 || appState === 'processing' || appState === 'canceling' || completionFlash);
 
-  const isWebHost = getHostCapabilities().kind === 'web';
-  useEffect(() => {
-    if (!isWebHost) document.title = appState === 'processing' ? '⏳ El Sbobinator' : 'El Sbobinator';
-  }, [appState, isWebHost]);
   const lastCompletedAt = useMemo(() => files.reduce((latest, file) => Math.max(latest, file.completedAt ?? 0), 0), [files]);
   useTabTitle({
-    enabled: isWebHost,
+    enabled: true,
     appState,
     activeProgress,
     batchCompleted,
@@ -402,12 +397,6 @@ export default function App() {
   const handleClearAll = useCallback(() => {
     setConfirmAction({ type: 'clear-all' });
   }, [setConfirmAction]);
-
-  const openFile = useCallback(async (path: string) => {
-    if (!window.pywebview?.api) return;
-    const res = await window.pywebview.api.open_file(path);
-    if (res && !res.ok) appendConsole(`❌ Impossibile aprire il file: ${res.error ?? path}`);
-  }, [appendConsole]);
 
   useQueuePersistence(files, structuralVersion, dispatch, appendConsole);
   useBridgeCallbacks({
@@ -630,7 +619,6 @@ export default function App() {
               handleQueueRetry,
               handleQueueResumeAll,
               openPreview,
-              openFile,
               handleQueueStart,
               handleQueueStop,
               handleOpenSettings,
@@ -662,7 +650,6 @@ export default function App() {
                   folders={folders}
                   onFoldersChange={handleFoldersChange}
                   onPreview={openPreview}
-                  onOpenFile={openFile}
                   onDeleteSession={(sessionDir, name) => setConfirmAction({ type: 'delete-archive-session', sessionDir, name })}
                   onDeleteMultipleSessions={(sessionsList) => setConfirmAction({ type: 'delete-multiple-archive-sessions', sessions: sessionsList })}
                   onRefresh={refreshArchiveSessions}
@@ -771,7 +758,6 @@ export default function App() {
               expected: preview.audioExpected,
               warning: preview.audioWarning,
               onRelink: relinkPreviewAudio,
-              onRemoveAudio: removePreviewAudio,
               kept: preview.audioKept,
               size: preview.audioSize,
               onKeepChange: setPreviewAudioKept,

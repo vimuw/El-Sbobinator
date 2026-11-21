@@ -18,7 +18,6 @@ import { SettingsDivider, SettingsPageHeader, SettingsSectionHeading } from './s
 
 import { useSettingsStorage } from '../../hooks/useSettingsStorage';
 import { useBackdropDismiss } from '../../hooks/useBackdropDismiss';
-import { getHostCapabilities } from '../../hostCapabilities';
 import { APP_VERSION, WEB_PREVIEW_BUILD, WEB_PRIVACY_PATH } from '../../branding';
 import { DURATION, largeModalCard } from '../../motion';
 
@@ -144,9 +143,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
     availableModels,
   } = models;
-  const hostCapabilities = getHostCapabilities();
   // Drive sits right under Generale, so the sync is seen as soon as the settings open.
-  const hasDriveTab = hostCapabilities.kind === 'web' && Boolean(window.pywebview?.api?.get_drive_status);
+  const hasDriveTab = Boolean(window.pywebview?.api?.get_drive_status);
   const [activeTab, setActiveTab] = useState<TabType>(initialTab ?? 'general');
   useEffect(() => {
     if (isOpen && initialTab) setActiveTab(initialTab);
@@ -241,12 +239,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   // Web build: Archiviazione's figures come from reading this browser's whole archive. They are read
   // as soon as the settings open, so the tab shows at once like the others instead of waiting for them.
-  const isWebHost = hostCapabilities.kind === 'web';
   useEffect(() => {
-    if (!isOpen || !isWebHost) return;
+    if (!isOpen) return;
     fetchSessionStorageInfo({ reuse: true });
     prefetchWebStorage();
-  }, [isOpen, isWebHost, fetchSessionStorageInfo]);
+  }, [isOpen, fetchSessionStorageInfo]);
 
   // A Drive sync changed the archive (a sbobina restored or trashed on another device) while
   // Archiviazione is open: its figures follow, as the trash list below already does.
@@ -536,29 +533,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         statusSummary={<ApiStatusSection apiUsage={apiUsage} isLoadingUsage={isLoadingUsage} />}
                       />
 
-                      {hostCapabilities.keyStorage === 'browser' && (
-                        <WebSharedDeviceNotice
-                          keyCount={webKeyCount}
-                          onRemoveKeys={() => void handleRemoveWebKeys()}
-                          disabled={isSaving}
-                        />
-                      )}
+                      <WebSharedDeviceNotice
+                        keyCount={webKeyCount}
+                        onRemoveKeys={() => void handleRemoveWebKeys()}
+                        disabled={isSaving}
+                      />
 
-                      {hostCapabilities.kind === 'web' && (
-                        <>
-                          <SettingsDivider />
-                          <div className="space-y-2" data-testid="web-version">
-                            <SettingsSectionHeading icon={Tag}>Versione</SettingsSectionHeading>
-                            <p className="text-xs text-[var(--text-secondary)]">
-                              {WEB_PREVIEW_BUILD ? `${APP_VERSION} (anteprima)` : APP_VERSION}. Gli aggiornamenti arrivano da soli alla prossima apertura del sito, senza toccare sbobine e chiavi salvate in questo browser.
-                            </p>
-                            <p className="text-xs text-[var(--text-secondary)]">
-                              Cosa resta nel browser e cosa va a Google:{' '}
-                              <a href={WEB_PRIVACY_PATH} target="_blank" rel="noopener" className="underline inline-flex items-center gap-0.5">informativa sulla privacy<ExternalLinkIcon /></a>.
-                            </p>
-                          </div>
-                        </>
-                      )}
+                      <SettingsDivider />
+                      <div className="space-y-2" data-testid="web-version">
+                        <SettingsSectionHeading icon={Tag}>Versione</SettingsSectionHeading>
+                        <p className="text-xs text-[var(--text-secondary)]">
+                          {WEB_PREVIEW_BUILD ? `${APP_VERSION} (anteprima)` : APP_VERSION}. Gli aggiornamenti arrivano da soli alla prossima apertura del sito, senza toccare sbobine e chiavi salvate in questo browser.
+                        </p>
+                        <p className="text-xs text-[var(--text-secondary)]">
+                          Cosa resta nel browser e cosa va a Google:{' '}
+                          <a href={WEB_PRIVACY_PATH} target="_blank" rel="noopener" className="underline inline-flex items-center gap-0.5">informativa sulla privacy<ExternalLinkIcon /></a>.
+                        </p>
+                      </div>
                     </div>
                   )}
 

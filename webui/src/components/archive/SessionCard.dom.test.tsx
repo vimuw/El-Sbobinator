@@ -4,7 +4,6 @@ import { reportClientError } from '../../diagnostics';
 import { RevisionRetryError } from '../../hooks/useRevisionRetry';
 import type { ArchiveFolder, ArchiveSession } from '../../bridge';
 import { DraggableSessionCard, SortableSessionCard } from './SessionCard';
-import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../../hostCapabilities';
 
 vi.mock('../../diagnostics', () => ({ reportClientError: vi.fn() }));
 
@@ -56,7 +55,6 @@ describe('SessionCard components selection styling', () => {
           onAssignToFolder={vi.fn()}
           onRemoveFromFolder={vi.fn()}
           onPreview={vi.fn()}
-          onOpenFile={vi.fn()}
           onDeleteSession={vi.fn()}
         />,
       );
@@ -80,7 +78,6 @@ describe('SessionCard components selection styling', () => {
           onAssignToFolder={vi.fn()}
           onRemoveFromFolder={vi.fn()}
           onPreview={vi.fn()}
-          onOpenFile={vi.fn()}
           onDeleteSession={vi.fn()}
         />,
       );
@@ -99,7 +96,6 @@ describe('SessionCard components selection styling', () => {
           onAssignToFolder={vi.fn()}
           onRemoveFromFolder={vi.fn()}
           onPreview={vi.fn()}
-          onOpenFile={vi.fn()}
           onDeleteSession={vi.fn()}
         />,
       );
@@ -116,7 +112,6 @@ describe('SessionCard components selection styling', () => {
           onAssignToFolder={vi.fn()}
           onRemoveFromFolder={vi.fn()}
           onPreview={vi.fn()}
-          onOpenFile={vi.fn()}
           onDeleteSession={vi.fn()}
         />,
       );
@@ -134,7 +129,6 @@ describe('SessionCard components selection styling', () => {
           onAssignToFolder={vi.fn()}
           onRemoveFromFolder={vi.fn()}
           onPreview={vi.fn()}
-          onOpenFile={vi.fn()}
           onDeleteSession={vi.fn()}
         />,
       );
@@ -154,7 +148,6 @@ describe('SessionCard components selection styling', () => {
           onAssignToFolder={onAssignToFolder}
           onRemoveFromFolder={vi.fn()}
           onPreview={vi.fn()}
-          onOpenFile={vi.fn()}
           onDeleteSession={vi.fn()}
         />,
       );
@@ -186,7 +179,6 @@ describe('SessionCard components selection styling', () => {
           onAssignToFolder={vi.fn()}
           onRemoveFromFolder={onRemoveFromFolder}
           onPreview={vi.fn()}
-          onOpenFile={vi.fn()}
           onDeleteSession={vi.fn()}
         />,
       );
@@ -215,7 +207,6 @@ describe('SessionCard components selection styling', () => {
           onRemoveFromFolder={onRemoveFromFolder}
           onMove={onMove}
           onPreview={onPreview}
-          onOpenFile={vi.fn()}
           onDeleteSession={onDeleteSession}
         />,
       );
@@ -246,7 +237,6 @@ describe('SessionCard components selection styling', () => {
           onAssignToFolder={vi.fn()}
           onRemoveFromFolder={vi.fn()}
           onPreview={vi.fn()}
-          onOpenFile={vi.fn()}
           onDeleteSession={vi.fn()}
         />,
       );
@@ -268,7 +258,6 @@ describe('SessionCard components selection styling', () => {
           onToggleSelect={onToggleSelect}
           onRemove={vi.fn()}
           onPreview={vi.fn()}
-          onOpenFile={vi.fn()}
           onDeleteSession={vi.fn()}
         />,
       );
@@ -292,7 +281,6 @@ describe('SessionCard components selection styling', () => {
           onToggleSelect={vi.fn()}
           onRemove={vi.fn()}
           onPreview={vi.fn()}
-          onOpenFile={vi.fn()}
           onDeleteSession={vi.fn()}
         />,
       );
@@ -311,7 +299,6 @@ describe('SessionCard components selection styling', () => {
           selected={false}
           onRemove={vi.fn()}
           onPreview={vi.fn()}
-          onOpenFile={vi.fn()}
           onDeleteSession={vi.fn()}
         />,
       );
@@ -328,7 +315,6 @@ describe('SessionCard components selection styling', () => {
           selected={true}
           onRemove={vi.fn()}
           onPreview={vi.fn()}
-          onOpenFile={vi.fn()}
           onDeleteSession={vi.fn()}
         />,
       );
@@ -340,32 +326,21 @@ describe('SessionCard components selection styling', () => {
   });
 });
 
-describe('SessionCard on hosts without local folders', () => {
-  it('offers "Apri cartella" only when the host can open local paths', () => {
-    const renderCard = () => render(
+describe('SessionCard without local folders', () => {
+  it('offers no "Apri cartella" in its menu', () => {
+    render(
       <DraggableSessionCard
         session={mockSession}
         allFolders={mockFolders}
         onAssignToFolder={vi.fn()}
         onRemoveFromFolder={vi.fn()}
         onPreview={vi.fn()}
-        onOpenFile={vi.fn()}
         onDeleteSession={vi.fn()}
       />,
     );
-    const first = renderCard();
     fireEvent.click(screen.getByLabelText('Altre opzioni'));
-    expect(screen.getByText('Apri cartella')).toBeTruthy();
-    first.unmount();
-
-    setHostCapabilities({ kind: 'web', openLocalPath: false });
-    try {
-      renderCard();
-      fireEvent.click(screen.getByLabelText('Altre opzioni'));
-      expect(screen.queryByText('Apri cartella')).toBeNull();
-    } finally {
-      setHostCapabilities(DESKTOP_CAPABILITIES);
-    }
+    expect(screen.getByText('Elimina')).toBeTruthy();
+    expect(screen.queryByText('Apri cartella')).toBeNull();
   });
 });
 
@@ -378,7 +353,6 @@ describe('SessionCard meta line', () => {
       onAssignToFolder={vi.fn()}
       onRemoveFromFolder={vi.fn()}
       onPreview={vi.fn()}
-      onOpenFile={vi.fn()}
       onDeleteSession={vi.fn()}
     />,
   );
@@ -404,7 +378,6 @@ describe('SessionCard meta line', () => {
         onAssignToFolder={vi.fn()}
         onRemoveFromFolder={vi.fn()}
         onPreview={vi.fn()}
-        onOpenFile={vi.fn()}
         onDeleteSession={vi.fn()}
       />,
     );
@@ -428,7 +401,6 @@ describe('SessionCard meta line', () => {
           onAssignToFolder={vi.fn()}
           onRemoveFromFolder={vi.fn()}
           onPreview={vi.fn()}
-          onOpenFile={vi.fn()}
           onDeleteSession={vi.fn()}
         />,
       );
@@ -474,7 +446,6 @@ describe('SessionCard revision retry button', () => {
         onAssignToFolder={vi.fn()}
         onRemoveFromFolder={vi.fn()}
         onPreview={vi.fn()}
-        onOpenFile={vi.fn()}
         onDeleteSession={vi.fn()}
         onRetryFailedRevisionBlocks={onRetry}
       />
@@ -487,7 +458,6 @@ describe('SessionCard revision retry button', () => {
         selected={false}
         onRemove={vi.fn()}
         onPreview={vi.fn()}
-        onOpenFile={vi.fn()}
         onDeleteSession={vi.fn()}
         onRetryFailedRevisionBlocks={onRetry}
       />
