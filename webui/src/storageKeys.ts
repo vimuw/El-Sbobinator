@@ -4,7 +4,6 @@
 export const STORAGE_KEYS = {
   SHOW_CONSOLE: 'show_console',
   AUTO_CONTINUE: 'auto_continue',
-  NOTIFICATIONS_ENABLED: 'notifications_enabled',
   EDITOR_ZOOM: 'editor_zoom',
   HAS_SESSIONS_V1: 'el-sbobinator.has_sessions.v1',
   EDITOR_SESSIONS_V1: 'el-sbobinator.editor-sessions.v1',

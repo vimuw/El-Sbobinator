@@ -196,7 +196,7 @@ describe('SetupPage', () => {
     const save = vi.fn().mockResolvedValue({ ok: true });
     const verify = vi.fn().mockRejectedValue(new Error('404 NOT_FOUND'));
     const validate = vi.fn().mockResolvedValue({ ok: true, result: { ok: false, checks: [] } });
-    setPywebview({ save_settings: save, verify_model_access: verify, validate_environment: validate });
+    setPywebview({ save_settings: save, verify_model_access: verify });
     render(<SetupPage {...baseProps} onSaved={onSaved} />);
     fireEvent.change(screen.getByLabelText('Chiave API Gemini'), { target: { value: 'AQ.abcdefghijklmnopqrstuvwxyz012345' } });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Salva e inizia' })); });

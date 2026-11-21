@@ -1,7 +1,5 @@
 import React, { useCallback, useState } from 'react';
 import { type FileDescriptor, type FileItem, type ProcessDonePayload, type ProcessingAction, type ProcessingState, isSuccessfulProcessDone } from '../appState';
-import { type ConfirmActionState } from './useConfirmModal';
-import { STORAGE_KEYS } from '../storageKeys';
 
 const SUPPORTED_MEDIA_EXTENSIONS = new Set([
   '.mp3',
@@ -81,7 +79,6 @@ export interface UseQueueProcessingOptions {
 
   dispatch: React.Dispatch<ProcessingAction>;
   appendConsole: (msg: string) => void;
-  setConfirmAction: (action: ConfirmActionState | null) => void;
   refreshArchiveSessions: () => Promise<void>;
 }
 
@@ -93,7 +90,6 @@ export function useQueueProcessing({
 
   dispatch,
   appendConsole,
-  setConfirmAction,
   refreshArchiveSessions,
 }: UseQueueProcessingOptions) {
   const [batchTotal, setBatchTotal] = useState(0);
@@ -137,7 +133,7 @@ export function useQueueProcessing({
     }] as FileDescriptor[];
   }, [appendConsole, dispatch, filesRef]);
 
-  const startProcessing = useCallback(async (isContinuation: boolean = false, overrideLowDisk: boolean = false, forceRetry: boolean = false) => {
+  const startProcessing = useCallback(async (isContinuation: boolean = false) => {
     const currentQueued = filesRef.current.filter(f => f.status === 'queued');
     const hasKey = Boolean(apiKey.trim());
     if (currentQueued.length === 0 || !hasKey) return false;
@@ -156,15 +152,8 @@ export function useQueueProcessing({
     try {
       const fileDescriptors = await resolveQueuedFilesForProcessing();
       if (!fileDescriptors || fileDescriptors.length === 0) return false;
-      const result = await window.pywebview.api.start_processing?.(fileDescriptors, apiKey.trim(), true, preferredModel, overrideLowDisk, forceRetry);
+      const result = await window.pywebview.api.start_processing?.(fileDescriptors, apiKey.trim(), true, preferredModel);
       if (!result?.ok) {
-        if (result?.low_disk_warning) {
-          setConfirmAction({ type: 'low-disk-warning', warning: result.low_disk_warning });
-          if (!document.hasFocus()) {
-            void window.pywebview?.api?.flash_window?.();
-          }
-          return false;
-        }
         appendConsole(`❌ ${result?.error || "Impossibile avviare l'elaborazione."}`);
         return false;
       }
@@ -174,7 +163,7 @@ export function useQueueProcessing({
       appendConsole(`❌ Errore avvio: ${getErrorMessage(e)}`);
       return false;
     }
-  }, [apiKey, appendConsole, appStateRef, dispatch, filesRef, preferredModel, resolveQueuedFilesForProcessing, setConfirmAction]);
+  }, [apiKey, appendConsole, appStateRef, dispatch, filesRef, preferredModel, resolveQueuedFilesForProcessing]);
 
   const onFileContinued = useCallback(() => { setBatchCompleted(prev => prev + 1); }, []);
   const onBatchReset = useCallback(() => { setBatchTotal(0); setBatchCompleted(0); }, []);
@@ -184,35 +173,6 @@ export function useQueueProcessing({
     if (isSuccessfulProcessDone(data)) {
       setCompletionFlash(true);
       setTimeout(() => setCompletionFlash(false), 5000);
-    }
-
-    if (!document.hasFocus()) {
-      const total = Number(data.total ?? 0);
-      const completed = Number(data.completed ?? 0);
-      const completed_with_warnings = Number(data.completed_with_warnings ?? 0);
-      const failed = Number(data.failed ?? 0);
-
-      if (total > 1 && !data.cancelled) {
-        void window.pywebview?.api?.flash_window?.();
-        if (localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED) !== 'false') {
-          if (failed > 0) {
-            void window.pywebview?.api?.show_notification?.(
-              '⚠️ Batch completato con errori — El Sbobinator',
-              `Elaborazione terminata. Riuscite: ${completed + completed_with_warnings}/${total}. Fallite: ${failed}. Apri l'app per i dettagli.`,
-            );
-          } else if (completed_with_warnings > 0) {
-            void window.pywebview?.api?.show_notification?.(
-              '⚠️ Batch completato con avvisi — El Sbobinator',
-              `Elaborazione terminata con avvisi. Sbobine con avvisi: ${completed_with_warnings}/${total}.`,
-            );
-          } else {
-            void window.pywebview?.api?.show_notification?.(
-              '✅ Batch completato — El Sbobinator',
-              `${completed} sbobine elaborate con successo.`,
-            );
-          }
-        }
-      }
     }
 
     void refreshArchiveSessions();

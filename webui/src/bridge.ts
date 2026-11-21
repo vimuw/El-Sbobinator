@@ -24,13 +24,6 @@ export interface ValidationCheck {
   help_action?: 'ai_studio';
 }
 
-export interface ValidationResult {
-  ok: boolean;
-  summary: string;
-  checks: ValidationCheck[];
-  has_warnings?: boolean;
-}
-
 export interface ModelQuota {
   model_id: string;
   limit: number;
@@ -182,18 +175,9 @@ export interface ArchiveFolder {
   session_dirs: string[];
 }
 
-export interface LowDiskWarning {
-  needed_bytes: number;
-  free_bytes: number;
-  location: string;
-  kind: string;
-  file_name?: string;
-}
-
 export interface StartProcessingResult {
   ok: boolean;
   error?: string;
-  low_disk_warning?: LowDiskWarning;
 }
 
 export interface SaveHtmlResult {
@@ -278,7 +262,6 @@ export interface BridgeCallbacks {
   filesDropped: (files: FileDescriptor[]) => void;
   apiUsageUpdated?: (data: ApiUsageResult) => void;
   retryStateChanged?: (data: RetryStatePayload) => void;
-  requestQuitConfirmation?: () => void;
   // Web previews with Drive sync only.
   /** Drive brought new or changed sbobine or raccolte: the archive reloads them. */
   archiveChangedRemotely?: () => void;
@@ -313,12 +296,8 @@ export interface PywebviewApi {
     apiKey: string,
     resumeSession: boolean,
     preferredModel: string,
-
-    overrideLowDisk?: boolean,
-    forceRetry?: boolean,
   ) => Promise<StartProcessingResult>;
   stop_processing?: () => Promise<{ ok: boolean }>;
-  close_window?: () => Promise<{ ok: boolean }>;
   is_processing_active?: () => Promise<{ ok: boolean; active?: boolean }>;
   answer_regenerate?: (regenerate: boolean | null) => Promise<{ ok: boolean }>;
   answer_new_key?: (key: string) => Promise<{ ok: boolean }>;
@@ -328,14 +307,6 @@ export interface PywebviewApi {
   save_html_content?: (path: string, content: string, generation?: number) => Promise<SaveHtmlResult>;
   /** audio_kept/audio_size (web): the audio comes from a copy kept in this browser, and its size. */
   stream_media_file?: (path: string, sessionDir?: string) => Promise<{ ok: boolean; url?: string; has_audio?: boolean; error?: string; warning?: string; audio_kept?: boolean; audio_size?: number }>;
-  show_notification?: (title: string, message: string) => Promise<void>;
-  flash_window?: () => Promise<{ ok: boolean; error?: string }>;
-  validate_environment?: (
-    apiKey?: string,
-    checkApiKey?: boolean,
-    preferredModel?: string,
-
-  ) => Promise<{ ok: boolean; result?: ValidationResult; error?: string }>;
   get_session_storage_info?: () => Promise<{ ok: boolean; total_bytes?: number; total_sessions?: number; session_root?: string; usage_detail?: string; usage_breakdown?: StorageUsagePart[]; browser_estimate_bytes?: number; persisted?: boolean; error?: string }>;
   // Web build only: asks the browser to keep this site's data; false when it may still clear it.
   get_storage_protection?: () => Promise<{ ok: boolean; persisted: boolean }>;
@@ -361,7 +332,6 @@ export interface PywebviewApi {
   list_trash?: () => Promise<{ ok: boolean; sessions?: ArchiveSession[]; error?: string }>;
   restore_session?: (sessionDir: string) => Promise<{ ok: boolean; error?: string }>;
   empty_trash?: () => Promise<{ ok: boolean; removed?: number; error?: string }>;
-  cleanup_old_sessions?: (maxAgeDays?: number, dryRun?: boolean) => Promise<{ ok: boolean; removed?: number; freed_bytes?: number; errors?: number; candidates?: number; preserved_completed?: number; missing_completed_html?: number; error?: string }>;
   get_completed_sessions?: (limit?: number) => Promise<{ ok: boolean; sessions?: ArchiveSession[]; total?: number; error?: string }>;
   delete_session?: (sessionDir: string) => Promise<{ ok: boolean; error?: string }>;
   rename_session?: (sessionDir: string, name: string) => Promise<{ ok: boolean; name?: string; error?: string }>;
@@ -428,7 +398,6 @@ export function createBridge(options: {
   onBatchStart: () => void;
   onApiUsageUpdated?: (data: ApiUsageResult) => void;
   onRetryStateChanged?: (data: RetryStatePayload) => void;
-  onRequestQuitConfirmation?: () => void;
   onArchiveChangedRemotely?: () => void;
   onDocumentChangedElsewhere?: (data: { session_dir: string }) => void;
   onDriveNeedsReconnect?: () => void;
@@ -447,7 +416,6 @@ export function createBridge(options: {
     onBatchStart,
     onApiUsageUpdated,
     onRetryStateChanged,
-    onRequestQuitConfirmation,
     onArchiveChangedRemotely,
     onDocumentChangedElsewhere,
     onDriveNeedsReconnect,
@@ -490,7 +458,6 @@ export function createBridge(options: {
     filesDropped: onFilesDropped,
     apiUsageUpdated: data => { onApiUsageUpdated?.(data); },
     retryStateChanged: data => { onRetryStateChanged?.(data); },
-    requestQuitConfirmation: () => { onRequestQuitConfirmation?.(); },
     archiveChangedRemotely: () => { onArchiveChangedRemotely?.(); },
     documentChangedElsewhere: data => { onDocumentChangedElsewhere?.(data); },
     driveNeedsReconnect: () => { onDriveNeedsReconnect?.(); },

@@ -96,7 +96,7 @@ export default function App() {
   }, [isSettingsOpen]);
 
   const handleRetryFailedRevisionBlocksRef = useRef<(sessionDir: string, fileId?: string) => Promise<void>>(() => Promise.resolve());
-  const startProcessingRef = useRef<(isContinuation?: boolean, overrideLowDisk?: boolean, forceRetry?: boolean) => Promise<boolean>>(() => Promise.resolve(false));
+  const startProcessingRef = useRef<(isContinuation?: boolean) => Promise<boolean>>(() => Promise.resolve(false));
 
   const {
     notifications,
@@ -120,12 +120,11 @@ export default function App() {
   const appStateRef = useRef(appState);
   const autoContinueRef = useRef(autoContinue);
   const editorControllerRef = useRef<EditorSaveController | null>(null);
-  const isQuittingRef = useRef(false);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       const isBusy = appStateRef.current === 'processing' || filesRef.current.some(f => f.isRetryingBlocks);
-      if (isBusy && !isQuittingRef.current && !(window as unknown as { __elSbobinatorQuitting?: boolean }).__elSbobinatorQuitting) {
+      if (isBusy && !(window as unknown as { __elSbobinatorQuitting?: boolean }).__elSbobinatorQuitting) {
         e.preventDefault();
         e.returnValue = '';
         return '';
@@ -210,7 +209,6 @@ export default function App() {
     setConfirmAction,
     confirmModalCopy,
     handleConfirmAction,
-    requestQuitConfirmation,
   } = useConfirmModal({
     dispatch,
     filesRef,
@@ -219,11 +217,9 @@ export default function App() {
     setArchiveSessions,
     setArchiveTotal,
     refreshArchiveSessions,
-    startProcessingRef,
     executeRetryFromArchive,
     normalizeSessionDir,
     appendConsole,
-    isQuittingRef,
     onFileRemovedFromBatch: useCallback(() => onFileRemovedFromBatchRef.current(), []),
   });
 
@@ -260,7 +256,6 @@ export default function App() {
 
     dispatch,
     appendConsole,
-    setConfirmAction,
     refreshArchiveSessions,
   });
 
@@ -414,8 +409,6 @@ export default function App() {
     clearCompletionFlash: () => setCompletionFlash(false),
     onRevisionWarning: handleRevisionWarning,
     addNotification,
-    batchTotal,
-    onRequestQuitConfirmation: requestQuitConfirmation,
     onArchiveChangedRemotely: () => {
       setArchiveRevision(revision => revision + 1);
       void reloadArchive();

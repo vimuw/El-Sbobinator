@@ -90,7 +90,6 @@ const makeProps = (overrides: MakePropsOverrides = {}): SettingsModalProps => ({
 
 beforeEach(() => {
   setPywebview(undefined);
-  localStorage.removeItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED);
 });
 
 afterEach(() => {

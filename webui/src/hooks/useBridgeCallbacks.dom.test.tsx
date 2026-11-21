@@ -247,46 +247,6 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
     expect(setRegeneratePrompt).toHaveBeenCalledWith(expect.objectContaining({ filename: 'test.mp3' }));
   });
 
-  it('askRegenerate callback shows native notification and flashes taskbar when window is in background', () => {
-    const showNotification = vi.fn();
-    const flashWindow = vi.fn();
-    setPywebview({ show_notification: showNotification, flash_window: flashWindow });
-    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
-    const setRegeneratePrompt = vi.fn();
-    const opts = makeMinimalHook({ setRegeneratePrompt });
-    renderHook(() => { useBridgeCallbacks(opts); });
-    localStorage.removeItem('notifications_enabled');
-    act(() => {
-      window.elSbobinatorBridge?.askRegenerate({ filename: 'test.mp3', mode: 'resume' });
-    });
-    expect(setRegeneratePrompt).toHaveBeenCalledWith(expect.objectContaining({ filename: 'test.mp3' }));
-    expect(flashWindow).toHaveBeenCalled();
-    expect(showNotification).toHaveBeenCalledWith(
-      '⚠️ Conferma richiesta — test.mp3',
-      expect.stringContaining('Ci sono progressi salvati'),
-    );
-    vi.restoreAllMocks();
-  });
-
-  it('askRegenerate flashes taskbar in background even when notifications are disabled', () => {
-    const showNotification = vi.fn();
-    const flashWindow = vi.fn();
-    setPywebview({ show_notification: showNotification, flash_window: flashWindow });
-    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
-    const setRegeneratePrompt = vi.fn();
-    const opts = makeMinimalHook({ setRegeneratePrompt });
-    renderHook(() => { useBridgeCallbacks(opts); });
-    localStorage.setItem('notifications_enabled', 'false');
-    act(() => {
-      window.elSbobinatorBridge?.askRegenerate({ filename: 'test.mp3', mode: 'resume' });
-    });
-    expect(setRegeneratePrompt).toHaveBeenCalledWith(expect.objectContaining({ filename: 'test.mp3' }));
-    expect(flashWindow).toHaveBeenCalled();
-    expect(showNotification).not.toHaveBeenCalled();
-    localStorage.removeItem('notifications_enabled');
-    vi.restoreAllMocks();
-  });
-
   it('askNewKey callback sets askNewKeyPrompt', () => {
     const setAskNewKeyPrompt = vi.fn();
     const opts = makeMinimalHook({ setAskNewKeyPrompt });
@@ -301,14 +261,6 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
     renderHook(() => { useBridgeCallbacks(opts); });
     act(() => { window.elSbobinatorBridge?.dismissNewKey(); });
     expect(setAskNewKeyPrompt).toHaveBeenCalledWith(false);
-  });
-
-  it('requestQuitConfirmation calls onRequestQuitConfirmation option', () => {
-    const onRequestQuitConfirmation = vi.fn();
-    const opts = makeMinimalHook({ onRequestQuitConfirmation });
-    renderHook(() => { useBridgeCallbacks(opts); });
-    act(() => { window.elSbobinatorBridge?.requestQuitConfirmation?.(); });
-    expect(onRequestQuitConfirmation).toHaveBeenCalled();
   });
 
   it('forwards the Drive sync events of the web previews', () => {
@@ -368,29 +320,6 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
     expect(enqueueUniqueFiles).not.toHaveBeenCalled();
   });
 
-  it('fileDone callback: covers notification path for completed file', () => {
-    const showNotification = vi.fn();
-    setPywebview({ show_notification: showNotification });
-    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
-    const doneFile: FileItem = {
-      id: 'file-1', name: 'audio.mp3', size: 1, duration: 60, path: '/a.mp3', status: 'done', progress: 1, phase: 0,
-    };
-    const opts = makeMinimalHook();
-    opts.filesRef = { current: [doneFile] } as unknown as ReturnType<typeof useRef<FileItem[]>>;
-    renderHook(() => { useBridgeCallbacks(opts); });
-    localStorage.removeItem('notifications_enabled');
-    act(() => {
-      window.elSbobinatorBridge?.fileDone({
-        id: 'file-1', index: 0, output_html: '/out.html', output_dir: '/sessions/x', effective_model: 'gemini-2.5-flash',
-      });
-    });
-    expect(showNotification).toHaveBeenCalledWith(
-      '✅ Sbobina pronta — audio.mp3',
-      expect.stringContaining('Elaborata con successo'),
-    );
-    vi.restoreAllMocks();
-  });
-
   it('fileDone on the web says the audio is not kept and where to keep it', () => {
     const doneFile: FileItem = {
       id: 'file-1', name: 'audio.mp3', size: 1, duration: 60, path: '/a.mp3', status: 'done', progress: 1, phase: 0,
@@ -429,26 +358,6 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
     expect(addNotification).toHaveBeenCalledWith('Sbobina pronta', '"audio.mp3" completata con successo.', 'success', 'processing');
   });
 
-  it('fileDone callback: does not show native notification when batchTotal > 1', () => {
-    const showNotification = vi.fn();
-    setPywebview({ show_notification: showNotification });
-    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
-    const doneFile: FileItem = {
-      id: 'file-1', name: 'audio.mp3', size: 1, duration: 60, path: '/a.mp3', status: 'done', progress: 1, phase: 0,
-    };
-    const opts = makeMinimalHook();
-    opts.batchTotal = 2;
-    opts.filesRef = { current: [doneFile] } as unknown as ReturnType<typeof useRef<FileItem[]>>;
-    renderHook(() => { useBridgeCallbacks(opts); });
-    act(() => {
-      window.elSbobinatorBridge?.fileDone({
-        id: 'file-1', index: 0, output_html: '/out.html', output_dir: '/sessions/x', effective_model: 'gemini-2.5-flash',
-      });
-    });
-    expect(showNotification).not.toHaveBeenCalled();
-    vi.restoreAllMocks();
-  });
-
   it('processDone with no queued files and autoContinue=false calls onBatchFullyDone', async () => {
     const onBatchFullyDone = vi.fn<(data: ProcessDonePayload) => void>();
     const opts = makeMinimalHook({ onBatchFullyDone });
@@ -467,23 +376,6 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
     expect(setRegeneratePrompt).toHaveBeenCalledWith(null);
   });
 
-  it('askNewKey callback: covers notification path for key exhaustion', () => {
-    const showNotification = vi.fn();
-    setPywebview({ show_notification: showNotification });
-    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
-    const opts = makeMinimalHook();
-    renderHook(() => { useBridgeCallbacks(opts); });
-    localStorage.removeItem('notifications_enabled');
-    act(() => {
-      window.elSbobinatorBridge?.askNewKey();
-    });
-    expect(showNotification).toHaveBeenCalledWith(
-      '⚠️ Chiavi esaurite — El Sbobinator',
-      expect.stringContaining('Limite API raggiunto'),
-    );
-    vi.restoreAllMocks();
-  });
-
   it('askNewKey on the web points to the dialog, not to the settings', () => {
     const addNotification = vi.fn();
     renderHook(() => { useBridgeCallbacks(makeMinimalHook({ addNotification })); });
@@ -492,92 +384,23 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
     expect(addNotification.mock.calls[0][1]).not.toContain('impostazioni');
   });
 
-  it('fileDone callback: covers warning notification for completed file with warnings', () => {
-    const showNotification = vi.fn();
-    setPywebview({ show_notification: showNotification });
-    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
-    const doneFile: FileItem = {
-      id: 'file-1', name: 'audio.mp3', size: 1, duration: 60, path: '/a.mp3', status: 'done', progress: 1, phase: 0,
-    };
-    const opts = makeMinimalHook();
-    opts.filesRef = { current: [doneFile] } as unknown as ReturnType<typeof useRef<FileItem[]>>;
-    renderHook(() => { useBridgeCallbacks(opts); });
-    localStorage.removeItem('notifications_enabled');
-    act(() => {
-      window.elSbobinatorBridge?.fileDone({
-        id: 'file-1', index: 0, output_html: '/out.html', output_dir: '/sessions/x', completion_status: 'completed_with_warnings'
-      });
-    });
-    expect(showNotification).toHaveBeenCalledWith(
-      '⚠️ Sbobina pronta con avvisi — audio.mp3',
-      "Completata con alcune parti non revisionate. Apri l'app per rivederle.",
-    );
-    vi.restoreAllMocks();
-  });
-
-  it('fileFailed callback: covers server overload and generic error notification paths', () => {
-    const showNotification = vi.fn();
-    setPywebview({ show_notification: showNotification });
-    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
-    const doneFile: FileItem = {
+  it('fileFailed tells server overload, pause and error apart in the notifications', () => {
+    const addNotification = vi.fn<Parameters<typeof useBridgeCallbacks>[0]['addNotification']>();
+    const failedFile: FileItem = {
       id: 'file-1', name: 'audio.mp3', size: 1, duration: 60, path: '/a.mp3', status: 'error', progress: 0, phase: 0,
     };
-    const opts = makeMinimalHook();
-    opts.filesRef = { current: [doneFile] } as unknown as ReturnType<typeof useRef<FileItem[]>>;
+    const opts = makeMinimalHook({ addNotification });
+    opts.filesRef = { current: [failedFile] } as unknown as ReturnType<typeof useRef<FileItem[]>>;
     renderHook(() => { useBridgeCallbacks(opts); });
-    localStorage.removeItem('notifications_enabled');
 
-    // Test server busy/unavailable error
-    act(() => {
-      window.elSbobinatorBridge?.fileFailed({
-        id: 'file-1', index: 0, error: 'Modello Gemini indisponibile'
-      });
-    });
-    expect(showNotification).toHaveBeenCalledWith(
-      '⚠️ Server occupati — audio.mp3',
-      expect.stringContaining('I server di Google Gemini sono temporaneamente sovraccarichi'),
-    );
+    act(() => { window.elSbobinatorBridge?.fileFailed({ id: 'file-1', index: 0, error: 'Modello Gemini indisponibile' }); });
+    expect(addNotification).toHaveBeenLastCalledWith('Server occupati', expect.stringContaining('"audio.mp3"'), 'warning', 'processing');
 
-    showNotification.mockClear();
+    act(() => { window.elSbobinatorBridge?.fileFailed({ id: 'file-1', index: 0, error: 'regenerate_prompt_timeout' }); });
+    expect(addNotification).toHaveBeenLastCalledWith('Elaborazione in pausa', expect.stringContaining('Nessuna scelta ricevuta'), 'warning', 'processing');
 
-    // Test a model-unavailable message
-    act(() => {
-      window.elSbobinatorBridge?.fileFailed({
-        id: 'file-1', index: 0, error: 'modello temporaneamente indisponibile'
-      });
-    });
-    expect(showNotification).toHaveBeenCalledWith(
-      '⚠️ Server occupati — audio.mp3',
-      expect.stringContaining('I server di Google Gemini sono temporaneamente sovraccarichi'),
-    );
-
-    showNotification.mockClear();
-
-    // Test paused timeout error
-    act(() => {
-      window.elSbobinatorBridge?.fileFailed({
-        id: 'file-1', index: 0, error: 'regenerate_prompt_timeout'
-      });
-    });
-    expect(showNotification).toHaveBeenCalledWith(
-      '⏸️ Elaborazione in pausa — audio.mp3',
-      expect.stringContaining('Nessuna scelta ricevuta'),
-    );
-
-    showNotification.mockClear();
-
-    // Test generic error
-    act(() => {
-      window.elSbobinatorBridge?.fileFailed({
-        id: 'file-1', index: 0, error: 'Errore generico di test'
-      });
-    });
-    expect(showNotification).toHaveBeenCalledWith(
-      '❌ Errore elaborazione — audio.mp3',
-      'Errore generico di test',
-    );
-
-    vi.restoreAllMocks();
+    act(() => { window.elSbobinatorBridge?.fileFailed({ id: 'file-1', index: 0, error: 'Errore generico di test' }); });
+    expect(addNotification).toHaveBeenLastCalledWith('Errore elaborazione', 'Errore per "audio.mp3": Errore generico di test', 'error', 'processing');
   });
 
   it('does not auto-continue queued files after a circuit-breaker pause', async () => {

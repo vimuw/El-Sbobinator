@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import type { ArchiveFolder, ArchiveSession, LowDiskWarning } from '../bridge';
+import type { ArchiveFolder, ArchiveSession } from '../bridge';
 import type { FileItem, ProcessingAction } from '../appState';
 import { getHostCapabilities } from '../hostCapabilities';
 import { releaseQueueFiles } from '../queueFileRelease';
@@ -8,21 +8,14 @@ export type ConfirmActionState =
   | { type: 'stop-processing' }
   | { type: 'remove-file'; fileId: string; fileName: string; isDone: boolean }
   | { type: 'clear-all' }
-  | { type: 'low-disk-warning'; warning: LowDiskWarning }
   | { type: 'delete-archive-session'; sessionDir: string; name: string }
   | { type: 'delete-multiple-archive-sessions'; sessions: { sessionDir: string; name: string }[] }
-  | { type: 'retry-archive-session'; session: ArchiveSession }
-  | { type: 'quit-app' };
+  | { type: 'retry-archive-session'; session: ArchiveSession };
 
 export type ConfirmAction = ConfirmActionState;
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes >= 1_073_741_824) return `${(bytes / 1_073_741_824).toFixed(1)} GB`;
-  return `${Math.round(bytes / 1_048_576)} MB`;
 }
 
 interface UseConfirmModalOptions {
@@ -33,11 +26,9 @@ interface UseConfirmModalOptions {
   setArchiveSessions: React.Dispatch<React.SetStateAction<ArchiveSession[]>>;
   setArchiveTotal: React.Dispatch<React.SetStateAction<number>>;
   refreshArchiveSessions: () => Promise<void>;
-  startProcessingRef: React.MutableRefObject<(isContinuation?: boolean, overrideLowDisk?: boolean) => Promise<boolean>>;
   executeRetryFromArchive: (session: ArchiveSession) => Promise<void>;
   normalizeSessionDir: (value?: string) => string;
   appendConsole: (msg: string) => void;
-  isQuittingRef?: React.RefObject<boolean>;
   onFileRemovedFromBatch?: () => void;
 }
 
@@ -49,11 +40,9 @@ export function useConfirmModal({
   setArchiveSessions,
   setArchiveTotal,
   refreshArchiveSessions,
-  startProcessingRef,
   executeRetryFromArchive,
   normalizeSessionDir,
   appendConsole,
-  isQuittingRef,
   onFileRemovedFromBatch,
 }: UseConfirmModalOptions) {
   const [confirmAction, setConfirmAction] = useState<ConfirmActionState | null>(null);
@@ -93,16 +82,6 @@ export function useConfirmModal({
         cancelLabel: 'Annulla',
       };
     }
-    if (confirmAction.type === 'low-disk-warning') {
-      const { warning } = confirmAction;
-      const fileLabel = warning.file_name ? ` per "${warning.file_name}"` : '';
-      return {
-        title: 'Spazio libero insufficiente',
-        description: `Lo spazio libero sembra insufficiente${fileLabel}. Stimato richiesto: ${formatBytes(warning.needed_bytes)} · disponibile: ${formatBytes(warning.free_bytes)} in ${warning.location}. Libera spazio prima di continuare, oppure procedi assumendoti il rischio di errore durante l'elaborazione.`,
-        confirmLabel: 'Continua comunque',
-        cancelLabel: 'Torna alla coda',
-      };
-    }
     if (confirmAction.type === 'delete-archive-session') {
       return {
         title: 'Eliminare questa sbobina?',
@@ -126,35 +105,16 @@ export function useConfirmModal({
         cancelLabel: 'Annulla',
       };
     }
-    if (confirmAction.type === 'retry-archive-session') {
-      return {
-        title: 'Ripristinare e riprovare la revisione?',
-        description: `La sbobina "${confirmAction.session.name}" verrà spostata nella coda di elaborazione per revisionare i blocchi mancanti. Vuoi procedere?`,
-        confirmLabel: 'Riprova revisione',
-        cancelLabel: 'Annulla',
-      };
-    }
     return {
-      title: 'Elaborazione in corso',
-      description: "Un'elaborazione è attualmente in corso. Se chiudi l'applicazione, il processo verrà interrotto e i progressi non salvati andranno persi. Vuoi davvero uscire?",
-      confirmLabel: 'Interrompi ed esci',
-      cancelLabel: 'Continua elaborazione',
+      title: 'Ripristinare e riprovare la revisione?',
+      description: `La sbobina "${confirmAction.session.name}" verrà spostata nella coda di elaborazione per revisionare i blocchi mancanti. Vuoi procedere?`,
+      confirmLabel: 'Riprova revisione',
+      cancelLabel: 'Annulla',
     };
   }, [confirmAction]);
 
   const handleConfirmAction = useCallback(() => {
     if (!confirmAction) return;
-    if (confirmAction.type === 'quit-app') {
-      setConfirmAction(null);
-      if (isQuittingRef) {
-        isQuittingRef.current = true;
-      }
-      (window as unknown as { __elSbobinatorQuitting?: boolean }).__elSbobinatorQuitting = true;
-      if (window.pywebview?.api?.close_window) {
-        void window.pywebview.api.close_window();
-      }
-      return;
-    }
     if (confirmAction.type === 'stop-processing') {
       void confirmStopProcessing();
       return;
@@ -173,11 +133,6 @@ export function useConfirmModal({
       setConfirmAction(null);
       dispatch({ type: 'queue/clear_all' });
       releaseQueueFiles(removedFiles);
-      return;
-    }
-    if (confirmAction.type === 'low-disk-warning') {
-      setConfirmAction(null);
-      void startProcessingRef.current(false, true);
       return;
     }
     if (confirmAction.type === 'delete-archive-session') {
@@ -235,8 +190,6 @@ export function useConfirmModal({
     normalizeSessionDir,
     filesRef,
     dispatch,
-    startProcessingRef,
-    isQuittingRef,
     setArchiveSessions,
     setArchiveTotal,
     foldersRef,
@@ -244,16 +197,11 @@ export function useConfirmModal({
     onFileRemovedFromBatch,
   ]);
 
-  const requestQuitConfirmation = useCallback(() => {
-    setConfirmAction({ type: 'quit-app' });
-  }, []);
-
   return {
     confirmAction,
     setConfirmAction,
     confirmModalCopy,
     handleConfirmAction,
     confirmStopProcessing,
-    requestQuitConfirmation,
   };
 }
