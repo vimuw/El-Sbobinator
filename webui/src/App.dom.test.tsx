@@ -817,6 +817,38 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
       expect(preventDefaultSpy).toHaveBeenCalled();
     });
 
+    it('lets a busy page go without asking once the host is leaving it (another tab took over)', async () => {
+      vi.mocked(useQueuePersistence).mockImplementation((_files, _structuralVersion, dispatch) => {
+        React.useEffect(() => {
+          dispatch({
+            type: 'queue/add',
+            files: [{
+              id: 'file-retry',
+              name: 'lesson.mp3',
+              size: 123,
+              duration: 60,
+              path: 'C:\\Media\\lesson.mp3',
+              status: 'done',
+              progress: 100,
+              phase: 0,
+              isRetryingBlocks: true,
+            }],
+          });
+        }, [dispatch]);
+      });
+      const leaving = window as unknown as { __elSbobinatorQuitting?: boolean };
+      try {
+        await act(async () => {
+          render(<App />);
+        });
+        // web/webHost.ts leaveTab() sets the flag before reloading into the waiting page.
+        leaving.__elSbobinatorQuitting = true;
+        expect(window.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(true);
+      } finally {
+        delete leaving.__elSbobinatorQuitting;
+      }
+    });
+
     it('opens the report email in a new tab during a run: this page stays and asks nothing', async () => {
       // Regression: the email opened in place (location.href = mailto:). Chromium fired
       // beforeunload, so mid-run the browser asked "Leave site?"; with a web mail handler (Gmail,
