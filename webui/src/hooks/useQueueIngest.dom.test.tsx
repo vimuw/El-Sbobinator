@@ -53,6 +53,31 @@ describe('useQueueIngest', () => {
     expect(fpMeta).toBe('meta:test.mp3::1024::60');
   });
 
+  it('asks to retry when a file is picked before the host is ready, without opening the picker', async () => {
+    const askFiles = vi.fn();
+    (window as unknown as { pywebview?: unknown }).pywebview = { api: { ask_files: askFiles } };
+    const { result } = renderHook(() =>
+      useQueueIngest({
+        filesRef: { current: [] as FileItem[] },
+        archiveSessionsRef: { current: [] },
+        pendingArchiveReplacementsRef: { current: new Map() },
+        setArchiveSessions,
+        setArchiveTotal,
+        dispatch,
+        appState: 'idle',
+        appStateRef: { current: 'idle' },
+        apiReady: false,
+        appendConsole,
+      }),
+    );
+
+    await act(async () => { await result.current.handleBrowseClick(); });
+
+    expect(appendConsole).toHaveBeenCalledWith('⚠ L’app non è ancora pronta... riprova tra un momento.');
+    expect(askFiles).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
   it('enqueues unique files and dispatches queue/add', () => {
     const filesRef = { current: [] as FileItem[] };
     const archiveSessionsRef = { current: [] };

@@ -854,4 +854,48 @@ describe('SettingsModal on the web host', () => {
     expect(setFallbackKeys).toHaveBeenCalledWith([]);
     expect(onSettingsSaved).toHaveBeenCalledTimes(1);
   });
+
+  it('copies the diagnostic report with the site version from Assistenza', async () => {
+    const getReport = vi.fn().mockResolvedValue({ ok: true, report: 'REPORT' });
+    setPywebview({ get_diagnostic_report: getReport });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const original = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    onTestFinished(() => {
+      if (original) Object.defineProperty(navigator, 'clipboard', original);
+      else delete (navigator as unknown as { clipboard?: unknown }).clipboard;
+    });
+    const appendConsole = vi.fn();
+    render(<SettingsModal {...makeProps({ appendConsole })} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Assistenza/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Copia report diagnostico' }));
+
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith('REPORT'));
+    expect(getReport).toHaveBeenCalledWith(undefined, undefined, undefined, undefined, APP_VERSION);
+    expect(appendConsole).toHaveBeenCalledWith('📋 Report diagnostico copiato negli appunti.');
+  });
+
+  it('re-reads the space and tells the app when a sbobina comes back from the trash', async () => {
+    const trashed = { session_dir: 'web-session://cestino', html_path: 'web-session://cestino/sbobina.html', name: 'Fisiologia', trashed_at: new Date().toISOString() };
+    const getInfo = vi.fn().mockResolvedValue({ ok: true, total_bytes: 2048, total_sessions: 5, session_root: 'browser' });
+    const listTrash = vi.fn()
+      .mockResolvedValueOnce({ ok: true, sessions: [trashed] })
+      .mockResolvedValue({ ok: true, sessions: [] });
+    const restore = vi.fn().mockResolvedValue({ ok: true });
+    setPywebview({
+      get_session_storage_info: getInfo,
+      get_web_backup_info: vi.fn().mockResolvedValue({ ok: true, sessions: 5, text_bytes: 2048, audio_bytes: 0, audio_files: 0, last_backup_at: null }),
+      list_trash: listTrash,
+      restore_session: restore,
+    });
+    const onArchiveImported = vi.fn();
+    render(<SettingsModal {...makeProps()} storage={{ onArchiveImported }} initialTab="storage" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Ripristina Fisiologia' }));
+
+    await vi.waitFor(() => expect(onArchiveImported).toHaveBeenCalledTimes(1));
+    expect(restore).toHaveBeenCalledWith('web-session://cestino');
+    expect(getInfo.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
 });
