@@ -3,7 +3,6 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { describe, expect, it, vi } from 'vitest';
 import type { ArchiveFolder, ArchiveSession } from '../bridge';
 import { ArchivePage } from './ArchivePage';
-import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 
 const motionCache = new Map<string, React.ComponentType<Record<string, unknown>>>();
 vi.mock('motion/react', () => ({
@@ -684,85 +683,21 @@ describe('ArchivePage', () => {
     expect((screen.getByPlaceholderText('Cerca per nome...') as HTMLInputElement).value).toBe('epitelio');
   });
 
-  it('calls onNotification when importing sbobina package fails with error', async () => {
-    const onNotification = vi.fn();
-    (window as unknown as { pywebview: { api: { import_sbobina_package: unknown } } }).pywebview = {
-      api: {
-        import_sbobina_package: vi.fn().mockResolvedValue({ ok: false, error: 'File corrotto' }),
-      },
-    };
-
-    render(
-      <ArchivePage
-        sessions={[makeSession('s1')]}
-        folders={[]}
-        onFoldersChange={vi.fn()}
-        onPreview={vi.fn()}
-        onOpenFile={vi.fn()}
-        onDeleteSession={vi.fn()}
-        onNotification={onNotification}
-      />,
-    );
-
-    const importBtn = screen.getByTitle('Importa Sbobina (.sbobina)');
-    await act(async () => {
-      fireEvent.click(importBtn);
-    });
-
-    await vi.waitFor(() => {
-      expect(onNotification).toHaveBeenCalledWith('Importazione non riuscita', 'File corrotto', 'error');
-    });
-  });
-
-  it('calls onNotification when importing sbobina package throws unexpected exception', async () => {
-    const onNotification = vi.fn();
-    (window as unknown as { pywebview: { api: { import_sbobina_package: unknown } } }).pywebview = {
-      api: {
-        import_sbobina_package: vi.fn().mockRejectedValue(new Error('Network IPC failure')),
-      },
-    };
-
-    render(
-      <ArchivePage
-        sessions={[makeSession('s1')]}
-        folders={[]}
-        onFoldersChange={vi.fn()}
-        onPreview={vi.fn()}
-        onOpenFile={vi.fn()}
-        onDeleteSession={vi.fn()}
-        onNotification={onNotification}
-      />,
-    );
-
-    const importBtn = screen.getByTitle('Importa Sbobina (.sbobina)');
-    await act(async () => {
-      fireEvent.click(importBtn);
-    });
-
-    await vi.waitFor(() => {
-      expect(onNotification).toHaveBeenCalledWith('Importazione non riuscita', 'Error: Network IPC failure', 'error');
-    });
-  });
 });
 
-describe('ArchivePage on hosts without .sbobina packages', () => {
-  it('hides the import button', () => {
-    setHostCapabilities({ kind: 'web', sbobinaPackages: false });
-    try {
-      render(
-        <ArchivePage
-          sessions={[makeSession('s1')]}
-          folders={[]}
-          onFoldersChange={vi.fn()}
-          onPreview={vi.fn()}
-          onOpenFile={vi.fn()}
-          onDeleteSession={vi.fn()}
-        />,
-      );
-      expect(screen.getAllByText('Lezione s1').length).toBeGreaterThan(0);
-      expect(screen.queryByTitle('Importa Sbobina (.sbobina)')).toBeNull();
-    } finally {
-      setHostCapabilities(DESKTOP_CAPABILITIES);
-    }
+describe('ArchivePage without .sbobina packages', () => {
+  it('offers no package import', () => {
+    render(
+      <ArchivePage
+        sessions={[makeSession('s1')]}
+        folders={[]}
+        onFoldersChange={vi.fn()}
+        onPreview={vi.fn()}
+        onOpenFile={vi.fn()}
+        onDeleteSession={vi.fn()}
+      />,
+    );
+    expect(screen.getAllByText('Lezione s1').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: 'Importa Sbobina' })).toBeNull();
   });
 });

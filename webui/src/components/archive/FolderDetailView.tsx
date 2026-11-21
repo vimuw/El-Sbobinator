@@ -47,7 +47,6 @@ export interface FolderDetailViewProps {
   onDeleteSession: ArchivePageProps['onDeleteSession'];
   onDeleteMultipleSessions?: ArchivePageProps['onDeleteMultipleSessions'];
   onRetryFailedRevisionBlocks?: ArchivePageProps['onRetryFailedRevisionBlocks'];
-  onShareSession?: (session: ArchiveSession) => void;
   onRenameSession?: (session: ArchiveSession) => void;
   onNavigate?: (id: string | null) => void;
   collectionGrid?: React.ReactNode;
@@ -75,7 +74,6 @@ export function FolderDetailView({
   onDeleteSession,
   onDeleteMultipleSessions,
   onRetryFailedRevisionBlocks,
-  onShareSession,
   onRenameSession,
   onNavigate,
   collectionGrid,
@@ -441,7 +439,6 @@ export function FolderDetailView({
                           }
                         }}
                         onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
-                        onShareSession={onShareSession}
                         onRenameSession={onRenameSession}
                       />
                     ))}

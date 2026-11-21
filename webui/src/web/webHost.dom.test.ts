@@ -91,7 +91,7 @@ describe('web host', () => {
     const capabilities = getHostCapabilities();
     expect(capabilities).toMatchObject({
       kind: 'web', keyStorage: 'browser', openLocalPath: false, nativeFolderPicker: false,
-      updateInstallation: false, osNotifications: false, editorAudio: true, sessionKeepsAudio: false, sbobinaPackages: false, environmentCheck: false,
+      updateInstallation: false, osNotifications: false, editorAudio: true, sessionKeepsAudio: false, environmentCheck: false,
       // No Sentry DSN in the tests' build: "Segnala un problema" writes an email.
       reportByEmail: true,
     });
@@ -100,7 +100,6 @@ describe('web host', () => {
     // Hidden features have no method, so the UI never offers them.
     expect(api?.open_file).toBeUndefined();
     expect(api?.stream_media_file).toBeTypeOf('function');
-    expect(api?.export_sbobina_package).toBeUndefined();
     expect(api?.export_diagnostics).toBeUndefined();
   });
 

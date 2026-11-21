@@ -407,30 +407,6 @@ export interface PywebviewApi {
     quota_exhausted?: boolean;
     conflict?: boolean;
   }>;
-  export_sbobina_package?: (
-    sessionDir: string,
-    exportType?: 'full' | 'text_only' | 'audio_only',
-    targetPath?: string,
-  ) => Promise<{
-    ok: boolean;
-    error?: string;
-    cancelled?: boolean;
-    target_path?: string;
-    include_mode?: string;
-    audio_included?: boolean;
-    size_bytes?: number;
-  }>;
-  import_sbobina_package?: (
-    packagePath?: string,
-  ) => Promise<{
-    ok: boolean;
-    error?: string;
-    cancelled?: boolean;
-    session_dir?: string;
-    name?: string;
-    html_path?: string;
-    has_audio?: boolean;
-  }>;
   get_api_usage?: (
     apiKey?: string,
     fallbackKeys?: string[],

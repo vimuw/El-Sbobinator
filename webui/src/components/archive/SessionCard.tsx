@@ -1,6 +1,6 @@
 import { Fragment, useState, type MouseEvent, type ReactNode } from 'react';
 import {
-  AlertTriangle, AudioLines, Check, ChevronLeft, ChevronRight, Download,
+  AlertTriangle, AudioLines, Check, ChevronLeft, ChevronRight,
   Eye, FileText, Folder, FolderOpen, Pencil, RotateCcw, Trash2, X,
 } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
@@ -108,7 +108,6 @@ export interface DraggableSessionCardProps {
   onOpenFile: ArchivePageProps['onOpenFile'];
   onDeleteSession: ArchivePageProps['onDeleteSession'];
   onRetryFailedRevisionBlocks?: ArchivePageProps['onRetryFailedRevisionBlocks'];
-  onShareSession?: (session: ArchiveSession) => void;
   onRenameSession?: (session: ArchiveSession) => void;
   onMove?: () => void;
 }
@@ -126,7 +125,6 @@ export function DraggableSessionCard({
   onOpenFile,
   onDeleteSession,
   onRetryFailedRevisionBlocks,
-  onShareSession,
   onRenameSession,
   onMove,
 }: DraggableSessionCardProps) {
@@ -169,11 +167,6 @@ export function DraggableSessionCard({
       label: 'Apri cartella',
       icon: <FolderOpen className="w-3.5 h-3.5" />,
       onClick: () => onOpenFile(session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path),
-    } as KebabMenuItem] : []),
-    ...(onShareSession ? [{
-      label: 'Esporta Sbobina...',
-      icon: <Download className="w-3.5 h-3.5" />,
-      onClick: () => onShareSession(session),
     } as KebabMenuItem] : []),
     ...(onMove ? [{ label: 'Sposta in…', icon: <Folder className="w-3.5 h-3.5" />, onClick: onMove }] : folderChildren.length > 0 ? [
       { separator: true } as KebabMenuItem,
@@ -327,7 +320,6 @@ export interface SortableSessionCardProps {
   onOpenFile: ArchivePageProps['onOpenFile'];
   onDeleteSession: ArchivePageProps['onDeleteSession'];
   onRetryFailedRevisionBlocks?: ArchivePageProps['onRetryFailedRevisionBlocks'];
-  onShareSession?: (session: ArchiveSession) => void;
   onRenameSession?: (session: ArchiveSession) => void;
   canMoveToPreviousPage?: boolean;
   canMoveToNextPage?: boolean;
@@ -349,7 +341,6 @@ export function SortableSessionCard({
   onOpenFile,
   onDeleteSession,
   onRetryFailedRevisionBlocks,
-  onShareSession,
   onRenameSession,
   canMoveToPreviousPage,
   canMoveToNextPage,
@@ -392,11 +383,6 @@ export function SortableSessionCard({
       label: 'Apri cartella',
       icon: <FolderOpen className="w-3.5 h-3.5" />,
       onClick: () => onOpenFile(session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path),
-    } as KebabMenuItem] : []),
-    ...(onShareSession ? [{
-      label: 'Esporta Sbobina...',
-      icon: <Download className="w-3.5 h-3.5" />,
-      onClick: () => onShareSession(session),
     } as KebabMenuItem] : []),
     { separator: true },
     {

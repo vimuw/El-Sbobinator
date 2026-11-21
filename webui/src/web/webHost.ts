@@ -79,7 +79,6 @@ export const WEB_CAPABILITIES: Partial<HostCapabilities> = {
   // in IndexedDB (webMedia.ts).
   editorAudio: true,
   sessionKeepsAudio: false,
-  sbobinaPackages: false,
   environmentCheck: false,
 };
 

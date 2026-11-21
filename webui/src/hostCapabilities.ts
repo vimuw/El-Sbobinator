@@ -18,8 +18,6 @@ export interface HostCapabilities {
   editorAudio: boolean;
   // The sbobina keeps its audio with it; without this (web) the editor asks for the lecture file.
   sessionKeepsAudio: boolean;
-  // .sbobina package import/export.
-  sbobinaPackages: boolean;
   // "Verifica ambiente" (FFmpeg, disk, session folder).
   environmentCheck: boolean;
   // Deleting a sbobina removes it at once; without this (web previews with Drive sync) it goes to a
@@ -44,7 +42,6 @@ export const DESKTOP_CAPABILITIES: HostCapabilities = {
   keyStorage: 'system',
   editorAudio: true,
   sessionKeepsAudio: true,
-  sbobinaPackages: true,
   environmentCheck: true,
   permanentDelete: true,
   reportByEmail: true,

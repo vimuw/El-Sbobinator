@@ -687,7 +687,6 @@ export default function App() {
                   onRenameSession={handleRenameSession}
                   onLoadAll={handleLoadAll}
                   onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
-                  onNotification={addNotification}
                   showKeptAudioRequest={showKeptAudioRequest}
                   onShowKeptAudioHandled={handleShowKeptAudioHandled}
                 />

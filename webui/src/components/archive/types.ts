@@ -22,11 +22,6 @@ export interface ArchivePageProps {
   onRefresh?: () => void;
   onLoadAll?: () => void;
   onRetryFailedRevisionBlocks?: (sessionDir: string) => Promise<void>;
-  onNotification?: (
-    title: string,
-    message: string,
-    type?: 'info' | 'warning' | 'error' | 'success',
-  ) => void;
   /** Web: set by "Vedi quali" in Archiviazione: show the sbobine with kept audio, heaviest first. */
   showKeptAudioRequest?: boolean;
   /** The request above was applied: the archive keeps its own filter from here on. */
