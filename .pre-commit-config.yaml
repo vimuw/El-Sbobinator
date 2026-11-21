@@ -7,11 +7,12 @@ repos:
       - id: check-yaml
       - id: check-json
 
-  # Ruff comes from the same uv.lock as CI, avoiding a second independent pin.
+  # ESLint from webui's locked node_modules: the same check as npm run lint and CI.
   - repo: local
     hooks:
-      - id: ruff-check
-        name: Locked Ruff check and format
-        entry: python scripts/build_release.py lint --fix
+      - id: eslint
+        name: ESLint (webui)
+        entry: npm --prefix webui run lint
         language: system
-        types_or: [python, pyi]
+        files: ^webui/.*\.(ts|tsx|js|mjs)$
+        pass_filenames: false

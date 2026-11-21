@@ -23,7 +23,7 @@ export interface DevResponse {
 export interface DriveDevMiddlewareOptions {
   /** Read at each request: the dev server's environment (GOOGLE_CLIENT_SECRET, DRIVE_COOKIE_KEY). */
   env: () => DriveServerEnv;
-  /** The dev server's scheme: https with the LAN certificate (vite.web.lan.config.ts). */
+  /** The dev server's scheme: https when it is served over HTTPS. */
   protocol: () => 'http' | 'https';
   handle?: typeof handleDriveRequest;
 }

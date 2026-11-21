@@ -6,7 +6,7 @@ import { REPORT_PATH, handleReportRequest } from './tunnel';
 
 export interface ReportDevMiddlewareOptions {
   dsn: string;
-  /** The dev server's scheme: https with the LAN certificate (vite.web.lan.config.ts). */
+  /** The dev server's scheme: https when it is served over HTTPS. */
   protocol: () => 'http' | 'https';
   handle?: typeof handleReportRequest;
 }

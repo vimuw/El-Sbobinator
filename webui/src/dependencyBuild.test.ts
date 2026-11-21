@@ -13,9 +13,13 @@ describe('build dependency boundary', () => {
       mkdirSync(join(webui, 'node_modules', 'sample'), { recursive: true });
       const actualPackage = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
       writeFileSync(join(temporary, 'scripts', 'verify_node_dependencies.mjs'), readFileSync(new URL('../../scripts/verify_node_dependencies.mjs', import.meta.url)));
+      // The real build:web, with the Vite build replaced by a marker.
+      const viteBuild = 'vite build --config vite.web.config.ts';
+      expect(actualPackage.scripts['build:web']).toContain(viteBuild);
+      const buildWeb = actualPackage.scripts['build:web'].replace(viteBuild, 'node -e "console.log(\'bundle-produced\')"');
       writeFileSync(join(webui, 'package.json'), JSON.stringify({
         name: 'build-fixture', version: '1.0.0', engines: { node: '24.x' },
-        scripts: { prebuild: actualPackage.scripts.prebuild, build: 'node -e "console.log(\'bundle-produced\')"' },
+        scripts: { 'build:web': buildWeb },
         dependencies: { sample: '2.0.0' },
       }));
       writeFileSync(join(webui, 'package-lock.json'), JSON.stringify({
@@ -23,7 +27,7 @@ describe('build dependency boundary', () => {
       }));
       writeFileSync(join(webui, 'node_modules', 'sample', 'package.json'), JSON.stringify({ name: 'sample', version: installed }));
       const command = process.platform === 'win32' ? (process.env.ComSpec ?? 'cmd.exe') : 'npm';
-      const args = process.platform === 'win32' ? ['/d', '/s', '/c', 'npm.cmd run build'] : ['run', 'build'];
+      const args = process.platform === 'win32' ? ['/d', '/s', '/c', 'npm.cmd run build:web'] : ['run', 'build:web'];
       const result = spawnSync(command, args, { cwd: webui, encoding: 'utf8' });
       if (installed === '2.0.0') {
         expect(result.status, result.stderr).toBe(0);

@@ -1,32 +1,8 @@
 version: 2
-# The web site (webui) gets a weekly batch of grouped updates; the desktop backup's
-# Python environment gets security updates only, and tooling is checked monthly.
-# Security updates follow no schedule and have their own limit, so they still open
-# as soon as an advisory appears, including for the security-only ecosystems.
+# The web site (webui) gets a weekly batch of grouped updates; tooling is checked monthly.
+# Security updates follow no schedule and have their own limit, so they still open as soon
+# as an advisory appears.
 updates:
-  - package-ecosystem: uv
-    directory: /
-    allow:
-      - dependency-type: all
-    schedule:
-      interval: weekly
-    # Security-only: 0 disables version updates for the frozen desktop backup.
-    open-pull-requests-limit: 0
-    labels: [dependencies]
-    groups:
-      python:
-        patterns: ['*']
-        update-types: [minor, patch]
-  - package-ecosystem: pip
-    directory: /requirements
-    schedule:
-      interval: weekly
-    # Security-only, like the uv environment above.
-    open-pull-requests-limit: 0
-    labels: [dependencies]
-    groups:
-      bootstrap:
-        patterns: ['*']
   - package-ecosystem: npm
     directory: /webui
     schedule:

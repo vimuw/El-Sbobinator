@@ -3,7 +3,7 @@ import { createViteConfig } from './vite.config.ts';
 
 // Static web build for Playwright plus a fixed-name module entry for specs that
 // compute reference values in the page (see e2e/sourceModules.ts).
-export default mergeConfig(createViteConfig('web'), {
+export default mergeConfig(createViteConfig(), {
   build: {
     emptyOutDir: true,
     rolldownOptions: {
