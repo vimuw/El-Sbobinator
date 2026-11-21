@@ -22,7 +22,9 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test --project=chromium --grep @ci-smoke",
-    "test:e2e:web": "playwright test --config playwright.web.config.ts"
+    "test:e2e:web": "playwright test --config playwright.web.config.ts",
+    "check": "node ../scripts/verify_node_dependencies.mjs && node ../scripts/check_node_imports.mjs && npm run lint && npm run typecheck && npm run test:coverage",
+    "audit:deps": "node ../scripts/npm_audit.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

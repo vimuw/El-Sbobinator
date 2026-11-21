@@ -5,7 +5,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 # Test modules whose fixtures run `git init` / `git add` / `git commit` in tmp_path.
-GIT_FIXTURE_MODULES = ("tests/test_ci_release.py", "tests/test_ci_editor_deps.py")
+GIT_FIXTURE_MODULES = ("tests/test_ci_release.py",)
 
 
 def _git(*args: str, cwd: Path) -> str:
