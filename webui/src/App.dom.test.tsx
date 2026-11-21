@@ -49,7 +49,6 @@ const mockApiReadyDefault = {
   setApiKey: vi.fn(),
   fallbackKeys: [],
   setFallbackKeys: vi.fn(),
-  configuredFallbackKeyCount: 0,
   preferredModel: 'gemini-2.5-flash',
   setPreferredModel: vi.fn(),
 

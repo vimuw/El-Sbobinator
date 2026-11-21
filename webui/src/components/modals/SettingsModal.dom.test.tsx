@@ -60,7 +60,6 @@ interface MakePropsOverrides {
   apiKey?: string;
   setApiKey?: (key: string) => void;
   fallbackKeys?: string[];
-  configuredFallbackKeyCount?: number;
   setFallbackKeys?: React.Dispatch<React.SetStateAction<string[]>>;
   preferredModel?: string;
   setPreferredModel?: (model: string) => void;
@@ -78,7 +77,6 @@ const makeProps = (overrides: MakePropsOverrides = {}): SettingsModalProps => ({
     setApiKey: overrides.setApiKey ?? overrides.auth?.setApiKey ?? vi.fn(),
     fallbackKeys: overrides.fallbackKeys ?? overrides.auth?.fallbackKeys ?? [],
     setFallbackKeys: overrides.setFallbackKeys ?? overrides.auth?.setFallbackKeys ?? vi.fn(),
-    configuredFallbackKeyCount: overrides.configuredFallbackKeyCount ?? overrides.auth?.configuredFallbackKeyCount ?? 0,
   },
   models: {
     preferredModel: overrides.preferredModel ?? overrides.models?.preferredModel ?? 'gemini-2.5-flash',
@@ -342,27 +340,6 @@ describe('SettingsModal — save behavior', () => {
     expect(onSettingsSaved).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onSettingsSaved.mock.invocationCallOrder[0]).toBeLessThan(onClose.mock.invocationCallOrder[0]);
-  });
-
-  it('preserves configured fallback keys when masked values were not edited', async () => {
-    const mockSave = vi.fn().mockResolvedValue({ ok: true });
-    setPywebview({ save_settings: mockSave });
-
-    render(
-      <SettingsModal
-        {...makeProps({ fallbackKeys: [], configuredFallbackKeyCount: 2 })}
-      />
-    );
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('Salva e Chiudi'));
-    });
-
-    expect(mockSave).toHaveBeenCalledWith(
-      'AIzaSyTest123456',
-      null,
-      'gemini-2.5-flash',
-    );
   });
 
   it('a click outside closes the settings when nothing waits to be saved', () => {

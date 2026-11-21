@@ -8,7 +8,6 @@ export function useApiReady(appendConsole: (msg: string) => void) {
   const [bridgeDelayed, setBridgeDelayed] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [fallbackKeys, setFallbackKeys] = useState<string[]>([]);
-  const [configuredFallbackKeyCount, setConfiguredFallbackKeyCount] = useState(0);
   const [preferredModel, setPreferredModel] = useState(DEFAULT_MODEL);
 
   const [availableModels, setAvailableModels] = useState<ModelOption[]>([]);
@@ -26,7 +25,6 @@ export function useApiReady(appendConsole: (msg: string) => void) {
   const applySettings = useCallback((cfg: SettingsPayload | undefined) => {
     setApiKey(String(cfg?.api_key ?? ''));
     setFallbackKeys(Array.isArray(cfg?.fallback_keys) ? cfg.fallback_keys : []);
-    setConfiguredFallbackKeyCount(Number(cfg?.configuredFallbackKeyCount ?? 0));
     setPreferredModel(cfg?.preferred_model || DEFAULT_MODEL);
 
     setAvailableModels(Array.isArray(cfg?.available_models) ? cfg.available_models : []);
@@ -110,7 +108,6 @@ export function useApiReady(appendConsole: (msg: string) => void) {
     setApiKey,
     fallbackKeys,
     setFallbackKeys,
-    configuredFallbackKeyCount,
     preferredModel,
     setPreferredModel,
 

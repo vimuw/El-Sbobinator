@@ -134,8 +134,6 @@ export interface SettingsPayload {
   preferred_model?: string;
 
   available_models?: ModelOption[];
-  configuredFallbackKeyCount?: number;
-  configured_fallback_key_count?: number;
 }
 
 export interface ArchiveSession {

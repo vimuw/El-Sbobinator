@@ -31,7 +31,6 @@ export interface SettingsAuthProps {
   setApiKey: (key: string) => void;
   fallbackKeys: string[];
   setFallbackKeys: React.Dispatch<React.SetStateAction<string[]>>;
-  configuredFallbackKeyCount?: number;
 }
 
 export interface SettingsModelsProps {
@@ -135,7 +134,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setApiKey,
     fallbackKeys,
     setFallbackKeys,
-    configuredFallbackKeyCount,
   } = auth;
   const {
     preferredModel,
@@ -299,13 +297,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       let result;
       try {
         const apiKeyPayload = apiKey.trim();
-        const fallbackKeysPayload =
-          fallbackKeys.length === 0 && (configuredFallbackKeyCount ?? 0) > 0
-            ? null
-            : keys;
         result = await window.pywebview.api.save_settings(
           apiKeyPayload,
-          fallbackKeysPayload,
+          keys,
           preferredModel,
 
         );

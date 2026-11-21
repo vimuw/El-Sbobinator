@@ -53,7 +53,7 @@ beforeEach(() => {
     apiReady: true, bridgeDelayed: false, apiKey: 'AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345', setApiKey: vi.fn(),
     hasProtectedKey: false, apiKeyInsecure: false, setApiKeyInsecure: vi.fn(), apiKeyInsecureReason: '',
     setApiKeyInsecureReason: vi.fn(), configRecoveredFrom: '', fallbackKeys: [], setFallbackKeys: vi.fn(),
-    configuredFallbackKeyCount: 0, preferredModel: 'gemini-2.5-flash', setPreferredModel: vi.fn(),
+    preferredModel: 'gemini-2.5-flash', setPreferredModel: vi.fn(),
     availableModels: [], refreshSettings: vi.fn(),
   } as unknown as ReturnType<typeof useApiReady>);
 });

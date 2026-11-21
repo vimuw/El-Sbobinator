@@ -68,7 +68,6 @@ export default function App() {
     setApiKey,
     fallbackKeys,
     setFallbackKeys,
-    configuredFallbackKeyCount,
     preferredModel,
     setPreferredModel,
 
@@ -723,7 +722,6 @@ export default function App() {
               setApiKey,
               fallbackKeys,
               setFallbackKeys,
-              configuredFallbackKeyCount,
             }}
             models={{
               preferredModel,
