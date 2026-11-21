@@ -3,7 +3,6 @@ import { renderHook, act } from '@testing-library/react';
 import { useQueueIngest } from './useQueueIngest';
 import type { FileItem } from '../appState';
 import type { ArchiveSession } from '../bridge';
-import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 
 describe('useQueueIngest', () => {
   const dispatch = vi.fn();
@@ -52,6 +51,31 @@ describe('useQueueIngest', () => {
       duration: 60,
     });
     expect(fpMeta).toBe('meta:test.mp3::1024::60');
+  });
+
+  it('asks to retry when a file is picked before the host is ready, without opening the picker', async () => {
+    const askFiles = vi.fn();
+    (window as unknown as { pywebview?: unknown }).pywebview = { api: { ask_files: askFiles } };
+    const { result } = renderHook(() =>
+      useQueueIngest({
+        filesRef: { current: [] as FileItem[] },
+        archiveSessionsRef: { current: [] },
+        pendingArchiveReplacementsRef: { current: new Map() },
+        setArchiveSessions,
+        setArchiveTotal,
+        dispatch,
+        appState: 'idle',
+        appStateRef: { current: 'idle' },
+        apiReady: false,
+        appendConsole,
+      }),
+    );
+
+    await act(async () => { await result.current.handleBrowseClick(); });
+
+    expect(appendConsole).toHaveBeenCalledWith('⚠ L’app non è ancora pronta... riprova tra un momento.');
+    expect(askFiles).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
   });
 
   it('enqueues unique files and dispatches queue/add', () => {
@@ -293,7 +317,7 @@ describe('useQueueIngest', () => {
     }));
   });
 
-  it('web: reports dropped files in a format the host refused', async () => {
+  it('reports dropped files in a format the host refused', async () => {
     const uploadBrowserFiles = vi.fn().mockResolvedValue([
       { id: 'uploaded', name: 'lezione.mp3', path: 'local://1/lezione.mp3', size: 3 },
     ]);
@@ -320,18 +344,9 @@ describe('useQueueIngest', () => {
       dataTransfer: { files: [new File(['a'], 'lezione.mp3'), new File(['b'], 'registrazione.wav')] },
     } as unknown as React.DragEvent;
 
-    const desktop = render();
-    await act(async () => { await desktop.current.handleDrop(drop); });
-    expect(onFilesRejected).not.toHaveBeenCalled();
-
-    setHostCapabilities({ kind: 'web' });
-    try {
-      const web = render();
-      await act(async () => { await web.current.handleDrop(drop); });
-      expect(onFilesRejected).toHaveBeenCalledWith(['registrazione.wav']);
-    } finally {
-      setHostCapabilities(DESKTOP_CAPABILITIES);
-    }
+    const web = render();
+    await act(async () => { await web.current.handleDrop(drop); });
+    expect(onFilesRejected).toHaveBeenCalledWith(['registrazione.wav']);
   });
 
   it('handleDuplicateAddAgain registers pending replacement and enqueues file without direct archive mutation', async () => {

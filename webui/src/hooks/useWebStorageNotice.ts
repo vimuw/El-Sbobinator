@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react';
-import { getHostCapabilities } from '../hostCapabilities';
 import { STORAGE_KEYS } from '../storageKeys';
 import type { AddNotificationOptions, NotificationCategory, NotificationType } from './useNotifications';
 
@@ -44,7 +43,7 @@ export function useWebStorageNotice({ apiReady, sessionCount, addNotification }:
   const checkingRef = useRef(false);
   useEffect(() => {
     if (!apiReady || sessionCount === 0 || checkingRef.current) return;
-    if (getHostCapabilities().kind !== 'web' || alreadyShown()) return;
+    if (alreadyShown()) return;
     const check = window.pywebview?.api?.get_storage_protection;
     if (!check) return;
     checkingRef.current = true;

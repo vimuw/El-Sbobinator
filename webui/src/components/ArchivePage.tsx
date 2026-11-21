@@ -1,17 +1,14 @@
-import { reportClientError } from '../diagnostics';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowRight, AudioLines, Eye, FileSearch, FileText,
-  Loader2, Pencil, RefreshCw, Search, Upload, X,
+  Loader2, Pencil, RefreshCw, Search, X,
 } from 'lucide-react';
 import type { ArchiveFolder, ArchiveSession } from '../bridge';
 import { loadAllEditorSessions } from '../editorSessions';
 import { formatRelativeTime, formatSize, normalizeSessionPath, shortModelName } from '../utils';
 import { FolderIndicatorChip } from './FolderChip';
 import { MiddleTruncate } from './MiddleTruncate';
-import { ShareExportModal } from './modals/ShareExportModal';
-import { getHostCapabilities } from '../hostCapabilities';
 import { ArchivePageTitle, ArchiveSectionHeading } from './archive/ArchiveLayout';
 
 import {
@@ -60,8 +57,8 @@ export { FullTextResultList } from './archive/FullTextResults';
 
 export function ArchivePage({
   sessions, total, folders, onFoldersChange,
-  onPreview, onOpenFile, onDeleteSession, onDeleteMultipleSessions, onRefresh,
-  onRetryFailedRevisionBlocks, onNotification, onRenameSession,
+  onPreview, onDeleteSession, onDeleteMultipleSessions, onRefresh,
+  onRetryFailedRevisionBlocks, onRenameSession,
   showKeptAudioRequest, onShowKeptAudioHandled,
 }: ArchivePageProps) {
   const [toolbarRef, toolbarStuck] = useStickyStuck();
@@ -73,37 +70,7 @@ export function ArchivePage({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [moveTarget, setMoveTarget] = useState<{ folderId?: string; dirs?: string[]; parentId: string | null; onComplete?: () => void } | null>(null);
 
-  const [sharingSession, setSharingSession] = useState<ArchiveSession | null>(null);
   const [renamingSession, setRenamingSession] = useState<ArchiveSession | null>(null);
-  const [isImporting, setIsImporting] = useState(false);
-  const canSharePackages = getHostCapabilities().sbobinaPackages;
-
-  const handleImportSbobina = useCallback(async () => {
-    if (isImporting) return;
-    setIsImporting(true);
-    try {
-      if (window.pywebview?.api?.import_sbobina_package) {
-        const res = await window.pywebview.api.import_sbobina_package();
-        if (res.ok) {
-          onRefresh?.();
-        } else if (!res.cancelled && res.error) {
-          if (onNotification) {
-            onNotification('Importazione non riuscita', res.error, 'error');
-          } else {
-            reportClientError('Importazione non riuscita:', res.error);
-          }
-        }
-      }
-    } catch (e) {
-      if (onNotification) {
-        onNotification('Importazione non riuscita', String(e), 'error');
-      } else {
-        reportClientError('Importazione non riuscita:', e);
-      }
-    } finally {
-      setIsImporting(false);
-    }
-  }, [isImporting, onNotification, onRefresh]);
 
   const handleRefresh = useCallback(async () => {
     if (isRefreshing || !onRefresh) return;
@@ -349,14 +316,6 @@ export function ArchivePage({
           />
         )}
       </AnimatePresence>
-      <AnimatePresence>
-        {sharingSession && (
-          <ShareExportModal
-            session={sharingSession}
-            onClose={() => setSharingSession(null)}
-          />
-        )}
-      </AnimatePresence>
     </>
   );
 
@@ -389,11 +348,9 @@ export function ArchivePage({
           onAssignMultipleToFolder={(dirs, fId) => bulkAssignToFolder(fId, dirs)}
           onNewFolder={() => setFolderModal({ type: 'create', parentId: selectedFolder.id })}
           onPreview={onPreview}
-          onOpenFile={onOpenFile}
           onDeleteSession={onDeleteSession}
           onDeleteMultipleSessions={handleOpenDeleteMultiple}
           onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
-          onShareSession={canSharePackages ? setSharingSession : undefined}
           onRenameSession={onRenameSession ? setRenamingSession : undefined}
         />
         {renderModals()}
@@ -550,16 +507,6 @@ export function ArchivePage({
               options={fullTextMode ? FULL_TEXT_SORT_OPTIONS : sortOptions}
             />
             <div className="ml-auto flex items-center gap-2 shrink-0">
-              {canSharePackages && <button
-                type="button"
-                onClick={handleImportSbobina}
-                disabled={isImporting}
-                className="filter-chip w-9 p-0 flex items-center justify-center group/import"
-                title="Importa Sbobina (.sbobina)"
-                aria-label="Importa Sbobina"
-              >
-                {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4 transition duration-200 opacity-80 group-hover/import:opacity-100 group-hover/import:scale-110" />}
-              </button>}
               {onRefresh && (
                 <button
                   type="button"
@@ -671,10 +618,8 @@ export function ArchivePage({
                       if (f) removeFromFolder(session.session_dir, f.id);
                     }}
                     onPreview={onPreview}
-                    onOpenFile={onOpenFile}
                     onDeleteSession={handleRowDeleteSession}
                     onRetryFailedRevisionBlocks={onRetryFailedRevisionBlocks}
-                    onShareSession={canSharePackages ? setSharingSession : undefined}
                     onRenameSession={onRenameSession ? setRenamingSession : undefined}
                   />
                 ))}

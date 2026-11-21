@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, UploadCloud } from 'lucide-react';
 import { fade } from '../motion';
-import { getHostCapabilities, isTouchWeb } from '../hostCapabilities';
+import { isTouchWeb } from '../hostCapabilities';
 
 // The page (QueuePage) owns the drag handlers: the card only reflects the state,
 // so moving across its children never toggles the highlight on and off.
@@ -12,18 +12,15 @@ interface DropZoneProps {
   compact?: boolean;
 }
 
-export const SUPPORTED_FORMATS = '.mp3 · .m4a · .wav · .mp4 · .mkv · .webm · .ogg · .flac · .aac';
-export const SUPPORTED_FORMATS_SUMMARY = 'Audio o video · MP3, M4A, WAV, MP4 e altri';
 // The web build cuts audio in the browser without re-encoding, which only works for these.
 const WEB_FORMATS = '.mp3 · .m4a · .mp4';
 const WEB_FORMATS_SUMMARY = 'Audio o video · MP3, M4A o MP4';
 
 function formatHints() {
-  const web = getHostCapabilities().kind === 'web';
   return {
-    title: `Formati supportati: ${web ? WEB_FORMATS : SUPPORTED_FORMATS}`,
-    summary: web ? WEB_FORMATS_SUMMARY : SUPPORTED_FORMATS_SUMMARY,
-    short: web ? 'MP3, M4A o MP4' : 'MP3, M4A, WAV, MP4 e altri',
+    title: `Formati supportati: ${WEB_FORMATS}`,
+    summary: WEB_FORMATS_SUMMARY,
+    short: 'MP3, M4A o MP4',
   };
 }
 

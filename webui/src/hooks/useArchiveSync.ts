@@ -4,7 +4,6 @@ import type { FileItem, ProcessingAction } from '../appState';
 import { filterArchiveSessionsByInputPath } from '../duplicateDetection';
 import { getFolderPresentation } from '../archiveFolders';
 import type { ActivePage } from '../components/NavSidebar';
-import { getHostCapabilities } from '../hostCapabilities';
 import { settleRevisionRetry } from './useRevisionRetry';
 
 export type PendingArchiveReplacement = {
@@ -122,9 +121,7 @@ export function useArchiveSync({
   const handleOpenFailed = useCallback((_htmlPath: string, sessionDir: string) => {
     addNotification(
       'File non disponibile',
-      getHostCapabilities().kind === 'web'
-        ? 'La sbobina non è più in questo browser: forse è stata eliminata o il browser ha svuotato i dati del sito.'
-        : 'La sbobina non è più disponibile: il file è stato eliminato dal disco.',
+      'La sbobina non è più in questo browser: forse è stata eliminata o il browser ha svuotato i dati del sito.',
       'warning',
       'system',
     );
@@ -150,14 +147,8 @@ export function useArchiveSync({
     await save;
   }, [addNotification]);
 
-  const handleSessionRootMoved = useCallback(async (payload?: { oldRoot?: string; newRoot?: string }) => {
-    if (payload?.oldRoot && payload?.newRoot) {
-      dispatch({
-        type: 'queue/remap_session_roots',
-        oldRoot: payload.oldRoot,
-        newRoot: payload.newRoot,
-      });
-    }
+  // Re-reads the archive and its folders: a backup import or a Drive sync changed them.
+  const reloadArchive = useCallback(async () => {
     await refreshArchiveSessions();
     try {
       const res = await window.pywebview?.api?.get_archive_folders?.();
@@ -165,7 +156,7 @@ export function useArchiveSync({
         setFolders(res.folders);
       }
     } catch (_) {}
-  }, [dispatch, refreshArchiveSessions]);
+  }, [refreshArchiveSessions]);
 
   const finalizeArchiveReplacement = useCallback(async (fileId: string) => {
     const pendingReplacement = pendingArchiveReplacementsRef.current.get(fileId);
@@ -374,7 +365,7 @@ export function useArchiveSync({
     handleLoadAll,
     handleOpenFailed,
     handleFoldersChange,
-    handleSessionRootMoved,
+    reloadArchive,
     finalizeArchiveReplacement,
     executeRetryFromArchive,
     archiveFiltered,

@@ -1,14 +1,13 @@
 import { Fragment, useState, type MouseEvent, type ReactNode } from 'react';
 import {
-  AlertTriangle, AudioLines, Check, ChevronLeft, ChevronRight, Download,
-  Eye, FileText, Folder, FolderOpen, Pencil, RotateCcw, Trash2, X,
+  AlertTriangle, AudioLines, Check, ChevronLeft, ChevronRight,
+  Eye, FileText, Folder, Pencil, RotateCcw, Trash2, X,
 } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { ArchiveFolder, ArchiveSession } from '../../bridge';
 import { loadAllEditorSessions, type EditorSession } from '../../editorSessions';
 import { formatRelativeTime, formatSize, shortModelName } from '../../utils';
-import { getHostCapabilities } from '../../hostCapabilities';
 import { KebabMenu, type KebabMenuItem } from '../KebabMenu';
 import { FolderIndicatorChip } from '../FolderChip';
 import { MiddleTruncate } from '../MiddleTruncate';
@@ -105,10 +104,8 @@ export interface DraggableSessionCardProps {
   onAssignToFolder: (folderId: string) => void;
   onRemoveFromFolder: () => void;
   onPreview: ArchivePageProps['onPreview'];
-  onOpenFile: ArchivePageProps['onOpenFile'];
   onDeleteSession: ArchivePageProps['onDeleteSession'];
   onRetryFailedRevisionBlocks?: ArchivePageProps['onRetryFailedRevisionBlocks'];
-  onShareSession?: (session: ArchiveSession) => void;
   onRenameSession?: (session: ArchiveSession) => void;
   onMove?: () => void;
 }
@@ -123,10 +120,8 @@ export function DraggableSessionCard({
   onAssignToFolder,
   onRemoveFromFolder,
   onPreview,
-  onOpenFile,
   onDeleteSession,
   onRetryFailedRevisionBlocks,
-  onShareSession,
   onRenameSession,
   onMove,
 }: DraggableSessionCardProps) {
@@ -165,16 +160,6 @@ export function DraggableSessionCard({
 
   const kebabItems: KebabMenuItem[] = [
     ...(onRenameSession ? [{ label: 'Rinomina', icon: <Pencil className="w-3.5 h-3.5" />, onClick: () => onRenameSession(session) }] : []),
-    ...(getHostCapabilities().openLocalPath ? [{
-      label: 'Apri cartella',
-      icon: <FolderOpen className="w-3.5 h-3.5" />,
-      onClick: () => onOpenFile(session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path),
-    } as KebabMenuItem] : []),
-    ...(onShareSession ? [{
-      label: 'Esporta Sbobina...',
-      icon: <Download className="w-3.5 h-3.5" />,
-      onClick: () => onShareSession(session),
-    } as KebabMenuItem] : []),
     ...(onMove ? [{ label: 'Sposta in…', icon: <Folder className="w-3.5 h-3.5" />, onClick: onMove }] : folderChildren.length > 0 ? [
       { separator: true } as KebabMenuItem,
       {
@@ -324,10 +309,8 @@ export interface SortableSessionCardProps {
   selected?: boolean;
   onToggleSelect?: () => void;
   onPreview: ArchivePageProps['onPreview'];
-  onOpenFile: ArchivePageProps['onOpenFile'];
   onDeleteSession: ArchivePageProps['onDeleteSession'];
   onRetryFailedRevisionBlocks?: ArchivePageProps['onRetryFailedRevisionBlocks'];
-  onShareSession?: (session: ArchiveSession) => void;
   onRenameSession?: (session: ArchiveSession) => void;
   canMoveToPreviousPage?: boolean;
   canMoveToNextPage?: boolean;
@@ -346,10 +329,8 @@ export function SortableSessionCard({
   selected,
   onToggleSelect,
   onPreview,
-  onOpenFile,
   onDeleteSession,
   onRetryFailedRevisionBlocks,
-  onShareSession,
   onRenameSession,
   canMoveToPreviousPage,
   canMoveToNextPage,
@@ -388,16 +369,6 @@ export function SortableSessionCard({
   const kebabItems: KebabMenuItem[] = [
     ...(onRenameSession ? [{ label: 'Rinomina', icon: <Pencil className="w-3.5 h-3.5" />, onClick: () => onRenameSession(session) }] : []),
     ...(onMove ? [{ label: 'Sposta in…', icon: <Folder className="w-3.5 h-3.5" />, onClick: onMove }] : []),
-    ...(getHostCapabilities().openLocalPath ? [{
-      label: 'Apri cartella',
-      icon: <FolderOpen className="w-3.5 h-3.5" />,
-      onClick: () => onOpenFile(session.html_path.replace(/[/\\][^/\\]+$/, '') || session.html_path),
-    } as KebabMenuItem] : []),
-    ...(onShareSession ? [{
-      label: 'Esporta Sbobina...',
-      icon: <Download className="w-3.5 h-3.5" />,
-      onClick: () => onShareSession(session),
-    } as KebabMenuItem] : []),
     { separator: true },
     {
       label: 'Rimuovi dalla raccolta',

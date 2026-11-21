@@ -1,11 +1,8 @@
 import React, { StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
-import { initBrowserHost } from './browserHost';
 import './index.css';
 import { installFrontendDiagnostics, reportClientError, reportFrontendReady } from './diagnostics';
-import { APP_VERSION } from './branding';
-import { validateDesktopBuild } from './desktopStartup';
 import { scheduleEditorPreload } from './editorPreload';
 import { startMonitoring } from './monitoring/start';
 
@@ -85,11 +82,6 @@ class RootErrorBoundary extends React.Component<React.PropsWithChildren, { hasEr
             >
               {this.state.stack || this.state.message || 'Errore sconosciuto'}
             </pre>
-            {window.pywebview?.api?.export_diagnostics && (
-              <button type="button" className="app-button-secondary" onClick={() => {
-                void window.pywebview?.api?.export_diagnostics?.().catch(error => reportClientError('support-export', error));
-              }}>Esporta diagnostica</button>
-            )}
           </div>
         </div>
       );
@@ -100,22 +92,17 @@ class RootErrorBoundary extends React.Component<React.PropsWithChildren, { hasEr
 }
 
 async function mountApp() {
-  // The static web build runs everything in the page; Vite drops the other branch from each bundle.
-  if (import.meta.env.MODE === 'web') {
-    const { applyCanonicalOrigin } = await import('./web/canonicalOrigin');
-    // An old address with an empty browser moves to elsbobinator.com: nothing to mount here.
-    if (await applyCanonicalOrigin()) return;
-    const { initWebHost } = await import('./web/webHost');
-    // Waits while another tab of this browser has the app (one at a time). False: the browser
-    // blocks the site's data, and a page says so instead of the app.
-    if (!await initWebHost()) return;
-    // Feedback and error reports, in builds with a Sentry DSN: before the app, to catch its start.
-    // Never throws: if they cannot start, the app opens with the email instead.
-    await startMonitoring();
-  } else {
-    validateDesktopBuild(APP_VERSION);
-    if (!window.elDesktopStartup) await initBrowserHost();
-  }
+  // Everything runs in the page (web/webHost.ts).
+  const { applyCanonicalOrigin } = await import('./web/canonicalOrigin');
+  // An old address with an empty browser moves to elsbobinator.com: nothing to mount here.
+  if (await applyCanonicalOrigin()) return;
+  const { initWebHost } = await import('./web/webHost');
+  // Waits while another tab of this browser has the app (one at a time). False: the browser
+  // blocks the site's data, and a page says so instead of the app.
+  if (!await initWebHost()) return;
+  // Feedback and error reports, in builds with a Sentry DSN: before the app, to catch its start.
+  // Never throws: if they cannot start, the app opens with the email instead.
+  await startMonitoring();
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <RootErrorBoundary>

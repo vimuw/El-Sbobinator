@@ -9,16 +9,7 @@ import {
 } from '../duplicateDetection';
 import type { AlreadyProcessedMatch, DuplicatePrompt } from '../components/modals/DuplicateFileModal';
 import type { PendingArchiveReplacement } from './useArchiveSync';
-import { getHostCapabilities } from '../hostCapabilities';
 import { releaseQueueFiles } from '../queueFileRelease';
-
-type WebViewHostWindow = Window & {
-  chrome?: {
-    webview?: {
-      postMessageWithAdditionalObjects?: (message: string, additionalObjects: FileList) => void;
-    };
-  };
-};
 
 interface UseQueueIngestOptions {
   filesRef: React.MutableRefObject<FileItem[]>;
@@ -63,7 +54,7 @@ export function useQueueIngest({
     return `meta:${String(file.name || '').trim().toLowerCase()}::${Number(file.size || 0)}::${Math.round(Number(file.duration || 0))}`;
   }, []);
 
-  // A path a queued file still reads is never released (a desktop path picked twice is the same one).
+  // A path a queued file still reads is never released.
   const releaseRejectedFiles = useCallback((rejected: FileItem[]) => {
     const queuedPaths = new Set(filesRef.current.map(file => file.path).filter(Boolean));
     releaseQueueFiles(rejected.filter(file => !queuedPaths.has(file.path)));
@@ -212,9 +203,7 @@ export function useQueueIngest({
   const handleBrowseClick = async () => {
     if (appState === 'canceling') return;
     if (!apiReady || !window.pywebview || !window.pywebview.api) {
-      appendConsole(getHostCapabilities().kind === 'web'
-        ? '⚠ L’app non è ancora pronta... riprova tra un momento.'
-        : '⚠ In attesa della connessione con Python... riprova tra un momento.');
+      appendConsole('⚠ L’app non è ancora pronta... riprova tra un momento.');
       return;
     }
     try {
@@ -244,18 +233,11 @@ export function useQueueIngest({
       setIsDragging(false);
       if (appStateRef.current === 'canceling') return;
       try {
-        const w = window as WebViewHostWindow;
-        if (w.chrome?.webview?.postMessageWithAdditionalObjects) {
-          const names = Array.from(e.dataTransfer.files).map((f: File) => f.name);
-          w.chrome.webview.postMessageWithAdditionalObjects('FilesDropped', e.dataTransfer.files);
-          window.pywebview?.api?.collect_dropped_files?.(names);
-          return;
-        }
         const files = Array.from(e.dataTransfer.files);
         if (files.length > 0 && window.pywebview?.api?.upload_browser_files) {
           const uploaded = await window.pywebview.api.upload_browser_files(files);
           ingestDescriptors(uploaded);
-          if (getHostCapabilities().kind === 'web' && uploaded.length < files.length) {
+          if (uploaded.length < files.length) {
             const accepted = new Set(uploaded.map(descriptor => descriptor.name));
             onFilesRejected?.(files.map(file => file.name).filter(name => !accepted.has(name)));
           }

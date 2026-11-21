@@ -4,46 +4,11 @@ import { StorageSection } from './StorageSection';
 
 describe('StorageSection component', () => {
   const baseProps = {
-    sessionInfo: { total_bytes: 1048576, total_sessions: 3, session_root: '/home/user/sessions' },
-    isMoveInProgress: false,
-    moveProgress: null,
-    moveError: null,
-    onOpenSessionFolder: vi.fn(),
-    onAskMoveFolder: vi.fn(),
-    isCleaningSession: false,
-    cleanupResult: null,
-    onAskCleanup: vi.fn(),
+    sessionInfo: { total_bytes: 1048576, total_sessions: 3, session_root: 'Memoria di questo browser' },
   };
 
-  it('renders session root path and triggers onOpenSessionFolder when clicked', () => {
-    render(<StorageSection {...baseProps} />);
-
-    // Verify session root is displayed
-    expect(screen.getByText('/home/user/sessions')).toBeTruthy();
-
-    // Verify clicking opens session folder
-    fireEvent.click(screen.getByTitle('Apri cartella sessioni'));
-    expect(baseProps.onOpenSessionFolder).toHaveBeenCalledTimes(1);
-  });
-
-  it('shows the used space as one line under the folder instead of stat cards', () => {
-    const { container } = render(<StorageSection {...baseProps} />);
-
-    expect(screen.getByTestId('storage-usage').textContent).toBe('3 sbobine · 1,0 MB occupati');
-    expect(container.querySelector('.premium-panel')).toBeNull();
-    expect(screen.queryByText('Spazio occupato')).toBeNull();
-    expect(screen.queryByText('Spazio disco e archivio')).toBeNull();
-  });
-
-  it('shows the host breakdown under the total only when there is one', () => {
-    const { rerender } = render(<StorageSection {...baseProps} />);
-    expect(screen.queryByTestId('storage-usage-detail')).toBeNull();
-    rerender(<StorageSection {...baseProps} sessionInfo={{ ...baseProps.sessionInfo, usage_detail: 'Audio delle lezioni 27.0 MB · stima del browser 1.1 MB' }} />);
-    expect(screen.getByTestId('storage-usage-detail').textContent).toBe('Audio delle lezioni 27.0 MB · stima del browser 1.1 MB');
-  });
-
   it('web: speaks of this browser instead of a folder on disk, without the folder cleanup', () => {
-    render(<StorageSection {...baseProps} canManageSessionFolder={false} inBrowser sessionInfo={{ ...baseProps.sessionInfo, session_root: 'Memoria di questo browser' }} />);
+    render(<StorageSection {...baseProps} sessionInfo={{ ...baseProps.sessionInfo, session_root: 'Memoria di questo browser' }} />);
     expect(screen.getByRole('region', { name: 'Le tue sbobine' }).textContent).toContain('salvati in questo browser, su questo dispositivo');
     expect(screen.queryByText('Cartella sessioni')).toBeNull();
     expect(screen.queryByText(/su disco/)).toBeNull();
@@ -60,16 +25,16 @@ describe('StorageSection component', () => {
         { label: 'Audio in coda', bytes: 2048 },
       ],
     });
-    const { rerender } = render(<StorageSection {...baseProps} canManageSessionFolder={false} inBrowser sessionInfo={breakdown(400 * 1024 * 1024)} onShowKeptAudio={onShowKeptAudio} />);
+    const { rerender } = render(<StorageSection {...baseProps} sessionInfo={breakdown(400 * 1024 * 1024)} onShowKeptAudio={onShowKeptAudio} />);
     const link = screen.getByRole('button', { name: 'Vedi quali' });
     expect(link.closest('li')?.textContent).toContain('Audio delle sbobine');
     expect(screen.getAllByRole('button', { name: 'Vedi quali' })).toHaveLength(1);
     fireEvent.click(link);
     expect(onShowKeptAudio).toHaveBeenCalledTimes(1);
 
-    rerender(<StorageSection {...baseProps} canManageSessionFolder={false} inBrowser sessionInfo={breakdown(0)} onShowKeptAudio={onShowKeptAudio} />);
+    rerender(<StorageSection {...baseProps} sessionInfo={breakdown(0)} onShowKeptAudio={onShowKeptAudio} />);
     expect(screen.queryByRole('button', { name: 'Vedi quali' })).toBeNull();
-    rerender(<StorageSection {...baseProps} canManageSessionFolder={false} inBrowser sessionInfo={breakdown(4096)} />);
+    rerender(<StorageSection {...baseProps} sessionInfo={breakdown(4096)} />);
     expect(screen.queryByRole('button', { name: 'Vedi quali' })).toBeNull();
   });
 
@@ -80,7 +45,7 @@ describe('StorageSection component', () => {
       usage_breakdown: [{ label: 'Testi delle sbobine', bytes: 1048576 }, { label: 'Audio delle sbobine', bytes: 0 }],
       browser_estimate_bytes: 2048,
     };
-    render(<StorageSection {...baseProps} canManageSessionFolder={false} inBrowser sessionInfo={sessionInfo} />);
+    render(<StorageSection {...baseProps} sessionInfo={sessionInfo} />);
     expect(screen.getByTestId('storage-count').textContent).toBe('3');
     expect(screen.getByTestId('storage-total').textContent).toBe('1,0 MB');
     expect(screen.getByTestId('storage-usage').textContent).toContain('occupati da 3 sbobine');
@@ -92,7 +57,7 @@ describe('StorageSection component', () => {
   });
 
   it('web: suggests linking Google Drive when this build has it and no account is linked', () => {
-    const webProps = { ...baseProps, canManageSessionFolder: false, inBrowser: true, sessionInfo: { ...baseProps.sessionInfo, persisted: false } };
+    const webProps = { ...baseProps, sessionInfo: { ...baseProps.sessionInfo, persisted: false } };
     const { rerender } = render(<StorageSection {...webProps} drive="disconnected" />);
     const warning = screen.getByTestId('storage-persist-warning');
     expect(warning.className).toContain('is-warning');
@@ -112,7 +77,7 @@ describe('StorageSection component', () => {
   it('web: no folder path box, so the browser message is not cut mid-word or said twice', () => {
     // The path box (break-all) split "non" into "no / n" and repeated the yellow warning below it.
     const sessionRoot = 'Memoria di questo browser: il browser può svuotarla se manca spazio o se non apri il sito per molti giorni';
-    const webProps = { ...baseProps, canManageSessionFolder: false, inBrowser: true };
+    const webProps = { ...baseProps };
     const { container, rerender } = render(<StorageSection {...webProps} sessionInfo={{ ...baseProps.sessionInfo, session_root: sessionRoot, persisted: false }} />);
     expect(screen.queryByText(sessionRoot)).toBeNull();
     expect(container.querySelector('.break-all')).toBeNull();
@@ -122,14 +87,16 @@ describe('StorageSection component', () => {
     expect(screen.getByTestId('storage-persisted').textContent).toBe('Il browser protegge questi dati dalla pulizia automatica.');
   });
 
-  it('shows the folder total in the same units as the rest of the app', () => {
+  it('shows the total in the same units as the rest of the app', () => {
     // A second formatter wrote "0 B" here beside "0 KB" in the breakdown.
     render(<StorageSection {...baseProps} sessionInfo={{ ...baseProps.sessionInfo, total_bytes: 0 }} />);
-    expect(screen.getByTestId('storage-usage').textContent).toBe('3 sbobine · 0 KB occupati');
+    const usage = screen.getByTestId('storage-usage').textContent ?? '';
+    expect(usage).toContain('0 KB');
+    expect(usage).not.toMatch(/\b0 B\b/);
   });
 
   it('web: warns that the browser may clear the data only when it did not promise to keep it', () => {
-    const webProps = { ...baseProps, canManageSessionFolder: false, inBrowser: true };
+    const webProps = { ...baseProps };
     const { rerender } = render(<StorageSection {...webProps} sessionInfo={{ ...baseProps.sessionInfo, persisted: false }} />);
     const warning = screen.getByTestId('storage-persist-warning');
     expect(warning.textContent).toContain('Il browser può cancellare questi dati');
@@ -140,8 +107,6 @@ describe('StorageSection component', () => {
 
     rerender(<StorageSection {...webProps} sessionInfo={{ ...baseProps.sessionInfo, persisted: true }} />);
     expect(screen.queryByTestId('storage-persist-warning')).toBeNull();
-    rerender(<StorageSection {...baseProps} sessionInfo={{ ...baseProps.sessionInfo, persisted: false }} />);
-    expect(screen.queryByTestId('storage-persist-warning')).toBeNull();
   });
 
   it('says when the used space is still loading or unavailable', () => {
@@ -151,93 +116,4 @@ describe('StorageSection component', () => {
     expect(screen.getByTestId('storage-usage').textContent).toBe('Spazio occupato non disponibile.');
   });
 
-  it('offers only the incomplete cleanup and warns that it cannot be resumed', () => {
-    render(<StorageSection {...baseProps} />);
-
-    expect(screen.getByRole('button', { name: 'Pulisci elaborazioni incomplete' })).toBeTruthy();
-    expect(screen.getByText(/non si potranno più riprendere/)).toBeTruthy();
-    expect(screen.queryByText('Sbobine archiviate')).toBeNull();
-    expect(screen.queryByRole('button', { name: /sbobine completate/i })).toBeNull();
-  });
-
-  it('hides folder actions when the host cannot manage local folders', () => {
-    render(<StorageSection {...baseProps} canManageSessionFolder={false} />);
-
-    expect(screen.getByText('/home/user/sessions')).toBeTruthy();
-    expect(screen.queryByTitle('Apri cartella sessioni')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Cambia cartella' })).toBeNull();
-  });
-
-  it('renders move progress with .alert-card.is-info', () => {
-    const { container } = render(
-      <StorageSection
-        {...baseProps}
-        isMoveInProgress={true}
-        moveProgress={{ moved: 2, total: 5 }}
-      />,
-    );
-
-    const alert = container.querySelector('.alert-card.is-info');
-    expect(alert).toBeTruthy();
-    expect(screen.getByText('Spostamento cartella in corso...')).toBeTruthy();
-  });
-
-  it('renders move error with .alert-card.is-error', () => {
-    const { container } = render(
-      <StorageSection
-        {...baseProps}
-        moveError="Permesso negato sul disco"
-      />,
-    );
-
-    const alert = container.querySelector('.alert-card.is-error');
-    expect(alert).toBeTruthy();
-    expect(screen.getByText('Permesso negato sul disco')).toBeTruthy();
-  });
-
-  it('renders informational notice with .alert-card.is-info when cleanup removed 0 items', () => {
-    const { container } = render(
-      <StorageSection
-        {...baseProps}
-        cleanupResult={{ removed: 0, freed_bytes: 0 }}
-      />,
-    );
-
-    const alert = container.querySelector('.alert-card.is-info');
-    expect(alert).toBeTruthy();
-    expect(screen.getByText('Nessuna elaborazione incompleta da eliminare.')).toBeTruthy();
-  });
-
-  it('renders success notice with .alert-card.is-success when cleanup removed items', () => {
-    const { container } = render(
-      <StorageSection
-        {...baseProps}
-        cleanupResult={{ removed: 2, freed_bytes: 2048 }}
-      />,
-    );
-
-    const alert = container.querySelector('.alert-card.is-success');
-    expect(alert).toBeTruthy();
-    expect(screen.getByText(/Rimosse 2 elaborazioni incomplete/)).toBeTruthy();
-  });
-
-  it('renders close button in top right and triggers onDismissCleanupResult when clicked', () => {
-    const onDismiss = vi.fn();
-    render(
-      <StorageSection
-        {...baseProps}
-        cleanupResult={{ removed: 0, freed_bytes: 0 }}
-        onDismissCleanupResult={onDismiss}
-      />,
-    );
-
-    const closeBtn = screen.getByRole('button', { name: 'Chiudi notifica' });
-    expect(closeBtn).toBeTruthy();
-    expect(closeBtn.className).toContain('absolute');
-    expect(closeBtn.className).toContain('top-2.5');
-    expect(closeBtn.className).toContain('right-2.5');
-    expect(closeBtn.querySelector('svg')).toBeTruthy();
-    fireEvent.click(closeBtn);
-    expect(onDismiss).toHaveBeenCalledTimes(1);
-  });
 });

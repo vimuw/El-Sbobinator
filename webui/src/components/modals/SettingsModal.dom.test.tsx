@@ -5,18 +5,16 @@ import {
   SettingsModal,
   type SettingsAuthProps,
   type SettingsModelsProps,
-  type SettingsUpdaterProps,
   type SettingsStorageProps,
   type SettingsModalProps,
-  type SettingsUpdateInstallState,
 } from './SettingsModal';
 import type { ModelOption } from '../../bridge';
 import { STORAGE_KEYS } from '../../storageKeys';
-import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../../hostCapabilities';
+import { DEFAULT_CAPABILITIES, setHostCapabilities } from '../../hostCapabilities';
 import { IDBFactory } from 'fake-indexeddb';
 import { createApiUsageStore } from '../../web/apiUsage';
-import { WEB_CAPABILITIES, createWebPywebviewApi } from '../../web/webHost';
-import { MODEL_25_ACCESS_NOTE, MODEL_25_ACCESS_NOTE_WEB } from './settings/ModelSection';
+import { createWebPywebviewApi } from '../../web/webHost';
+import { MODEL_25_ACCESS_NOTE_WEB } from './settings/ModelSection';
 import { APP_VERSION } from '../../branding';
 import { BACKDROP_SHAKE_MS } from '../../hooks/useBackdropDismiss';
 import { UNSAVED_CHANGES_HINT } from './UnsavedChangesHint';
@@ -58,26 +56,15 @@ interface MakePropsOverrides {
   onSettingsSaved?: () => Promise<unknown> | unknown;
   auth?: Partial<SettingsAuthProps>;
   models?: Partial<SettingsModelsProps>;
-  updater?: Partial<SettingsUpdaterProps>;
   storage?: Partial<SettingsStorageProps>;
   apiKey?: string;
   setApiKey?: (key: string) => void;
-  hasProtectedKey?: boolean;
   fallbackKeys?: string[];
-  configuredFallbackKeyCount?: number;
   setFallbackKeys?: React.Dispatch<React.SetStateAction<string[]>>;
   preferredModel?: string;
   setPreferredModel?: (model: string) => void;
 
   availableModels?: ModelOption[];
-  latestVersion?: string | null;
-  checkForUpdates?: (force?: boolean) => void;
-  isCheckingUpdate?: boolean;
-  hasChecked?: boolean;
-  checkFailed?: boolean;
-  updateInstallState?: SettingsUpdateInstallState;
-  onInstallUpdate?: (version: string) => Promise<void>;
-  onSessionRootMoved?: (payload?: { oldRoot?: string; newRoot?: string }) => void;
 }
 
 const makeProps = (overrides: MakePropsOverrides = {}): SettingsModalProps => ({
@@ -88,10 +75,8 @@ const makeProps = (overrides: MakePropsOverrides = {}): SettingsModalProps => ({
   auth: {
     apiKey: overrides.apiKey ?? overrides.auth?.apiKey ?? 'AIzaSyTest123456',
     setApiKey: overrides.setApiKey ?? overrides.auth?.setApiKey ?? vi.fn(),
-    hasProtectedKey: overrides.hasProtectedKey ?? overrides.auth?.hasProtectedKey ?? false,
     fallbackKeys: overrides.fallbackKeys ?? overrides.auth?.fallbackKeys ?? [],
     setFallbackKeys: overrides.setFallbackKeys ?? overrides.auth?.setFallbackKeys ?? vi.fn(),
-    configuredFallbackKeyCount: overrides.configuredFallbackKeyCount ?? overrides.auth?.configuredFallbackKeyCount ?? 0,
   },
   models: {
     preferredModel: overrides.preferredModel ?? overrides.models?.preferredModel ?? 'gemini-2.5-flash',
@@ -99,17 +84,7 @@ const makeProps = (overrides: MakePropsOverrides = {}): SettingsModalProps => ({
 
     availableModels: overrides.availableModels ?? overrides.models?.availableModels ?? [],
   },
-  updater: {
-    latestVersion: overrides.latestVersion !== undefined ? overrides.latestVersion : (overrides.updater?.latestVersion ?? null),
-    checkForUpdates: overrides.checkForUpdates ?? overrides.updater?.checkForUpdates ?? vi.fn(),
-    isCheckingUpdate: overrides.isCheckingUpdate ?? overrides.updater?.isCheckingUpdate ?? false,
-    hasChecked: overrides.hasChecked ?? overrides.updater?.hasChecked ?? true,
-    checkFailed: overrides.checkFailed ?? overrides.updater?.checkFailed ?? false,
-    updateInstallState: overrides.updateInstallState ?? overrides.updater?.updateInstallState,
-    onInstallUpdate: overrides.onInstallUpdate ?? overrides.updater?.onInstallUpdate,
-  },
   storage: {
-    onSessionRootMoved: overrides.onSessionRootMoved ?? overrides.storage?.onSessionRootMoved,
   },
 });
 
@@ -123,16 +98,6 @@ afterEach(() => {
 });
 
 describe('SettingsModal — model parameters chunk display', () => {
-  it('keeps the saved modal open when credentials are session-only', async () => {
-    const onClose = vi.fn();
-    setPywebview({ save_settings: vi.fn().mockResolvedValue({ ok: true, credential_storage: { primary: 'session_only', fallback: 'absent' } }) });
-    render(<SettingsModal {...makeProps({ onClose })} />);
-    await act(async () => { fireEvent.click(screen.getByText('Salva e Chiudi')); });
-    expect(onClose).not.toHaveBeenCalled();
-    expect(screen.getByText('Credenziali temporanee')).toBeTruthy();
-    expect(screen.getByText(/al riavvio saranno disponibili/)).toBeTruthy();
-  });
-
   it('does not display technical chunk duration or temperature parameters in UI', async () => {
     const models = [
       { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: '', default_chunk_minutes: 15 },
@@ -187,16 +152,6 @@ describe('SettingsModal — API usage and support tab', () => {
     }
   });
 
-  it('shows no pending check rows before the environment check runs', async () => {
-    render(<SettingsModal {...makeProps({ apiKey: 'test-api-key' })} />);
-    await act(async () => {
-      fireEvent.click(screen.getByText('Assistenza').closest('button')!);
-    });
-
-    expect(screen.queryByText('da verificare')).toBeNull();
-    expect(screen.queryByText('Config locale')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Verifica ambiente' })).toBeTruthy();
-  });
 });
 
 describe('SettingsModal — save behavior', () => {
@@ -333,7 +288,7 @@ describe('SettingsModal — save behavior', () => {
     });
 
     expect(onClose).not.toHaveBeenCalled();
-    expect(screen.queryByText(/Bridge Python non disponibile/i)).not.toBeNull();
+    expect(screen.queryByText(/Salvataggio non disponibile/i)).not.toBeNull();
     expect(appendConsole).toHaveBeenCalledTimes(1);
     expect(appendConsole).toHaveBeenCalledWith(
       expect.stringMatching(/❌.*non disponibile|non disponibile.*❌/s),
@@ -367,7 +322,7 @@ describe('SettingsModal — save behavior', () => {
     });
 
     expect(onClose).toHaveBeenCalledTimes(1);
-    expect(screen.queryByText(/Bridge Python non disponibile/i)).toBeNull();
+    expect(screen.queryByText(/Salvataggio non disponibile/i)).toBeNull();
   });
 
   it('successful save: refreshes settings before closing', async () => {
@@ -387,48 +342,6 @@ describe('SettingsModal — save behavior', () => {
     expect(onSettingsSaved.mock.invocationCallOrder[0]).toBeLessThan(onClose.mock.invocationCallOrder[0]);
   });
 
-  it('sends an explicit empty key when removing an inaccessible protected primary', async () => {
-    const mockSave = vi.fn().mockResolvedValue({ ok: true });
-    setPywebview({ save_settings: mockSave });
-
-    render(
-      <SettingsModal
-        {...makeProps({ apiKey: '', hasProtectedKey: true, fallbackKeys: [] })}
-      />
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Opzioni chiave principale' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Rimuovi chiave' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Rimuovi' }));
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('Salva e Chiudi'));
-    });
-
-    expect(mockSave).toHaveBeenCalledWith('', [], 'gemini-2.5-flash');
-  });
-
-  it('preserves configured fallback keys when masked values were not edited', async () => {
-    const mockSave = vi.fn().mockResolvedValue({ ok: true });
-    setPywebview({ save_settings: mockSave });
-
-    render(
-      <SettingsModal
-        {...makeProps({ fallbackKeys: [], configuredFallbackKeyCount: 2 })}
-      />
-    );
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('Salva e Chiudi'));
-    });
-
-    expect(mockSave).toHaveBeenCalledWith(
-      'AIzaSyTest123456',
-      null,
-      'gemini-2.5-flash',
-    );
-  });
-
   it('a click outside closes the settings when nothing waits to be saved', () => {
     const onClose = vi.fn();
     render(<SettingsModal {...makeProps()} onClose={onClose} />);
@@ -439,10 +352,10 @@ describe('SettingsModal — save behavior', () => {
   it('a click outside with unsaved edits keeps them: the card shakes and "Salva e Chiudi" lights up', () => {
     vi.useFakeTimers();
     onTestFinished(() => { vi.useRealTimers(); });
-    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED, 'false');
     const onClose = vi.fn();
-    const { container } = render(<SettingsModal {...makeProps()} onClose={onClose} />);
-    fireEvent.click(screen.getByRole('switch'));
+    const props = makeProps({ onClose });
+    const { container, rerender } = render(<SettingsModal {...props} />);
+    rerender(<SettingsModal {...props} models={{ ...props.models, preferredModel: 'gemini-3.6-flash' }} />);
 
     fireEvent.click(screen.getByTestId('settings-backdrop'));
     expect(onClose).not.toHaveBeenCalled();
@@ -455,7 +368,8 @@ describe('SettingsModal — save behavior', () => {
     expect(screen.getByText(UNSAVED_CHANGES_HINT).getAttribute('role')).toBe('status');
     expect(container.querySelector('.modal-card')?.classList.contains('is-shaking')).toBe(false);
     expect(screen.getByRole('button', { name: 'Salva e Chiudi' }).classList.contains('is-attention')).toBe(false);
-    expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('true');
+    // The draft model is still there: nothing restored the saved one.
+    expect(props.models.setPreferredModel).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
   });
 
@@ -567,7 +481,7 @@ describe('SettingsModal — session info race condition', () => {
     await act(async () => { resolveSecond({ ok: true, total_bytes: 1024, total_sessions: 3 }); });
 
     expect(screen.queryByText('Calcolo dello spazio occupato…')).toBeNull();
-    expect(screen.queryByText(/3 sbobine/)).not.toBeNull();
+    expect(screen.getByTestId('storage-usage').textContent).toContain('3 sbobine');
   });
 });
 
@@ -595,57 +509,6 @@ describe('SettingsModal — main-section interactions', () => {
     fireEvent.change(input, { target: { value: 'AIzaSyFallbackKey123456789' } });
     fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
     expect(setFallbackKeys).toHaveBeenCalledWith(['AIzaSyFallbackKey123456789']);
-  });
-
-  it('keeps notification changes in draft across tabs until a successful save', async () => {
-    const saveSettings = vi.fn().mockResolvedValue({ ok: true });
-    setPywebview({ save_settings: saveSettings });
-    render(<SettingsModal {...makeProps()} />);
-    const toggle = screen.getByRole('switch');
-    fireEvent.click(toggle);
-    expect(toggle.getAttribute('aria-checked')).toBe('false');
-    expect(localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED)).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Assistenza' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Generale' }));
-    expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('false');
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Salva e Chiudi' }));
-    });
-    expect(saveSettings).toHaveBeenCalledTimes(1);
-    expect(localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED)).toBe('false');
-  });
-
-  it.each(['Annulla', 'Chiudi finestra', 'Escape'])('discards notification drafts with %s and reloads saved state on reopening', (closeAction) => {
-    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED, 'false');
-    const onClose = vi.fn();
-    const props = makeProps({ onClose });
-    const { rerender } = render(<SettingsModal {...props} />);
-    fireEvent.click(screen.getByRole('switch'));
-    expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('true');
-    if (closeAction === 'Escape') {
-      fireEvent.keyDown(window, { key: 'Escape' });
-    } else {
-      fireEvent.click(screen.getByRole('button', { name: closeAction }));
-    }
-    expect(onClose).toHaveBeenCalledTimes(1);
-    expect(localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED)).toBe('false');
-    rerender(<SettingsModal {...props} isOpen={false} />);
-    rerender(<SettingsModal {...props} isOpen />);
-    expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('false');
-  });
-
-  it('preserves saved notification preferences when saving settings fails', async () => {
-    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED, 'true');
-    setPywebview({ save_settings: vi.fn().mockResolvedValue({ ok: false, error: 'Errore di salvataggio' }) });
-    const onClose = vi.fn();
-    render(<SettingsModal {...makeProps({ onClose })} />);
-    fireEvent.click(screen.getByRole('switch'));
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Salva e Chiudi' }));
-    });
-    expect(onClose).not.toHaveBeenCalled();
-    expect(localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED)).toBe('true');
-    expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('false');
   });
 
   it('only allows revealing the new key input', () => {
@@ -696,202 +559,6 @@ describe('SettingsModal — main-section interactions', () => {
   });
 });
 
-describe('SettingsModal — session folder and cleanup', () => {
-  it('calls open_session_folder when folder button is clicked', async () => {
-    const openFolder = vi.fn();
-    setPywebview({ open_session_folder: openFolder });
-    render(<SettingsModal {...makeProps()} />);
-    await act(async () => {
-      fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
-    });
-    fireEvent.click(screen.getByTitle('Apri cartella sessioni'));
-    expect(openFolder).toHaveBeenCalledTimes(1);
-  });
-
-  it('calls cleanup_old_sessions for incomplete cleanup and shows result', async () => {
-    const cleanupFn = vi.fn()
-      .mockResolvedValueOnce({ ok: true, removed: 0, candidates: 3, freed_bytes: 1024, preserved_completed: 2 })
-      .mockResolvedValueOnce({ ok: true, removed: 3, candidates: 3, freed_bytes: 1024, preserved_completed: 2 });
-    setPywebview({ cleanup_old_sessions: cleanupFn });
-    render(<SettingsModal {...makeProps()} />);
-    await act(async () => {
-      fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByTitle(/Conta ed elimina tutte le elaborazioni incomplete/));
-    });
-    expect(await screen.findByText(/Sbobine interessate: 3/)).toBeTruthy();
-    expect(cleanupFn).toHaveBeenCalledTimes(1);
-    expect(cleanupFn).toHaveBeenCalledWith(0, true);
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('Elimina incomplete'));
-    });
-    await vi.waitFor(() =>
-      expect(screen.getByText(/Rimoss/)).toBeTruthy(),
-    );
-    expect(cleanupFn).toHaveBeenCalledTimes(2);
-    expect(cleanupFn).toHaveBeenLastCalledWith(0, false);
-  });
-
-  it('warns that cleanup also removes paused work and offers no completed-notes cleanup', async () => {
-    const cleanupFn = vi.fn().mockResolvedValue({ ok: true, removed: 0, candidates: 1, freed_bytes: 256 });
-    setPywebview({ cleanup_old_sessions: cleanupFn });
-    render(<SettingsModal {...makeProps()} />);
-    await act(async () => {
-      fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
-    });
-    expect(screen.queryByTitle(/sbobine completate/)).toBeNull();
-    expect(screen.queryByText('Sbobine archiviate')).toBeNull();
-    await act(async () => {
-      fireEvent.click(screen.getByTitle(/Conta ed elimina tutte le elaborazioni incomplete/));
-    });
-    expect(await screen.findByText(/comprese quelle in pausa che potresti ancora riprendere/)).toBeTruthy();
-  });
-
-  it('dismisses cleanup notification when close button is clicked', async () => {
-    const cleanupFn = vi.fn()
-      .mockResolvedValueOnce({ ok: true, removed: 0, candidates: 2, freed_bytes: 512 })
-      .mockResolvedValueOnce({ ok: true, removed: 2, candidates: 2, freed_bytes: 512 });
-    setPywebview({ cleanup_old_sessions: cleanupFn });
-    render(<SettingsModal {...makeProps()} />);
-    await act(async () => {
-      fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByTitle(/Conta ed elimina tutte le elaborazioni incomplete/));
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByText('Elimina incomplete'));
-    });
-    await vi.waitFor(() =>
-      expect(screen.getByText(/Rimosse 2 elaborazioni incomplete/)).toBeTruthy(),
-    );
-
-    const closeBtn = screen.getByRole('button', { name: 'Chiudi notifica' });
-    await act(async () => {
-      fireEvent.click(closeBtn);
-    });
-
-    expect(screen.queryByText(/Rimosse 2 elaborazioni incomplete/)).toBeNull();
-  });
-
-  it('auto-dismisses cleanup notification after 5 seconds', async () => {
-    vi.useFakeTimers();
-    try {
-      const cleanupFn = vi.fn()
-        .mockResolvedValueOnce({ ok: true, removed: 0, candidates: 1, freed_bytes: 256 })
-        .mockResolvedValueOnce({ ok: true, removed: 1, candidates: 1, freed_bytes: 256 });
-      setPywebview({ cleanup_old_sessions: cleanupFn });
-      render(<SettingsModal {...makeProps()} />);
-      await act(async () => {
-        fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
-      });
-      await act(async () => {
-        fireEvent.click(screen.getByTitle(/Conta ed elimina tutte le elaborazioni incomplete/));
-      });
-      await act(async () => {
-        fireEvent.click(screen.getByText('Elimina incomplete'));
-      });
-      expect(screen.getByText(/Rimossa 1 elaborazione incompleta/)).toBeTruthy();
-
-      await act(async () => {
-        vi.advanceTimersByTime(5100);
-      });
-
-      expect(screen.queryByText(/Rimossa 1 elaborazione incompleta/)).toBeNull();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('resets cleanup result when modal is closed and reopened', async () => {
-    const cleanupFn = vi.fn()
-      .mockResolvedValueOnce({ ok: true, removed: 0, candidates: 1, freed_bytes: 256 })
-      .mockResolvedValueOnce({ ok: true, removed: 1, candidates: 1, freed_bytes: 256 });
-    setPywebview({ cleanup_old_sessions: cleanupFn });
-    const props = { ...makeProps(), isOpen: true };
-    const { rerender } = render(<SettingsModal {...props} />);
-    await act(async () => {
-      fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByTitle(/Conta ed elimina tutte le elaborazioni incomplete/));
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByText('Elimina incomplete'));
-    });
-    await vi.waitFor(() =>
-      expect(screen.getByText(/Rimossa 1 elaborazione incompleta/)).toBeTruthy(),
-    );
-
-    // Close the modal
-    rerender(<SettingsModal {...props} isOpen={false} />);
-
-    // Reopen the modal
-    rerender(<SettingsModal {...props} isOpen={true} />);
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
-    });
-
-    // Cleanup result should be reset to null
-    expect(screen.queryByText(/Rimossa 1 elaborazione incompleta/)).toBeNull();
-  });
-
-  it('triggers onSessionRootMoved when move completes successfully', async () => {
-    const onSessionRootMoved = vi.fn();
-    const askFolder = vi.fn().mockResolvedValue({ ok: true, path: 'D:\\new_sessions' });
-    const moveRoot = vi.fn().mockResolvedValue({ ok: true, started: true });
-    const moveStatus = vi.fn().mockResolvedValue({
-      status: 'done',
-      moved: 5,
-      total: 5,
-      old_root: 'C:\\old_sessions',
-      new_root: 'D:\\new_sessions',
-    });
-    const getStorageInfo = vi.fn().mockResolvedValue({
-      ok: true,
-      total_bytes: 1024,
-      total_sessions: 5,
-      session_root: 'D:\\new_sessions',
-    });
-
-    setPywebview({
-      ask_session_folder: askFolder,
-      move_session_root: moveRoot,
-      get_session_move_status: moveStatus,
-      get_session_storage_info: getStorageInfo,
-    });
-
-    render(<SettingsModal {...makeProps({ onSessionRootMoved })} />);
-    await act(async () => {
-      fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
-    });
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Cambia cartella' }));
-    });
-    expect(askFolder).toHaveBeenCalledTimes(1);
-
-    // Confirmation dialog appears
-    expect(await screen.findByText('Spostare la cartella sessioni?')).toBeTruthy();
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('Sposta'));
-    });
-
-    expect(moveRoot).toHaveBeenCalledWith('D:\\new_sessions');
-
-    await vi.waitFor(() => {
-      expect(onSessionRootMoved).toHaveBeenCalledWith({
-        oldRoot: 'C:\\old_sessions',
-        newRoot: 'D:\\new_sessions',
-      });
-    });
-  });
-});
-
 describe('SettingsModal — model section', () => {
   it('shows the 2.5 Flash default badge and its access tooltip', async () => {
     const models = [
@@ -915,13 +582,13 @@ describe('SettingsModal — model section', () => {
     // The closed select shows only the choice; the Default badge appears while choosing
     expect(trigger.textContent).not.toContain('Default');
     fireEvent.click(trigger);
-    const selectedOption = screen.getByRole('option', { name: /Gemini 3.6 Flash/i });
+    const selectedOption = screen.getByRole('option', { name: /^Gemini 3.6 Flash/i });
     expect(selectedOption.getAttribute('aria-selected')).toBe('true');
     expect(selectedOption.textContent).not.toContain('Default');
     expect(screen.getAllByRole('option')).toHaveLength(3);
     expect(screen.queryByRole('option', { name: /Gemini 3\.5 Flash|Gemini 3\.7 Flash/i })).toBeNull();
     const legacyOption = screen.getByRole('option', { name: /Gemini 2.5 Flash.*Default/i });
-    const accessNote = MODEL_25_ACCESS_NOTE;
+    const accessNote = MODEL_25_ACCESS_NOTE_WEB;
     expect(legacyOption.querySelector('[title]')?.getAttribute('title')).toBe(accessNote);
     expect(screen.queryByText(accessNote)).toBeNull();
     fireEvent.click(trigger);
@@ -932,8 +599,6 @@ describe('SettingsModal — model section', () => {
   });
 
   it('tells web users that a key without 2.5 Flash moves to 3.6 Flash by itself', async () => {
-    setHostCapabilities(WEB_CAPABILITIES);
-    onTestFinished(() => setHostCapabilities(DESKTOP_CAPABILITIES));
     const models = [
       { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: '', default_chunk_minutes: 15 },
       { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: '', default_chunk_minutes: 15 },
@@ -966,289 +631,13 @@ describe('SettingsModal — model section', () => {
     });
     const trigger = screen.getByRole('button', { name: /Gemini 2.5 Flash/i });
     fireEvent.click(trigger);
-    const option = screen.getByRole('option', { name: /Gemini 3.6 Flash/i });
+    const option = screen.getByRole('option', { name: /^Gemini 3.6 Flash/i });
     fireEvent.click(option);
     expect(setPreferredModel).toHaveBeenCalledWith('gemini-3.6-flash');
   });
 });
 
-describe('SettingsModal — version status display', () => {
-  it('lets the user install a manually found update beside the check button while keeping the top notice', () => {
-    const checkForUpdates = vi.fn();
-    const onInstallUpdate = vi.fn().mockResolvedValue(undefined);
-    const props = makeProps({ hasChecked: false, checkForUpdates, onInstallUpdate });
-    const { rerender } = render(<SettingsModal {...props} />);
-    const content = screen.getByTestId('settings-content');
-    content.scrollTop = 500;
-    const statusScrollIntoView = vi.fn();
-    const section = screen.getByRole('region', { name: 'Versione e aggiornamenti' });
-    within(section).getByRole('status').scrollIntoView = statusScrollIntoView;
-
-    fireEvent.click(screen.getByRole('button', { name: 'Cerca aggiornamenti' }));
-    expect(checkForUpdates).toHaveBeenCalledWith(true);
-    rerender(<SettingsModal {...props} updater={{ ...props.updater, isCheckingUpdate: true }} />);
-    expect(screen.getByText('Controllo in corso…')).toBeTruthy();
-    expect(screen.queryByText(/È disponibile la versione/)).toBeNull();
-    expect(statusScrollIntoView).not.toHaveBeenCalled();
-
-    rerender(<SettingsModal {...props} updater={{ ...props.updater, latestVersion: 'v9.9.9', hasChecked: true }} />);
-    expect(within(section).getByRole('status').textContent).toBe('È disponibile la versione v9.9.9.');
-    expect(content.scrollTop).toBe(500);
-    expect(statusScrollIntoView).toHaveBeenCalledWith({ block: 'nearest' });
-    const notice = screen.getByRole('region', { name: 'Aggiornamento applicazione' });
-    expect(notice.compareDocumentPosition(screen.getByText('Modello di trascrizione')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(within(notice).getByRole('button', { name: 'Installa aggiornamento' })).toBeTruthy();
-    // The check button became the section's only install action, beside the release notes
-    expect(within(section).getAllByRole('button')).toHaveLength(1);
-    expect(within(section).getByRole('link', { name: 'Note di rilascio' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Mostra aggiornamento' })).toBeNull();
-
-    const scrollIntoView = vi.fn();
-    notice.scrollIntoView = scrollIntoView;
-    expect(onInstallUpdate).not.toHaveBeenCalled();
-    fireEvent.click(within(section).getByRole('button', { name: 'Aggiorna a v9.9.9' }));
-    expect(onInstallUpdate).toHaveBeenCalledWith('v9.9.9');
-    expect(onInstallUpdate).toHaveBeenCalledTimes(1);
-    expect(scrollIntoView).not.toHaveBeenCalled();
-    expect(content.scrollTop).toBe(500);
-
-    // Progress shows only where the install was started
-    rerender(<SettingsModal {...props} updater={{
-      ...props.updater,
-      latestVersion: 'v9.9.9',
-      hasChecked: true,
-      updateInstallState: { status: 'downloading', bytesDone: 5242880, bytesTotal: 10485760 },
-    }} />);
-    expect(within(section).getByRole('progressbar').getAttribute('aria-valuenow')).toBe('50');
-    expect(within(notice).queryByRole('progressbar')).toBeNull();
-    expect(screen.getAllByText('Download aggiornamento…')).toHaveLength(1);
-  });
-
-  it('moves the progress of an install started in the section to the top notice after a tab switch', () => {
-    // jsdom has no scrollIntoView; the section reveals its feedback with it.
-    Element.prototype.scrollIntoView = vi.fn();
-    onTestFinished(() => { delete (Element.prototype as Partial<Element>).scrollIntoView; });
-    const props = makeProps({ hasChecked: false, onInstallUpdate: vi.fn().mockResolvedValue(undefined) });
-    const { rerender } = render(<SettingsModal {...props} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Cerca aggiornamenti' }));
-    const found = { ...props.updater, latestVersion: 'v9.9.9', hasChecked: true };
-    rerender(<SettingsModal {...props} updater={found} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Aggiorna a v9.9.9' }));
-    const downloading = { ...found, updateInstallState: { status: 'downloading', bytesDone: 5242880, bytesTotal: 10485760 } as const };
-    rerender(<SettingsModal {...props} updater={downloading} />);
-    expect(within(screen.getByRole('region', { name: 'Versione e aggiornamenti' })).getByRole('progressbar')).toBeTruthy();
-
-    // Back on Generale the page starts at the top: the progress must be visible there.
-    fireEvent.click(screen.getByRole('button', { name: 'Archiviazione' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Generale' }));
-    const notice = screen.getByRole('region', { name: 'Aggiornamento applicazione' });
-    const section = screen.getByRole('region', { name: 'Versione e aggiornamenti' });
-    expect(within(notice).getByRole('progressbar').getAttribute('aria-valuenow')).toBe('50');
-    expect(within(section).queryByRole('progressbar')).toBeNull();
-    expect(screen.getAllByText('Download aggiornamento…')).toHaveLength(1);
-  });
-
-  it.each([
-    ['downloading', 'Download aggiornamento…'],
-    ['verifying', 'Verifica integrità aggiornamento…'],
-    ['installing', 'Installazione aggiornamento…'],
-    ['done', 'Installer avviato. Segui le istruzioni a schermo.'],
-    ['error', 'Errore download di prova.'],
-  ] as const)('shows %s feedback once, in the top notice, for an install started elsewhere', (status, message) => {
-    render(<SettingsModal {...makeProps({
-      latestVersion: 'v9.9.9',
-      onInstallUpdate: vi.fn().mockResolvedValue(undefined),
-      updateInstallState: { status, bytesDone: 5242880, bytesTotal: 10485760, error: 'Errore download di prova.' },
-    })} />);
-    const section = screen.getByRole('region', { name: 'Versione e aggiornamenti' });
-    const notice = screen.getByRole('region', { name: 'Aggiornamento applicazione' });
-    expect(within(notice).getByText(message)).toBeTruthy();
-    expect(within(section).queryByText(message)).toBeNull();
-    expect(screen.queryByText(/Sei aggiornato/)).toBeNull();
-    if (status === 'downloading') {
-      expect(within(notice).getByRole('progressbar').getAttribute('aria-valuenow')).toBe('50');
-      expect(within(section).queryByRole('progressbar')).toBeNull();
-    }
-    if (status !== 'error') {
-      expect(screen.queryByRole('button', { name: 'Installa aggiornamento' })).toBeNull();
-    }
-    if (status === 'downloading' || status === 'verifying' || status === 'installing') {
-      expect((within(section).getByRole('button', { name: 'Cerca aggiornamenti' }) as HTMLButtonElement).disabled).toBe(true);
-    }
-  });
-
-  it('checkFailed=true: shows network-error message, hides "✓ Sei aggiornato"', () => {
-    render(<SettingsModal {...makeProps({ checkFailed: true, latestVersion: null, hasChecked: true, isCheckingUpdate: false })} />);
-    expect(screen.queryByText(/Sei aggiornato/)).toBeNull();
-    expect(screen.getByText(/non riuscita/i)).toBeTruthy();
-  });
-
-  it('checkFailed=false, hasChecked=true: shows "✓ Sei aggiornato"', () => {
-    render(<SettingsModal {...makeProps({ checkFailed: false, latestVersion: null, hasChecked: true, isCheckingUpdate: false })} />);
-    expect(screen.getByText(/Sei aggiornato/)).toBeTruthy();
-    expect(screen.queryByText(/non riuscita/i)).toBeNull();
-  });
-
-  it('isCheckingUpdate=true: shows neither status row', () => {
-    render(<SettingsModal {...makeProps({ checkFailed: false, latestVersion: null, hasChecked: true, isCheckingUpdate: true })} />);
-    expect(screen.queryByText(/Sei aggiornato/)).toBeNull();
-    expect(screen.queryByText(/non riuscita/i)).toBeNull();
-  });
-
-  it('shows the async install error state once', () => {
-    render(
-      <SettingsModal
-        {...makeProps({
-          latestVersion: 'v2.0.0',
-          updateInstallState: {
-            version: 'v2.0.0',
-            status: 'error',
-            bytesDone: 0,
-            bytesTotal: 0,
-            error: 'Verifica integrità fallita: il file scaricato non corrisponde al checksum atteso.',
-          },
-        })}
-      />,
-    );
-
-    expect(screen.getAllByText(/Verifica integrità fallita/i)).toHaveLength(1);
-  });
-
-  it('shows the async install success state once', () => {
-    render(
-      <SettingsModal
-        {...makeProps({
-          latestVersion: 'v2.0.0',
-          updateInstallState: {
-            version: 'v2.0.0',
-            status: 'done',
-            bytesDone: 10,
-            bytesTotal: 10,
-            error: null,
-          },
-        })}
-      />,
-    );
-
-    expect(screen.getAllByText(/Installer avviato/i)).toHaveLength(1);
-  });
-});
-
-describe('SettingsModal — validate environment', () => {
-  it('shows validation summary after clicking Verifica ambiente', async () => {
-    const models = [
-      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: 'Fast', default_chunk_minutes: 12 },
-    ];
-    const validateFn = vi.fn().mockResolvedValue({
-      ok: true,
-      result: {
-        ok: true,
-        summary: 'Ambiente OK',
-        checks: [
-          { id: 'ffmpeg', label: 'ffmpeg', status: 'ok', message: 'ffmpeg trovato' },
-        ],
-      },
-    });
-    setPywebview({ validate_environment: validateFn });
-    render(
-      <SettingsModal
-        {...makeProps({
-          availableModels: models,
-          preferredModel: 'gemini-2.5-flash',
-        })}
-      />,
-    );
-    await act(async () => {
-      fireEvent.click(screen.getByText('Assistenza').closest('button')!);
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByTitle('Verifica ambiente'));
-    });
-    await vi.waitFor(() => expect(screen.getByText('Ambiente OK')).toBeTruthy());
-    expect(screen.queryByText('FFmpeg')).toBeNull();
-  });
-
-  it('resets validation result when preferredModel changes', async () => {
-    const models = [
-      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: 'Fast', default_chunk_minutes: 12 },
-      { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: 'New', default_chunk_minutes: 15 },
-    ];
-    const validateFn = vi.fn().mockResolvedValue({
-      ok: true,
-      result: {
-        ok: true,
-        summary: 'Ambiente OK',
-        checks: [
-          { id: 'ffmpeg', label: 'ffmpeg', status: 'ok', message: 'ffmpeg trovato' },
-        ],
-      },
-    });
-    setPywebview({ validate_environment: validateFn });
-    const props = makeProps({
-      availableModels: models,
-      preferredModel: 'gemini-2.5-flash',
-      isOpen: true,
-    });
-    const { rerender } = render(<SettingsModal {...props} />);
-    await act(async () => {
-      fireEvent.click(screen.getByText('Assistenza').closest('button')!);
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByTitle('Verifica ambiente'));
-    });
-    await vi.waitFor(() => expect(screen.getByText('Ambiente OK')).toBeTruthy());
-
-    // Change preferredModel
-    rerender(<SettingsModal {...props} models={{ ...props.models, preferredModel: 'gemini-3.6-flash' }} />);
-
-    // Expect 'Ambiente OK' to be cleared (since validationResult is set to null)
-    expect(screen.queryByText('Ambiente OK')).toBeNull();
-  });
-
-  it('resets validation result when modal is closed and reopened', async () => {
-    const models = [
-      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: 'Fast', default_chunk_minutes: 12 },
-    ];
-    const validateFn = vi.fn().mockResolvedValue({
-      ok: true,
-      result: {
-        ok: true,
-        summary: 'Ambiente OK',
-        checks: [
-          { id: 'ffmpeg', label: 'ffmpeg', status: 'ok', message: 'ffmpeg trovato' },
-        ],
-      },
-    });
-    setPywebview({ validate_environment: validateFn });
-    const props = makeProps({
-      availableModels: models,
-      preferredModel: 'gemini-2.5-flash',
-      isOpen: true,
-    });
-    const { rerender } = render(<SettingsModal {...props} />);
-    await act(async () => {
-      fireEvent.click(screen.getByText('Assistenza').closest('button')!);
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByTitle('Verifica ambiente'));
-    });
-    await vi.waitFor(() => expect(screen.getByText('Ambiente OK')).toBeTruthy());
-
-    // Close the modal
-    rerender(<SettingsModal {...props} isOpen={false} />);
-
-    // Reopen the modal
-    rerender(<SettingsModal {...props} isOpen={true} />);
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('Assistenza').closest('button')!);
-    });
-
-    // Expect 'Ambiente OK' to be cleared and state reset
-    expect(screen.queryByText('Ambiente OK')).toBeNull();
-    expect(screen.getByText('Verifica ora')).toBeTruthy();
-  });
-
+describe('SettingsModal — tabs and footer', () => {
   it.each([
     ['Assistenza', 'Assistenza'],
     ['Archiviazione', 'Archiviazione'],
@@ -1299,13 +688,12 @@ describe('SettingsModal — validate environment', () => {
 
 describe('SettingsModal on the web host', () => {
   beforeEach(() => {
-    setHostCapabilities(WEB_CAPABILITIES);
   });
   afterEach(() => {
-    setHostCapabilities(DESKTOP_CAPABILITIES);
+    setHostCapabilities(DEFAULT_CAPABILITIES);
   });
 
-  it('lists the keys like the desktop, with the shared-device warning and no desktop-only sections', () => {
+  it('lists the keys with the shared-device warning and no app-only sections', () => {
     render(<SettingsModal {...makeProps({ apiKey: 'AIzaSyPrimary1234567890123', fallbackKeys: ['AIzaSyReserve1234567890456'] })} />);
 
     // Same key section as the desktop: rows with a menu and the add field, not a free text box.
@@ -1412,7 +800,7 @@ describe('SettingsModal on the web host', () => {
     expect(screen.queryByText(/pronta a trascrivere/)).toBeNull();
   });
 
-  it('adds a reserve key from the add field, as on the desktop', () => {
+  it('adds a reserve key from the add field', () => {
     const setFallbackKeys = vi.fn();
     render(<SettingsModal {...makeProps({ apiKey: 'AIzaSyPrimary1234567890123', setFallbackKeys })} />);
 
@@ -1465,5 +853,49 @@ describe('SettingsModal on the web host', () => {
     expect(setApiKey).toHaveBeenCalledWith('');
     expect(setFallbackKeys).toHaveBeenCalledWith([]);
     expect(onSettingsSaved).toHaveBeenCalledTimes(1);
+  });
+
+  it('copies the diagnostic report with the site version from Assistenza', async () => {
+    const getReport = vi.fn().mockResolvedValue({ ok: true, report: 'REPORT' });
+    setPywebview({ get_diagnostic_report: getReport });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const original = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    onTestFinished(() => {
+      if (original) Object.defineProperty(navigator, 'clipboard', original);
+      else delete (navigator as unknown as { clipboard?: unknown }).clipboard;
+    });
+    const appendConsole = vi.fn();
+    render(<SettingsModal {...makeProps({ appendConsole })} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Assistenza/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Copia report diagnostico' }));
+
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith('REPORT'));
+    expect(getReport).toHaveBeenCalledWith(undefined, undefined, undefined, undefined, APP_VERSION);
+    expect(appendConsole).toHaveBeenCalledWith('📋 Report diagnostico copiato negli appunti.');
+  });
+
+  it('re-reads the space and tells the app when a sbobina comes back from the trash', async () => {
+    const trashed = { session_dir: 'web-session://cestino', html_path: 'web-session://cestino/sbobina.html', name: 'Fisiologia', trashed_at: new Date().toISOString() };
+    const getInfo = vi.fn().mockResolvedValue({ ok: true, total_bytes: 2048, total_sessions: 5, session_root: 'browser' });
+    const listTrash = vi.fn()
+      .mockResolvedValueOnce({ ok: true, sessions: [trashed] })
+      .mockResolvedValue({ ok: true, sessions: [] });
+    const restore = vi.fn().mockResolvedValue({ ok: true });
+    setPywebview({
+      get_session_storage_info: getInfo,
+      get_web_backup_info: vi.fn().mockResolvedValue({ ok: true, sessions: 5, text_bytes: 2048, audio_bytes: 0, audio_files: 0, last_backup_at: null }),
+      list_trash: listTrash,
+      restore_session: restore,
+    });
+    const onArchiveImported = vi.fn();
+    render(<SettingsModal {...makeProps()} storage={{ onArchiveImported }} initialTab="storage" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Ripristina Fisiologia' }));
+
+    await vi.waitFor(() => expect(onArchiveImported).toHaveBeenCalledTimes(1));
+    expect(restore).toHaveBeenCalledWith('web-session://cestino');
+    expect(getInfo.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 });

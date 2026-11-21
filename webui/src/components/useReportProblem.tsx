@@ -7,7 +7,7 @@ import { FeedbackModal } from './modals/FeedbackModal';
 
 /**
  * "Segnala un problema" wherever it appears (the sidebar, Impostazioni → Assistenza): web builds
- * with Sentry open the feedback window, the others (no DSN, desktop) write an email.
+ * with Sentry open the feedback window, the others write an email.
  */
 export function useReportProblem() {
   const [open, setOpen] = useState(false);

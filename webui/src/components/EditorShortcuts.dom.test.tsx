@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { EditorShortcuts } from './EditorShortcuts';
-import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
+import { DEFAULT_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 
 // jsdom has dialog elements but no native top-layer API. Chromium acceptance
 // below the component tier verifies focus trapping, restoration and Escape.
@@ -46,7 +46,6 @@ describe('EditorShortcuts', () => {
   });
 
   it('web on iPad: shows the shortcuts with ⌘, the keys that run them there', () => {
-    setHostCapabilities({ kind: 'web' });
     const platform = vi.spyOn(navigator, 'platform', 'get').mockReturnValue('MacIntel');
     try {
       render(<EditorShortcuts audioAvailable={false} />);
@@ -57,7 +56,7 @@ describe('EditorShortcuts', () => {
       expect(within(dialog).queryByText(/Ctrl/)).toBeNull();
     } finally {
       platform.mockRestore();
-      setHostCapabilities(DESKTOP_CAPABILITIES);
+      setHostCapabilities(DEFAULT_CAPABILITIES);
     }
   });
 

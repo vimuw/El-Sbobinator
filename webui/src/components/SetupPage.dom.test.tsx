@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SetupPage } from './SetupPage';
 
 const baseProps = {
-  hasProtectedKey: false,
   onSaved: vi.fn(),
   preferredModel: 'gemini-2.5-flash',
   fallbackKeys: [],
@@ -22,16 +21,6 @@ beforeEach(() => setPywebview(undefined));
 afterEach(() => setPywebview(undefined));
 
 describe('SetupPage', () => {
-  it('passes temporary credential storage to the queue after setup', async () => {
-    const onSaved = vi.fn();
-    const storage = { primary: 'session_only', fallback: 'absent' };
-    setPywebview({ save_settings: vi.fn().mockResolvedValue({ ok: true, credential_storage: storage }) });
-    render(<SetupPage {...baseProps} onSaved={onSaved} />);
-    fireEvent.change(screen.getByPlaceholderText(/Incolla qui la tua API Key/), { target: { value: 'AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345' } });
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Salva e inizia/i })); });
-    expect(onSaved).toHaveBeenCalledWith('AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345', 'gemini-2.5-flash', storage);
-  });
-
   it('uses the shared page title, pill field, pill save action and sentence-case guide card', () => {
     const { container } = render(<SetupPage {...baseProps} />);
     expect(screen.getByRole('heading', { level: 1, name: 'Configura la tua API Key' }).classList.contains('page-title')).toBe(true);
@@ -48,14 +37,9 @@ describe('SetupPage', () => {
     expect(input.classList.contains('is-valid')).toBe(true);
   });
 
-  it('shows "Configura la tua API Key" when no protected key', () => {
+  it('shows "Configura la tua API Key"', () => {
     render(<SetupPage {...baseProps} />);
     expect(screen.getByText('Configura la tua API Key')).toBeTruthy();
-  });
-
-  it('shows alternative text when hasProtectedKey is true', () => {
-    render(<SetupPage {...baseProps} hasProtectedKey />);
-    expect(screen.getByText('Chiave API non accessibile')).toBeTruthy();
   });
 
   it('masks input by default with obscured-text', () => {
@@ -115,7 +99,7 @@ describe('SetupPage', () => {
       fireEvent.click(saveBtn);
     });
     await vi.waitFor(() =>
-      expect(screen.getByText(/Bridge Python non disponibile/)).toBeTruthy(),
+      expect(screen.getByText(/Salvataggio non disponibile/)).toBeTruthy(),
     );
   });
 

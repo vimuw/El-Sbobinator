@@ -89,7 +89,7 @@ export function useEditorImageDrop({ editorRef }: UseEditorImageDropOptions) {
     if (!files.length) return false;
     const html = event.clipboardData?.getData?.('text/html').trim();
     // Copy image exposes pixels AND an HTML reference, which can be inaccessible
-    // in the desktop WebView. Embed the pixels for this single-image case while
+    // from this page. Embed the pixels for this single-image case while
     // keeping rich documents and our own image layout on the HTML parser route.
     if (html && (files.length !== 1 || !isSingleImageClipboardHtml(html))) return false;
     event.preventDefault();

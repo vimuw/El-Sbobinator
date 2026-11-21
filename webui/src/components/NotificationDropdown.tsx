@@ -13,7 +13,7 @@ import { useEscapeToClose } from '../hooks/useEscapeToClose';
 
 export interface NotificationAction {
   label: string;
-  type: 'retry_failed_revision_blocks' | 'install_update' | 'open_github' | 'open_settings';
+  type: 'retry_failed_revision_blocks' | 'open_settings';
   data?: unknown;
   loadingLabel?: string;
   errorSuffix?: string;

@@ -577,30 +577,6 @@ describe('processingReducer', () => {
     expect(state.files[0].progress).toBe(0);
   });
 
-  it('queue/remap_session_roots updates outputDir and outputHtml for matching roots', () => {
-    const file1 = makeFile({
-      id: 'f1',
-      status: 'done',
-      outputDir: 'C:\\old_sessions\\sess1',
-      outputHtml: 'C:\\old_sessions\\sess1\\out.html',
-    });
-    const file2 = makeFile({
-      id: 'f2',
-      status: 'done',
-      outputDir: 'D:\\other\\sess2',
-      outputHtml: 'D:\\other\\sess2\\out.html',
-    });
-    const state = processingReducer(
-      { ...initialProcessingState, files: [file1, file2] },
-      { type: 'queue/remap_session_roots', oldRoot: 'C:/old_sessions', newRoot: 'E:/new_sessions' },
-    );
-
-    expect(state.files[0].outputDir).toBe('E:/new_sessions/sess1');
-    expect(state.files[0].outputHtml).toBe('E:/new_sessions/sess1/out.html');
-    expect(state.files[1].outputDir).toBe('D:\\other\\sess2');
-    expect(state.files[1].outputHtml).toBe('D:\\other\\sess2\\out.html');
-  });
-
   describe('processing warnings', () => {
     const warn = (state: ReturnType<typeof createInitialProcessingState>, code: string, message: string | null) =>
       processingReducer(state, { type: 'bridge/processing_warning', data: { code, message } });

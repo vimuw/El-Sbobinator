@@ -1,11 +1,10 @@
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { BUG_REPORT_URL } from '../branding';
-import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
+import { DEFAULT_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 import { NavSidebar } from './NavSidebar';
 
 afterEach(() => {
-  setHostCapabilities(DESKTOP_CAPABILITIES);
+  setHostCapabilities(DEFAULT_CAPABILITIES);
   delete window.pywebview;
 });
 
@@ -23,7 +22,6 @@ function renderSidebar(overrides: Partial<Parameters<typeof NavSidebar>[0]> = {}
     showConsole: false,
     setShowConsole: vi.fn(),
     setIsSettingsOpen: vi.fn(),
-    hasPendingUpdate: false,
     consoleDisabled: false,
     unreadNotificationsCount: 0,
     isNotificationsOpen: false,
@@ -41,12 +39,11 @@ describe('NavSidebar badges', () => {
   });
 
   it('marks each pending state with the shared badge on its own button', () => {
-    renderSidebar({ appState: 'processing', unreadNotificationsCount: 2, hasPendingUpdate: true });
+    renderSidebar({ appState: 'processing', unreadNotificationsCount: 2 });
 
     const cases = [
       ['Dashboard', 'processing'],
       ['Apri notifiche', 'alert'],
-      ['Apri impostazioni', 'accent'],
     ] as const;
     for (const [button, tone] of cases) {
       const badge = screen.getByTestId(`sidebar-badge-${tone}`);
@@ -59,21 +56,12 @@ describe('NavSidebar badges', () => {
   });
 
   it('opens the feedback window from the sidebar in web builds with Sentry', async () => {
-    setHostCapabilities({ kind: 'web', reportByEmail: false });
+    setHostCapabilities({ reportByEmail: false });
     renderSidebar();
     fireEvent.click(screen.getByRole('button', { name: 'Segnala un problema' }));
     const dialog = await screen.findByRole('dialog', { name: 'Segnala un problema' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Annulla' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-  });
-
-  it('writes the email through the desktop bridge, where the WebView has no mail handler', async () => {
-    const openUrl = vi.fn(async (_url: string) => ({ ok: true }));
-    window.pywebview = { api: { open_url: openUrl } } as unknown as NonNullable<typeof window.pywebview>;
-    renderSidebar();
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Segnala un problema' })); });
-    expect(openUrl).toHaveBeenCalledWith(BUG_REPORT_URL);
-    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('keeps the API status dot still during a run', () => {

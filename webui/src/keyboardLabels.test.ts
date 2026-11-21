@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DESKTOP_CAPABILITIES, setHostCapabilities } from './hostCapabilities';
+import { DEFAULT_CAPABILITIES, setHostCapabilities } from './hostCapabilities';
 import { appleShortcutLabel, shortcutLabel } from './keyboardLabels';
 
 describe('shortcut labels', () => {
   afterEach(() => {
-    setHostCapabilities(DESKTOP_CAPABILITIES);
+    setHostCapabilities(DEFAULT_CAPABILITIES);
     vi.unstubAllGlobals();
   });
 
@@ -23,10 +23,8 @@ describe('shortcut labels', () => {
     expect(appleShortcutLabel('Precedente (Shift+Invio)')).toBe('Precedente (⇧ Invio)');
   });
 
-  it('changes labels only on the web build on an Apple device', () => {
+  it('changes labels only on an Apple device', () => {
     vi.stubGlobal('navigator', { ...navigator, platform: 'MacIntel', userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Safari/605.1.15' });
-    expect(shortcutLabel('Ctrl+B')).toBe('Ctrl+B');
-    setHostCapabilities({ kind: 'web' });
     expect(shortcutLabel('Ctrl+B')).toBe('⌘B');
     vi.stubGlobal('navigator', { ...navigator, platform: 'Win32', userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' });
     expect(shortcutLabel('Ctrl+B')).toBe('Ctrl+B');

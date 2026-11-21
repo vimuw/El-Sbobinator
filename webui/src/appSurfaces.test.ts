@@ -242,8 +242,6 @@ describe('app surfaces', () => {
     }
     expect(offenders).toEqual([]);
     expect(contrast(themeValue('--btn-primary-text', true), themeValue('--accent-bg', true))).toBeGreaterThanOrEqual(3);
-    const share = componentSources.find(({ file }) => file.endsWith('ShareExportModal.tsx'))!.source;
-    expect(share).not.toMatch(/background: 'var\(--accent-bg\)', color: 'var\(--btn-primary-text\)'/);
   });
 
   it('frames every floating surface in the light theme as clearly as the dark one does', () => {

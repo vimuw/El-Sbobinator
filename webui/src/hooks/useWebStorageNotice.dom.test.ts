@@ -1,6 +1,6 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
+import { DEFAULT_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 import { STORAGE_KEYS } from '../storageKeys';
 import { WEB_STORAGE_NOTICE_TITLE, useWebStorageNotice } from './useWebStorageNotice';
 
@@ -12,11 +12,10 @@ function installApi(persisted: boolean) {
 
 beforeEach(() => {
   localStorage.clear();
-  setHostCapabilities({ kind: 'web' });
 });
 
 afterEach(() => {
-  setHostCapabilities(DESKTOP_CAPABILITIES);
+  setHostCapabilities(DEFAULT_CAPABILITIES);
   delete window.pywebview;
 });
 
@@ -71,11 +70,4 @@ describe('useWebStorageNotice', () => {
     expect(addNotification).toHaveBeenCalledWith(WEB_STORAGE_NOTICE_TITLE, expect.any(String), 'warning', 'system', expect.any(Object));
   });
 
-  it('never runs on the desktop app', async () => {
-    setHostCapabilities(DESKTOP_CAPABILITIES);
-    const check = installApi(false);
-    renderHook(() => useWebStorageNotice({ apiReady: true, sessionCount: 3, addNotification: vi.fn() }));
-    await Promise.resolve();
-    expect(check).not.toHaveBeenCalled();
-  });
 });

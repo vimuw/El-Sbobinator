@@ -18,120 +18,23 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   setPywebview(undefined);
-  delete window.elDesktopStartup;
 });
 
 describe('useApiReady — bootstrap guard', () => {
-  it('announces settings before the Python request and waits for a slow result', async () => {
-    const order: string[] = [];
+  it('waits for a slow settings load before announcing the app ready', async () => {
     let finish!: (cfg: Record<string, unknown>) => void;
-    const load = vi.fn(() => {
-      order.push('load_settings');
-      return new Promise<Record<string, unknown>>(resolve => { finish = resolve; });
-    });
-    window.elDesktopStartup = {
-      validate: vi.fn().mockReturnValue(true),
-      settingsStarted: vi.fn(async () => { order.push('settings-started'); return true; }),
-      ready: vi.fn(async () => { order.push('ready'); return true; }),
-    };
-    setPywebview({ load_settings: load });
-    const { result } = renderHook(() => useApiReady(vi.fn()));
-    await act(async () => { await vi.advanceTimersByTimeAsync(20_000); });
-    expect(order).toEqual(['settings-started', 'load_settings']);
-    expect(load).toHaveBeenCalledTimes(1);
-    expect(result.current.apiReady).toBe(false);
-    await act(async () => { finish({ preferred_model: 'slow-model' }); });
-    expect(order).toEqual(['settings-started', 'load_settings', 'ready']);
-    expect(result.current.apiReady).toBe(true);
-    expect(result.current.preferredModel).toBe('slow-model');
-  });
-
-  it('retries the full bootstrap when Python accepts ready but its response is lost', async () => {
-    const order: string[] = [];
-    let backendReady = false;
+    const load = vi.fn(() => new Promise<Record<string, unknown>>(resolve => { finish = resolve; }));
     const appendConsole = vi.fn();
-    const load = vi.fn(async () => {
-      order.push('load_settings');
-      return { api_key: 'recovered-key', preferred_model: 'recovered-model' };
-    });
-    window.elDesktopStartup = {
-      validate: vi.fn().mockReturnValue(true),
-      settingsStarted: vi.fn(async () => {
-        order.push(backendReady ? 'settings-started:already-ready' : 'settings-started');
-        return true;
-      }),
-      ready: vi.fn(async () => {
-        order.push('ready');
-        const responseDelivered = backendReady;
-        backendReady = true;
-        return responseDelivered;
-      }),
-    };
     setPywebview({ load_settings: load });
     const { result } = renderHook(() => useApiReady(appendConsole));
-    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
-    expect(backendReady).toBe(true);
+    await act(async () => { await vi.advanceTimersByTimeAsync(20_000); });
+    expect(load).toHaveBeenCalledTimes(1);
     expect(result.current.apiReady).toBe(false);
-    expect(result.current.apiKey).toBe('');
     expect(appendConsole).not.toHaveBeenCalled();
-
-    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
-    expect(order).toEqual([
-      'settings-started', 'load_settings', 'ready',
-      'settings-started:already-ready', 'load_settings', 'ready',
-    ]);
+    await act(async () => { finish({ preferred_model: 'slow-model' }); });
     expect(result.current.apiReady).toBe(true);
-    expect(result.current.bridgeDelayed).toBe(false);
-    expect(result.current.apiKey).toBe('recovered-key');
-    expect(result.current.preferredModel).toBe('recovered-model');
-    expect(appendConsole).toHaveBeenCalledExactlyOnceWith('Connesso a Python.');
-    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
-    expect(load).toHaveBeenCalledTimes(2);
-    expect(window.elDesktopStartup.ready).toHaveBeenCalledTimes(2);
-  });
-
-  it('does not invoke Python if the settings phase acknowledgement fails', async () => {
-    const load = vi.fn();
-    window.elDesktopStartup = {
-      validate: vi.fn().mockReturnValue(true),
-      settingsStarted: vi.fn().mockResolvedValue(false),
-      ready: vi.fn(),
-    };
-    setPywebview({ load_settings: load });
-    const { result } = renderHook(() => useApiReady(vi.fn()));
-    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
-    expect(load).not.toHaveBeenCalled();
-    expect(window.elDesktopStartup.ready).not.toHaveBeenCalled();
-    expect(result.current.apiReady).toBe(false);
-  });
-
-  it('ignores a settings phase acknowledgement after the hook unmounts', async () => {
-    let acknowledge!: (ok: boolean) => void;
-    window.elDesktopStartup = {
-      validate: vi.fn().mockReturnValue(true),
-      settingsStarted: vi.fn(() => new Promise<boolean>(resolve => { acknowledge = resolve; })),
-      ready: vi.fn(),
-    };
-    const load = vi.fn();
-    setPywebview({ load_settings: load });
-    const { unmount } = renderHook(() => useApiReady(vi.fn()));
-    unmount();
-    await act(async () => { acknowledge(true); });
-    expect(load).not.toHaveBeenCalled();
-  });
-
-  it('hydrates temporary credentials and retains the old plaintext warning through refresh', async () => {
-    const load = vi.fn().mockResolvedValue({ api_key: 'temporary', credential_storage: { primary: 'session_only', fallback: 'absent' }, api_key_insecure: true });
-    setPywebview({ load_settings: load });
-    const { result } = renderHook(() => useApiReady(vi.fn()));
-    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
-    expect(result.current.apiKey).toBe('temporary');
-    expect(result.current.apiKeyInsecureReason).toContain('solo per questa sessione');
-    expect(result.current.apiKeyInsecureReason).toContain('in chiaro');
-    load.mockResolvedValue({ api_key: 'protected', credential_storage: { primary: 'protected', fallback: 'absent' }, api_key_insecure: false });
-    await act(async () => { await result.current.refreshSettings(); });
-    expect(result.current.apiKeyInsecure).toBe(false);
-    expect(result.current.apiKeyInsecureReason).toBe('');
+    expect(result.current.preferredModel).toBe('slow-model');
+    expect(appendConsole).toHaveBeenCalledExactlyOnceWith('Pronto.');
   });
 
   it('5-second timeout does not set apiReady when bridge is absent', async () => {
@@ -175,7 +78,7 @@ describe('useApiReady — bootstrap guard', () => {
     expect(result.current.bridgeDelayed).toBe(false);
     expect(result.current.apiKey).toBe('late-key');
     expect(result.current.preferredModel).toBe('gemini-2.5-flash');
-    expect(appendConsole).toHaveBeenCalledWith('Connesso a Python.');
+    expect(appendConsole).toHaveBeenCalledWith('Pronto.');
   });
 
   it('load_settings failure does not latch and allows retry on next pywebviewready', async () => {
@@ -298,57 +201,18 @@ describe('useApiReady — bootstrap guard', () => {
 
     expect(result.current.apiReady).toBe(true);
     expect(appendConsole).toHaveBeenCalledTimes(1);
-    expect(appendConsole).toHaveBeenCalledWith('Connesso a Python.');
+    expect(appendConsole).toHaveBeenCalledWith('Pronto.');
   });
 
-  it('hydrates plaintext API key warning fields', async () => {
-    const mockLoad = vi.fn().mockResolvedValue({
-      api_key: 'plain-key',
-      api_key_insecure: true,
-      api_key_insecure_reason: 'DPAPI non disponibile',
-    });
-    setPywebview({ load_settings: mockLoad });
-
-    const { result } = renderHook(() => useApiReady(vi.fn()));
-
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(result.current.apiKey).toBe('plain-key');
-    expect(result.current.apiKeyInsecure).toBe(true);
-    expect(result.current.apiKeyInsecureReason).toBe('DPAPI non disponibile');
-  });
-
-  it('hydrates config recovery path', async () => {
-    const mockLoad = vi.fn().mockResolvedValue({
-      api_key: '',
-      config_recovered_from: 'C:\\Users\\me\\AppData\\Roaming\\El Sbobinator\\config.json',
-    });
-    setPywebview({ load_settings: mockLoad });
-
-    const { result } = renderHook(() => useApiReady(vi.fn()));
-
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(result.current.configRecoveredFrom).toBe('C:\\Users\\me\\AppData\\Roaming\\El Sbobinator\\config.json');
-  });
-
-  it('refreshSettings reloads security flags after bootstrap', async () => {
+  it('refreshSettings reloads the saved keys after bootstrap', async () => {
     const mockLoad = vi.fn()
       .mockResolvedValueOnce({
-        api_key: 'plain-key',
-        api_key_insecure: true,
-        api_key_insecure_reason: 'DPAPI non disponibile',
+        api_key: 'first-key',
+        fallback_keys: [],
       })
       .mockResolvedValueOnce({
-        api_key: 'protected-key',
-        api_key_insecure: false,
-        api_key_insecure_reason: '',
+        api_key: 'second-key',
+        fallback_keys: ['reserve-key'],
       });
     setPywebview({ load_settings: mockLoad });
 
@@ -359,40 +223,15 @@ describe('useApiReady — bootstrap guard', () => {
       await Promise.resolve();
     });
 
-    expect(result.current.apiKeyInsecure).toBe(true);
+    expect(result.current.apiKey).toBe('first-key');
 
     await act(async () => {
       await result.current.refreshSettings();
     });
 
     expect(mockLoad).toHaveBeenCalledTimes(2);
-    expect(result.current.apiKey).toBe('protected-key');
-    expect(result.current.apiKeyInsecure).toBe(false);
-    expect(result.current.apiKeyInsecureReason).toBe('');
+    expect(result.current.apiKey).toBe('second-key');
+    expect(result.current.fallbackKeys).toEqual(['reserve-key']);
   });
 
-  it('refreshSettings reloads config recovery path', async () => {
-    const mockLoad = vi.fn()
-      .mockResolvedValueOnce({ api_key: '' })
-      .mockResolvedValueOnce({
-        api_key: '',
-        config_recovered_from: 'C:\\broken\\config.json',
-      });
-    setPywebview({ load_settings: mockLoad });
-
-    const { result } = renderHook(() => useApiReady(vi.fn()));
-
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(result.current.configRecoveredFrom).toBe('');
-
-    await act(async () => {
-      await result.current.refreshSettings();
-    });
-
-    expect(result.current.configRecoveredFrom).toBe('C:\\broken\\config.json');
-  });
 });

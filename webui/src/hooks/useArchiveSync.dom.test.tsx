@@ -183,7 +183,7 @@ describe('useArchiveSync', () => {
     expect(retrying.current.archiveFiltered).toHaveLength(0);
   });
 
-  it('handles session root relocation by remapping queue and refreshing folders', async () => {
+  it('reloads the archive and its folders after an import or a Drive sync', async () => {
     const mockApi: Partial<PywebviewApi> = {
       get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [] }),
       get_archive_folders: vi.fn().mockResolvedValue({
@@ -208,14 +208,10 @@ describe('useArchiveSync', () => {
     );
 
     await act(async () => {
-      await result.current.handleSessionRootMoved({ oldRoot: '/old', newRoot: '/new' });
+      await result.current.reloadArchive();
     });
 
-    expect(dispatch).toHaveBeenCalledWith({
-      type: 'queue/remap_session_roots',
-      oldRoot: '/old',
-      newRoot: '/new',
-    });
+    expect(mockApi.get_completed_sessions).toHaveBeenCalled();
     expect(result.current.folders).toHaveLength(1);
   });
 

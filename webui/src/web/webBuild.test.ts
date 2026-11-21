@@ -18,13 +18,12 @@ describe('web build page policy', () => {
     expect(directive(WEB_CSP, 'object-src')).toBe("object-src 'none'");
   });
 
-  it('rewrites the desktop index.html for the static site', () => {
+  it('rewrites index.html for the static site', () => {
     const desktopHtml = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
     const html = toWebIndexHtml(desktopHtml);
 
     const csp = /<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]+)"/i.exec(html)?.[1];
     expect(csp).toBe(WEB_CSP);
-    expect(html).not.toContain('startup-guard.js');
     expect(html).toContain('<script src="./boot-theme.js"></script>');
     expect(html).toContain('src="/src/main.tsx"');
     expect(html).toContain('<link rel="icon" type="image/png" href="./icon.png" />');
@@ -35,19 +34,19 @@ describe('web build page policy', () => {
     const head = /<head>([\s\S]*?)<\/head>/i.exec(toWebIndexHtml(desktopHtml))?.[1] ?? '';
     expect(head).toContain('<meta name="google-site-verification" content="XWVhccF0gdqWBcyMsZnKhkONXaFYCZAFHq19zBBjC8M" />');
     expect(toWebIndexHtml(desktopHtml, true)).toContain(SEARCH_CONSOLE_VERIFICATION);
-    // The desktop page has no use for it.
+    // The dev page has no use for it.
     expect(desktopHtml).not.toContain('google-site-verification');
   });
 
-  it('lets the web dev server reach Gemini while keeping the desktop policy for HMR', () => {
+  it('lets the web dev server reach Gemini while keeping the permissive policy for HMR', () => {
     const desktopHtml = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
     const csp = /<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]+)"/i.exec(toWebDevIndexHtml(desktopHtml))?.[1] ?? '';
     const connect = directive(csp.replace(/\s+/g, ' '), 'connect-src');
     expect(connect).toContain('https://generativelanguage.googleapis.com');
     expect(connect).toContain('ws://localhost:*');
-    // The picked audio plays from a blob: URL, as on the site; the desktop's local server stays.
+    // The picked audio plays from a blob: URL, as on the site.
     const media = directive(csp.replace(/\s+/g, ' '), 'media-src');
-    expect(media).toBe('media-src http://127.0.0.1:* blob:');
+    expect(media).toBe("media-src 'self' blob:");
     expect(directive(WEB_CSP, 'media-src')).toBe("media-src 'self' blob:");
   });
 

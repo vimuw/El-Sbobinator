@@ -11,16 +11,13 @@ import { GEMINI_KEY_PATTERN, normalizeSessionPath } from './utils';
 import { STORAGE_KEYS } from './storageKeys';
 import { useConsole } from './hooks/useConsole';
 import { useTheme } from './hooks/useTheme';
-import { useUpdateChecker } from './hooks/useUpdateChecker';
 import { loadPersistedQueue, useQueuePersistence } from './hooks/useQueuePersistence';
 import { useApiReady } from './hooks/useApiReady';
 import { useBridgeCallbacks } from './hooks/useBridgeCallbacks';
-import { getHostCapabilities } from './hostCapabilities';
 import { useBodyScrollLock } from './hooks/useBodyScrollLock';
 import { useHistoryNavigation } from './hooks/useHistoryNavigation';
 import { usePreview } from './hooks/usePreview';
 import { useNotifications } from './hooks/useNotifications';
-import { useUpdateInstaller } from './hooks/useUpdateInstaller';
 import { useArchiveSync } from './hooks/useArchiveSync';
 import { useQueueIngest } from './hooks/useQueueIngest';
 import { useConfirmModal } from './hooks/useConfirmModal';
@@ -28,7 +25,6 @@ import { useQueueProcessing } from './hooks/useQueueProcessing';
 import { useRevisionRetry } from './hooks/useRevisionRetry';
 import { useRegenerateDialog } from './hooks/useRegenerateDialog';
 import type { EditorSaveController } from './hooks/useEditorAutosave';
-import { useSystemNotificationTriggers } from './hooks/useSystemNotificationTriggers';
 import { useWebStorageNotice } from './hooks/useWebStorageNotice';
 import { useTabTitle } from './hooks/useTabTitle';
 import { QueuePage } from './components/QueuePage';
@@ -65,23 +61,13 @@ export default function App() {
   const { consoleLogs, appendConsole } = useConsole();
   const handleDismissRunOutcome = useCallback(() => dispatch({ type: 'outcome/clear' }), []);
   const { themeMode, setThemeMode } = useTheme();
-  const { updateAvailable, latestVersion, isCheckingUpdate, hasChecked, checkFailed, checkForUpdates, dismissUpdate } = useUpdateChecker(
-    getHostCapabilities().updateInstallation,
-  );
   const {
     apiReady,
     bridgeDelayed,
     apiKey,
     setApiKey,
-    hasProtectedKey,
-    apiKeyInsecure,
-    setApiKeyInsecure,
-    apiKeyInsecureReason,
-    setApiKeyInsecureReason,
-    configRecoveredFrom,
     fallbackKeys,
     setFallbackKeys,
-    configuredFallbackKeyCount,
     preferredModel,
     setPreferredModel,
 
@@ -110,7 +96,6 @@ export default function App() {
   }, [isSettingsOpen]);
 
   const handleRetryFailedRevisionBlocksRef = useRef<(sessionDir: string, fileId?: string) => Promise<void>>(() => Promise.resolve());
-  const installUpdateRef = useRef<(version: string) => Promise<void>>(() => Promise.resolve());
   const startProcessingRef = useRef<(isContinuation?: boolean, overrideLowDisk?: boolean, forceRetry?: boolean) => Promise<boolean>>(() => Promise.resolve(false));
 
   const {
@@ -118,17 +103,12 @@ export default function App() {
     unreadNotificationsCount,
     shakeBell,
     addNotification,
-    upsertNotification,
     deleteNotification,
     markNotificationAsRead,
     markAllNotificationsAsRead,
     clearAllNotifications,
-    removeNotificationByDedupeKey,
   } = useNotifications({
     onRetryFailedRevisionBlocks: useCallback((sessionDir: string, fileId?: string) => handleRetryFailedRevisionBlocksRef.current(sessionDir, fileId), []),
-    onInstallUpdate: useCallback((version: string) => installUpdateRef.current(version), []),
-    onDismissUpdate: dismissUpdate,
-    updateAvailable,
     onOpenSettings: useCallback(() => setIsSettingsOpen(true), [setIsSettingsOpen]),
   });
 
@@ -156,17 +136,6 @@ export default function App() {
   }, []);
 
   const {
-    updateInstallState,
-    installUpdate,
-    handleDownloadProgress,
-  } = useUpdateInstaller({
-    latestVersion,
-    appendConsole,
-    upsertNotification,
-    removeNotificationByDedupeKey,
-  });
-
-  const {
     archiveSessions,
     setArchiveSessions,
     archiveTotal,
@@ -182,7 +151,7 @@ export default function App() {
     handleLoadAll,
     handleOpenFailed,
     handleFoldersChange,
-    handleSessionRootMoved,
+    reloadArchive,
     executeRetryFromArchive,
     archiveFiltered,
     completedSessionFolderMap,
@@ -287,7 +256,6 @@ export default function App() {
     filesRef,
     appStateRef,
     apiKey,
-    hasProtectedKey,
     preferredModel,
 
     dispatch,
@@ -296,7 +264,7 @@ export default function App() {
     refreshArchiveSessions,
   });
 
-  const { preview, openPreview, closePreview, markChangedElsewhere, setPreviewTitle, relinkPreviewAudio, removePreviewAudio, setPreviewAudioKept, handleAudioStateChange, handleScrollTopChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed, onArchiveRefresh: refreshArchiveSessions });
+  const { preview, openPreview, closePreview, markChangedElsewhere, setPreviewTitle, relinkPreviewAudio, setPreviewAudioKept, handleAudioStateChange, handleScrollTopChange } = usePreview({ appendConsole, dispatch, setArchiveSessions, onOpenFailed: handleOpenFailed, onArchiveRefresh: refreshArchiveSessions });
 
   // The editor's title renames the sbobina like "Rinomina" in the archive (only the title changes).
   const renamePreview = useCallback(async (name: string) => {
@@ -322,7 +290,7 @@ export default function App() {
   }, [closePreview]);
   const editorSessionDir = preview.content !== null ? preview.sessionDir || null : null;
   useHistoryNavigation({
-    enabled: getHostCapabilities().kind === 'web',
+    enabled: true,
     screen: useMemo(() => ({ page: activePage, settings: isSettingsOpen, editor: editorSessionDir }), [activePage, isSettingsOpen, editorSessionDir]),
     ready: apiReady && isArchiveLoaded,
     setPage: setActivePage,
@@ -345,13 +313,6 @@ export default function App() {
     editorControllerRef,
   });
 
-  useSystemNotificationTriggers({
-    configRecoveredFrom,
-    updateAvailable,
-    addNotification,
-    removeNotificationByDedupeKey,
-  });
-
   const [hasOpenedPreview, setHasOpenedPreview] = useState(false);
   const shouldRenderPreview = preview.content !== null || hasOpenedPreview;
 
@@ -362,7 +323,6 @@ export default function App() {
   }, [preview.content]);
 
   useLayoutEffect(() => {
-    installUpdateRef.current = installUpdate;
     handleRetryFailedRevisionBlocksRef.current = handleRetryFailedRevisionBlocks;
     startProcessingRef.current = startProcessing;
     onFilesAddedToBatchRef.current = onFilesAddedToBatch;
@@ -370,23 +330,19 @@ export default function App() {
     filesRef.current = files;
     appStateRef.current = appState;
     autoContinueRef.current = autoContinue;
-  }, [installUpdate, handleRetryFailedRevisionBlocks, startProcessing, onFilesAddedToBatch, onFileRemovedFromBatch, files, appState, autoContinue]);
+  }, [handleRetryFailedRevisionBlocks, startProcessing, onFilesAddedToBatch, onFileRemovedFromBatch, files, appState, autoContinue]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEYS.AUTO_CONTINUE, String(autoContinue)); } catch (_) {}
   }, [autoContinue]);
 
-  const hasApiKey = Boolean(apiKey.trim() || hasProtectedKey);
-  const isApiKeyValid = hasProtectedKey || GEMINI_KEY_PATTERN.test(apiKey.trim());
+  const hasApiKey = Boolean(apiKey.trim());
+  const isApiKeyValid = GEMINI_KEY_PATTERN.test(apiKey.trim());
   const isConsoleDisabled = !hasApiKey || !isApiKeyValid || !(files.length > 0 || appState === 'processing' || appState === 'canceling' || completionFlash);
 
-  const isWebHost = getHostCapabilities().kind === 'web';
-  useEffect(() => {
-    if (!isWebHost) document.title = appState === 'processing' ? '⏳ El Sbobinator' : 'El Sbobinator';
-  }, [appState, isWebHost]);
   const lastCompletedAt = useMemo(() => files.reduce((latest, file) => Math.max(latest, file.completedAt ?? 0), 0), [files]);
   useTabTitle({
-    enabled: isWebHost,
+    enabled: true,
     appState,
     activeProgress,
     batchCompleted,
@@ -441,12 +397,6 @@ export default function App() {
     setConfirmAction({ type: 'clear-all' });
   }, [setConfirmAction]);
 
-  const openFile = useCallback(async (path: string) => {
-    if (!window.pywebview?.api) return;
-    const res = await window.pywebview.api.open_file(path);
-    if (res && !res.ok) appendConsole(`❌ Impossibile aprire il file: ${res.error ?? path}`);
-  }, [appendConsole]);
-
   useQueuePersistence(files, structuralVersion, dispatch, appendConsole);
   useBridgeCallbacks({
     dispatch,
@@ -465,11 +415,10 @@ export default function App() {
     onRevisionWarning: handleRevisionWarning,
     addNotification,
     batchTotal,
-    onDownloadProgress: handleDownloadProgress,
     onRequestQuitConfirmation: requestQuitConfirmation,
     onArchiveChangedRemotely: () => {
       setArchiveRevision(revision => revision + 1);
-      void handleSessionRootMoved();
+      void reloadArchive();
     },
     onDocumentChangedElsewhere: data => markChangedElsewhere(data.session_dir),
     onDriveNeedsReconnect: () => addNotification(
@@ -610,7 +559,6 @@ export default function App() {
         setShowConsole={setShowConsole}
         setIsSettingsOpen={setIsSettingsOpen}
         onOpenStorageSettings={handleOpenDriveSettings}
-        hasPendingUpdate={updateAvailable !== null}
         consoleDisabled={isConsoleDisabled}
         unreadNotificationsCount={unreadNotificationsCount}
         isNotificationsOpen={isNotificationsOpen}
@@ -644,11 +592,6 @@ export default function App() {
               bridgeDelayed,
               apiKey,
               setApiKey,
-              hasProtectedKey,
-              apiKeyInsecure,
-              setApiKeyInsecure,
-              apiKeyInsecureReason,
-              setApiKeyInsecureReason,
               fallbackKeys,
               preferredModel,
               setPreferredModel,
@@ -675,7 +618,6 @@ export default function App() {
               handleQueueRetry,
               handleQueueResumeAll,
               openPreview,
-              openFile,
               handleQueueStart,
               handleQueueStop,
               handleOpenSettings,
@@ -707,14 +649,12 @@ export default function App() {
                   folders={folders}
                   onFoldersChange={handleFoldersChange}
                   onPreview={openPreview}
-                  onOpenFile={openFile}
                   onDeleteSession={(sessionDir, name) => setConfirmAction({ type: 'delete-archive-session', sessionDir, name })}
                   onDeleteMultipleSessions={(sessionsList) => setConfirmAction({ type: 'delete-multiple-archive-sessions', sessions: sessionsList })}
                   onRefresh={refreshArchiveSessions}
                   onRenameSession={handleRenameSession}
                   onLoadAll={handleLoadAll}
                   onRetryFailedRevisionBlocks={handleRetryFailedRevisionBlocks}
-                  onNotification={addNotification}
                   showKeptAudioRequest={showKeptAudioRequest}
                   onShowKeptAudioHandled={handleShowKeptAudioHandled}
                 />
@@ -780,10 +720,8 @@ export default function App() {
             auth={{
               apiKey,
               setApiKey,
-              hasProtectedKey,
               fallbackKeys,
               setFallbackKeys,
-              configuredFallbackKeyCount,
             }}
             models={{
               preferredModel,
@@ -791,18 +729,8 @@ export default function App() {
 
               availableModels,
             }}
-            updater={{
-              latestVersion,
-              checkForUpdates,
-              isCheckingUpdate,
-              hasChecked,
-              checkFailed,
-              updateInstallState,
-              onInstallUpdate: installUpdate,
-            }}
             storage={{
-              onSessionRootMoved: handleSessionRootMoved,
-              onArchiveImported: () => void handleSessionRootMoved(),
+              onArchiveImported: () => void reloadArchive(),
               archiveRevision,
               onShowKeptAudio: handleShowKeptAudio,
             }}
@@ -828,7 +756,6 @@ export default function App() {
               expected: preview.audioExpected,
               warning: preview.audioWarning,
               onRelink: relinkPreviewAudio,
-              onRemoveAudio: removePreviewAudio,
               kept: preview.audioKept,
               size: preview.audioSize,
               onKeepChange: setPreviewAudioKept,

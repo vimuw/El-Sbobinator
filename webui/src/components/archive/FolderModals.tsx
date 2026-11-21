@@ -5,7 +5,7 @@ import type { ArchiveFolder } from '../../bridge';
 import { DEFAULT_FOLDER_COLOR, FOLDER_COLORS, type FolderModalState } from './types';
 import { getFolderColor, NEUTRAL_FOLDER_COLOR } from '../../archiveFolders';
 import { modalCard } from '../../motion';
-import { deletedFrom, getHostCapabilities } from '../../hostCapabilities';
+import { getHostCapabilities } from '../../hostCapabilities';
 import { useBackdropDismiss } from '../../hooks/useBackdropDismiss';
 import { UnsavedChangesHint } from '../modals/UnsavedChangesHint';
 
@@ -346,7 +346,7 @@ export function DeleteMultipleSessionsConfirmModal({
             </p>
           ) : (
             <p style={{ color: 'var(--text-muted)' }}>
-              Tutti i file e i dati di sessione relativi verranno eliminati definitivamente {deletedFrom()}.{' '}
+              Tutti i file e i dati di sessione relativi verranno eliminati definitivamente da questo browser.{' '}
               <strong style={{ color: 'var(--error-text)' }}>L&apos;operazione è irreversibile.</strong>
             </p>
           )}

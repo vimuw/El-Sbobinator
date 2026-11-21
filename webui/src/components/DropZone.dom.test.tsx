@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { DropOverlay, DropZone } from './DropZone';
-import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
+import { DEFAULT_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 
 const baseProps = {
   isDragging: false,
@@ -16,30 +16,23 @@ describe('DropZone', () => {
 
   it('summarises supported formats and keeps the full list in the tooltip', () => {
     render(<DropZone {...baseProps} />);
-    const summary = screen.getByText('Audio o video · MP3, M4A, WAV, MP4 e altri');
-    expect(summary.getAttribute('title')).toContain('.flac');
-    expect(summary.getAttribute('title')).toContain('.aac');
+    const summary = screen.getByText('Audio o video · MP3, M4A o MP4');
+    expect(summary.getAttribute('title')).toBe('Formati supportati: .mp3 · .m4a · .mp4');
   });
 
   it('lists only the formats the web build can cut', () => {
-    setHostCapabilities({ kind: 'web' });
     try {
       render(<DropZone {...baseProps} />);
       const summary = screen.getByText('Audio o video · MP3, M4A o MP4');
       expect(summary.getAttribute('title')).toBe('Formati supportati: .mp3 · .m4a · .mp4');
     } finally {
-      setHostCapabilities(DESKTOP_CAPABILITIES);
+      setHostCapabilities(DEFAULT_CAPABILITIES);
     }
   });
 
-  it('asks to pick files instead of dragging them on a touch screen (web only)', () => {
+  it('asks to pick files instead of dragging them on a touch screen', () => {
     vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(pointer: coarse)' }));
     try {
-      const { unmount } = render(<DropZone {...baseProps} />);
-      expect(screen.getByText('Trascina i file qui')).toBeTruthy();
-      unmount();
-
-      setHostCapabilities({ kind: 'web' });
       const card = render(<DropZone {...baseProps} />);
       expect(screen.getByRole('button', { name: 'Scegli i file da aggiungere' })).toBeTruthy();
       expect(screen.getByText('Scegli i file da sbobinare')).toBeTruthy();
@@ -48,19 +41,18 @@ describe('DropZone', () => {
       render(<DropZone {...baseProps} compact />);
       expect(screen.getByText('Tocca per aggiungere file')).toBeTruthy();
     } finally {
-      setHostCapabilities(DESKTOP_CAPABILITIES);
+      setHostCapabilities(DEFAULT_CAPABILITIES);
       vi.unstubAllGlobals();
     }
   });
 
   it('keeps the drag copy on the web with a mouse', () => {
     vi.stubGlobal('matchMedia', () => ({ matches: false }));
-    setHostCapabilities({ kind: 'web' });
     try {
       render(<DropZone {...baseProps} compact />);
       expect(screen.getByText('Trascina file o clicca per aggiungere')).toBeTruthy();
     } finally {
-      setHostCapabilities(DESKTOP_CAPABILITIES);
+      setHostCapabilities(DEFAULT_CAPABILITIES);
       vi.unstubAllGlobals();
     }
   });

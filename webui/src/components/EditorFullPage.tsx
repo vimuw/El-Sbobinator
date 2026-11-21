@@ -8,13 +8,12 @@ import { downloadDocx } from '../docxExport';
 import { prepareHtmlLineSpacing } from '../editorLineSpacing';
 import { clipboardPlainText } from '../documentFormatting';
 import { reportClientError } from '../diagnostics';
-import { ConfirmActionModal } from './modals/ConfirmActionModal';
 import { useTheme } from '../hooks/useTheme';
 import { useKeyboardInsets } from '../hooks/useKeyboardInsets';
 import { usePhoneLayout } from '../hooks/usePhoneLayout';
 import { useEditorAutosave, type EditorSaveController } from '../hooks/useEditorAutosave';
 import { STORAGE_KEYS } from '../storageKeys';
-import { getHostCapabilities, isTouchWeb } from '../hostCapabilities';
+import { isTouchWeb } from '../hostCapabilities';
 import { EditorShortcuts } from './EditorShortcuts';
 import { KebabMenu, type KebabMenuItem } from './KebabMenu';
 import { ZOOM_OPTIONS } from './editor/toolbar/formatOptions';
@@ -59,7 +58,6 @@ export interface EditorAudioProps {
   expected?: AudioDockKind;
   warning?: string;
   onRelink: () => Promise<boolean | undefined>;
-  onRemoveAudio?: () => Promise<boolean | undefined> | void;
   /** Web: a copy of the playing file is kept in this browser (size in bytes). */
   kept?: boolean;
   size?: number;
@@ -88,7 +86,6 @@ export interface EditorFullPageProps {
   audioSrc?: string | null;
   audioRelinkNeeded?: boolean;
   onRelink?: () => Promise<boolean | undefined>;
-  onRemoveAudio?: () => Promise<boolean | undefined> | void;
   previewInitAudio?: { time?: number; duration?: number; playbackRate?: number; volume?: number };
   previewInitScrollTop?: number | undefined;
   initialSearchTerm?: string;
@@ -110,7 +107,6 @@ export function EditorFullPage({
   audioSrc: flatAudioSrc,
   audioRelinkNeeded: flatAudioRelinkNeeded,
   onRelink: flatOnRelink,
-  onRemoveAudio: flatOnRemoveAudio,
   previewInitAudio: flatPreviewInitAudio,
   previewInitScrollTop: flatPreviewInitScrollTop,
   initialSearchTerm: flatInitialSearchTerm,
@@ -130,7 +126,6 @@ export function EditorFullPage({
   const audioLoading = audioProp?.loading ?? false;
   const audioExpected = audioProp?.expected ?? 'player';
   const onRelink = audioProp?.onRelink ?? flatOnRelink ?? (() => Promise.resolve(undefined));
-  const onRemoveAudio = audioProp?.onRemoveAudio ?? flatOnRemoveAudio;
   const onKeepChange = audioProp?.onKeepChange;
   const previewInitAudio = audioProp?.init ?? flatPreviewInitAudio ?? {};
   const onAudioStateChange = audioProp?.onStateChange ?? flatOnAudioStateChange ?? (() => {});
@@ -161,17 +156,10 @@ export function EditorFullPage({
   };
   const [isRenaming, setIsRenaming] = useState(false);
   const isRenamingRef = useRef(false);
-  // Web only: the desktop app copies images into Docs, and its WebView has no download sheet.
-  const offersDocx = getHostCapabilities().kind === 'web';
-  const [isRemovingAudio, setIsRemovingAudio] = useState(false);
-  const [showConfirmRemove, setShowConfirmRemove] = useState(false);
   const copiedTimerRef = useRef<number | null>(null);
   const getHtmlRef = useRef<(() => string) | null>(null);
-  const showAudioDock = getHostCapabilities().editorAudio;
-  // Web: the sbobina keeps no audio, so the dock asks for the lecture file instead of a relink.
-  const audioPicked = !getHostCapabilities().sessionKeepsAudio;
   // On a tablet the editor shrinks to the area above the on-screen keyboard, player included.
-  const keyboard = useKeyboardInsets(getHostCapabilities().kind === 'web');
+  const keyboard = useKeyboardInsets(true);
   const isPhone = usePhoneLayout();
   const footerRef = useRef<HTMLDivElement>(null);
   const [footerHeight, setFooterHeight] = useState(0);
@@ -280,7 +268,7 @@ export function EditorFullPage({
         formats = { 'text/html': prepareHtmlLineSpacing(clipboardHtml), 'text/plain': clipboardPlainText(temp) };
       }
       await writeEditorClipboard(clipboardHtml, formats['text/plain'], sourceRoot, formats);
-      if (offersDocx && (isTouchWeb() || /Apple/.test(navigator.vendor ?? '')) && /<img[\s>]/i.test(clipboardHtml)) setExportNotice(isPhone ? COPY_IMAGES_NOTICE_PHONE : COPY_IMAGES_NOTICE);
+      if ((isTouchWeb() || /Apple/.test(navigator.vendor ?? '')) && /<img[\s>]/i.test(clipboardHtml)) setExportNotice(isPhone ? COPY_IMAGES_NOTICE_PHONE : COPY_IMAGES_NOTICE);
     } catch (error) {
       reportClientError('Clipboard error', error);
       return;
@@ -345,7 +333,7 @@ export function EditorFullPage({
   // whole export (images stay behind), so it sits by name beside the .docx instead of a filled pill.
   const phoneMenuItems: KebabMenuItem[] = [
     { label: 'Copia documento', icon: <Copy className="w-4 h-4" />, onClick: () => void handleCopy() },
-    ...(offersDocx ? [{ label: 'Scarica .docx', icon: <Download className="w-4 h-4" />, onClick: handleDownloadDocx }] : []),
+    { label: 'Scarica .docx', icon: <Download className="w-4 h-4" />, onClick: handleDownloadDocx },
     { separator: true },
     { label: 'Indice', icon: <ListTree className="w-4 h-4" />, checked: isTocOpen, onClick: () => setIsTocOpen(p => !p) },
     { label: 'Trova e sostituisci', icon: <Search className="w-4 h-4" />, onClick: () => setFindRequest(n => n + 1) },
@@ -472,7 +460,7 @@ export function EditorFullPage({
             </div>
 
             <div className="editor-fullpage-actions">
-              {offersDocx && !isPhone && (
+              {!isPhone && (
                 <button
                   type="button"
                   onClick={handleDownloadDocx}
@@ -508,7 +496,7 @@ export function EditorFullPage({
                 />
               ) : (
                 <div className="editor-fullpage-utilities">
-                  <EditorShortcuts audioAvailable={showAudioDock && Boolean(audioSrc)} />
+                  <EditorShortcuts audioAvailable={Boolean(audioSrc)} />
                   <button
                     onClick={toggleTheme}
                     className="icon-button theme-toggle-btn"
@@ -550,7 +538,7 @@ export function EditorFullPage({
           )}
 
           {/* Under the header like the notice above, so the player row never carries text over its controls. */}
-          {showAudioDock && audioProp?.warning && audioProp.warning !== dismissedAudioWarning && (
+          {audioProp?.warning && audioProp.warning !== dismissedAudioWarning && (
             <div
               role="status"
               data-testid="editor-audio-warning"
@@ -594,9 +582,7 @@ export function EditorFullPage({
               />
             </Suspense>
 
-            {/* The player floats over the page bottom; the editor reserves its height so text never hides under it.
-                Hosts without session audio (the web build until M2b) have no dock at all. */}
-            {showAudioDock && (
+            {/* The player floats over the page bottom; the editor reserves its height so text never hides under it. */}
             <div ref={footerRef} className="editor-fullpage-footer">
               <div className="editor-player-dock">
                 {/* While the audio gets ready the dock already looks like what it showed last time:
@@ -612,44 +598,21 @@ export function EditorFullPage({
                     initialVolume={previewInitAudio.volume}
                     onStateChange={onAudioStateChange}
                     onRelink={onRelink}
-                    // Web: nothing to unlink, the user decides whether this browser keeps a copy.
-                    onRemoveAudio={audioPicked ? undefined : onRemoveAudio}
-                    keep={audioPicked && onKeepChange ? { kept: Boolean(audioProp?.kept), size: audioProp?.size ?? 0, onChange: onKeepChange } : undefined}
+                    // Nothing to unlink: the user decides whether this browser keeps a copy.
+                    keep={onKeepChange ? { kept: Boolean(audioProp?.kept), size: audioProp?.size ?? 0, onChange: onKeepChange } : undefined}
                   />
                 ) : (
                   <AudioDockEmpty
                     key={htmlPath}
                     state={audioLoading ? (audioExpected === 'missing' ? 'missing' : 'none') : audioRelinkNeeded ? 'missing' : 'none'}
-                    audioPicked={audioPicked}
+                    audioPicked
                     onRelink={onRelink}
-                    onRemove={(audioLoading ? audioExpected === 'missing' : audioRelinkNeeded) && onRemoveAudio && !audioPicked ? () => setShowConfirmRemove(true) : undefined}
-                    isRemoving={isRemovingAudio}
                     pending={audioLoading}
                   />
                 )}
               </div>
             </div>
-            )}
           </div>
-
-          <ConfirmActionModal
-            isOpen={showConfirmRemove}
-            title="Rimuovere l'audio mancante?"
-            description="La copia audio interna verrà eliminata dalla sbobina, liberando spazio. Il file originale sul tuo computer non verrà cancellato. Potrai aggiungere un nuovo audio in qualsiasi momento."
-            confirmLabel={isRemovingAudio ? 'Rimozione...' : 'Rimuovi audio'}
-            cancelLabel="Annulla"
-            onClose={() => setShowConfirmRemove(false)}
-            onConfirm={async () => {
-              setShowConfirmRemove(false);
-              if (isRemovingAudio) return;
-              setIsRemovingAudio(true);
-              try {
-                await onRemoveAudio?.();
-              } finally {
-                setIsRemovingAudio(false);
-              }
-            }}
-          />
         </motion.div>
       )}
     </AnimatePresence>

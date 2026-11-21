@@ -17,12 +17,11 @@ function recordLinkClicks() {
 describe('report email', () => {
   afterEach(() => {
     vi.restoreAllMocks();
-    setHostCapabilities({});
     delete window.pywebview;
   });
 
   it('opens in a new tab from a link: this page neither leaves nor fires beforeunload', () => {
-    setHostCapabilities({ kind: 'web', reportByEmail: true });
+    setHostCapabilities({ reportByEmail: true });
     const { opened } = recordLinkClicks();
     let unloads = 0;
     const countUnload = () => { unloads += 1; };
@@ -41,15 +40,4 @@ describe('report email', () => {
     expect(window.location.href).toBe(address);
   });
 
-  it('goes through the bridge in the desktop app, without a link', async () => {
-    setHostCapabilities({ kind: 'desktop' });
-    const openUrl = vi.fn().mockResolvedValue({ ok: true });
-    window.pywebview = { api: { open_url: openUrl } } as unknown as typeof window.pywebview;
-    const { opened } = recordLinkClicks();
-
-    openReportEmail();
-
-    expect(openUrl).toHaveBeenCalledWith(BUG_REPORT_URL);
-    expect(opened).toEqual([]);
-  });
 });

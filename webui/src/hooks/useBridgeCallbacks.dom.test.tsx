@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { useRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
+import { DEFAULT_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 import { useBridgeCallbacks } from './useBridgeCallbacks';
 import type { AppStatus, FileItem, ProcessDonePayload, ProcessingAction } from '../appState';
 
@@ -404,18 +404,9 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
       unmount();
     };
     const web = vi.fn<AddNotification>();
-    setHostCapabilities({ kind: 'web', sessionKeepsAudio: false });
-    try {
-      finish(web);
-    } finally {
-      setHostCapabilities(DESKTOP_CAPABILITIES);
-    }
+    finish(web);
     expect(web).toHaveBeenCalledWith('Sbobina pronta', expect.stringContaining('L’audio non viene conservato'), 'success', 'processing');
     expect(web.mock.calls[0][1]).toContain('«Tieni l’audio nel browser»');
-
-    const desktop = vi.fn<AddNotification>();
-    finish(desktop);
-    expect(desktop.mock.calls[0][1]).toBe('"audio.mp3" completata con successo.');
   });
 
   it('fileDone on the web does not say the audio is not kept for an existing sbobina it reused', () => {
@@ -426,7 +417,6 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
     const addNotification = vi.fn<Parameters<typeof useBridgeCallbacks>[0]['addNotification']>();
     const opts = makeMinimalHook({ addNotification });
     opts.filesRef = { current: [doneFile] } as unknown as ReturnType<typeof useRef<FileItem[]>>;
-    setHostCapabilities({ kind: 'web', sessionKeepsAudio: false });
     try {
       const { unmount } = renderHook(() => { useBridgeCallbacks(opts); });
       act(() => {
@@ -434,7 +424,7 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
       });
       unmount();
     } finally {
-      setHostCapabilities(DESKTOP_CAPABILITIES);
+      setHostCapabilities(DEFAULT_CAPABILITIES);
     }
     expect(addNotification).toHaveBeenCalledWith('Sbobina pronta', '"audio.mp3" completata con successo.', 'success', 'processing');
   });
@@ -496,19 +486,10 @@ describe('useBridgeCallbacks — direct bridge callbacks', () => {
 
   it('askNewKey on the web points to the dialog, not to the settings', () => {
     const addNotification = vi.fn();
-    setHostCapabilities({ kind: 'web' });
-    try {
-      renderHook(() => { useBridgeCallbacks(makeMinimalHook({ addNotification })); });
-      act(() => { window.elSbobinatorBridge?.askNewKey(); });
-      expect(addNotification).toHaveBeenCalledWith('Chiavi esaurite', expect.stringContaining('vale solo per questa elaborazione'), 'warning', 'system');
-      expect(addNotification.mock.calls[0][1]).not.toContain('impostazioni');
-    } finally {
-      setHostCapabilities(DESKTOP_CAPABILITIES);
-    }
-    const desktopNotification = vi.fn();
-    renderHook(() => { useBridgeCallbacks(makeMinimalHook({ addNotification: desktopNotification })); });
+    renderHook(() => { useBridgeCallbacks(makeMinimalHook({ addNotification })); });
     act(() => { window.elSbobinatorBridge?.askNewKey(); });
-    expect(desktopNotification.mock.calls[0][1]).toContain('Aggiungi una chiave nelle impostazioni');
+    expect(addNotification).toHaveBeenCalledWith('Chiavi esaurite', expect.stringContaining('vale solo per questa elaborazione'), 'warning', 'system');
+    expect(addNotification.mock.calls[0][1]).not.toContain('impostazioni');
   });
 
   it('fileDone callback: covers warning notification for completed file with warnings', () => {

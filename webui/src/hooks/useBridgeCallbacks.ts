@@ -1,15 +1,12 @@
 import { type Dispatch, useEffect, useLayoutEffect, useRef } from 'react';
 import type React from 'react';
-import { createBridge, type ElSbobinatorBridge, type PreferredModelChangedPayload, type UpdateDownloadProgressPayload } from '../bridge';
+import { createBridge, type ElSbobinatorBridge, type PreferredModelChangedPayload } from '../bridge';
 import type { AppStatus, FileDescriptor, FileDonePayload, FileItem, ProcessDonePayload, ProcessingAction } from '../appState';
-import { getHostCapabilities } from '../hostCapabilities';
 import { errorLabel, isPausedError, shortModelName } from '../utils';
 
-// On the web the dialog itself takes the new key, for this run only; the desktop points to the settings.
+// The dialog itself takes the new key, for this run only.
 function newKeyNotice(): string {
-  return getHostCapabilities().kind === 'web'
-    ? 'Limite API raggiunto: le tue chiavi Gemini hanno esaurito la quota gratuita. Incolla un’altra chiave nella finestra che si è aperta per continuare: vale solo per questa elaborazione.'
-    : 'Limite API raggiunto. Le tue chiavi Gemini hanno esaurito i crediti gratuiti o la capacità temporanea. Aggiungi una chiave nelle impostazioni per continuare.';
+  return 'Limite API raggiunto: le tue chiavi Gemini hanno esaurito la quota gratuita. Incolla un’altra chiave nella finestra che si è aperta per continuare: vale solo per questa elaborazione.';
 }
 
 // Web: the audio copy goes when the sbobina is done, and the page's File goes at the next reload.
@@ -31,7 +28,6 @@ export function useBridgeCallbacks(options: {
   onBatchFullyDone: (data: ProcessDonePayload) => void;
   clearCompletionFlash: () => void;
   onRevisionWarning?: (data: FileDonePayload) => void;
-  onDownloadProgress?: (data: UpdateDownloadProgressPayload) => void;
   batchTotal?: number;
   addNotification?: (
     title: string,
@@ -41,7 +37,7 @@ export function useBridgeCallbacks(options: {
     opts?: {
       persistent?: boolean;
       dedupeKey?: string;
-      actionType?: 'retry_failed_revision_blocks' | 'install_update' | 'open_github';
+      actionType?: 'retry_failed_revision_blocks';
       actionData?: unknown;
     }
   ) => void;
@@ -77,7 +73,6 @@ export function useBridgeCallbacks(options: {
   const onBatchFullyDoneRef = useRef(options.onBatchFullyDone);
   const clearCompletionFlashRef = useRef(options.clearCompletionFlash);
   const onRevisionWarningRef = useRef(options.onRevisionWarning);
-  const onDownloadProgressRef = useRef(options.onDownloadProgress);
   const addNotificationRef = useRef(addNotification);
   const batchTotalRef = useRef(batchTotal);
   const onRequestQuitConfirmationRef = useRef(options.onRequestQuitConfirmation);
@@ -97,7 +92,6 @@ export function useBridgeCallbacks(options: {
     onBatchFullyDoneRef.current = options.onBatchFullyDone;
     clearCompletionFlashRef.current = options.clearCompletionFlash;
     onRevisionWarningRef.current = options.onRevisionWarning;
-    onDownloadProgressRef.current = options.onDownloadProgress;
     addNotificationRef.current = options.addNotification;
     batchTotalRef.current = options.batchTotal ?? 0;
     onRequestQuitConfirmationRef.current = options.onRequestQuitConfirmation;
@@ -145,7 +139,6 @@ export function useBridgeCallbacks(options: {
         enqueueUniqueFilesRef.current(filesToAdd);
       },
       onBatchStart: () => { clearCompletionFlashRef.current(); },
-      onDownloadProgress: data => { onDownloadProgressRef.current?.(data); },
       onAskNewKey: () => {
         setAskNewKeyPromptRef.current(true);
         if (addNotificationRef.current) {
@@ -200,7 +193,7 @@ export function useBridgeCallbacks(options: {
             const elapsed = currentFile.startedAt ? Math.round((Date.now() - currentFile.startedAt) / 60000) : null;
             const elapsedPart = elapsed !== null && elapsed > 0 ? ` · ${elapsed} min` : '';
             // Only a sbobina made by this run surely has no audio kept: an existing one may keep it.
-            const audioNote = getHostCapabilities().sessionKeepsAudio || data.reused_existing ? '' : ` ${WEB_AUDIO_NOT_KEPT_NOTE}`;
+            const audioNote = data.reused_existing ? '' : ` ${WEB_AUDIO_NOT_KEPT_NOTE}`;
             addNotificationRef.current(
               'Sbobina pronta',
               `"${currentFile.name}" completata con successo${modelPart}${elapsedPart}.${audioNote}`,

@@ -1,7 +1,7 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { Blob as NodeBlob, File as NodeFile } from 'node:buffer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DESKTOP_CAPABILITIES, getHostCapabilities, setHostCapabilities } from '../hostCapabilities';
+import { DEFAULT_CAPABILITIES, getHostCapabilities, setHostCapabilities } from '../hostCapabilities';
 import { STORAGE_KEYS } from '../storageKeys';
 import type { BridgeEventName } from './fakePipeline';
 import { createApiUsageStore } from './apiUsage';
@@ -24,7 +24,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
-  setHostCapabilities(DESKTOP_CAPABILITIES);
+  setHostCapabilities(DEFAULT_CAPABILITIES);
   delete window.pywebview;
   window.elSbobinatorBridge = null;
   delete document.documentElement.dataset.host;
@@ -89,20 +89,16 @@ describe('web host', () => {
     // The touch sizing in index.css applies to the web build only.
     expect(document.documentElement.dataset.host).toBe('web');
     const capabilities = getHostCapabilities();
-    expect(capabilities).toMatchObject({
-      kind: 'web', keyStorage: 'browser', openLocalPath: false, nativeFolderPicker: false,
-      updateInstallation: false, osNotifications: false, editorAudio: true, sessionKeepsAudio: false, sbobinaPackages: false, environmentCheck: false,
+    expect(capabilities).toEqual({
+      // No Drive client ID in the tests' build: deleting is permanent, there is no trash.
+      permanentDelete: true,
       // No Sentry DSN in the tests' build: "Segnala un problema" writes an email.
       reportByEmail: true,
     });
     const api = window.pywebview?.api;
     expect(api?.start_processing).toBeTypeOf('function');
     // Hidden features have no method, so the UI never offers them.
-    expect(api?.open_file).toBeUndefined();
     expect(api?.stream_media_file).toBeTypeOf('function');
-    expect(api?.export_sbobina_package).toBeUndefined();
-    expect(api?.download_and_install_update).toBeUndefined();
-    expect(api?.export_diagnostics).toBeUndefined();
   });
 
   it('tells the app when a main-key 404 changes the saved model, so Settings shows it', () => {
@@ -132,7 +128,6 @@ describe('web host', () => {
       api_key: 'AIzaSyMain12345678901234567',
       fallback_keys: ['AIzaSyBackup1234567890123456'],
       preferred_model: 'gemini-2.5-flash',
-      has_protected_key: false,
     });
 
     // null keeps what is saved, like the desktop contract.

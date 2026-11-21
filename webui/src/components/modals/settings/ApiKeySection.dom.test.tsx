@@ -8,19 +8,9 @@ describe('ApiKeySection component', () => {
   const defaultProps = {
     apiKey: 'AIzaSyPrimary0123456789012345',
     setApiKey: vi.fn(),
-    hasProtectedKey: false,
-    apiKeyInsecure: false,
-    apiKeyInsecureReason: '',
     fallbackKeys: [],
     setFallbackKeys: vi.fn(),
   };
-
-  it('warns for temporary fallback credentials without claiming plaintext storage', () => {
-    render(<ApiKeySection {...defaultProps} credentialStorage={{ primary: 'protected', fallback: 'session_only' }} />);
-    expect(screen.getByText('Credenziali temporanee')).toBeTruthy();
-    expect(screen.getByText(/solo per questa sessione/)).toBeTruthy();
-    expect(screen.queryByText('Memorizzazione in chiaro')).toBeNull();
-  });
 
   it('renders primary API key in the card table and shows count', () => {
     render(<ApiKeySection {...defaultProps} />);
@@ -249,28 +239,6 @@ describe('ApiKeySection component', () => {
 
     expect(setApiKey).toHaveBeenCalledWith('AIzaSyBackupKey11111111111111ABCD');
     expect(setFallbackKeys).toHaveBeenCalledWith(['AIzaSyBackupKey22222222222222WXYZ']);
-  });
-
-  it('requests explicit deletion when the primary key is protected and inaccessible', () => {
-    const setApiKey = vi.fn();
-    const onClearProtectedPrimary = vi.fn();
-
-    render(
-      <ApiKeySection
-        {...defaultProps}
-        apiKey=""
-        setApiKey={setApiKey}
-        hasProtectedKey
-        onClearProtectedPrimary={onClearProtectedPrimary}
-      />
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Opzioni chiave principale' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Rimuovi chiave' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Rimuovi' }));
-
-    expect(setApiKey).toHaveBeenCalledWith('');
-    expect(onClearProtectedPrimary).toHaveBeenCalledTimes(1);
   });
 
   it('promotes a reserve key to primary and swaps current primary into reserves', () => {

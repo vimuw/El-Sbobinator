@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useRegenerateDialog } from './useRegenerateDialog';
+import * as diagnostics from '../diagnostics';
 
 import { type PywebviewApi } from '../bridge';
 
@@ -37,6 +38,34 @@ describe('useRegenerateDialog', () => {
 
     expect(answerRegenMock).toHaveBeenCalledWith(true);
     expect(result.current.regeneratePrompt).toBeNull();
+  });
+
+  it('reports a failed answer and still closes the prompt', async () => {
+    const failure = new Error('host gone');
+    window.pywebview = {
+      api: {
+        answer_regenerate: vi.fn().mockRejectedValue(failure),
+      } as unknown as PywebviewApi,
+    };
+    const report = vi.spyOn(diagnostics, 'reportClientError').mockImplementation(() => {});
+    const { result } = renderHook(() =>
+      useRegenerateDialog({
+        previewContent: null,
+        previewSessionDir: '',
+        closePreview: vi.fn(),
+      }),
+    );
+    act(() => {
+      result.current.setRegeneratePrompt({ filename: 'test.mp3', mode: 'resume' });
+    });
+
+    await act(async () => {
+      await result.current.handleRegenerateAnswer(false);
+    });
+
+    expect(report).toHaveBeenCalledWith('Failed to send the regenerate answer:', failure);
+    expect(result.current.regeneratePrompt).toBeNull();
+    report.mockRestore();
   });
 
   it('checks dirty content and flushes via editorControllerRef before showing dirty confirm', async () => {

@@ -2,7 +2,6 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ArchiveFolder, ArchiveSession } from '../../bridge';
 import { BACKDROP_SHAKE_MS } from '../../hooks/useBackdropDismiss';
-import { ShareExportModal } from '../modals/ShareExportModal';
 import { UNSAVED_CHANGES_HINT } from '../modals/UnsavedChangesHint';
 import { AddSessionsToFolderModal, FolderModal } from './FolderModals';
 import { MoveToFolderModal } from './MoveToFolderModal';
@@ -151,30 +150,5 @@ describe('MoveToFolderModal', () => {
     fireEvent.click(screen.getByTestId('move-folder-backdrop'));
     expect(onClose).not.toHaveBeenCalled();
     expectShake(container, 'Sposta qui');
-  });
-});
-
-describe('ShareExportModal', () => {
-  it('closes on a click outside: nothing in it waits to be saved', () => {
-    const onClose = vi.fn();
-    render(<ShareExportModal session={session} onClose={onClose} />);
-    fireEvent.click(screen.getByText('Solo Sbobina (Leggero)'));
-    fireEvent.click(screen.getByTestId('share-export-backdrop'));
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it('ignores a click outside while the package is being exported', async () => {
-    let resolveExport!: (value: { ok: boolean }) => void;
-    (window as unknown as { pywebview: unknown }).pywebview = {
-      api: { export_sbobina_package: () => new Promise(resolve => { resolveExport = resolve; }) },
-    };
-    const onClose = vi.fn();
-    render(<ShareExportModal session={session} onClose={onClose} />);
-    fireEvent.click(screen.getByText('Esporta Pacchetto (.sbobina)'));
-    fireEvent.click(screen.getByTestId('share-export-backdrop'));
-    expect(onClose).not.toHaveBeenCalled();
-    await act(async () => { resolveExport({ ok: true }); });
-    fireEvent.click(screen.getByTestId('share-export-backdrop'));
-    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

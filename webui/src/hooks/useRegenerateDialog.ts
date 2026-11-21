@@ -54,7 +54,7 @@ export function useRegenerateDialog({
         }
       }
       if (window.pywebview?.api?.answer_regenerate) await window.pywebview.api.answer_regenerate(ans);
-    } catch (e) { reportClientError('Failed to send answer to Python:', e); }
+    } catch (e) { reportClientError('Failed to send the regenerate answer:', e); }
   }, [closePreview, editorControllerRef, isPreviewOpen, previewSessionDir, regeneratePrompt]);
 
   const handleRegenDirtyConfirm = useCallback(async () => {

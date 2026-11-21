@@ -43,7 +43,7 @@ describe('SidebarAccount', () => {
       <NavSidebar
         activePage="queue" setActivePage={noop} apiReady bridgeDelayed={false} hasApiKey isApiKeyValid appState="idle"
         themeMode="light" setThemeMode={noop} showConsole={false} setShowConsole={noop} setIsSettingsOpen={noop}
-        hasPendingUpdate={false} consoleDisabled={false} unreadNotificationsCount={0} isNotificationsOpen={false}
+        consoleDisabled={false} unreadNotificationsCount={0} isNotificationsOpen={false}
         setIsNotificationsOpen={noop} shakeBell={false}
       />,
     );

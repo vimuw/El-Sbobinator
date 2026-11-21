@@ -15,18 +15,12 @@ export interface ArchivePageProps {
   folders: ArchiveFolder[];
   onFoldersChange: (folders: ArchiveFolder[]) => void;
   onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string, sessionDir?: string, searchTerm?: string) => void;
-  onOpenFile: (path: string) => void;
   onDeleteSession: (sessionDir: string, name: string) => void;
   onRenameSession?: (sessionDir: string, name: string) => Promise<unknown>;
   onDeleteMultipleSessions?: (sessions: { sessionDir: string; name: string }[]) => void;
   onRefresh?: () => void;
   onLoadAll?: () => void;
   onRetryFailedRevisionBlocks?: (sessionDir: string) => Promise<void>;
-  onNotification?: (
-    title: string,
-    message: string,
-    type?: 'info' | 'warning' | 'error' | 'success',
-  ) => void;
   /** Web: set by "Vedi quali" in Archiviazione: show the sbobine with kept audio, heaviest first. */
   showKeptAudioRequest?: boolean;
   /** The request above was applied: the archive keeps its own filter from here on. */
@@ -51,7 +45,7 @@ export const SORT_OPTIONS: { id: SortOption; label: string }[] = [
 /** Web: offered only while some sbobina keeps its audio in this browser. */
 export const AUDIO_SIZE_SORT_OPTION: { id: SortOption; label: string } = { id: 'audio_size', label: 'Audio più pesante' };
 
-/** Bytes of audio a sbobina keeps in this browser (0 on desktop and without a kept copy). */
+/** Bytes of audio a sbobina keeps in this browser (0 without a kept copy). */
 export function keptAudioBytes(session: ArchiveSession): number {
   return session.kept_audio_bytes && session.kept_audio_bytes > 0 ? session.kept_audio_bytes : 0;
 }

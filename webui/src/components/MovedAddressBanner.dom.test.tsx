@@ -1,10 +1,10 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
+import { DEFAULT_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
 import { MovedAddressBanner } from './MovedAddressBanner';
 import { PrivacyLink } from './PrivacyLink';
 
-afterEach(() => setHostCapabilities(DESKTOP_CAPABILITIES));
+afterEach(() => setHostCapabilities(DEFAULT_CAPABILITIES));
 
 describe('moved-address notice', () => {
   it('asks for a backup to import on elsbobinator.com and reminds that keys stay behind', () => {
@@ -33,12 +33,8 @@ describe('moved-address notice', () => {
 });
 
 describe('privacy link', () => {
-  it('points to the static page on the web only', () => {
-    const { rerender } = render(<PrivacyLink />);
-    expect(screen.queryByRole('link', { name: 'Informativa sulla privacy' })).toBeNull();
-
-    setHostCapabilities({ kind: 'web' });
-    rerender(<PrivacyLink />);
+  it('points to the static page', () => {
+    render(<PrivacyLink />);
     const link = screen.getByRole('link', { name: 'Informativa sulla privacy' });
     expect(link.getAttribute('href')).toBe('/privacy');
     // Same tab: the page links back to the app.

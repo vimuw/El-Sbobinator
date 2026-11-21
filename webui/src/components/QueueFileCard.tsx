@@ -1,12 +1,11 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { DURATION, EASE_IN, enterTransition, exitTransition } from '../motion';
-import { AlertCircle, AlertTriangle, ArrowUpRight, CheckCircle, Clock, FileAudio, FolderOpen, GripVertical, Mic, RotateCcw, Settings, X, XCircle } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowUpRight, CheckCircle, Clock, FileAudio, GripVertical, Mic, RotateCcw, Settings, X, XCircle } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { AppStatus, FileItem } from '../appState';
 import type { ArchiveFolder } from '../bridge';
-import { getHostCapabilities } from '../hostCapabilities';
 import { errorLabel, formatDuration, formatRelativeTime, formatSize, isPausedError, isQuotaError, isResumableError, shortModelName } from '../utils';
 import { FolderIndicatorChip } from './FolderChip';
 import { MiddleTruncate } from './MiddleTruncate';
@@ -20,7 +19,6 @@ interface QueueFileCardProps {
   onRemove: (id: string) => void;
   onRetry: (id: string) => void;
   onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string, sessionDir?: string) => void;
-  onOpenFile: (path: string) => void;
   onOpenSettings?: () => void;
   showDragHandle?: boolean;
 }
@@ -30,7 +28,6 @@ function QueueFileCardInner({
   onRemove,
   onRetry,
   onPreview: _onPreview,
-  onOpenFile: _onOpenFile,
   onOpenSettings,
   showDragHandle = true,
 }: QueueFileCardProps) {
@@ -216,7 +213,6 @@ interface CompletedFileCardProps {
   isNewest?: boolean;
   onRemove: (id: string) => void;
   onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string, sessionDir?: string) => void;
-  onOpenFile: (path: string) => void;
   onRetryFailedRevisionBlocks?: (sessionDir: string, fileId?: string) => Promise<void>;
   currentFolder?: Pick<ArchiveFolder, 'name' | 'color'>;
   // Web: whether this browser keeps the sbobina's audio; undefined while that is unknown.
@@ -226,10 +222,9 @@ interface CompletedFileCardProps {
 // A sbobina finished moments ago gets a brief background highlight instead of motion.
 const FRESH_COMPLETION_MS = 6000;
 
-function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetryFailedRevisionBlocks, currentFolder, audioKept }: CompletedFileCardProps) {
-  const { openLocalPath: canOpenLocalPath, sessionKeepsAudio } = getHostCapabilities();
-  // Web: the lecture's size reads as audio still here, so a sbobina without a copy says so instead.
-  const audioNotKept = !sessionKeepsAudio && audioKept === false;
+function CompletedFileCardInner({ file, onRemove, onPreview, onRetryFailedRevisionBlocks, currentFolder, audioKept }: CompletedFileCardProps) {
+  // The lecture's size reads as audio still here, so a sbobina without a copy says so instead.
+  const audioNotKept = audioKept === false;
   const [isFresh] = React.useState(() => file.completedAt !== undefined && Date.now() - file.completedAt < FRESH_COMPLETION_MS);
   const isClickable = Boolean(file.outputHtml);
   const [isRetryingBlocks, setIsRetryingBlocks] = React.useState(false);
@@ -363,17 +358,6 @@ function CompletedFileCardInner({ file, onRemove, onPreview, onOpenFile, onRetry
             </button>
           )}
           {/* One or two secondary actions sit on the card as icons: a menu for them only hides them. */}
-          {file.outputHtml && canOpenLocalPath && (
-            <button
-              type="button"
-              onClick={() => onOpenFile(file.outputDir ?? file.outputHtml!)}
-              className="icon-button compact-icon-button"
-              title="Apri cartella"
-              aria-label="Apri cartella"
-            >
-              <FolderOpen className="w-4 h-4" />
-            </button>
-          )}
           <button
             type="button"
             onClick={() => onRemove(file.id)}

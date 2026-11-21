@@ -1,23 +1,20 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
 import { AlertCircle, ArrowRight, CheckCircle2, ExternalLink, Eye, EyeOff, Loader2 } from 'lucide-react';
-import type { CredentialStorage, ValidationCheck } from '../bridge';
+import type { ValidationCheck } from '../bridge';
 import { GEMINI_KEY_PATTERN } from '../utils';
-import { getHostCapabilities } from '../hostCapabilities';
 import { BrandLogo } from './BrandLogo';
 import { SetupErrorNotice } from './SetupErrorNotice';
 import { enterTransition } from '../motion';
 
 interface SetupPageProps {
-  hasProtectedKey: boolean;
-  onSaved: (key: string, model?: string, storage?: CredentialStorage, legacyPlaintext?: boolean) => void;
+  onSaved: (key: string, model?: string) => void;
   preferredModel: string;
   fallbackKeys: string[];
 
 }
 
 export function SetupPage({
-  hasProtectedKey,
   onSaved,
   preferredModel,
   fallbackKeys,
@@ -39,7 +36,7 @@ export function SetupPage({
     setSetupKeyError(null);
     try {
       if (!window.pywebview?.api?.save_settings) {
-        setLocalError('Bridge Python non disponibile — impostazioni non salvate.');
+        setLocalError('Salvataggio non disponibile: impostazioni non salvate.');
         return;
       }
 
@@ -59,13 +56,7 @@ export function SetupPage({
         setLocalError(`Errore salvataggio: ${result?.error || 'errore sconosciuto'}`);
         return;
       }
-      if (result.api_key_insecure !== undefined) {
-        onSaved(trimmedKey, preferredModel, result.credential_storage, result.api_key_insecure);
-      } else if (result.credential_storage) {
-        onSaved(trimmedKey, preferredModel, result.credential_storage);
-      } else {
-        onSaved(trimmedKey, preferredModel);
-      }
+      onSaved(trimmedKey, preferredModel);
     } finally {
       setSetupKeySaving(false);
     }
@@ -80,15 +71,13 @@ export function SetupPage({
     >
       {/* Document Header */}
       <div className="space-y-3 text-left">
-        <BrandLogo size={52} welcome={!hasProtectedKey} />
+        <BrandLogo size={52} welcome />
         <div className="space-y-1.5">
           <h1 className="page-title">
-            {hasProtectedKey ? 'Chiave API non accessibile' : 'Configura la tua API Key'}
+            Configura la tua API Key
           </h1>
           <p className="text-base leading-relaxed text-[var(--text-muted)]">
-            {hasProtectedKey
-              ? 'La tua chiave era salvata ma non è accessibile (errore di sistema). Reinseriscila per continuare.'
-              : 'El Sbobinator usa Google Gemini per trascrivere audio e video. Inserisci una chiave API gratuita per iniziare.'}
+            El Sbobinator usa Google Gemini per trascrivere audio e video. Inserisci una chiave API gratuita per iniziare.
           </p>
         </div>
       </div>
@@ -180,7 +169,7 @@ export function SetupPage({
           <SetupErrorNotice check={setupKeyError} apiKey={trimmedKey} />
         )}
 
-        {getHostCapabilities().keyStorage === 'browser' && (
+        {(
           <p className="text-xs text-[var(--text-muted)]" data-testid="setup-browser-key-note">
             La chiave resta solo in questo browser e viene inviata solo a Google. Su un dispositivo condiviso rimuovila da Impostazioni quando hai finito.
           </p>

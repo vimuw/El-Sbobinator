@@ -128,25 +128,12 @@ export interface ModelOption {
   is_default?: boolean;
 }
 
-export type CredentialStorageState = 'protected' | 'session_only' | 'legacy_plaintext' | 'absent';
-export interface CredentialStorage {
-  primary: CredentialStorageState;
-  fallback: CredentialStorageState;
-}
-
 export interface SettingsPayload {
   api_key?: string;
   fallback_keys?: string[];
   preferred_model?: string;
 
   available_models?: ModelOption[];
-  has_protected_key?: boolean;
-  api_key_insecure?: boolean;
-  api_key_insecure_reason?: string;
-  credential_storage?: CredentialStorage;
-  config_recovered_from?: string;
-  configuredFallbackKeyCount?: number;
-  configured_fallback_key_count?: number;
 }
 
 export interface ArchiveSession {
@@ -167,8 +154,7 @@ export interface ArchiveSession {
   /** Web previews with the trash: when the sbobina was moved to the trash (gone for good 30 days later). */
   trashed_at?: string;
   /** Web: bytes of the lecture audio kept in this browser for the sbobina, counted when the archive
-   *  is read and never stored; 0 when it keeps none, absent when the audio couldn't be read (and on
-   *  desktop, whose audio stays on disk). */
+   *  is read and never stored; 0 when it keeps none, absent when the audio couldn't be read. */
   kept_audio_bytes?: number;
 }
 
@@ -255,13 +241,6 @@ export interface DriveExportResult {
 
 export type ElSbobinatorBridge = BridgeCallbacks | null;
 
-export interface UpdateDownloadProgressPayload {
-  status: 'downloading' | 'verifying' | 'installing' | 'done' | 'error';
-  bytes_done: number;
-  bytes_total: number;
-  error?: string;
-}
-
 export interface StepTimePayload {
   kind: string;
   seconds: number;
@@ -297,7 +276,6 @@ export interface BridgeCallbacks {
   askNewKey: () => void;
   dismissNewKey: () => void;
   filesDropped: (files: FileDescriptor[]) => void;
-  updateDownloadProgress: (data: UpdateDownloadProgressPayload) => void;
   apiUsageUpdated?: (data: ApiUsageResult) => void;
   retryStateChanged?: (data: RetryStatePayload) => void;
   requestQuitConfirmation?: () => void;
@@ -324,13 +302,12 @@ export interface PywebviewApi {
     fallbackKeys: string[] | null,
     preferredModel: string,
 
-  ) => Promise<{ ok: boolean; error?: string; credential_storage?: CredentialStorage; api_key_insecure?: boolean; api_key_insecure_reason?: string }>;
+  ) => Promise<{ ok: boolean; error?: string }>;
   ask_files?: () => Promise<FileDescriptor[]>;
   ask_media_file?: () => Promise<FileDescriptor | null>;
   /** Web: a file for the editor's player, held by the page only (no copy in the browser). */
   ask_editor_media_file?: () => Promise<FileDescriptor | null>;
   check_path_exists?: (path: string) => Promise<{ ok: boolean; exists: boolean }>;
-  collect_dropped_files?: (names: string[]) => Promise<{ ok: boolean }>;
   start_processing?: (
     files: FileDescriptor[],
     apiKey: string,
@@ -345,7 +322,6 @@ export interface PywebviewApi {
   is_processing_active?: () => Promise<{ ok: boolean; active?: boolean }>;
   answer_regenerate?: (regenerate: boolean | null) => Promise<{ ok: boolean }>;
   answer_new_key?: (key: string) => Promise<{ ok: boolean }>;
-  open_file?: (path: string) => Promise<{ ok: boolean; error?: string }>;
   open_url?: (url: string) => Promise<{ ok: boolean; error?: string }>;
   open_link?: (url: string) => Promise<{ ok: boolean; error?: string }>;
   read_html_content?: (path: string) => Promise<{ ok: boolean; content?: string; error?: string }>;
@@ -394,11 +370,6 @@ export interface PywebviewApi {
   /** Web: keeps (or stops keeping) a copy of the sbobina's audio in this browser. */
   set_session_audio_kept?: (sessionDir: string, keep: boolean) => Promise<{ ok: boolean; audio_kept?: boolean; error?: string }>;
   touch_session_opened?: (sessionDir: string) => Promise<{ ok: boolean; last_opened_at_iso?: string; error?: string }>;
-  open_session_folder?: () => Promise<{ ok: boolean; error?: string }>;
-  ask_session_folder?: () => Promise<{ ok: boolean; path?: string; cancelled?: boolean; error?: string }>;
-  move_session_root?: (newPath: string) => Promise<{ ok: boolean; started?: boolean; error?: string }>;
-  get_session_move_status?: () => Promise<{ status: string; moved?: number; total?: number; error?: string | null; old_root?: string; new_root?: string }>;
-  download_and_install_update?: (version: string) => Promise<{ ok: boolean; status?: string; error?: string }>;
   save_theme_preference?: (theme: 'light' | 'dark') => Promise<void>;
   get_archive_folders?: () => Promise<{ ok: boolean; folders: ArchiveFolder[]; error?: string }>;
   save_archive_folders?: (folders: ArchiveFolder[]) => Promise<{ ok: boolean; error?: string }>;
@@ -416,30 +387,6 @@ export interface PywebviewApi {
     quota_exhausted?: boolean;
     conflict?: boolean;
   }>;
-  export_sbobina_package?: (
-    sessionDir: string,
-    exportType?: 'full' | 'text_only' | 'audio_only',
-    targetPath?: string,
-  ) => Promise<{
-    ok: boolean;
-    error?: string;
-    cancelled?: boolean;
-    target_path?: string;
-    include_mode?: string;
-    audio_included?: boolean;
-    size_bytes?: number;
-  }>;
-  import_sbobina_package?: (
-    packagePath?: string,
-  ) => Promise<{
-    ok: boolean;
-    error?: string;
-    cancelled?: boolean;
-    session_dir?: string;
-    name?: string;
-    html_path?: string;
-    has_audio?: boolean;
-  }>;
   get_api_usage?: (
     apiKey?: string,
     fallbackKeys?: string[],
@@ -455,11 +402,8 @@ export interface PywebviewApi {
     sessionDir?: string,
     frontendVersion?: string,
   ) => Promise<{ ok: boolean; report?: string; error?: string }>;
-  list_diagnostic_sessions?: () => Promise<{ ok: boolean; sessions?: Array<{ path: string; label: string }>; error?: string }>;
-  export_diagnostics?: (sessionDir?: string, frontendVersion?: string) => Promise<{ ok: boolean; target_path?: string; cancelled?: boolean; error?: string }>;
   record_frontend_event?: (kind: string, message?: string, stack?: string) => Promise<{ ok: boolean; error?: string }>;
   upload_browser_files?: (files: File[]) => Promise<FileDescriptor[]>;
-  set_browser_scenario?: (scenario: string) => Promise<{ ok: boolean; scenario?: string; error?: string }>;
 }
 
 declare global {
@@ -482,7 +426,6 @@ export function createBridge(options: {
   onFileFailed?: (data: FileFailedPayload) => void;
   onFilesDropped: (files: FileDescriptor[]) => void;
   onBatchStart: () => void;
-  onDownloadProgress?: (data: UpdateDownloadProgressPayload) => void;
   onApiUsageUpdated?: (data: ApiUsageResult) => void;
   onRetryStateChanged?: (data: RetryStatePayload) => void;
   onRequestQuitConfirmation?: () => void;
@@ -502,7 +445,6 @@ export function createBridge(options: {
     onFileFailed,
     onFilesDropped,
     onBatchStart,
-    onDownloadProgress,
     onApiUsageUpdated,
     onRetryStateChanged,
     onRequestQuitConfirmation,
@@ -546,7 +488,6 @@ export function createBridge(options: {
     askNewKey: onAskNewKey,
     dismissNewKey: onDismissNewKey,
     filesDropped: onFilesDropped,
-    updateDownloadProgress: data => { onDownloadProgress?.(data); },
     apiUsageUpdated: data => { onApiUsageUpdated?.(data); },
     retryStateChanged: data => { onRetryStateChanged?.(data); },
     requestQuitConfirmation: () => { onRequestQuitConfirmation?.(); },

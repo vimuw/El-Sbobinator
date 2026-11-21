@@ -42,7 +42,6 @@ export interface QueueSectionActionProps {
   onRetry: (id: string) => void;
   onResumeAll?: () => void;
   onPreview: (htmlPath: string, filename: string, sourcePath?: string, fileId?: string, sessionDir?: string) => void;
-  onOpenFile: (path: string) => void;
   onStart: () => void;
   onOpenSettings?: () => void;
   onAddFiles?: () => void;
@@ -85,7 +84,6 @@ export const QueueSection = memo(function QueueSection({
     onRetry,
     onResumeAll,
     onPreview,
-    onOpenFile,
     onStart,
     onOpenSettings,
     onAddFiles,
@@ -225,7 +223,6 @@ export const QueueSection = memo(function QueueSection({
                       onRemove={onRemove}
                       onRetry={(id) => onRetry(id)}
                       onPreview={onPreview}
-                      onOpenFile={onOpenFile}
                       onOpenSettings={onOpenSettings}
                       showDragHandle={canReorder}
                     />

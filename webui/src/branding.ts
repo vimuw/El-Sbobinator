@@ -4,8 +4,6 @@ export const APP_SHORT = 'Sbobinatura';
 export const APP_WINDOW_TITLE = 'El Sbobinator';
 export const GITHUB_REPO = 'vimuw/El-Sbobinator';
 export const GITHUB_URL = `https://github.com/${GITHUB_REPO}`;
-export const GITHUB_RELEASES_URL = `${GITHUB_URL}/releases/latest`;
-export const GITHUB_API_RELEASES_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
 // Privacy notice of the web build, a static page of the same site (webBuild.ts emits it).
 export const WEB_PRIVACY_PATH = '/privacy';
 // The developer's contact, the same as on the privacy page: where reports go when the app cannot
@@ -20,8 +18,6 @@ export const APP_VERSION: string = typeof __APP_VERSION__ !== 'undefined' ? __AP
 declare const __WEB_PREVIEW__: boolean;
 export const WEB_PREVIEW_BUILD: boolean = typeof __WEB_PREVIEW__ !== 'undefined' && __WEB_PREVIEW__;
 
-// An email to the developer with the app version in the subject. The desktop bridge allows exactly
-// this address with only a subject (bridge_utils._ALLOWED_URL_PREFIXES, _is_allowed_open_url); the
-// subject is its own constant so tests/test_app_webview.py can resolve this URL.
+// An email to the developer with the app version in the subject.
 export const BUG_REPORT_SUBJECT = `${APP_NAME} ${APP_VERSION}: segnalazione`;
 export const BUG_REPORT_URL = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(BUG_REPORT_SUBJECT)}`;

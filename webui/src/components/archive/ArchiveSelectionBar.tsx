@@ -6,7 +6,6 @@ import {
 } from 'lucide-react';
 import type { ArchiveFolder } from '../../bridge';
 import { DEFAULT_FOLDER_COLOR } from './types';
-import { deletedFrom } from '../../hostCapabilities';
 import { DURATION, enterTransition } from '../../motion';
 
 export interface ArchiveSelectionBarProps {
@@ -212,7 +211,7 @@ export function ArchiveSelectionBar({
           onClick={onDeleteSelected}
           className="group/del flex items-center gap-2 min-h-[var(--control-height-lg)] px-4 rounded-full text-sm font-semibold tracking-tight transition-colors cursor-pointer hover:bg-[var(--error-subtle)]"
           style={{ color: 'var(--error-text)' }}
-          title={`Elimina le sbobine selezionate ${deletedFrom()}`}
+          title="Elimina le sbobine selezionate da questo browser"
         >
           <Trash2
             className="w-4 h-4 shrink-0 transition-transform duration-200 group-hover/del:scale-110 group-hover/del:-translate-y-0.5"

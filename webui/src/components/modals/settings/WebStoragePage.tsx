@@ -29,8 +29,6 @@ interface WebStoragePageProps {
   onShowKeptAudio?: () => void;
 }
 
-const noop = () => {};
-
 export const REVEAL_TIMEOUT_MS = 1500;
 
 export const WebStoragePage: React.FC<WebStoragePageProps> = ({ sessionInfo, isLoadingSessionInfo, onArchiveChanged, onOpenDrive, onShowKeptAudio }) => {
@@ -60,21 +58,11 @@ export const WebStoragePage: React.FC<WebStoragePageProps> = ({ sessionInfo, isL
       aria-busy={!revealed}
     >
       <StorageSection
-        inBrowser
         drive={!drive.available ? 'unavailable' : drive.status?.connected ? 'connected' : 'disconnected'}
         onOpenDrive={onOpenDrive}
         onShowKeptAudio={onShowKeptAudio}
-        canManageSessionFolder={false}
         sessionInfo={sessionInfo}
         isLoadingSessionInfo={isLoadingSessionInfo}
-        isMoveInProgress={false}
-        moveProgress={null}
-        moveError={null}
-        onOpenSessionFolder={noop}
-        onAskMoveFolder={noop}
-        isCleaningSession={false}
-        cleanupResult={null}
-        onAskCleanup={noop}
       />
       <WebBackupSection onArchiveImported={onArchiveChanged} onLoaded={() => setBackupLoaded(true)}>
         {drive.available && <WebDriveExportRow drive={drive} />}
