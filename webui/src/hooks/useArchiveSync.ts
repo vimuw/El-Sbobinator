@@ -156,7 +156,7 @@ export function useArchiveSync({
         setFolders(res.folders);
       }
     } catch (_) {}
-  }, [dispatch, refreshArchiveSessions]);
+  }, [refreshArchiveSessions]);
 
   const finalizeArchiveReplacement = useCallback(async (fileId: string) => {
     const pendingReplacement = pendingArchiveReplacementsRef.current.get(fileId);
