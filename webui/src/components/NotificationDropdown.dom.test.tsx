@@ -23,7 +23,7 @@ describe('NotificationDropdown component', () => {
       read: true,
       action: {
         label: 'Aggiorna ora',
-        type: 'install_update',
+        type: 'open_settings',
         onAction: vi.fn().mockResolvedValue(undefined),
       },
     },
@@ -299,7 +299,7 @@ describe('NotificationDropdown component', () => {
         onDismiss,
         action: {
           label: 'Scarica ora',
-          type: 'install_update',
+          type: 'open_settings',
           onAction,
         },
       },
@@ -339,7 +339,7 @@ describe('NotificationDropdown component', () => {
         read: false,
         action: {
           label: 'Esegui',
-          type: 'install_update',
+          type: 'retry_failed_revision_blocks',
           errorSuffix: 'riprova più tardi',
           onAction,
         },

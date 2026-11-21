@@ -4,8 +4,6 @@ export const APP_SHORT = 'Sbobinatura';
 export const APP_WINDOW_TITLE = 'El Sbobinator';
 export const GITHUB_REPO = 'vimuw/El-Sbobinator';
 export const GITHUB_URL = `https://github.com/${GITHUB_REPO}`;
-export const GITHUB_RELEASES_URL = `${GITHUB_URL}/releases/latest`;
-export const GITHUB_API_RELEASES_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
 // Privacy notice of the web build, a static page of the same site (webBuild.ts emits it).
 export const WEB_PRIVACY_PATH = '/privacy';
 // The developer's contact, the same as on the privacy page: where reports go when the app cannot

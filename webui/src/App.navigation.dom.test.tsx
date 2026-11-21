@@ -2,13 +2,11 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import App from './App';
 import { useApiReady } from './hooks/useApiReady';
-import { useUpdateChecker } from './hooks/useUpdateChecker';
 import { DESKTOP_CAPABILITIES, setHostCapabilities } from './hostCapabilities';
 
 // Real motion/react here (App.dom.test mocks it away): page switches must not
 // wait for the previous page's exit animation.
 vi.mock('./hooks/useApiReady');
-vi.mock('./hooks/useUpdateChecker');
 vi.mock('./hooks/useQueuePersistence', async (importOriginal) => ({
   ...await importOriginal<typeof import('./hooks/useQueuePersistence')>(),
   useQueuePersistence: vi.fn(),
@@ -35,10 +33,6 @@ beforeEach(() => {
     configuredFallbackKeyCount: 0, preferredModel: 'gemini-2.5-flash', setPreferredModel: vi.fn(),
     availableModels: [], refreshSettings: vi.fn(),
   } as unknown as ReturnType<typeof useApiReady>);
-  vi.mocked(useUpdateChecker).mockReturnValue({
-    updateAvailable: null, latestVersion: null, isDismissed: false, isCheckingUpdate: false,
-    hasChecked: true, checkFailed: false, checkForUpdates: vi.fn(), dismissUpdate: vi.fn(),
-  } as unknown as ReturnType<typeof useUpdateChecker>);
 });
 
 afterEach(() => {

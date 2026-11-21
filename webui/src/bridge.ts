@@ -255,13 +255,6 @@ export interface DriveExportResult {
 
 export type ElSbobinatorBridge = BridgeCallbacks | null;
 
-export interface UpdateDownloadProgressPayload {
-  status: 'downloading' | 'verifying' | 'installing' | 'done' | 'error';
-  bytes_done: number;
-  bytes_total: number;
-  error?: string;
-}
-
 export interface StepTimePayload {
   kind: string;
   seconds: number;
@@ -297,7 +290,6 @@ export interface BridgeCallbacks {
   askNewKey: () => void;
   dismissNewKey: () => void;
   filesDropped: (files: FileDescriptor[]) => void;
-  updateDownloadProgress: (data: UpdateDownloadProgressPayload) => void;
   apiUsageUpdated?: (data: ApiUsageResult) => void;
   retryStateChanged?: (data: RetryStatePayload) => void;
   requestQuitConfirmation?: () => void;
@@ -398,7 +390,6 @@ export interface PywebviewApi {
   ask_session_folder?: () => Promise<{ ok: boolean; path?: string; cancelled?: boolean; error?: string }>;
   move_session_root?: (newPath: string) => Promise<{ ok: boolean; started?: boolean; error?: string }>;
   get_session_move_status?: () => Promise<{ status: string; moved?: number; total?: number; error?: string | null; old_root?: string; new_root?: string }>;
-  download_and_install_update?: (version: string) => Promise<{ ok: boolean; status?: string; error?: string }>;
   save_theme_preference?: (theme: 'light' | 'dark') => Promise<void>;
   get_archive_folders?: () => Promise<{ ok: boolean; folders: ArchiveFolder[]; error?: string }>;
   save_archive_folders?: (folders: ArchiveFolder[]) => Promise<{ ok: boolean; error?: string }>;
@@ -482,7 +473,6 @@ export function createBridge(options: {
   onFileFailed?: (data: FileFailedPayload) => void;
   onFilesDropped: (files: FileDescriptor[]) => void;
   onBatchStart: () => void;
-  onDownloadProgress?: (data: UpdateDownloadProgressPayload) => void;
   onApiUsageUpdated?: (data: ApiUsageResult) => void;
   onRetryStateChanged?: (data: RetryStatePayload) => void;
   onRequestQuitConfirmation?: () => void;
@@ -502,7 +492,6 @@ export function createBridge(options: {
     onFileFailed,
     onFilesDropped,
     onBatchStart,
-    onDownloadProgress,
     onApiUsageUpdated,
     onRetryStateChanged,
     onRequestQuitConfirmation,
@@ -546,7 +535,6 @@ export function createBridge(options: {
     askNewKey: onAskNewKey,
     dismissNewKey: onDismissNewKey,
     filesDropped: onFilesDropped,
-    updateDownloadProgress: data => { onDownloadProgress?.(data); },
     apiUsageUpdated: data => { onApiUsageUpdated?.(data); },
     retryStateChanged: data => { onRetryStateChanged?.(data); },
     requestQuitConfirmation: () => { onRequestQuitConfirmation?.(); },

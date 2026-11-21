@@ -11,7 +11,6 @@ import { GEMINI_KEY_PATTERN, normalizeSessionPath } from './utils';
 import { STORAGE_KEYS } from './storageKeys';
 import { useConsole } from './hooks/useConsole';
 import { useTheme } from './hooks/useTheme';
-import { useUpdateChecker } from './hooks/useUpdateChecker';
 import { loadPersistedQueue, useQueuePersistence } from './hooks/useQueuePersistence';
 import { useApiReady } from './hooks/useApiReady';
 import { useBridgeCallbacks } from './hooks/useBridgeCallbacks';
@@ -20,7 +19,6 @@ import { useBodyScrollLock } from './hooks/useBodyScrollLock';
 import { useHistoryNavigation } from './hooks/useHistoryNavigation';
 import { usePreview } from './hooks/usePreview';
 import { useNotifications } from './hooks/useNotifications';
-import { useUpdateInstaller } from './hooks/useUpdateInstaller';
 import { useArchiveSync } from './hooks/useArchiveSync';
 import { useQueueIngest } from './hooks/useQueueIngest';
 import { useConfirmModal } from './hooks/useConfirmModal';
@@ -65,9 +63,6 @@ export default function App() {
   const { consoleLogs, appendConsole } = useConsole();
   const handleDismissRunOutcome = useCallback(() => dispatch({ type: 'outcome/clear' }), []);
   const { themeMode, setThemeMode } = useTheme();
-  const { updateAvailable, latestVersion, isCheckingUpdate, hasChecked, checkFailed, checkForUpdates, dismissUpdate } = useUpdateChecker(
-    getHostCapabilities().updateInstallation,
-  );
   const {
     apiReady,
     bridgeDelayed,
@@ -110,7 +105,6 @@ export default function App() {
   }, [isSettingsOpen]);
 
   const handleRetryFailedRevisionBlocksRef = useRef<(sessionDir: string, fileId?: string) => Promise<void>>(() => Promise.resolve());
-  const installUpdateRef = useRef<(version: string) => Promise<void>>(() => Promise.resolve());
   const startProcessingRef = useRef<(isContinuation?: boolean, overrideLowDisk?: boolean, forceRetry?: boolean) => Promise<boolean>>(() => Promise.resolve(false));
 
   const {
@@ -118,17 +112,12 @@ export default function App() {
     unreadNotificationsCount,
     shakeBell,
     addNotification,
-    upsertNotification,
     deleteNotification,
     markNotificationAsRead,
     markAllNotificationsAsRead,
     clearAllNotifications,
-    removeNotificationByDedupeKey,
   } = useNotifications({
     onRetryFailedRevisionBlocks: useCallback((sessionDir: string, fileId?: string) => handleRetryFailedRevisionBlocksRef.current(sessionDir, fileId), []),
-    onInstallUpdate: useCallback((version: string) => installUpdateRef.current(version), []),
-    onDismissUpdate: dismissUpdate,
-    updateAvailable,
     onOpenSettings: useCallback(() => setIsSettingsOpen(true), [setIsSettingsOpen]),
   });
 
@@ -154,17 +143,6 @@ export default function App() {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
-
-  const {
-    updateInstallState,
-    installUpdate,
-    handleDownloadProgress,
-  } = useUpdateInstaller({
-    latestVersion,
-    appendConsole,
-    upsertNotification,
-    removeNotificationByDedupeKey,
-  });
 
   const {
     archiveSessions,
@@ -347,9 +325,7 @@ export default function App() {
 
   useSystemNotificationTriggers({
     configRecoveredFrom,
-    updateAvailable,
     addNotification,
-    removeNotificationByDedupeKey,
   });
 
   const [hasOpenedPreview, setHasOpenedPreview] = useState(false);
@@ -362,7 +338,6 @@ export default function App() {
   }, [preview.content]);
 
   useLayoutEffect(() => {
-    installUpdateRef.current = installUpdate;
     handleRetryFailedRevisionBlocksRef.current = handleRetryFailedRevisionBlocks;
     startProcessingRef.current = startProcessing;
     onFilesAddedToBatchRef.current = onFilesAddedToBatch;
@@ -370,7 +345,7 @@ export default function App() {
     filesRef.current = files;
     appStateRef.current = appState;
     autoContinueRef.current = autoContinue;
-  }, [installUpdate, handleRetryFailedRevisionBlocks, startProcessing, onFilesAddedToBatch, onFileRemovedFromBatch, files, appState, autoContinue]);
+  }, [handleRetryFailedRevisionBlocks, startProcessing, onFilesAddedToBatch, onFileRemovedFromBatch, files, appState, autoContinue]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEYS.AUTO_CONTINUE, String(autoContinue)); } catch (_) {}
@@ -465,7 +440,6 @@ export default function App() {
     onRevisionWarning: handleRevisionWarning,
     addNotification,
     batchTotal,
-    onDownloadProgress: handleDownloadProgress,
     onRequestQuitConfirmation: requestQuitConfirmation,
     onArchiveChangedRemotely: () => {
       setArchiveRevision(revision => revision + 1);
@@ -610,7 +584,6 @@ export default function App() {
         setShowConsole={setShowConsole}
         setIsSettingsOpen={setIsSettingsOpen}
         onOpenStorageSettings={handleOpenDriveSettings}
-        hasPendingUpdate={updateAvailable !== null}
         consoleDisabled={isConsoleDisabled}
         unreadNotificationsCount={unreadNotificationsCount}
         isNotificationsOpen={isNotificationsOpen}
@@ -790,15 +763,6 @@ export default function App() {
               setPreferredModel,
 
               availableModels,
-            }}
-            updater={{
-              latestVersion,
-              checkForUpdates,
-              isCheckingUpdate,
-              hasChecked,
-              checkFailed,
-              updateInstallState,
-              onInstallUpdate: installUpdate,
             }}
             storage={{
               onSessionRootMoved: handleSessionRootMoved,

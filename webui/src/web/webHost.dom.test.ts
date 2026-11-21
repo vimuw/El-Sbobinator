@@ -101,7 +101,6 @@ describe('web host', () => {
     expect(api?.open_file).toBeUndefined();
     expect(api?.stream_media_file).toBeTypeOf('function');
     expect(api?.export_sbobina_package).toBeUndefined();
-    expect(api?.download_and_install_update).toBeUndefined();
     expect(api?.export_diagnostics).toBeUndefined();
   });
 

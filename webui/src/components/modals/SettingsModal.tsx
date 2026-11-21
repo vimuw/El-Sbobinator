@@ -16,7 +16,6 @@ import { ExternalLinkIcon } from '../ExternalLinkIcon';
 import { DiagnosticsSection } from './settings/DiagnosticsSection';
 import { ApiStatusSection } from './settings/ApiStatusSection';
 import { WebSharedDeviceNotice } from './settings/WebSharedDeviceNotice';
-import { UpdaterSection, UpdateNotice, type SettingsUpdateInstallState } from './settings/UpdaterSection';
 import { SettingsDivider, SettingsPageHeader, SettingsSectionHeading } from './settings/SettingsLayout';
 
 import { useSettingsStorage } from '../../hooks/useSettingsStorage';
@@ -28,7 +27,6 @@ import { APP_VERSION, WEB_PREVIEW_BUILD, WEB_PRIVACY_PATH } from '../../branding
 import { STORAGE_KEYS } from '../../storageKeys';
 import { DURATION, largeModalCard } from '../../motion';
 
-export type { SettingsUpdateInstallState };
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -50,16 +48,6 @@ export interface SettingsModelsProps {
   availableModels: ModelOption[];
 }
 
-export interface SettingsUpdaterProps {
-  latestVersion: string | null;
-  checkForUpdates: (force?: boolean) => void;
-  isCheckingUpdate: boolean;
-  hasChecked: boolean;
-  checkFailed: boolean;
-  updateInstallState?: SettingsUpdateInstallState;
-  onInstallUpdate?: (version: string) => Promise<void>;
-}
-
 export interface SettingsStorageProps {
   onSessionRootMoved?: (payload?: { oldRoot?: string; newRoot?: string }) => void;
   /** Web build: a backup was imported, the archive must be reloaded. */
@@ -77,7 +65,6 @@ export interface SettingsModalProps {
   onSettingsSaved?: () => Promise<unknown> | unknown;
   auth: SettingsAuthProps;
   models: SettingsModelsProps;
-  updater: SettingsUpdaterProps;
   storage?: SettingsStorageProps;
   /** Section shown when the modal opens, e.g. the backup from the moved-address notice. */
   initialTab?: SettingsTab;
@@ -170,7 +157,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onSettingsSaved,
   auth,
   models,
-  updater,
   storage,
   initialTab,
 }) => {
@@ -188,7 +174,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
     availableModels,
   } = models;
-  const { latestVersion, checkForUpdates, isCheckingUpdate, hasChecked, checkFailed, updateInstallState, onInstallUpdate } = updater;
   const onSessionRootMoved = storage?.onSessionRootMoved;
   const hostCapabilities = getHostCapabilities();
   // Drive sits right under Generale, so the sync is seen as soon as the settings open.
@@ -212,17 +197,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [isLoadingUsage, setIsLoadingUsage] = useState(false);
   const [clearProtectedPrimary, setClearProtectedPrimary] = useState(false);
   const [keyDeleteTarget, setKeyDeleteTarget] = useState<DeleteKeyTarget | null>(null);
-  // Update progress shows only where the install was started: the top notice by default,
-  // the version section when the user installed from there.
-  const [updateStartedInSection, setUpdateStartedInSection] = useState(false);
-  const installUpdateFromNotice = useCallback((version: string) => {
-    setUpdateStartedInSection(false);
-    return onInstallUpdate!(version);
-  }, [onInstallUpdate]);
-  const installUpdateFromSection = useCallback((version: string) => {
-    setUpdateStartedInSection(true);
-    return onInstallUpdate!(version);
-  }, [onInstallUpdate]);
 
   const isSavingRef = useRef(false);
   const isMountedRef = useRef(true);
@@ -289,8 +263,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       };
     } else if (!isOpen) {
       settingsSnapshotRef.current = null;
-      // Reopened, the page starts at the top again, where the notice shows the progress.
-      setUpdateStartedInSection(false);
     }
     wasOpenRef.current = isOpen;
   }, [apiKey, fallbackKeys, isOpen, preferredModel]);
@@ -395,8 +367,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
     setSaveError(null);
-    // The new page starts at the top, where the notice shows the progress.
-    setUpdateStartedInSection(false);
   };
 
   const runEnvironmentValidation = async () => {
@@ -688,13 +658,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div ref={contentRef} data-testid="settings-content" className="app-scroll flex-1 overflow-y-auto overflow-x-hidden px-6 md:px-8 pt-5 pb-6 md:pb-8 space-y-6 [scrollbar-gutter:stable]">
                   {activeTab === 'general' && (
                     <div className="space-y-6 animate-fade-in">
-                      <UpdateNotice
-                        latestVersion={latestVersion}
-                        updateInstallState={updateInstallState}
-                        onInstallUpdate={onInstallUpdate && installUpdateFromNotice}
-                        showsInstallFeedback={!updateStartedInSection}
-                      />
-
                       <ModelSection
                         preferredModel={preferredModel}
                         setPreferredModel={setPreferredModel}
@@ -740,23 +703,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             notificationsEnabled={notificationsEnabled}
                             onChange={setNotificationsEnabled}
                             disabled={isSaving}
-                          />
-                        </>
-                      )}
-
-                      {hostCapabilities.updateInstallation && (
-                        <>
-                          <SettingsDivider />
-
-                          <UpdaterSection
-                            latestVersion={latestVersion}
-                            checkForUpdates={checkForUpdates}
-                            isCheckingUpdate={isCheckingUpdate}
-                            hasChecked={hasChecked}
-                            checkFailed={checkFailed}
-                            updateInstallState={updateInstallState}
-                            onInstallUpdate={onInstallUpdate && installUpdateFromSection}
-                            showsInstallFeedback={updateStartedInSection}
                           />
                         </>
                       )}

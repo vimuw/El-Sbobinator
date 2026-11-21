@@ -24,7 +24,6 @@ interface NavSidebarProps {
   showConsole: boolean;
   setShowConsole: (v: boolean) => void;
   setIsSettingsOpen: (v: boolean) => void;
-  hasPendingUpdate: boolean;
   consoleDisabled: boolean;
   unreadNotificationsCount: number;
   isNotificationsOpen: boolean;
@@ -49,7 +48,6 @@ export const NavSidebar = memo(function NavSidebar({
   themeMode, setThemeMode,
   showConsole, setShowConsole,
   setIsSettingsOpen,
-  hasPendingUpdate,
   consoleDisabled,
   unreadNotificationsCount,
   isNotificationsOpen,
@@ -177,12 +175,9 @@ export const NavSidebar = memo(function NavSidebar({
         {report.modal}
         <UtilityButton
           icon={
-            <span style={{ position: 'relative', display: 'inline-flex' }}>
-              <Settings size={18} />
-              {hasPendingUpdate && <SidebarBadge tone="accent" />}
-            </span>
+            <Settings size={18} />
           }
-          label={hasPendingUpdate ? 'Impostazioni (Nuova versione)' : 'Impostazioni'}
+          label="Impostazioni"
           ariaLabel="Apri impostazioni"
           active={false}
           onClick={() => setIsSettingsOpen(true)}

@@ -23,7 +23,6 @@ function renderSidebar(overrides: Partial<Parameters<typeof NavSidebar>[0]> = {}
     showConsole: false,
     setShowConsole: vi.fn(),
     setIsSettingsOpen: vi.fn(),
-    hasPendingUpdate: false,
     consoleDisabled: false,
     unreadNotificationsCount: 0,
     isNotificationsOpen: false,
@@ -41,12 +40,11 @@ describe('NavSidebar badges', () => {
   });
 
   it('marks each pending state with the shared badge on its own button', () => {
-    renderSidebar({ appState: 'processing', unreadNotificationsCount: 2, hasPendingUpdate: true });
+    renderSidebar({ appState: 'processing', unreadNotificationsCount: 2 });
 
     const cases = [
       ['Dashboard', 'processing'],
       ['Apri notifiche', 'alert'],
-      ['Apri impostazioni', 'accent'],
     ] as const;
     for (const [button, tone] of cases) {
       const badge = screen.getByTestId(`sidebar-badge-${tone}`);

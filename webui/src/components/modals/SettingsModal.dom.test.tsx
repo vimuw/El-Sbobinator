@@ -5,10 +5,8 @@ import {
   SettingsModal,
   type SettingsAuthProps,
   type SettingsModelsProps,
-  type SettingsUpdaterProps,
   type SettingsStorageProps,
   type SettingsModalProps,
-  type SettingsUpdateInstallState,
 } from './SettingsModal';
 import type { ModelOption } from '../../bridge';
 import { STORAGE_KEYS } from '../../storageKeys';
@@ -58,7 +56,6 @@ interface MakePropsOverrides {
   onSettingsSaved?: () => Promise<unknown> | unknown;
   auth?: Partial<SettingsAuthProps>;
   models?: Partial<SettingsModelsProps>;
-  updater?: Partial<SettingsUpdaterProps>;
   storage?: Partial<SettingsStorageProps>;
   apiKey?: string;
   setApiKey?: (key: string) => void;
@@ -70,13 +67,6 @@ interface MakePropsOverrides {
   setPreferredModel?: (model: string) => void;
 
   availableModels?: ModelOption[];
-  latestVersion?: string | null;
-  checkForUpdates?: (force?: boolean) => void;
-  isCheckingUpdate?: boolean;
-  hasChecked?: boolean;
-  checkFailed?: boolean;
-  updateInstallState?: SettingsUpdateInstallState;
-  onInstallUpdate?: (version: string) => Promise<void>;
   onSessionRootMoved?: (payload?: { oldRoot?: string; newRoot?: string }) => void;
 }
 
@@ -98,15 +88,6 @@ const makeProps = (overrides: MakePropsOverrides = {}): SettingsModalProps => ({
     setPreferredModel: overrides.setPreferredModel ?? overrides.models?.setPreferredModel ?? vi.fn(),
 
     availableModels: overrides.availableModels ?? overrides.models?.availableModels ?? [],
-  },
-  updater: {
-    latestVersion: overrides.latestVersion !== undefined ? overrides.latestVersion : (overrides.updater?.latestVersion ?? null),
-    checkForUpdates: overrides.checkForUpdates ?? overrides.updater?.checkForUpdates ?? vi.fn(),
-    isCheckingUpdate: overrides.isCheckingUpdate ?? overrides.updater?.isCheckingUpdate ?? false,
-    hasChecked: overrides.hasChecked ?? overrides.updater?.hasChecked ?? true,
-    checkFailed: overrides.checkFailed ?? overrides.updater?.checkFailed ?? false,
-    updateInstallState: overrides.updateInstallState ?? overrides.updater?.updateInstallState,
-    onInstallUpdate: overrides.onInstallUpdate ?? overrides.updater?.onInstallUpdate,
   },
   storage: {
     onSessionRootMoved: overrides.onSessionRootMoved ?? overrides.storage?.onSessionRootMoved,
@@ -969,168 +950,6 @@ describe('SettingsModal — model section', () => {
     const option = screen.getByRole('option', { name: /Gemini 3.6 Flash/i });
     fireEvent.click(option);
     expect(setPreferredModel).toHaveBeenCalledWith('gemini-3.6-flash');
-  });
-});
-
-describe('SettingsModal — version status display', () => {
-  it('lets the user install a manually found update beside the check button while keeping the top notice', () => {
-    const checkForUpdates = vi.fn();
-    const onInstallUpdate = vi.fn().mockResolvedValue(undefined);
-    const props = makeProps({ hasChecked: false, checkForUpdates, onInstallUpdate });
-    const { rerender } = render(<SettingsModal {...props} />);
-    const content = screen.getByTestId('settings-content');
-    content.scrollTop = 500;
-    const statusScrollIntoView = vi.fn();
-    const section = screen.getByRole('region', { name: 'Versione e aggiornamenti' });
-    within(section).getByRole('status').scrollIntoView = statusScrollIntoView;
-
-    fireEvent.click(screen.getByRole('button', { name: 'Cerca aggiornamenti' }));
-    expect(checkForUpdates).toHaveBeenCalledWith(true);
-    rerender(<SettingsModal {...props} updater={{ ...props.updater, isCheckingUpdate: true }} />);
-    expect(screen.getByText('Controllo in corso…')).toBeTruthy();
-    expect(screen.queryByText(/È disponibile la versione/)).toBeNull();
-    expect(statusScrollIntoView).not.toHaveBeenCalled();
-
-    rerender(<SettingsModal {...props} updater={{ ...props.updater, latestVersion: 'v9.9.9', hasChecked: true }} />);
-    expect(within(section).getByRole('status').textContent).toBe('È disponibile la versione v9.9.9.');
-    expect(content.scrollTop).toBe(500);
-    expect(statusScrollIntoView).toHaveBeenCalledWith({ block: 'nearest' });
-    const notice = screen.getByRole('region', { name: 'Aggiornamento applicazione' });
-    expect(notice.compareDocumentPosition(screen.getByText('Modello di trascrizione')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(within(notice).getByRole('button', { name: 'Installa aggiornamento' })).toBeTruthy();
-    // The check button became the section's only install action, beside the release notes
-    expect(within(section).getAllByRole('button')).toHaveLength(1);
-    expect(within(section).getByRole('link', { name: 'Note di rilascio' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Mostra aggiornamento' })).toBeNull();
-
-    const scrollIntoView = vi.fn();
-    notice.scrollIntoView = scrollIntoView;
-    expect(onInstallUpdate).not.toHaveBeenCalled();
-    fireEvent.click(within(section).getByRole('button', { name: 'Aggiorna a v9.9.9' }));
-    expect(onInstallUpdate).toHaveBeenCalledWith('v9.9.9');
-    expect(onInstallUpdate).toHaveBeenCalledTimes(1);
-    expect(scrollIntoView).not.toHaveBeenCalled();
-    expect(content.scrollTop).toBe(500);
-
-    // Progress shows only where the install was started
-    rerender(<SettingsModal {...props} updater={{
-      ...props.updater,
-      latestVersion: 'v9.9.9',
-      hasChecked: true,
-      updateInstallState: { status: 'downloading', bytesDone: 5242880, bytesTotal: 10485760 },
-    }} />);
-    expect(within(section).getByRole('progressbar').getAttribute('aria-valuenow')).toBe('50');
-    expect(within(notice).queryByRole('progressbar')).toBeNull();
-    expect(screen.getAllByText('Download aggiornamento…')).toHaveLength(1);
-  });
-
-  it('moves the progress of an install started in the section to the top notice after a tab switch', () => {
-    // jsdom has no scrollIntoView; the section reveals its feedback with it.
-    Element.prototype.scrollIntoView = vi.fn();
-    onTestFinished(() => { delete (Element.prototype as Partial<Element>).scrollIntoView; });
-    const props = makeProps({ hasChecked: false, onInstallUpdate: vi.fn().mockResolvedValue(undefined) });
-    const { rerender } = render(<SettingsModal {...props} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Cerca aggiornamenti' }));
-    const found = { ...props.updater, latestVersion: 'v9.9.9', hasChecked: true };
-    rerender(<SettingsModal {...props} updater={found} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Aggiorna a v9.9.9' }));
-    const downloading = { ...found, updateInstallState: { status: 'downloading', bytesDone: 5242880, bytesTotal: 10485760 } as const };
-    rerender(<SettingsModal {...props} updater={downloading} />);
-    expect(within(screen.getByRole('region', { name: 'Versione e aggiornamenti' })).getByRole('progressbar')).toBeTruthy();
-
-    // Back on Generale the page starts at the top: the progress must be visible there.
-    fireEvent.click(screen.getByRole('button', { name: 'Archiviazione' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Generale' }));
-    const notice = screen.getByRole('region', { name: 'Aggiornamento applicazione' });
-    const section = screen.getByRole('region', { name: 'Versione e aggiornamenti' });
-    expect(within(notice).getByRole('progressbar').getAttribute('aria-valuenow')).toBe('50');
-    expect(within(section).queryByRole('progressbar')).toBeNull();
-    expect(screen.getAllByText('Download aggiornamento…')).toHaveLength(1);
-  });
-
-  it.each([
-    ['downloading', 'Download aggiornamento…'],
-    ['verifying', 'Verifica integrità aggiornamento…'],
-    ['installing', 'Installazione aggiornamento…'],
-    ['done', 'Installer avviato. Segui le istruzioni a schermo.'],
-    ['error', 'Errore download di prova.'],
-  ] as const)('shows %s feedback once, in the top notice, for an install started elsewhere', (status, message) => {
-    render(<SettingsModal {...makeProps({
-      latestVersion: 'v9.9.9',
-      onInstallUpdate: vi.fn().mockResolvedValue(undefined),
-      updateInstallState: { status, bytesDone: 5242880, bytesTotal: 10485760, error: 'Errore download di prova.' },
-    })} />);
-    const section = screen.getByRole('region', { name: 'Versione e aggiornamenti' });
-    const notice = screen.getByRole('region', { name: 'Aggiornamento applicazione' });
-    expect(within(notice).getByText(message)).toBeTruthy();
-    expect(within(section).queryByText(message)).toBeNull();
-    expect(screen.queryByText(/Sei aggiornato/)).toBeNull();
-    if (status === 'downloading') {
-      expect(within(notice).getByRole('progressbar').getAttribute('aria-valuenow')).toBe('50');
-      expect(within(section).queryByRole('progressbar')).toBeNull();
-    }
-    if (status !== 'error') {
-      expect(screen.queryByRole('button', { name: 'Installa aggiornamento' })).toBeNull();
-    }
-    if (status === 'downloading' || status === 'verifying' || status === 'installing') {
-      expect((within(section).getByRole('button', { name: 'Cerca aggiornamenti' }) as HTMLButtonElement).disabled).toBe(true);
-    }
-  });
-
-  it('checkFailed=true: shows network-error message, hides "✓ Sei aggiornato"', () => {
-    render(<SettingsModal {...makeProps({ checkFailed: true, latestVersion: null, hasChecked: true, isCheckingUpdate: false })} />);
-    expect(screen.queryByText(/Sei aggiornato/)).toBeNull();
-    expect(screen.getByText(/non riuscita/i)).toBeTruthy();
-  });
-
-  it('checkFailed=false, hasChecked=true: shows "✓ Sei aggiornato"', () => {
-    render(<SettingsModal {...makeProps({ checkFailed: false, latestVersion: null, hasChecked: true, isCheckingUpdate: false })} />);
-    expect(screen.getByText(/Sei aggiornato/)).toBeTruthy();
-    expect(screen.queryByText(/non riuscita/i)).toBeNull();
-  });
-
-  it('isCheckingUpdate=true: shows neither status row', () => {
-    render(<SettingsModal {...makeProps({ checkFailed: false, latestVersion: null, hasChecked: true, isCheckingUpdate: true })} />);
-    expect(screen.queryByText(/Sei aggiornato/)).toBeNull();
-    expect(screen.queryByText(/non riuscita/i)).toBeNull();
-  });
-
-  it('shows the async install error state once', () => {
-    render(
-      <SettingsModal
-        {...makeProps({
-          latestVersion: 'v2.0.0',
-          updateInstallState: {
-            version: 'v2.0.0',
-            status: 'error',
-            bytesDone: 0,
-            bytesTotal: 0,
-            error: 'Verifica integrità fallita: il file scaricato non corrisponde al checksum atteso.',
-          },
-        })}
-      />,
-    );
-
-    expect(screen.getAllByText(/Verifica integrità fallita/i)).toHaveLength(1);
-  });
-
-  it('shows the async install success state once', () => {
-    render(
-      <SettingsModal
-        {...makeProps({
-          latestVersion: 'v2.0.0',
-          updateInstallState: {
-            version: 'v2.0.0',
-            status: 'done',
-            bytesDone: 10,
-            bytesTotal: 10,
-            error: null,
-          },
-        })}
-      />,
-    );
-
-    expect(screen.getAllByText(/Installer avviato/i)).toHaveLength(1);
   });
 });
 

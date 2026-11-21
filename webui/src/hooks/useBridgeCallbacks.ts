@@ -1,6 +1,6 @@
 import { type Dispatch, useEffect, useLayoutEffect, useRef } from 'react';
 import type React from 'react';
-import { createBridge, type ElSbobinatorBridge, type PreferredModelChangedPayload, type UpdateDownloadProgressPayload } from '../bridge';
+import { createBridge, type ElSbobinatorBridge, type PreferredModelChangedPayload } from '../bridge';
 import type { AppStatus, FileDescriptor, FileDonePayload, FileItem, ProcessDonePayload, ProcessingAction } from '../appState';
 import { getHostCapabilities } from '../hostCapabilities';
 import { errorLabel, isPausedError, shortModelName } from '../utils';
@@ -31,7 +31,6 @@ export function useBridgeCallbacks(options: {
   onBatchFullyDone: (data: ProcessDonePayload) => void;
   clearCompletionFlash: () => void;
   onRevisionWarning?: (data: FileDonePayload) => void;
-  onDownloadProgress?: (data: UpdateDownloadProgressPayload) => void;
   batchTotal?: number;
   addNotification?: (
     title: string,
@@ -41,7 +40,7 @@ export function useBridgeCallbacks(options: {
     opts?: {
       persistent?: boolean;
       dedupeKey?: string;
-      actionType?: 'retry_failed_revision_blocks' | 'install_update' | 'open_github';
+      actionType?: 'retry_failed_revision_blocks';
       actionData?: unknown;
     }
   ) => void;
@@ -77,7 +76,6 @@ export function useBridgeCallbacks(options: {
   const onBatchFullyDoneRef = useRef(options.onBatchFullyDone);
   const clearCompletionFlashRef = useRef(options.clearCompletionFlash);
   const onRevisionWarningRef = useRef(options.onRevisionWarning);
-  const onDownloadProgressRef = useRef(options.onDownloadProgress);
   const addNotificationRef = useRef(addNotification);
   const batchTotalRef = useRef(batchTotal);
   const onRequestQuitConfirmationRef = useRef(options.onRequestQuitConfirmation);
@@ -97,7 +95,6 @@ export function useBridgeCallbacks(options: {
     onBatchFullyDoneRef.current = options.onBatchFullyDone;
     clearCompletionFlashRef.current = options.clearCompletionFlash;
     onRevisionWarningRef.current = options.onRevisionWarning;
-    onDownloadProgressRef.current = options.onDownloadProgress;
     addNotificationRef.current = options.addNotification;
     batchTotalRef.current = options.batchTotal ?? 0;
     onRequestQuitConfirmationRef.current = options.onRequestQuitConfirmation;
@@ -145,7 +142,6 @@ export function useBridgeCallbacks(options: {
         enqueueUniqueFilesRef.current(filesToAdd);
       },
       onBatchStart: () => { clearCompletionFlashRef.current(); },
-      onDownloadProgress: data => { onDownloadProgressRef.current?.(data); },
       onAskNewKey: () => {
         setAskNewKeyPromptRef.current(true);
         if (addNotificationRef.current) {

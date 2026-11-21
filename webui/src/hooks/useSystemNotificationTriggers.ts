@@ -3,7 +3,6 @@ import { type AddNotificationOptions, type NotificationCategory, type Notificati
 
 export interface UseSystemNotificationTriggersOptions {
   configRecoveredFrom: string;
-  updateAvailable: string | null;
   addNotification: (
     title: string,
     message: string,
@@ -11,14 +10,11 @@ export interface UseSystemNotificationTriggersOptions {
     category?: NotificationCategory,
     options?: AddNotificationOptions,
   ) => void;
-  removeNotificationByDedupeKey: (dedupeKey: string) => void;
 }
 
 export function useSystemNotificationTriggers({
   configRecoveredFrom,
-  updateAvailable,
   addNotification,
-  removeNotificationByDedupeKey,
 }: UseSystemNotificationTriggersOptions) {
   const configRecoveryToastPathRef = useRef<string | null>(null);
   useEffect(() => {
@@ -41,30 +37,4 @@ export function useSystemNotificationTriggers({
       },
     );
   }, [configRecoveredFrom, addNotification]);
-
-  const updateToastShownVersionRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!updateAvailable) {
-      if (updateToastShownVersionRef.current !== null) {
-        removeNotificationByDedupeKey('update-available');
-        updateToastShownVersionRef.current = null;
-      }
-      return;
-    }
-    if (updateToastShownVersionRef.current === updateAvailable) return;
-    updateToastShownVersionRef.current = updateAvailable;
-    const cleanVer = updateAvailable.trim().replace(/^v+/, '');
-    addNotification(
-      'Aggiornamento disponibile',
-      `Nuova versione disponibile: v${cleanVer}`,
-      'info',
-      'update',
-      {
-        persistent: true,
-        dedupeKey: 'update-available',
-        actionType: 'install_update',
-        actionData: { version: updateAvailable },
-      },
-    );
-  }, [updateAvailable, addNotification, removeNotificationByDedupeKey]);
 }

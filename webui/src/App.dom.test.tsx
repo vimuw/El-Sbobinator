@@ -5,7 +5,6 @@ import App from './App';
 import { useApiReady } from './hooks/useApiReady';
 import { useBridgeCallbacks } from './hooks/useBridgeCallbacks';
 import { useQueuePersistence } from './hooks/useQueuePersistence';
-import { useUpdateChecker } from './hooks/useUpdateChecker';
 import { STORAGE_KEYS } from './storageKeys';
 import { BUG_REPORT_URL } from './branding';
 import { setHostCapabilities } from './hostCapabilities';
@@ -69,8 +68,6 @@ const mockApiReadyWithKey = {
   apiReady: true,
   apiKey: 'AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ012345',
 };
-
-vi.mock('./hooks/useUpdateChecker');
 
 vi.mock('./hooks/useQueuePersistence', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./hooks/useQueuePersistence')>();
@@ -136,16 +133,6 @@ beforeEach(() => {
   setElSbobinatorBridge();
   vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('no network')));
   vi.mocked(useApiReady).mockReturnValue(mockApiReadyDefault);
-  vi.mocked(useUpdateChecker).mockReturnValue({
-    updateAvailable: null,
-    latestVersion: null,
-    isDismissed: false,
-    isCheckingUpdate: false,
-    hasChecked: true,
-    checkFailed: false,
-    checkForUpdates: vi.fn(),
-    dismissUpdate: vi.fn(),
-  });
   vi.mocked(useBridgeCallbacks).mockReturnValue(undefined);
 });
 
@@ -157,25 +144,6 @@ afterEach(() => {
 });
 
 describe('App', () => {
-  // The notification panel stays mounted while closed, but inert and hidden, so out of the
-  // accessibility tree; these tests read what it holds without opening it.
-  const closedNotificationPanel = () => document.querySelector<HTMLElement>('[role="dialog"][aria-label="Notifiche"]')!;
-
-  function expectUpdateInstallFeedback(message: RegExp, startedIn: 'notice' | 'section' = 'notice') {
-    // Settings shows the feedback once, where the install was started.
-    const section = within(screen.getByRole('region', { name: 'Versione e aggiornamenti' }));
-    if (startedIn === 'section') {
-      expect(section.getByText(message)).toBeTruthy();
-      expect(screen.queryByRole('region', { name: 'Aggiornamento applicazione' })?.textContent ?? '').not.toMatch(message);
-    } else {
-      expect(within(screen.getByRole('region', { name: 'Aggiornamento applicazione' })).getByText(message)).toBeTruthy();
-      expect(section.queryByText(message)).toBeNull();
-    }
-    const notifications = within(closedNotificationPanel());
-    expect(notifications.getAllByText('Installazione aggiornamento', { selector: 'h1, h2, h3, h4, h5, h6' })).toHaveLength(1);
-    expect(notifications.getByText(message)).toBeTruthy();
-  }
-
   it('renders the app header with logo', async () => {
     await act(async () => { render(<App />); });
     const sidebar = screen.getByRole('navigation');
@@ -294,242 +262,6 @@ describe('App', () => {
 
     await act(async () => { render(<App />); });
     expect(screen.queryByText(/file di configurazione era corrotto/i)).toBeNull();
-  });
-
-  it('Settings install receives async checksum error and shows actionable fallback', async () => {
-    vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
-    vi.mocked(useUpdateChecker).mockReturnValue({
-      updateAvailable: null,
-      latestVersion: 'v2.0.0',
-      isDismissed: false,
-      isCheckingUpdate: false,
-      hasChecked: true,
-      checkFailed: false,
-      checkForUpdates: vi.fn(),
-      dismissUpdate: vi.fn(),
-    });
-    const downloadUpdate = vi.fn().mockResolvedValue({ ok: true, status: 'downloading' });
-    const openUrl = vi.fn().mockResolvedValue({ ok: true });
-    setPywebview({
-      get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [] }),
-      get_archive_folders: vi.fn().mockResolvedValue({ ok: true, folders: [] }),
-      download_and_install_update: downloadUpdate,
-      open_url: openUrl,
-    });
-
-    await act(async () => { render(<App />); });
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText(/Apri impostazioni/));
-    });
-    const updateSection = await screen.findByRole('region', { name: 'Versione e aggiornamenti' });
-    within(updateSection).getByRole('status').scrollIntoView = vi.fn();
-    // An update known on opening is offered by the top notice; the section offers it after a check.
-    await act(async () => {
-      fireEvent.click(within(updateSection).getByRole('button', { name: 'Cerca aggiornamenti' }));
-    });
-    await act(async () => {
-      fireEvent.click(within(updateSection).getByRole('button', { name: 'Aggiorna a v2.0.0' }));
-    });
-
-    expect(downloadUpdate).toHaveBeenCalledWith('v2.0.0');
-    expect(downloadUpdate).toHaveBeenCalledTimes(1);
-    expectUpdateInstallFeedback(/Download aggiornamento/i, 'section');
-    const bridgeOptions = vi.mocked(useBridgeCallbacks).mock.calls.at(-1)?.[0];
-    expect(bridgeOptions).toBeTruthy();
-    await act(async () => {
-      bridgeOptions?.onDownloadProgress?.({
-        status: 'error',
-        bytes_done: 10,
-        bytes_total: 10,
-        error: 'Verifica integrità fallita: il file scaricato non corrisponde al checksum atteso.',
-      });
-    });
-
-    expectUpdateInstallFeedback(/Verifica integrità fallita/i, 'section');
-    await act(async () => {
-      fireEvent.click(within(closedNotificationPanel()).getByText('Apri GitHub', { selector: 'button > span' }).closest('button')!);
-    });
-    expect(openUrl).toHaveBeenCalledWith('https://github.com/vimuw/El-Sbobinator/releases/latest');
-  });
-
-  it('does not duplicate update install toast when progress arrives before first toast render', async () => {
-    vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
-    vi.mocked(useUpdateChecker).mockReturnValue({
-      updateAvailable: null,
-      latestVersion: 'v2.0.0',
-      isDismissed: false,
-      isCheckingUpdate: false,
-      hasChecked: true,
-      checkFailed: false,
-      checkForUpdates: vi.fn(),
-      dismissUpdate: vi.fn(),
-    });
-    const downloadUpdate = vi.fn().mockImplementation(() => {
-      const bridgeOptions = vi.mocked(useBridgeCallbacks).mock.calls.at(-1)?.[0];
-      bridgeOptions?.onDownloadProgress?.({
-        status: 'downloading',
-        bytes_done: 5,
-        bytes_total: 10,
-      });
-      return Promise.resolve({ ok: true, status: 'downloading' });
-    });
-    setPywebview({
-      get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [] }),
-      get_archive_folders: vi.fn().mockResolvedValue({ ok: true, folders: [] }),
-      download_and_install_update: downloadUpdate,
-    });
-
-    await act(async () => { render(<App />); });
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText(/Apri impostazioni/));
-    });
-    const updateNotice = await screen.findByRole('region', { name: 'Aggiornamento applicazione' });
-    await act(async () => {
-      fireEvent.click(within(updateNotice).getByRole('button', { name: 'Installa aggiornamento' }));
-    });
-
-    expect(downloadUpdate).toHaveBeenCalledWith('v2.0.0');
-    expect(downloadUpdate).toHaveBeenCalledTimes(1);
-    expectUpdateInstallFeedback(/Download aggiornamento/i);
-  });
-
-  it('recreates update install toast after GitHub fallback action dismisses it', async () => {
-    vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
-    vi.mocked(useUpdateChecker).mockReturnValue({
-      updateAvailable: null,
-      latestVersion: 'v2.0.0',
-      isDismissed: false,
-      isCheckingUpdate: false,
-      hasChecked: true,
-      checkFailed: false,
-      checkForUpdates: vi.fn(),
-      dismissUpdate: vi.fn(),
-    });
-    const downloadUpdate = vi.fn().mockResolvedValue({ ok: true, status: 'downloading' });
-    const openUrl = vi.fn().mockResolvedValue({ ok: true });
-    setPywebview({
-      get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [] }),
-      get_archive_folders: vi.fn().mockResolvedValue({ ok: true, folders: [] }),
-      download_and_install_update: downloadUpdate,
-      open_url: openUrl,
-    });
-
-    await act(async () => { render(<App />); });
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText(/Apri impostazioni/));
-    });
-    const updateNotice = await screen.findByRole('region', { name: 'Aggiornamento applicazione' });
-    await act(async () => {
-      fireEvent.click(within(updateNotice).getByRole('button', { name: 'Installa aggiornamento' }));
-    });
-
-    const bridgeOptions = vi.mocked(useBridgeCallbacks).mock.calls.at(-1)?.[0];
-    expect(bridgeOptions).toBeTruthy();
-    await act(async () => {
-      bridgeOptions?.onDownloadProgress?.({
-        status: 'error',
-        bytes_done: 10,
-        bytes_total: 10,
-        error: 'Verifica integrità fallita: il file scaricato non corrisponde al checksum atteso.',
-      });
-    });
-    expectUpdateInstallFeedback(/Verifica integrità fallita/i);
-
-    const notifications = within(closedNotificationPanel());
-    await act(async () => {
-      fireEvent.click(notifications.getByText('Apri GitHub', { selector: 'button > span' }).closest('button')!);
-    });
-    expect(openUrl).toHaveBeenCalledWith('https://github.com/vimuw/El-Sbobinator/releases/latest');
-    expect(notifications.queryByText('Installazione aggiornamento', { selector: 'h1, h2, h3, h4, h5, h6' })).toBeNull();
-    expect(notifications.queryByText(/Verifica integrità fallita/i)).toBeNull();
-    expect(within(updateNotice).getByText(/Verifica integrità fallita/i)).toBeTruthy();
-    expect(within(screen.getByRole('region', { name: 'Versione e aggiornamenti' })).queryByText(/Verifica integrità fallita/i)).toBeNull();
-
-    await act(async () => {
-      fireEvent.click(within(updateNotice).getByRole('button', { name: 'Installa aggiornamento' }));
-    });
-
-    expect(downloadUpdate).toHaveBeenCalledTimes(2);
-    expectUpdateInstallFeedback(/Download aggiornamento/i);
-  });
-
-  it('Settings install success resolves and shows installer-started state', async () => {
-    vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
-    vi.mocked(useUpdateChecker).mockReturnValue({
-      updateAvailable: null,
-      latestVersion: 'v2.0.0',
-      isDismissed: false,
-      isCheckingUpdate: false,
-      hasChecked: true,
-      checkFailed: false,
-      checkForUpdates: vi.fn(),
-      dismissUpdate: vi.fn(),
-    });
-    const downloadUpdate = vi.fn().mockResolvedValue({ ok: true, status: 'downloading' });
-    setPywebview({
-      get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [] }),
-      get_archive_folders: vi.fn().mockResolvedValue({ ok: true, folders: [] }),
-      download_and_install_update: downloadUpdate,
-    });
-
-    await act(async () => { render(<App />); });
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText(/Apri impostazioni/));
-    });
-    const updateNotice = await screen.findByRole('region', { name: 'Aggiornamento applicazione' });
-    await act(async () => {
-      fireEvent.click(within(updateNotice).getByRole('button', { name: 'Installa aggiornamento' }));
-    });
-
-    expect(downloadUpdate).toHaveBeenCalledTimes(1);
-    expectUpdateInstallFeedback(/Download aggiornamento/i);
-    const bridgeOptions = vi.mocked(useBridgeCallbacks).mock.calls.at(-1)?.[0];
-    expect(bridgeOptions).toBeTruthy();
-    await act(async () => {
-      bridgeOptions?.onDownloadProgress?.({ status: 'done', bytes_done: 10, bytes_total: 10 });
-    });
-
-    expectUpdateInstallFeedback(/Installer avviato/i);
-  });
-
-  it('Settings install UAC denied leaves app open and explains the cancellation', async () => {
-    vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
-    vi.mocked(useUpdateChecker).mockReturnValue({
-      updateAvailable: null,
-      latestVersion: 'v2.0.0',
-      isDismissed: false,
-      isCheckingUpdate: false,
-      hasChecked: true,
-      checkFailed: false,
-      checkForUpdates: vi.fn(),
-      dismissUpdate: vi.fn(),
-    });
-    const downloadUpdate = vi.fn().mockResolvedValue({ ok: true, status: 'downloading' });
-    setPywebview({
-      get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [] }),
-      get_archive_folders: vi.fn().mockResolvedValue({ ok: true, folders: [] }),
-      download_and_install_update: downloadUpdate,
-    });
-
-    await act(async () => { render(<App />); });
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText(/Apri impostazioni/));
-    });
-    const updateNotice = await screen.findByRole('region', { name: 'Aggiornamento applicazione' });
-    await act(async () => {
-      fireEvent.click(within(updateNotice).getByRole('button', { name: 'Installa aggiornamento' }));
-    });
-
-    expect(downloadUpdate).toHaveBeenCalledTimes(1);
-    expectUpdateInstallFeedback(/Download aggiornamento/i);
-    const bridgeOptions = vi.mocked(useBridgeCallbacks).mock.calls.at(-1)?.[0];
-    expect(bridgeOptions).toBeTruthy();
-    await act(async () => {
-      bridgeOptions?.onDownloadProgress?.({ status: 'error', bytes_done: 0, bytes_total: 0, error: 'uac_denied' });
-    });
-
-    expectUpdateInstallFeedback(/richiesta UAC è stata rifiutata/i);
-    expect(screen.getByRole('heading', { name: /Impostazioni/ })).toBeTruthy();
   });
 });
 

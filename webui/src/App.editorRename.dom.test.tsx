@@ -2,14 +2,12 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import App from './App';
 import { useApiReady } from './hooks/useApiReady';
-import { useUpdateChecker } from './hooks/useUpdateChecker';
 import type { EditorFullPageProps } from './components/EditorFullPage';
 
 // The real usePreview and useArchiveSync run here (App.dom.test mocks usePreview away), so this
 // covers the App wiring of the editor's title: rename_session -> archive -> open editor heading.
 // The editor itself is a stub: its title field has its own tests in EditorFullPage.dom.test.
 vi.mock('./hooks/useApiReady');
-vi.mock('./hooks/useUpdateChecker');
 vi.mock('./hooks/useQueuePersistence', async (importOriginal) => ({
   ...await importOriginal<typeof import('./hooks/useQueuePersistence')>(),
   useQueuePersistence: vi.fn(),
@@ -58,10 +56,6 @@ beforeEach(() => {
     configuredFallbackKeyCount: 0, preferredModel: 'gemini-2.5-flash', setPreferredModel: vi.fn(),
     availableModels: [], refreshSettings: vi.fn(),
   } as unknown as ReturnType<typeof useApiReady>);
-  vi.mocked(useUpdateChecker).mockReturnValue({
-    updateAvailable: null, latestVersion: null, isDismissed: false, isCheckingUpdate: false,
-    hasChecked: true, checkFailed: false, checkForUpdates: vi.fn(), dismissUpdate: vi.fn(),
-  } as unknown as ReturnType<typeof useUpdateChecker>);
 });
 
 afterEach(() => {
