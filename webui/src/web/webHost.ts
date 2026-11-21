@@ -472,7 +472,6 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
         fallback_keys: keys.slice(1),
         preferred_model: loadWebModel(),
         available_models: WEB_MODEL_OPTIONS,
-        has_protected_key: false,
       };
     },
     save_settings: async (apiKey, fallbackKeys, preferredModel) => {

@@ -1,7 +1,6 @@
 import { reportClientError } from '../../../diagnostics';
 import React, { useState, useMemo, useCallback } from 'react';
 import {
-  ShieldCheck,
   AlertCircle,
   AlertTriangle,
   Plus,
@@ -23,21 +22,15 @@ import { QuotasSection } from './QuotasSection';
 import { SettingsSectionHeading, StatusBadge } from './SettingsLayout';
 import { KebabMenu, type KebabMenuItem } from '../../KebabMenu';
 import { DEFAULT_MODEL, GEMINI_KEY_PATTERN, getModelDisplayName } from '../../../utils';
-import type { ApiUsageResult, CredentialProfile, CredentialStorage } from '../../../bridge';
+import type { ApiUsageResult, CredentialProfile } from '../../../bridge';
 
-import { credentialStorageWarning } from '../../../credentialStorage';
 import { DEFAULT_QUOTA_RESET_INFO, isCredentialUsableForModel } from './credentialAvailability';
 
 export interface ApiKeySectionProps {
   apiKey: string;
   setApiKey: (key: string) => void;
-  hasProtectedKey: boolean;
-  credentialStorage?: CredentialStorage;
-  apiKeyInsecure: boolean;
-  apiKeyInsecureReason: string;
   fallbackKeys: string[];
   setFallbackKeys: (keys: string[]) => void;
-  onClearProtectedPrimary?: () => void;
   apiUsage?: ApiUsageResult | null;
   isLoadingUsage?: boolean;
   onRefreshUsage?: () => void;
@@ -56,13 +49,8 @@ export interface DeleteKeyTarget {
 export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
   apiKey,
   setApiKey,
-  hasProtectedKey,
-  credentialStorage,
-  apiKeyInsecure,
-  apiKeyInsecureReason,
   fallbackKeys,
   setFallbackKeys,
-  onClearProtectedPrimary,
   apiUsage,
   isLoadingUsage = false,
   onRefreshUsage,
@@ -70,7 +58,6 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
   onAskDeleteKey,
   statusSummary,
 }) => {
-  const storageWarning = credentialStorageWarning(credentialStorage, credentialStorage ? apiKeyInsecure : false) || (apiKeyInsecure ? (apiKeyInsecureReason || 'Credenziali presenti in chiaro nel file di configurazione.') : '');
   const [newKeyInput, setNewKeyInput] = useState('');
   const [notice, setNotice] = useState<{ type: 'error' | 'warning'; message: string } | null>(null);
   const [showNewKeyInput, setShowNewKeyInput] = useState(false);
@@ -90,7 +77,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
     [fallbackKeys]
   );
 
-  const hasPrimaryConfigured = Boolean(apiKey.trim() || hasProtectedKey);
+  const hasPrimaryConfigured = Boolean(apiKey.trim());
   const totalKeysCount = (hasPrimaryConfigured ? 1 : 0) + cleanedFallbackKeys.length;
 
   const credentials: CredentialProfile[] = useMemo(() => {
@@ -139,7 +126,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
     if (candidates.length === 0) return;
 
     const primaryKeyTrimmed = apiKey.trim();
-    const isPrimaryEmpty = !primaryKeyTrimmed && !hasProtectedKey;
+    const isPrimaryEmpty = !primaryKeyTrimmed;
 
     if (candidates.length === 1) {
       const cand = candidates[0];
@@ -325,9 +312,6 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
         setFallbackKeys(rest);
       } else {
         setApiKey('');
-        if (hasProtectedKey) {
-          onClearProtectedPrimary?.();
-        }
       }
     } else if (deleteTarget.type === 'fallback' && typeof deleteTarget.index === 'number') {
       const updated = cleanedFallbackKeys.filter((_, idx) => idx !== deleteTarget.index);
@@ -464,7 +448,7 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
     ? `...${apiKey.slice(-4)}`
     : (primaryCred?.masked_key
         ? `...${primaryCred.masked_key.slice(-4)}`
-        : (hasProtectedKey ? '••••••••••••' : ''));
+        : '');
 
   const primaryKebabItems: KebabMenuItem[] = [
     ...(apiKey
@@ -512,19 +496,6 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
 
       {statusSummary}
 
-      {/* Storage / Security notice */}
-      {storageWarning && (
-        <div className="alert-card is-warning text-xs space-y-1">
-          <div className="font-bold flex items-center gap-1.5">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
-            {credentialStorage?.primary === 'session_only' || credentialStorage?.fallback === 'session_only' ? 'Credenziali temporanee' : 'Memorizzazione in chiaro'}
-          </div>
-          <p className="text-[var(--text-secondary)]">
-            {storageWarning}
-          </p>
-        </div>
-      )}
-
       {/* 3. Structured Card Table (Quotas Layout) */}
       <div className="border border-[var(--border-default)] rounded-lg divide-y divide-[var(--border-default)] overflow-hidden bg-[var(--bg-surface)]">
         {/* Row 1: Chiave Principale (if configured) */}
@@ -534,22 +505,9 @@ export const ApiKeySection: React.FC<ApiKeySectionProps> = React.memo(({
               <div className="flex items-center gap-2 min-w-0 flex-wrap">
                 <span className="font-bold text-[var(--text-primary)]">Principale</span>
 
-                <span
-                  className="font-mono text-caption text-[var(--text-secondary)] select-all"
-                  title="Chiave protetta"
-                >
+                <span className="font-mono text-caption text-[var(--text-secondary)] select-all">
                   {primaryMaskedDisplay}
                 </span>
-
-                {hasProtectedKey && !apiKey && (
-                  <span
-                    className="text-caption font-medium text-[var(--success-text)] inline-flex items-center gap-1"
-                    title="Credenziale cifrata dal sistema operativo (DPAPI su Windows, Keychain su macOS)"
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-                    <span>Protetta</span>
-                  </span>
-                )}
               </div>
               {renderOtherModelsNote(primaryCred)}
             </div>

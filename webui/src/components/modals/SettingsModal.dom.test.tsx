@@ -59,7 +59,6 @@ interface MakePropsOverrides {
   storage?: Partial<SettingsStorageProps>;
   apiKey?: string;
   setApiKey?: (key: string) => void;
-  hasProtectedKey?: boolean;
   fallbackKeys?: string[];
   configuredFallbackKeyCount?: number;
   setFallbackKeys?: React.Dispatch<React.SetStateAction<string[]>>;
@@ -67,7 +66,6 @@ interface MakePropsOverrides {
   setPreferredModel?: (model: string) => void;
 
   availableModels?: ModelOption[];
-  onSessionRootMoved?: (payload?: { oldRoot?: string; newRoot?: string }) => void;
 }
 
 const makeProps = (overrides: MakePropsOverrides = {}): SettingsModalProps => ({
@@ -78,7 +76,6 @@ const makeProps = (overrides: MakePropsOverrides = {}): SettingsModalProps => ({
   auth: {
     apiKey: overrides.apiKey ?? overrides.auth?.apiKey ?? 'AIzaSyTest123456',
     setApiKey: overrides.setApiKey ?? overrides.auth?.setApiKey ?? vi.fn(),
-    hasProtectedKey: overrides.hasProtectedKey ?? overrides.auth?.hasProtectedKey ?? false,
     fallbackKeys: overrides.fallbackKeys ?? overrides.auth?.fallbackKeys ?? [],
     setFallbackKeys: overrides.setFallbackKeys ?? overrides.auth?.setFallbackKeys ?? vi.fn(),
     configuredFallbackKeyCount: overrides.configuredFallbackKeyCount ?? overrides.auth?.configuredFallbackKeyCount ?? 0,
@@ -90,7 +87,6 @@ const makeProps = (overrides: MakePropsOverrides = {}): SettingsModalProps => ({
     availableModels: overrides.availableModels ?? overrides.models?.availableModels ?? [],
   },
   storage: {
-    onSessionRootMoved: overrides.onSessionRootMoved ?? overrides.storage?.onSessionRootMoved,
   },
 });
 
@@ -104,16 +100,6 @@ afterEach(() => {
 });
 
 describe('SettingsModal — model parameters chunk display', () => {
-  it('keeps the saved modal open when credentials are session-only', async () => {
-    const onClose = vi.fn();
-    setPywebview({ save_settings: vi.fn().mockResolvedValue({ ok: true, credential_storage: { primary: 'session_only', fallback: 'absent' } }) });
-    render(<SettingsModal {...makeProps({ onClose })} />);
-    await act(async () => { fireEvent.click(screen.getByText('Salva e Chiudi')); });
-    expect(onClose).not.toHaveBeenCalled();
-    expect(screen.getByText('Credenziali temporanee')).toBeTruthy();
-    expect(screen.getByText(/al riavvio saranno disponibili/)).toBeTruthy();
-  });
-
   it('does not display technical chunk duration or temperature parameters in UI', async () => {
     const models = [
       { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: '', default_chunk_minutes: 15 },
@@ -168,16 +154,6 @@ describe('SettingsModal — API usage and support tab', () => {
     }
   });
 
-  it('shows no pending check rows before the environment check runs', async () => {
-    render(<SettingsModal {...makeProps({ apiKey: 'test-api-key' })} />);
-    await act(async () => {
-      fireEvent.click(screen.getByText('Assistenza').closest('button')!);
-    });
-
-    expect(screen.queryByText('da verificare')).toBeNull();
-    expect(screen.queryByText('Config locale')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Verifica ambiente' })).toBeTruthy();
-  });
 });
 
 describe('SettingsModal — save behavior', () => {
@@ -314,7 +290,7 @@ describe('SettingsModal — save behavior', () => {
     });
 
     expect(onClose).not.toHaveBeenCalled();
-    expect(screen.queryByText(/Bridge Python non disponibile/i)).not.toBeNull();
+    expect(screen.queryByText(/Salvataggio non disponibile/i)).not.toBeNull();
     expect(appendConsole).toHaveBeenCalledTimes(1);
     expect(appendConsole).toHaveBeenCalledWith(
       expect.stringMatching(/❌.*non disponibile|non disponibile.*❌/s),
@@ -348,7 +324,7 @@ describe('SettingsModal — save behavior', () => {
     });
 
     expect(onClose).toHaveBeenCalledTimes(1);
-    expect(screen.queryByText(/Bridge Python non disponibile/i)).toBeNull();
+    expect(screen.queryByText(/Salvataggio non disponibile/i)).toBeNull();
   });
 
   it('successful save: refreshes settings before closing', async () => {
@@ -366,27 +342,6 @@ describe('SettingsModal — save behavior', () => {
     expect(onSettingsSaved).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onSettingsSaved.mock.invocationCallOrder[0]).toBeLessThan(onClose.mock.invocationCallOrder[0]);
-  });
-
-  it('sends an explicit empty key when removing an inaccessible protected primary', async () => {
-    const mockSave = vi.fn().mockResolvedValue({ ok: true });
-    setPywebview({ save_settings: mockSave });
-
-    render(
-      <SettingsModal
-        {...makeProps({ apiKey: '', hasProtectedKey: true, fallbackKeys: [] })}
-      />
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Opzioni chiave principale' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Rimuovi chiave' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Rimuovi' }));
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('Salva e Chiudi'));
-    });
-
-    expect(mockSave).toHaveBeenCalledWith('', [], 'gemini-2.5-flash');
   });
 
   it('preserves configured fallback keys when masked values were not edited', async () => {
@@ -420,10 +375,10 @@ describe('SettingsModal — save behavior', () => {
   it('a click outside with unsaved edits keeps them: the card shakes and "Salva e Chiudi" lights up', () => {
     vi.useFakeTimers();
     onTestFinished(() => { vi.useRealTimers(); });
-    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED, 'false');
     const onClose = vi.fn();
-    const { container } = render(<SettingsModal {...makeProps()} onClose={onClose} />);
-    fireEvent.click(screen.getByRole('switch'));
+    const props = makeProps({ onClose });
+    const { container, rerender } = render(<SettingsModal {...props} />);
+    rerender(<SettingsModal {...props} models={{ ...props.models, preferredModel: 'gemini-3.6-flash' }} />);
 
     fireEvent.click(screen.getByTestId('settings-backdrop'));
     expect(onClose).not.toHaveBeenCalled();
@@ -436,7 +391,8 @@ describe('SettingsModal — save behavior', () => {
     expect(screen.getByText(UNSAVED_CHANGES_HINT).getAttribute('role')).toBe('status');
     expect(container.querySelector('.modal-card')?.classList.contains('is-shaking')).toBe(false);
     expect(screen.getByRole('button', { name: 'Salva e Chiudi' }).classList.contains('is-attention')).toBe(false);
-    expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('true');
+    // The draft model is still there: nothing restored the saved one.
+    expect(props.models.setPreferredModel).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
   });
 
@@ -548,7 +504,7 @@ describe('SettingsModal — session info race condition', () => {
     await act(async () => { resolveSecond({ ok: true, total_bytes: 1024, total_sessions: 3 }); });
 
     expect(screen.queryByText('Calcolo dello spazio occupato…')).toBeNull();
-    expect(screen.queryByText(/3 sbobine/)).not.toBeNull();
+    expect(screen.getByTestId('storage-usage').textContent).toContain('3 sbobine');
   });
 });
 
@@ -576,57 +532,6 @@ describe('SettingsModal — main-section interactions', () => {
     fireEvent.change(input, { target: { value: 'AIzaSyFallbackKey123456789' } });
     fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
     expect(setFallbackKeys).toHaveBeenCalledWith(['AIzaSyFallbackKey123456789']);
-  });
-
-  it('keeps notification changes in draft across tabs until a successful save', async () => {
-    const saveSettings = vi.fn().mockResolvedValue({ ok: true });
-    setPywebview({ save_settings: saveSettings });
-    render(<SettingsModal {...makeProps()} />);
-    const toggle = screen.getByRole('switch');
-    fireEvent.click(toggle);
-    expect(toggle.getAttribute('aria-checked')).toBe('false');
-    expect(localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED)).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Assistenza' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Generale' }));
-    expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('false');
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Salva e Chiudi' }));
-    });
-    expect(saveSettings).toHaveBeenCalledTimes(1);
-    expect(localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED)).toBe('false');
-  });
-
-  it.each(['Annulla', 'Chiudi finestra', 'Escape'])('discards notification drafts with %s and reloads saved state on reopening', (closeAction) => {
-    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED, 'false');
-    const onClose = vi.fn();
-    const props = makeProps({ onClose });
-    const { rerender } = render(<SettingsModal {...props} />);
-    fireEvent.click(screen.getByRole('switch'));
-    expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('true');
-    if (closeAction === 'Escape') {
-      fireEvent.keyDown(window, { key: 'Escape' });
-    } else {
-      fireEvent.click(screen.getByRole('button', { name: closeAction }));
-    }
-    expect(onClose).toHaveBeenCalledTimes(1);
-    expect(localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED)).toBe('false');
-    rerender(<SettingsModal {...props} isOpen={false} />);
-    rerender(<SettingsModal {...props} isOpen />);
-    expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('false');
-  });
-
-  it('preserves saved notification preferences when saving settings fails', async () => {
-    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED, 'true');
-    setPywebview({ save_settings: vi.fn().mockResolvedValue({ ok: false, error: 'Errore di salvataggio' }) });
-    const onClose = vi.fn();
-    render(<SettingsModal {...makeProps({ onClose })} />);
-    fireEvent.click(screen.getByRole('switch'));
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Salva e Chiudi' }));
-    });
-    expect(onClose).not.toHaveBeenCalled();
-    expect(localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED)).toBe('true');
-    expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('false');
   });
 
   it('only allows revealing the new key input', () => {
@@ -674,202 +579,6 @@ describe('SettingsModal — main-section interactions', () => {
 
     expect(setApiKey).toHaveBeenCalledWith('AIzaSyReserve1111111111');
     expect(setFallbackKeys).toHaveBeenCalledWith([]);
-  });
-});
-
-describe('SettingsModal — session folder and cleanup', () => {
-  it('calls open_session_folder when folder button is clicked', async () => {
-    const openFolder = vi.fn();
-    setPywebview({ open_session_folder: openFolder });
-    render(<SettingsModal {...makeProps()} />);
-    await act(async () => {
-      fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
-    });
-    fireEvent.click(screen.getByTitle('Apri cartella sessioni'));
-    expect(openFolder).toHaveBeenCalledTimes(1);
-  });
-
-  it('calls cleanup_old_sessions for incomplete cleanup and shows result', async () => {
-    const cleanupFn = vi.fn()
-      .mockResolvedValueOnce({ ok: true, removed: 0, candidates: 3, freed_bytes: 1024, preserved_completed: 2 })
-      .mockResolvedValueOnce({ ok: true, removed: 3, candidates: 3, freed_bytes: 1024, preserved_completed: 2 });
-    setPywebview({ cleanup_old_sessions: cleanupFn });
-    render(<SettingsModal {...makeProps()} />);
-    await act(async () => {
-      fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByTitle(/Conta ed elimina tutte le elaborazioni incomplete/));
-    });
-    expect(await screen.findByText(/Sbobine interessate: 3/)).toBeTruthy();
-    expect(cleanupFn).toHaveBeenCalledTimes(1);
-    expect(cleanupFn).toHaveBeenCalledWith(0, true);
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('Elimina incomplete'));
-    });
-    await vi.waitFor(() =>
-      expect(screen.getByText(/Rimoss/)).toBeTruthy(),
-    );
-    expect(cleanupFn).toHaveBeenCalledTimes(2);
-    expect(cleanupFn).toHaveBeenLastCalledWith(0, false);
-  });
-
-  it('warns that cleanup also removes paused work and offers no completed-notes cleanup', async () => {
-    const cleanupFn = vi.fn().mockResolvedValue({ ok: true, removed: 0, candidates: 1, freed_bytes: 256 });
-    setPywebview({ cleanup_old_sessions: cleanupFn });
-    render(<SettingsModal {...makeProps()} />);
-    await act(async () => {
-      fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
-    });
-    expect(screen.queryByTitle(/sbobine completate/)).toBeNull();
-    expect(screen.queryByText('Sbobine archiviate')).toBeNull();
-    await act(async () => {
-      fireEvent.click(screen.getByTitle(/Conta ed elimina tutte le elaborazioni incomplete/));
-    });
-    expect(await screen.findByText(/comprese quelle in pausa che potresti ancora riprendere/)).toBeTruthy();
-  });
-
-  it('dismisses cleanup notification when close button is clicked', async () => {
-    const cleanupFn = vi.fn()
-      .mockResolvedValueOnce({ ok: true, removed: 0, candidates: 2, freed_bytes: 512 })
-      .mockResolvedValueOnce({ ok: true, removed: 2, candidates: 2, freed_bytes: 512 });
-    setPywebview({ cleanup_old_sessions: cleanupFn });
-    render(<SettingsModal {...makeProps()} />);
-    await act(async () => {
-      fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByTitle(/Conta ed elimina tutte le elaborazioni incomplete/));
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByText('Elimina incomplete'));
-    });
-    await vi.waitFor(() =>
-      expect(screen.getByText(/Rimosse 2 elaborazioni incomplete/)).toBeTruthy(),
-    );
-
-    const closeBtn = screen.getByRole('button', { name: 'Chiudi notifica' });
-    await act(async () => {
-      fireEvent.click(closeBtn);
-    });
-
-    expect(screen.queryByText(/Rimosse 2 elaborazioni incomplete/)).toBeNull();
-  });
-
-  it('auto-dismisses cleanup notification after 5 seconds', async () => {
-    vi.useFakeTimers();
-    try {
-      const cleanupFn = vi.fn()
-        .mockResolvedValueOnce({ ok: true, removed: 0, candidates: 1, freed_bytes: 256 })
-        .mockResolvedValueOnce({ ok: true, removed: 1, candidates: 1, freed_bytes: 256 });
-      setPywebview({ cleanup_old_sessions: cleanupFn });
-      render(<SettingsModal {...makeProps()} />);
-      await act(async () => {
-        fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
-      });
-      await act(async () => {
-        fireEvent.click(screen.getByTitle(/Conta ed elimina tutte le elaborazioni incomplete/));
-      });
-      await act(async () => {
-        fireEvent.click(screen.getByText('Elimina incomplete'));
-      });
-      expect(screen.getByText(/Rimossa 1 elaborazione incompleta/)).toBeTruthy();
-
-      await act(async () => {
-        vi.advanceTimersByTime(5100);
-      });
-
-      expect(screen.queryByText(/Rimossa 1 elaborazione incompleta/)).toBeNull();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('resets cleanup result when modal is closed and reopened', async () => {
-    const cleanupFn = vi.fn()
-      .mockResolvedValueOnce({ ok: true, removed: 0, candidates: 1, freed_bytes: 256 })
-      .mockResolvedValueOnce({ ok: true, removed: 1, candidates: 1, freed_bytes: 256 });
-    setPywebview({ cleanup_old_sessions: cleanupFn });
-    const props = { ...makeProps(), isOpen: true };
-    const { rerender } = render(<SettingsModal {...props} />);
-    await act(async () => {
-      fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByTitle(/Conta ed elimina tutte le elaborazioni incomplete/));
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByText('Elimina incomplete'));
-    });
-    await vi.waitFor(() =>
-      expect(screen.getByText(/Rimossa 1 elaborazione incompleta/)).toBeTruthy(),
-    );
-
-    // Close the modal
-    rerender(<SettingsModal {...props} isOpen={false} />);
-
-    // Reopen the modal
-    rerender(<SettingsModal {...props} isOpen={true} />);
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
-    });
-
-    // Cleanup result should be reset to null
-    expect(screen.queryByText(/Rimossa 1 elaborazione incompleta/)).toBeNull();
-  });
-
-  it('triggers onSessionRootMoved when move completes successfully', async () => {
-    const onSessionRootMoved = vi.fn();
-    const askFolder = vi.fn().mockResolvedValue({ ok: true, path: 'D:\\new_sessions' });
-    const moveRoot = vi.fn().mockResolvedValue({ ok: true, started: true });
-    const moveStatus = vi.fn().mockResolvedValue({
-      status: 'done',
-      moved: 5,
-      total: 5,
-      old_root: 'C:\\old_sessions',
-      new_root: 'D:\\new_sessions',
-    });
-    const getStorageInfo = vi.fn().mockResolvedValue({
-      ok: true,
-      total_bytes: 1024,
-      total_sessions: 5,
-      session_root: 'D:\\new_sessions',
-    });
-
-    setPywebview({
-      ask_session_folder: askFolder,
-      move_session_root: moveRoot,
-      get_session_move_status: moveStatus,
-      get_session_storage_info: getStorageInfo,
-    });
-
-    render(<SettingsModal {...makeProps({ onSessionRootMoved })} />);
-    await act(async () => {
-      fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
-    });
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Cambia cartella' }));
-    });
-    expect(askFolder).toHaveBeenCalledTimes(1);
-
-    // Confirmation dialog appears
-    expect(await screen.findByText('Spostare la cartella sessioni?')).toBeTruthy();
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('Sposta'));
-    });
-
-    expect(moveRoot).toHaveBeenCalledWith('D:\\new_sessions');
-
-    await vi.waitFor(() => {
-      expect(onSessionRootMoved).toHaveBeenCalledWith({
-        oldRoot: 'C:\\old_sessions',
-        newRoot: 'D:\\new_sessions',
-      });
-    });
   });
 });
 
@@ -953,121 +662,7 @@ describe('SettingsModal — model section', () => {
   });
 });
 
-describe('SettingsModal — validate environment', () => {
-  it('shows validation summary after clicking Verifica ambiente', async () => {
-    const models = [
-      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: 'Fast', default_chunk_minutes: 12 },
-    ];
-    const validateFn = vi.fn().mockResolvedValue({
-      ok: true,
-      result: {
-        ok: true,
-        summary: 'Ambiente OK',
-        checks: [
-          { id: 'ffmpeg', label: 'ffmpeg', status: 'ok', message: 'ffmpeg trovato' },
-        ],
-      },
-    });
-    setPywebview({ validate_environment: validateFn });
-    render(
-      <SettingsModal
-        {...makeProps({
-          availableModels: models,
-          preferredModel: 'gemini-2.5-flash',
-        })}
-      />,
-    );
-    await act(async () => {
-      fireEvent.click(screen.getByText('Assistenza').closest('button')!);
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByTitle('Verifica ambiente'));
-    });
-    await vi.waitFor(() => expect(screen.getByText('Ambiente OK')).toBeTruthy());
-    expect(screen.queryByText('FFmpeg')).toBeNull();
-  });
-
-  it('resets validation result when preferredModel changes', async () => {
-    const models = [
-      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: 'Fast', default_chunk_minutes: 12 },
-      { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: 'New', default_chunk_minutes: 15 },
-    ];
-    const validateFn = vi.fn().mockResolvedValue({
-      ok: true,
-      result: {
-        ok: true,
-        summary: 'Ambiente OK',
-        checks: [
-          { id: 'ffmpeg', label: 'ffmpeg', status: 'ok', message: 'ffmpeg trovato' },
-        ],
-      },
-    });
-    setPywebview({ validate_environment: validateFn });
-    const props = makeProps({
-      availableModels: models,
-      preferredModel: 'gemini-2.5-flash',
-      isOpen: true,
-    });
-    const { rerender } = render(<SettingsModal {...props} />);
-    await act(async () => {
-      fireEvent.click(screen.getByText('Assistenza').closest('button')!);
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByTitle('Verifica ambiente'));
-    });
-    await vi.waitFor(() => expect(screen.getByText('Ambiente OK')).toBeTruthy());
-
-    // Change preferredModel
-    rerender(<SettingsModal {...props} models={{ ...props.models, preferredModel: 'gemini-3.6-flash' }} />);
-
-    // Expect 'Ambiente OK' to be cleared (since validationResult is set to null)
-    expect(screen.queryByText('Ambiente OK')).toBeNull();
-  });
-
-  it('resets validation result when modal is closed and reopened', async () => {
-    const models = [
-      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: 'Fast', default_chunk_minutes: 12 },
-    ];
-    const validateFn = vi.fn().mockResolvedValue({
-      ok: true,
-      result: {
-        ok: true,
-        summary: 'Ambiente OK',
-        checks: [
-          { id: 'ffmpeg', label: 'ffmpeg', status: 'ok', message: 'ffmpeg trovato' },
-        ],
-      },
-    });
-    setPywebview({ validate_environment: validateFn });
-    const props = makeProps({
-      availableModels: models,
-      preferredModel: 'gemini-2.5-flash',
-      isOpen: true,
-    });
-    const { rerender } = render(<SettingsModal {...props} />);
-    await act(async () => {
-      fireEvent.click(screen.getByText('Assistenza').closest('button')!);
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByTitle('Verifica ambiente'));
-    });
-    await vi.waitFor(() => expect(screen.getByText('Ambiente OK')).toBeTruthy());
-
-    // Close the modal
-    rerender(<SettingsModal {...props} isOpen={false} />);
-
-    // Reopen the modal
-    rerender(<SettingsModal {...props} isOpen={true} />);
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('Assistenza').closest('button')!);
-    });
-
-    // Expect 'Ambiente OK' to be cleared and state reset
-    expect(screen.queryByText('Ambiente OK')).toBeNull();
-    expect(screen.getByText('Verifica ora')).toBeTruthy();
-  });
-
+describe('SettingsModal — tabs and footer', () => {
   it.each([
     ['Assistenza', 'Assistenza'],
     ['Archiviazione', 'Archiviazione'],

@@ -26,7 +26,6 @@ import { useQueueProcessing } from './hooks/useQueueProcessing';
 import { useRevisionRetry } from './hooks/useRevisionRetry';
 import { useRegenerateDialog } from './hooks/useRegenerateDialog';
 import type { EditorSaveController } from './hooks/useEditorAutosave';
-import { useSystemNotificationTriggers } from './hooks/useSystemNotificationTriggers';
 import { useWebStorageNotice } from './hooks/useWebStorageNotice';
 import { useTabTitle } from './hooks/useTabTitle';
 import { QueuePage } from './components/QueuePage';
@@ -68,12 +67,6 @@ export default function App() {
     bridgeDelayed,
     apiKey,
     setApiKey,
-    hasProtectedKey,
-    apiKeyInsecure,
-    setApiKeyInsecure,
-    apiKeyInsecureReason,
-    setApiKeyInsecureReason,
-    configRecoveredFrom,
     fallbackKeys,
     setFallbackKeys,
     configuredFallbackKeyCount,
@@ -160,7 +153,7 @@ export default function App() {
     handleLoadAll,
     handleOpenFailed,
     handleFoldersChange,
-    handleSessionRootMoved,
+    reloadArchive,
     executeRetryFromArchive,
     archiveFiltered,
     completedSessionFolderMap,
@@ -265,7 +258,6 @@ export default function App() {
     filesRef,
     appStateRef,
     apiKey,
-    hasProtectedKey,
     preferredModel,
 
     dispatch,
@@ -323,11 +315,6 @@ export default function App() {
     editorControllerRef,
   });
 
-  useSystemNotificationTriggers({
-    configRecoveredFrom,
-    addNotification,
-  });
-
   const [hasOpenedPreview, setHasOpenedPreview] = useState(false);
   const shouldRenderPreview = preview.content !== null || hasOpenedPreview;
 
@@ -351,8 +338,8 @@ export default function App() {
     try { localStorage.setItem(STORAGE_KEYS.AUTO_CONTINUE, String(autoContinue)); } catch (_) {}
   }, [autoContinue]);
 
-  const hasApiKey = Boolean(apiKey.trim() || hasProtectedKey);
-  const isApiKeyValid = hasProtectedKey || GEMINI_KEY_PATTERN.test(apiKey.trim());
+  const hasApiKey = Boolean(apiKey.trim());
+  const isApiKeyValid = GEMINI_KEY_PATTERN.test(apiKey.trim());
   const isConsoleDisabled = !hasApiKey || !isApiKeyValid || !(files.length > 0 || appState === 'processing' || appState === 'canceling' || completionFlash);
 
   const isWebHost = getHostCapabilities().kind === 'web';
@@ -443,7 +430,7 @@ export default function App() {
     onRequestQuitConfirmation: requestQuitConfirmation,
     onArchiveChangedRemotely: () => {
       setArchiveRevision(revision => revision + 1);
-      void handleSessionRootMoved();
+      void reloadArchive();
     },
     onDocumentChangedElsewhere: data => markChangedElsewhere(data.session_dir),
     onDriveNeedsReconnect: () => addNotification(
@@ -617,11 +604,6 @@ export default function App() {
               bridgeDelayed,
               apiKey,
               setApiKey,
-              hasProtectedKey,
-              apiKeyInsecure,
-              setApiKeyInsecure,
-              apiKeyInsecureReason,
-              setApiKeyInsecureReason,
               fallbackKeys,
               preferredModel,
               setPreferredModel,
@@ -752,7 +734,6 @@ export default function App() {
             auth={{
               apiKey,
               setApiKey,
-              hasProtectedKey,
               fallbackKeys,
               setFallbackKeys,
               configuredFallbackKeyCount,
@@ -764,8 +745,7 @@ export default function App() {
               availableModels,
             }}
             storage={{
-              onSessionRootMoved: handleSessionRootMoved,
-              onArchiveImported: () => void handleSessionRootMoved(),
+              onArchiveImported: () => void reloadArchive(),
               archiveRevision,
               onShowKeptAudio: handleShowKeptAudio,
             }}

@@ -149,15 +149,7 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
   }, [bootstrap]);
 
   const deleteNotification = useCallback((id: string) => {
-    setRawNotifications(prev => {
-      const notif = prev.find(n => n.id === id);
-      if (notif?.dedupeKey?.startsWith('config-recovery:')) {
-        const recoveredPath = notif.dedupeKey.split('config-recovery:')[1];
-        const storageKey = `el-sbobinator.config-recovery-dismissed.v1:${recoveredPath}`;
-        try { localStorage.setItem(storageKey, '1'); } catch (_) {}
-      }
-      return prev.filter(n => n.id !== id);
-    });
+    setRawNotifications(prev => prev.filter(n => n.id !== id));
   }, []);
 
   const markNotificationAsRead = useCallback((id: string) => {
@@ -169,16 +161,7 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
   }, []);
 
   const clearAllNotifications = useCallback(() => {
-    setRawNotifications(prev => {
-      prev.forEach(notif => {
-        if (notif.dedupeKey?.startsWith('config-recovery:')) {
-          const recoveredPath = notif.dedupeKey.split('config-recovery:')[1];
-          const storageKey = `el-sbobinator.config-recovery-dismissed.v1:${recoveredPath}`;
-          try { localStorage.setItem(storageKey, '1'); } catch (_) {}
-        }
-      });
-      return [];
-    });
+    setRawNotifications([]);
   }, []);
 
   const removeNotificationByDedupeKey = useCallback((dedupeKey: string) => {

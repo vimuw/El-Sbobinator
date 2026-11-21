@@ -47,12 +47,6 @@ const mockApiReadyDefault = {
   bridgeDelayed: false,
   apiKey: '',
   setApiKey: vi.fn(),
-  hasProtectedKey: false,
-  apiKeyInsecure: false,
-  setApiKeyInsecure: vi.fn(),
-  apiKeyInsecureReason: '',
-  setApiKeyInsecureReason: vi.fn(),
-  configRecoveredFrom: '',
   fallbackKeys: [],
   setFallbackKeys: vi.fn(),
   configuredFallbackKeyCount: 0,
@@ -228,41 +222,6 @@ describe('App', () => {
     expect(consoleBtn.disabled).toBe(true);
   });
 
-  it('shows config recovery warning without exposing the full path', async () => {
-    localStorage.setItem('peakBannerDismissedUntil', String(Date.now() + 86_400_000));
-    vi.mocked(useApiReady).mockReturnValue({
-      ...mockApiReadyDefault,
-      configRecoveredFrom: 'C:\\Users\\me\\AppData\\Roaming\\El Sbobinator\\config.json',
-    });
-
-    await act(async () => { render(<App />); });
-
-    expect(screen.getByText(/file di configurazione era corrotto/i)).toBeTruthy();
-    expect(screen.queryByText(/C:\\Users\\me/)).toBeNull();
-  });
-
-  it('does not show config recovery warning again after dismissal for same path', async () => {
-    localStorage.setItem('peakBannerDismissedUntil', String(Date.now() + 86_400_000));
-    const recoveredPath = 'C:\\broken\\config.json';
-    vi.mocked(useApiReady).mockReturnValue({
-      ...mockApiReadyDefault,
-      configRecoveredFrom: recoveredPath,
-    });
-
-    let unmount: () => void = () => {};
-    await act(async () => {
-      ({ unmount } = render(<App />));
-    });
-    expect(await screen.findByText(/file di configurazione era corrotto/i)).toBeTruthy();
-
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText('Archivia notifica'));
-    });
-    unmount();
-
-    await act(async () => { render(<App />); });
-    expect(screen.queryByText(/file di configurazione era corrotto/i)).toBeNull();
-  });
 });
 
 describe('App — ready-empty mode (valid API key, no files)', () => {
@@ -837,39 +796,6 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
     });
   });
 
-  describe('App — Credential storage warning', () => {
-    it('opens settings from the warning without deleting credentials', async () => {
-      const saveSettings = vi.fn().mockResolvedValue({ ok: true });
-      const setApiKey = vi.fn();
-      const setApiKeyInsecure = vi.fn();
-      vi.mocked(useApiReady).mockReturnValue({
-        ...mockApiReadyWithKey,
-        apiKeyInsecure: true,
-        apiKeyInsecureReason: 'DPAPI fallback',
-        setApiKey,
-        setApiKeyInsecure,
-        setApiKeyInsecureReason: vi.fn(),
-      });
-      setPywebview({
-        get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [] }),
-        get_archive_folders: vi.fn().mockResolvedValue({ ok: true, folders: [] }),
-        save_settings: saveSettings,
-      });
-
-      await act(async () => { render(<App />); });
-      expect(screen.getByText(/DPAPI fallback/i)).toBeTruthy();
-
-      await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'Gestisci credenziali' }));
-      });
-
-      expect(await screen.findByRole('heading', { name: /Impostazioni/ })).toBeTruthy();
-      expect(saveSettings).not.toHaveBeenCalled();
-      expect(setApiKey).not.toHaveBeenCalled();
-      expect(setApiKeyInsecure).not.toHaveBeenCalled();
-    });
-  });
-
   describe('App — Queue management interactions', () => {
     it('handles clear-all confirmation dialog and clear completed', async () => {
       vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
@@ -1053,93 +979,6 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
       });
 
       expect(answerRegenerate).toHaveBeenCalledWith(false);
-    });
-  });
-
-  describe('App — Session root moved handling', () => {
-    it('refreshes archive sessions and folders when session root is moved', async () => {
-      vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
-      const getCompletedSessions = vi.fn().mockResolvedValue({
-        ok: true,
-        sessions: [
-          { name: 'lezione.mp3', session_dir: 'D:\\new_sessions\\sess1', completed_at_iso: '2026-08-18T10:00:00Z', html_path: 'D:\\new_sessions\\sess1\\outputs.html' },
-        ],
-      });
-      const getArchiveFolders = vi.fn()
-        .mockResolvedValueOnce({ ok: true, folders: [] })
-        .mockResolvedValueOnce({
-          ok: true,
-          folders: [{ id: 'f1', name: 'Cardio', color: '#ff0000', session_dirs: ['D:\\new_sessions\\sess1'] }],
-        });
-
-      setPywebview({
-        get_completed_sessions: getCompletedSessions,
-        get_archive_folders: getArchiveFolders,
-        ask_session_folder: vi.fn().mockResolvedValue({ ok: true, path: 'D:\\new_sessions' }),
-        move_session_root: vi.fn().mockResolvedValue({ ok: true, started: true }),
-        get_session_move_status: vi.fn().mockResolvedValue({
-          status: 'done',
-          moved: 1,
-          total: 1,
-          old_root: 'C:\\old_sessions',
-          new_root: 'D:\\new_sessions',
-        }),
-        get_session_storage_info: vi.fn().mockResolvedValue({
-          ok: true,
-          total_bytes: 1024,
-          total_sessions: 1,
-          session_root: 'D:\\new_sessions',
-        }),
-      });
-
-      await act(async () => { render(<App />); });
-
-      // Open settings
-      const settingsBtn = screen.getByLabelText('Apri impostazioni');
-      await act(async () => { fireEvent.click(settingsBtn); });
-
-      // Switch to storage tab
-      await act(async () => {
-        fireEvent.click(screen.getByText('Archiviazione').closest('button')!);
-      });
-
-      // Click move folder
-      await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'Cambia cartella' }));
-      });
-
-      // Confirm move
-      await act(async () => {
-        fireEvent.click(screen.getByText('Sposta'));
-      });
-
-      await vi.waitFor(() => {
-        expect(getCompletedSessions).toHaveBeenCalled();
-        expect(getArchiveFolders).toHaveBeenCalledTimes(2);
-      });
-    });
-
-    it('re-reads the space of an open Archiviazione when a Drive sync changed the archive', async () => {
-      vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
-      const getStorageInfo = vi.fn()
-        .mockResolvedValueOnce({ ok: true, total_bytes: 2048, total_sessions: 5, session_root: 'browser' })
-        .mockResolvedValueOnce({ ok: true, total_bytes: 4096, total_sessions: 6, session_root: 'browser' });
-      setPywebview({
-        get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [] }),
-        get_archive_folders: vi.fn().mockResolvedValue({ ok: true, folders: [] }),
-        get_session_storage_info: getStorageInfo,
-      });
-
-      await act(async () => { render(<App />); });
-      await act(async () => { fireEvent.click(screen.getByLabelText('Apri impostazioni')); });
-      const storageTab = (await screen.findByText('Archiviazione')).closest('button')!;
-      await act(async () => { fireEvent.click(storageTab); });
-      expect(getStorageInfo).toHaveBeenCalledTimes(1);
-
-      const bridgeOptions = vi.mocked(useBridgeCallbacks).mock.calls.at(-1)?.[0];
-      await act(async () => { bridgeOptions?.onArchiveChangedRemotely?.(); });
-
-      await vi.waitFor(() => expect(getStorageInfo).toHaveBeenCalledTimes(2));
     });
   });
 

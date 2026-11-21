@@ -226,34 +226,15 @@ describe('useNotifications', () => {
       expect(result.current.rawNotifications[0].id).not.toBe(idToDelete);
     });
 
-    it('sets config-recovery dismissal localStorage flag on delete', () => {
-      const { result } = renderHook(() => useNotifications());
-
-      act(() => {
-        result.current.addNotification('Config', 'Ripristinata', 'warning', 'system', {
-          dedupeKey: 'config-recovery:C:/test/path/config.json',
-        });
-      });
-
-      const notifId = result.current.rawNotifications[0].id;
-      act(() => {
-        result.current.deleteNotification(notifId);
-      });
-
-      expect(localStorage.getItem('el-sbobinator.config-recovery-dismissed.v1:C:/test/path/config.json')).toBe('1');
-    });
-
   });
 
   describe('clearAllNotifications', () => {
-    it('clears all notifications and runs dismissal side effects for all items', () => {
+    it('clears all notifications', () => {
       const { result } = renderHook(() => useNotifications());
 
       act(() => {
         result.current.addNotification('Normal', 'Msg');
-        result.current.addNotification('Config', 'Msg', 'warning', 'system', {
-          dedupeKey: 'config-recovery:C:/path/config.json',
-        });
+        result.current.addNotification('Other', 'Msg', 'warning', 'system');
       });
 
       expect(result.current.rawNotifications).toHaveLength(2);
@@ -264,7 +245,6 @@ describe('useNotifications', () => {
 
       expect(result.current.rawNotifications).toHaveLength(0);
       expect(result.current.unreadNotificationsCount).toBe(0);
-      expect(localStorage.getItem('el-sbobinator.config-recovery-dismissed.v1:C:/path/config.json')).toBe('1');
     });
   });
 

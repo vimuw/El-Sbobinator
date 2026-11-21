@@ -150,14 +150,8 @@ export function useArchiveSync({
     await save;
   }, [addNotification]);
 
-  const handleSessionRootMoved = useCallback(async (payload?: { oldRoot?: string; newRoot?: string }) => {
-    if (payload?.oldRoot && payload?.newRoot) {
-      dispatch({
-        type: 'queue/remap_session_roots',
-        oldRoot: payload.oldRoot,
-        newRoot: payload.newRoot,
-      });
-    }
+  // Re-reads the archive and its folders: a backup import or a Drive sync changed them.
+  const reloadArchive = useCallback(async () => {
     await refreshArchiveSessions();
     try {
       const res = await window.pywebview?.api?.get_archive_folders?.();
@@ -374,7 +368,7 @@ export function useArchiveSync({
     handleLoadAll,
     handleOpenFailed,
     handleFoldersChange,
-    handleSessionRootMoved,
+    reloadArchive,
     finalizeArchiveReplacement,
     executeRetryFromArchive,
     archiveFiltered,

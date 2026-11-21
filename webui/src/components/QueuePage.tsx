@@ -1,8 +1,7 @@
-import { credentialStorageWarning } from '../credentialStorage';
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { type DragEndEvent, type SensorDescriptor, type SensorOptions } from '@dnd-kit/core';
-import { AlertTriangle, Loader2, Settings } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { AppFooterLinks } from './AppFooterLinks';
 import { ConsoleHint } from './ConsoleHint';
 import { useConsoleHint } from '../hooks/useConsoleHint';
@@ -46,11 +45,6 @@ export interface QueueAuthProps {
   bridgeDelayed: boolean;
   apiKey: string;
   setApiKey: (key: string) => void;
-  hasProtectedKey: boolean;
-  apiKeyInsecure: boolean;
-  setApiKeyInsecure: (val: boolean) => void;
-  apiKeyInsecureReason: string;
-  setApiKeyInsecureReason: (val: string) => void;
   fallbackKeys: string[];
   preferredModel: string;
   setPreferredModel?: (model: string) => void;
@@ -144,11 +138,6 @@ export function QueuePage({
     bridgeDelayed,
     apiKey,
     setApiKey,
-    hasProtectedKey,
-    apiKeyInsecure,
-    setApiKeyInsecure,
-    apiKeyInsecureReason,
-    setApiKeyInsecureReason,
     fallbackKeys,
     preferredModel,
     setPreferredModel,
@@ -205,8 +194,8 @@ export function QueuePage({
     return { queuedCount: queued, failedCount: failed };
   }, [files]);
 
-  const hasApiKey = Boolean(apiKey.trim() || hasProtectedKey);
-  const isApiKeyValid = hasProtectedKey || GEMINI_KEY_PATTERN.test(apiKey.trim());
+  const hasApiKey = Boolean(apiKey.trim());
+  const isApiKeyValid = GEMINI_KEY_PATTERN.test(apiKey.trim());
   const handleNetworkChange = useCallback((online: boolean) => {
     if (online) {
       appendConsole('✅ Connessione a Internet ripristinata.');
@@ -227,7 +216,6 @@ export function QueuePage({
 
   const lastConsoleMessage = consoleLogs.length > 0 ? consoleLogs[consoleLogs.length - 1] : 'Pronto per iniziare.';
   const showProcessingBanner = appState === 'processing' || appState === 'canceling' || completionFlash;
-  const apiKeyInsecureReasonLabel = apiKeyInsecureReason.trim() || 'Credenziali presenti in chiaro nel file di configurazione.';
   const bannerFile = useMemo(
     () => files.find(f => f.status === 'processing' || f.isRetryingBlocks) ?? (completionFlash ? doneFiles[0] : undefined),
     [files, completionFlash, doneFiles],
@@ -314,28 +302,6 @@ export function QueuePage({
         data-testid="queue-column"
         className={`${hasWork ? 'mb-auto' : 'my-auto'} px-5 sm:px-6 py-8 flex flex-col gap-8 max-w-3xl w-full mx-auto`}
       >
-        {apiKeyInsecure && (
-          <motion.div
-            key="api-key-insecure-banner"
-            {...fadeUp}
-            className="w-full alert-card is-warning px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-          >
-            <div className="flex items-start gap-3 text-sm leading-relaxed text-[var(--warning-text)]">
-              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>
-                {apiKeyInsecureReasonLabel}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={handleOpenSettings}
-              className="shrink-0 compact-button is-warning flex items-center justify-center gap-2"
-            >
-              <Settings className="w-4 h-4" />
-              Gestisci credenziali
-            </button>
-          </motion.div>
-        )}
         {uiMode === 'loading' ? (
           <motion.div
             key="connecting-loader"
@@ -362,11 +328,7 @@ export function QueuePage({
         ) : uiMode === 'setup' ? (
           <React.Suspense fallback={null}>
             <SetupPage
-              hasProtectedKey={hasProtectedKey}
-              onSaved={(key, model, storage, legacyPlaintext) => {
-                const warning = credentialStorageWarning(storage, legacyPlaintext);
-                setApiKeyInsecure(Boolean(warning));
-                setApiKeyInsecureReason(warning);
+              onSaved={(key, model) => {
                 setApiKey(key);
                 if (model && setPreferredModel) {
                   setPreferredModel(model);

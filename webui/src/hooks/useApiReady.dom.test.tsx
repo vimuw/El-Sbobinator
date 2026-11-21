@@ -37,20 +37,6 @@ describe('useApiReady — bootstrap guard', () => {
     expect(appendConsole).toHaveBeenCalledExactlyOnceWith('Pronto.');
   });
 
-  it('hydrates temporary credentials and retains the old plaintext warning through refresh', async () => {
-    const load = vi.fn().mockResolvedValue({ api_key: 'temporary', credential_storage: { primary: 'session_only', fallback: 'absent' }, api_key_insecure: true });
-    setPywebview({ load_settings: load });
-    const { result } = renderHook(() => useApiReady(vi.fn()));
-    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
-    expect(result.current.apiKey).toBe('temporary');
-    expect(result.current.apiKeyInsecureReason).toContain('solo per questa sessione');
-    expect(result.current.apiKeyInsecureReason).toContain('in chiaro');
-    load.mockResolvedValue({ api_key: 'protected', credential_storage: { primary: 'protected', fallback: 'absent' }, api_key_insecure: false });
-    await act(async () => { await result.current.refreshSettings(); });
-    expect(result.current.apiKeyInsecure).toBe(false);
-    expect(result.current.apiKeyInsecureReason).toBe('');
-  });
-
   it('5-second timeout does not set apiReady when bridge is absent', async () => {
     const { result } = renderHook(() => useApiReady(vi.fn()));
 
@@ -218,54 +204,15 @@ describe('useApiReady — bootstrap guard', () => {
     expect(appendConsole).toHaveBeenCalledWith('Pronto.');
   });
 
-  it('hydrates plaintext API key warning fields', async () => {
-    const mockLoad = vi.fn().mockResolvedValue({
-      api_key: 'plain-key',
-      api_key_insecure: true,
-      api_key_insecure_reason: 'DPAPI non disponibile',
-    });
-    setPywebview({ load_settings: mockLoad });
-
-    const { result } = renderHook(() => useApiReady(vi.fn()));
-
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(result.current.apiKey).toBe('plain-key');
-    expect(result.current.apiKeyInsecure).toBe(true);
-    expect(result.current.apiKeyInsecureReason).toBe('DPAPI non disponibile');
-  });
-
-  it('hydrates config recovery path', async () => {
-    const mockLoad = vi.fn().mockResolvedValue({
-      api_key: '',
-      config_recovered_from: 'C:\\Users\\me\\AppData\\Roaming\\El Sbobinator\\config.json',
-    });
-    setPywebview({ load_settings: mockLoad });
-
-    const { result } = renderHook(() => useApiReady(vi.fn()));
-
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(result.current.configRecoveredFrom).toBe('C:\\Users\\me\\AppData\\Roaming\\El Sbobinator\\config.json');
-  });
-
-  it('refreshSettings reloads security flags after bootstrap', async () => {
+  it('refreshSettings reloads the saved keys after bootstrap', async () => {
     const mockLoad = vi.fn()
       .mockResolvedValueOnce({
-        api_key: 'plain-key',
-        api_key_insecure: true,
-        api_key_insecure_reason: 'DPAPI non disponibile',
+        api_key: 'first-key',
+        fallback_keys: [],
       })
       .mockResolvedValueOnce({
-        api_key: 'protected-key',
-        api_key_insecure: false,
-        api_key_insecure_reason: '',
+        api_key: 'second-key',
+        fallback_keys: ['reserve-key'],
       });
     setPywebview({ load_settings: mockLoad });
 
@@ -276,40 +223,15 @@ describe('useApiReady — bootstrap guard', () => {
       await Promise.resolve();
     });
 
-    expect(result.current.apiKeyInsecure).toBe(true);
+    expect(result.current.apiKey).toBe('first-key');
 
     await act(async () => {
       await result.current.refreshSettings();
     });
 
     expect(mockLoad).toHaveBeenCalledTimes(2);
-    expect(result.current.apiKey).toBe('protected-key');
-    expect(result.current.apiKeyInsecure).toBe(false);
-    expect(result.current.apiKeyInsecureReason).toBe('');
+    expect(result.current.apiKey).toBe('second-key');
+    expect(result.current.fallbackKeys).toEqual(['reserve-key']);
   });
 
-  it('refreshSettings reloads config recovery path', async () => {
-    const mockLoad = vi.fn()
-      .mockResolvedValueOnce({ api_key: '' })
-      .mockResolvedValueOnce({
-        api_key: '',
-        config_recovered_from: 'C:\\broken\\config.json',
-      });
-    setPywebview({ load_settings: mockLoad });
-
-    const { result } = renderHook(() => useApiReady(vi.fn()));
-
-    await act(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(result.current.configRecoveredFrom).toBe('');
-
-    await act(async () => {
-      await result.current.refreshSettings();
-    });
-
-    expect(result.current.configRecoveredFrom).toBe('C:\\broken\\config.json');
-  });
 });

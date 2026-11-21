@@ -2,13 +2,11 @@ import { reportClientError } from '../../diagnostics';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Settings, HardDrive, SlidersHorizontal, Loader2, X, LifeBuoy, Tag, Cloud } from 'lucide-react';
-import type { ApiUsageResult, CredentialStorage, ModelOption, ValidationResult } from '../../bridge';
+import type { ApiUsageResult, ModelOption } from '../../bridge';
 import { ConfirmActionModal } from './ConfirmActionModal';
 import { UnsavedChangesHint } from './UnsavedChangesHint';
 import { ApiKeySection, type DeleteKeyTarget } from './settings/ApiKeySection';
 import { ModelSection } from './settings/ModelSection';
-import { NotificationSection } from './settings/NotificationSection';
-import { StorageSection } from './settings/StorageSection';
 import { WebStoragePage } from './settings/WebStoragePage';
 import { prefetchWebStorage } from './settings/webStorageSnapshot';
 import { WebDrivePage } from './settings/WebDrivePage';
@@ -20,11 +18,8 @@ import { SettingsDivider, SettingsPageHeader, SettingsSectionHeading } from './s
 
 import { useSettingsStorage } from '../../hooks/useSettingsStorage';
 import { useBackdropDismiss } from '../../hooks/useBackdropDismiss';
-import { formatSize } from '../../utils';
-import { credentialStorageWarning } from '../../credentialStorage';
 import { getHostCapabilities } from '../../hostCapabilities';
 import { APP_VERSION, WEB_PREVIEW_BUILD, WEB_PRIVACY_PATH } from '../../branding';
-import { STORAGE_KEYS } from '../../storageKeys';
 import { DURATION, largeModalCard } from '../../motion';
 
 
@@ -35,7 +30,6 @@ function getErrorMessage(error: unknown): string {
 export interface SettingsAuthProps {
   apiKey: string;
   setApiKey: (key: string) => void;
-  hasProtectedKey: boolean;
   fallbackKeys: string[];
   setFallbackKeys: React.Dispatch<React.SetStateAction<string[]>>;
   configuredFallbackKeyCount?: number;
@@ -49,7 +43,6 @@ export interface SettingsModelsProps {
 }
 
 export interface SettingsStorageProps {
-  onSessionRootMoved?: (payload?: { oldRoot?: string; newRoot?: string }) => void;
   /** Web build: a backup was imported, the archive must be reloaded. */
   onArchiveImported?: () => void;
   /** Web build: grows each time a Drive sync changes the archive; an open Archiviazione re-reads the space. */
@@ -75,26 +68,6 @@ export type SettingsTab = 'general' | 'drive' | 'storage' | 'diagnostics';
 type TabType = SettingsTab;
 
 const TAB_HEADERS: Record<TabType, { title: string; description: string }> = {
-  general: {
-    title: 'Generale',
-    description: 'Chiave API Google Gemini, modello di trascrizione e preferenze di sistema.',
-  },
-  drive: {
-    title: 'Google Drive',
-    description: 'Una copia delle sbobine nel tuo Google Drive, per ritrovarle sugli altri dispositivi.',
-  },
-  storage: {
-    title: 'Archiviazione',
-    description: 'Spazio su disco occupato dalle sbobine e gestione della cartella di lavoro.',
-  },
-  diagnostics: {
-    title: 'Assistenza',
-    description: "Segnala un problema e controlla che l'app sia pronta a trascrivere.",
-  },
-};
-
-// The web build has no system preferences, folder or environment check: its headers say what is there.
-const WEB_TAB_HEADERS: Record<TabType, { title: string; description: string }> = {
   general: {
     title: 'Generale',
     description: 'Modello di trascrizione e chiavi API Google Gemini salvate in questo browser.',
@@ -146,8 +119,6 @@ interface SettingsSnapshot {
   apiKey: string;
   fallbackKeys: string[];
   preferredModel: string;
-
-  notificationsEnabled: boolean;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -163,7 +134,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const {
     apiKey,
     setApiKey,
-    hasProtectedKey,
     fallbackKeys,
     setFallbackKeys,
     configuredFallbackKeyCount,
@@ -174,7 +144,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
     availableModels,
   } = models;
-  const onSessionRootMoved = storage?.onSessionRootMoved;
   const hostCapabilities = getHostCapabilities();
   // Drive sits right under Generale, so the sync is seen as soon as the settings open.
   const hasDriveTab = hostCapabilities.kind === 'web' && Boolean(window.pywebview?.api?.get_drive_status);
@@ -184,18 +153,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   }, [isOpen, initialTab]);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(
-    () => localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED) !== 'false',
-  );
-  const [credentialStorage, setCredentialStorage] = useState<CredentialStorage | undefined>();
-  const [apiKeyInsecure, setApiKeyInsecure] = useState(false);
-  const [apiKeyInsecureReason, setApiKeyInsecureReason] = useState<string | null>(null);
-
-  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
-  const [isValidatingEnvironment, setIsValidatingEnvironment] = useState(false);
   const [apiUsage, setApiUsage] = useState<ApiUsageResult | null>(null);
   const [isLoadingUsage, setIsLoadingUsage] = useState(false);
-  const [clearProtectedPrimary, setClearProtectedPrimary] = useState(false);
   const [keyDeleteTarget, setKeyDeleteTarget] = useState<DeleteKeyTarget | null>(null);
 
   const isSavingRef = useRef(false);
@@ -208,42 +167,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     if (contentRef.current) contentRef.current.scrollTop = 0;
   }, [activeTab, isOpen]);
 
-  const {
-    sessionInfo,
-    isLoadingSessionInfo,
-    fetchSessionStorageInfo,
-    isMoveInProgress,
-    moveProgress,
-    moveError,
-    pendingMovePath,
-    showMoveConfirm,
-    handleOpenSessionFolder,
-    handleAskMoveFolder,
-    handleConfirmMove,
-    handleCancelMove,
-    isCleaningSession,
-    showCleanupConfirm,
-    setShowCleanupConfirm,
-    cleanupPreview,
-    cleanupResult,
-    handleAskCleanup,
-    handleCleanupSessions,
-    handleDismissCleanupResult,
-  } = useSettingsStorage({
-    isOpen,
-    activeTab,
-    appendConsole,
-    onSessionRootMoved,
-  });
-
-  const prevSettingsKeyRef = useRef<string>('');
-  useEffect(() => {
-    const key = `${apiKey}|${preferredModel}`;
-    if (prevSettingsKeyRef.current && prevSettingsKeyRef.current !== key) {
-      setValidationResult(null);
-    }
-    prevSettingsKeyRef.current = key;
-  }, [apiKey, preferredModel]);
+  const { sessionInfo, isLoadingSessionInfo, fetchSessionStorageInfo } = useSettingsStorage({ isOpen, activeTab });
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -258,8 +182,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         apiKey,
         fallbackKeys: [...fallbackKeys],
         preferredModel,
-
-        notificationsEnabled: localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED) !== 'false',
       };
     } else if (!isOpen) {
       settingsSnapshotRef.current = null;
@@ -271,9 +193,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const hasPendingChanges = Boolean(snapshot && (
     apiKey !== snapshot.apiKey ||
     preferredModel !== snapshot.preferredModel ||
-    JSON.stringify(fallbackKeys) !== JSON.stringify(snapshot.fallbackKeys) ||
-    notificationsEnabled !== snapshot.notificationsEnabled ||
-    clearProtectedPrimary
+    JSON.stringify(fallbackKeys) !== JSON.stringify(snapshot.fallbackKeys)
   ));
   const showCloseOnly = activeTab !== 'general' && !hasPendingChanges;
 
@@ -284,11 +204,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setIsLoadingUsage(true);
     try {
       const res = await window.pywebview.api.get_api_usage(
-        clearProtectedPrimary
-          ? ''
-          : hasProtectedKey && !apiKey.trim()
-            ? undefined
-            : apiKey.trim(),
+        apiKey.trim(),
         fallbackKeys,
         preferredModel,
 
@@ -306,7 +222,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         setIsLoadingUsage(false);
       }
     }
-  }, [apiKey, clearProtectedPrimary, fallbackKeys, hasProtectedKey, preferredModel]);
+  }, [apiKey, fallbackKeys, preferredModel]);
 
   const handleRefreshUsage = useCallback(() => {
     void fetchApiUsage(true);
@@ -344,22 +260,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      setNotificationsEnabled(localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED) !== 'false');
-      setClearProtectedPrimary(false);
       setSaveError(null);
       setIsSaving(false);
       isSavingRef.current = false;
-      if (window.pywebview?.api?.load_settings) {
-        window.pywebview.api.load_settings().then(res => {
-          if (isMountedRef.current && res) {
-            setCredentialStorage(res.credential_storage);
-            setApiKeyInsecure(!!res.api_key_insecure);
-            setApiKeyInsecureReason(res.api_key_insecure_reason || null);
-          }
-        }).catch(() => {});
-      }
     } else {
-      setValidationResult(null);
       setActiveTab('general');
     }
   }, [isOpen]);
@@ -367,34 +271,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
     setSaveError(null);
-  };
-
-  const runEnvironmentValidation = async () => {
-    if (isValidatingEnvironment || !window.pywebview?.api?.validate_environment) return;
-    setIsValidatingEnvironment(true);
-    try {
-      const response = await window.pywebview.api.validate_environment(
-        apiKey.trim(),
-        true,
-        preferredModel,
-
-      );
-      if (!isMountedRef.current) return;
-      if (!response?.ok || !response.result) {
-        appendConsole(`❌ Validazione ambiente fallita: ${response?.error || 'errore sconosciuto'}`);
-        setValidationResult(null);
-        return;
-      }
-      setValidationResult(response.result);
-      appendConsole(response.result.summary);
-    } catch (error: unknown) {
-      if (isMountedRef.current) {
-        appendConsole(`❌ Validazione ambiente fallita: ${getErrorMessage(error)}`);
-        setValidationResult(null);
-      }
-    } finally {
-      if (isMountedRef.current) setIsValidatingEnvironment(false);
-    }
   };
 
   const handleCopyReport = async (sessionDir?: string) => {
@@ -419,7 +295,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
     try {
       if (!window.pywebview?.api?.save_settings) {
-        const err = 'Bridge Python non disponibile — impostazioni non salvate.';
+        const err = 'Salvataggio non disponibile: impostazioni non salvate.';
         if (isMountedRef.current) setSaveError(err);
         appendConsole(`❌ ${err}`);
         return;
@@ -427,11 +303,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       const keys = fallbackKeys.map(k => k.trim()).filter(Boolean);
       let result;
       try {
-        const apiKeyPayload = clearProtectedPrimary
-          ? ''
-          : hasProtectedKey && !apiKey.trim()
-            ? null
-            : apiKey.trim();
+        const apiKeyPayload = apiKey.trim();
         const fallbackKeysPayload =
           fallbackKeys.length === 0 && (configuredFallbackKeyCount ?? 0) > 0
             ? null
@@ -455,21 +327,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         appendConsole(`❌ ${err}`);
         return;
       }
-      settingsSnapshotRef.current = { apiKey, fallbackKeys: [...fallbackKeys], preferredModel, notificationsEnabled };
-      setCredentialStorage(result.credential_storage);
-      setApiKeyInsecure(Boolean(result.api_key_insecure));
-      setApiKeyInsecureReason(result.api_key_insecure_reason || null);
-      localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED, String(notificationsEnabled));
+      settingsSnapshotRef.current = { apiKey, fallbackKeys: [...fallbackKeys], preferredModel };
       try {
         await onSettingsSaved?.();
       } catch (e: unknown) {
         appendConsole(`⚠ Impostazioni salvate, ma l'aggiornamento dello stato non è riuscito: ${getErrorMessage(e)}`);
       }
-      if (credentialStorageWarning(result.credential_storage, result.api_key_insecure)) {
-        setActiveTab('general');
-      } else {
-        onClose();
-      }
+      onClose();
     } finally {
       isSavingRef.current = false;
       if (isMountedRef.current) setIsSaving(false);
@@ -478,14 +342,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleClose = useCallback(() => {
     if (isSavingRef.current) return;
-    setNotificationsEnabled(localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS_ENABLED) !== 'false');
     const snapshot = settingsSnapshotRef.current;
     if (snapshot) {
       setApiKey(snapshot.apiKey);
       setFallbackKeys([...snapshot.fallbackKeys]);
       setPreferredModel(snapshot.preferredModel);
-
-      setClearProtectedPrimary(false);
     }
     onClose();
   }, [onClose, setApiKey, setFallbackKeys, setPreferredModel]);
@@ -528,12 +389,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         const [firstReserve, ...rest] = cleaned;
         setApiKey(firstReserve);
         setFallbackKeys(rest);
-        setClearProtectedPrimary(false);
       } else {
         setApiKey('');
-        if (hasProtectedKey) {
-          setClearProtectedPrimary(true);
-        }
       }
     } else if (keyDeleteTarget.type === 'fallback' && typeof keyDeleteTarget.index === 'number') {
       const cleaned = fallbackKeys.map(k => k.trim()).filter(Boolean);
@@ -542,7 +399,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
 
     setKeyDeleteTarget(null);
-  }, [fallbackKeys, hasProtectedKey, keyDeleteTarget, setApiKey, setFallbackKeys]);
+  }, [fallbackKeys, keyDeleteTarget, setApiKey, setFallbackKeys]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -653,7 +510,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 {/* The page title stays put above the scrolling content and leaves room for the
                     close button placed over its right end. */}
                 <div className="pl-6 pr-14 md:pl-8 md:pr-16 pt-6 md:pt-8 pb-4 border-b border-[var(--border-subtle)]">
-                  <SettingsPageHeader {...(hostCapabilities.kind === 'web' ? WEB_TAB_HEADERS : TAB_HEADERS)[activeTab]} />
+                  <SettingsPageHeader {...TAB_HEADERS[activeTab]} />
                 </div>
                 <div ref={contentRef} data-testid="settings-content" className="app-scroll flex-1 overflow-y-auto overflow-x-hidden px-6 md:px-8 pt-5 pb-6 md:pb-8 space-y-6 [scrollbar-gutter:stable]">
                   {activeTab === 'general' && (
@@ -668,17 +525,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                       <ApiKeySection
                         apiKey={apiKey}
-                        setApiKey={key => {
-                          if (key.trim()) setClearProtectedPrimary(false);
-                          setApiKey(key);
-                        }}
-                        hasProtectedKey={hasProtectedKey && !clearProtectedPrimary}
-                        credentialStorage={credentialStorage}
-                        apiKeyInsecure={apiKeyInsecure}
-                        apiKeyInsecureReason={apiKeyInsecureReason || ''}
+                        setApiKey={setApiKey}
                         fallbackKeys={fallbackKeys}
                         setFallbackKeys={setFallbackKeys}
-                        onClearProtectedPrimary={() => setClearProtectedPrimary(true)}
                         apiUsage={apiUsage}
                         isLoadingUsage={isLoadingUsage}
                         preferredModel={preferredModel}
@@ -693,18 +542,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           onRemoveKeys={() => void handleRemoveWebKeys()}
                           disabled={isSaving}
                         />
-                      )}
-
-                      {hostCapabilities.osNotifications && (
-                        <>
-                          <SettingsDivider />
-
-                          <NotificationSection
-                            notificationsEnabled={notificationsEnabled}
-                            onChange={setNotificationsEnabled}
-                            disabled={isSaving}
-                          />
-                        </>
                       )}
 
                       {hostCapabilities.kind === 'web' && (
@@ -733,46 +570,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                   {activeTab === 'storage' && (
                     <div className="space-y-6 animate-fade-in">
-                      {hostCapabilities.kind === 'web' ? (
-                        <WebStoragePage
-                          sessionInfo={sessionInfo}
-                          isLoadingSessionInfo={isLoadingSessionInfo}
-                          onOpenDrive={hasDriveTab ? () => handleTabChange('drive') : undefined}
-                          onShowKeptAudio={storage?.onShowKeptAudio}
-                          onArchiveChanged={() => {
-                            storage?.onArchiveImported?.();
-                            // The page is open: its figures stay until the new ones arrive.
-                            fetchSessionStorageInfo({ quiet: true });
-                          }}
-                        />
-                      ) : (
-                      <StorageSection
+                      <WebStoragePage
                         sessionInfo={sessionInfo}
                         isLoadingSessionInfo={isLoadingSessionInfo}
-                        onOpenSessionFolder={handleOpenSessionFolder}
-                        onAskMoveFolder={handleAskMoveFolder}
-                        isMoveInProgress={isMoveInProgress}
-                        moveProgress={moveProgress}
-                        moveError={moveError}
-                        isCleaningSession={isCleaningSession}
-                        onAskCleanup={handleAskCleanup}
-                        cleanupResult={cleanupResult}
-                        onDismissCleanupResult={handleDismissCleanupResult}
-                        canManageSessionFolder={hostCapabilities.nativeFolderPicker && hostCapabilities.openLocalPath}
+                        onOpenDrive={hasDriveTab ? () => handleTabChange('drive') : undefined}
+                        onShowKeptAudio={storage?.onShowKeptAudio}
+                        onArchiveChanged={() => {
+                          storage?.onArchiveImported?.();
+                          // The page is open: its figures stay until the new ones arrive.
+                          fetchSessionStorageInfo({ quiet: true });
+                        }}
                       />
-                      )}
                     </div>
                   )}
 
                   {activeTab === 'diagnostics' && (
                     <div className="space-y-6 animate-fade-in">
-                      <DiagnosticsSection
-                        isValidatingEnvironment={isValidatingEnvironment}
-                        onRunValidation={runEnvironmentValidation}
-                        validationResult={validationResult}
-                        onCopyReport={handleCopyReport}
-                        showEnvironmentCheck={hostCapabilities.environmentCheck}
-                      />
+                      <DiagnosticsSection onCopyReport={handleCopyReport} />
                     </div>
                   )}
                 </div>
@@ -814,29 +628,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       </AnimatePresence>
 
       {/* Confirmation Dialog Modals */}
-      <ConfirmActionModal
-        isOpen={showCleanupConfirm}
-        title="Eliminare tutte le elaborazioni incomplete?"
-        description={`Elimina subito tutte le sbobine interrotte o non finite, comprese quelle in pausa che potresti ancora riprendere. Sbobine interessate: ${cleanupPreview?.candidates ?? 0}. Spazio stimato: ${formatSize(cleanupPreview?.freed_bytes ?? 0)}. L'operazione è irreversibile.`}
-        confirmLabel="Elimina incomplete"
-        cancelLabel="Annulla"
-        onClose={() => setShowCleanupConfirm(false)}
-        onConfirm={() => {
-          setShowCleanupConfirm(false);
-          void handleCleanupSessions();
-        }}
-      />
-      <ConfirmActionModal
-        isOpen={showMoveConfirm}
-        title="Spostare la cartella sessioni?"
-        description={`Le sessioni verranno spostate subito in:\n${pendingMovePath ?? ''}\n\nL'operazione è rapida se la destinazione è sullo stesso disco.`}
-        confirmLabel="Sposta"
-        cancelLabel="Annulla"
-        onClose={handleCancelMove}
-        onConfirm={() => {
-          void handleConfirmMove();
-        }}
-      />
       <ConfirmActionModal
         isOpen={Boolean(keyDeleteTarget)}
         title="Rimuovi chiave API"

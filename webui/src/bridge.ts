@@ -128,23 +128,12 @@ export interface ModelOption {
   is_default?: boolean;
 }
 
-export type CredentialStorageState = 'protected' | 'session_only' | 'legacy_plaintext' | 'absent';
-export interface CredentialStorage {
-  primary: CredentialStorageState;
-  fallback: CredentialStorageState;
-}
-
 export interface SettingsPayload {
   api_key?: string;
   fallback_keys?: string[];
   preferred_model?: string;
 
   available_models?: ModelOption[];
-  has_protected_key?: boolean;
-  api_key_insecure?: boolean;
-  api_key_insecure_reason?: string;
-  credential_storage?: CredentialStorage;
-  config_recovered_from?: string;
   configuredFallbackKeyCount?: number;
   configured_fallback_key_count?: number;
 }
@@ -316,7 +305,7 @@ export interface PywebviewApi {
     fallbackKeys: string[] | null,
     preferredModel: string,
 
-  ) => Promise<{ ok: boolean; error?: string; credential_storage?: CredentialStorage; api_key_insecure?: boolean; api_key_insecure_reason?: string }>;
+  ) => Promise<{ ok: boolean; error?: string }>;
   ask_files?: () => Promise<FileDescriptor[]>;
   ask_media_file?: () => Promise<FileDescriptor | null>;
   /** Web: a file for the editor's player, held by the page only (no copy in the browser). */

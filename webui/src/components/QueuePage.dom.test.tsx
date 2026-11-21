@@ -2,7 +2,6 @@ import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
 import { QueuePage, type QueuePageProps } from './QueuePage';
-import { credentialStorageWarning } from '../credentialStorage';
 import type { FileItem } from '../appState';
 import type { ArchiveSession } from '../bridge';
 import { DESKTOP_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
@@ -33,11 +32,6 @@ describe('QueuePage Component', () => {
       bridgeDelayed: false,
       apiKey: 'AIzaSyTestKey123456789012345678901234',
       setApiKey: vi.fn(),
-      hasProtectedKey: true,
-      apiKeyInsecure: false,
-      setApiKeyInsecure: vi.fn(),
-      apiKeyInsecureReason: '',
-      setApiKeyInsecureReason: vi.fn(),
       fallbackKeys: [],
       preferredModel: 'gemini-2.5-flash',
 
@@ -83,50 +77,6 @@ describe('QueuePage Component', () => {
     expect(screen.getByText(/Progetto Open-Source/i)).toBeTruthy();
   });
 
-  it('shows insecure api key banner when apiKeyInsecure is true', () => {
-    render(
-      <QueuePage
-        {...defaultProps}
-        auth={{
-          ...defaultProps.auth,
-          apiKeyInsecure: true,
-          apiKeyInsecureReason: 'DPAPI non disponibile',
-        }}
-      />,
-    );
-    expect(screen.getByText(/DPAPI non disponibile/i)).toBeTruthy();
-  });
-
-  it.each(['session_only', 'legacy_plaintext'] as const)(
-    'opens credential settings without clearing the protected primary for %s fallback keys',
-    fallback => {
-      const handleOpenSettings = vi.fn();
-      const setApiKey = vi.fn();
-      const warning = credentialStorageWarning({ primary: 'protected', fallback });
-      render(
-        <QueuePage
-          {...defaultProps}
-          auth={{
-            ...defaultProps.auth,
-            apiKey: '',
-            hasProtectedKey: true,
-            fallbackKeys: ['fallback-key'],
-            apiKeyInsecure: true,
-            apiKeyInsecureReason: warning,
-            setApiKey,
-          }}
-          actions={{ ...defaultProps.actions, handleOpenSettings }}
-        />,
-      );
-
-      expect(screen.getByText(warning)).toBeTruthy();
-      fireEvent.click(screen.getByRole('button', { name: 'Gestisci credenziali' }));
-      expect(handleOpenSettings).toHaveBeenCalledOnce();
-      expect(setApiKey).not.toHaveBeenCalled();
-      expect(screen.queryByRole('button', { name: 'Rimuovi chiave' })).toBeNull();
-    },
-  );
-
   it('renders loading view when apiReady is false', () => {
     render(
       <QueuePage
@@ -147,7 +97,6 @@ describe('QueuePage Component', () => {
         auth={{
           ...defaultProps.auth,
           apiKey: '',
-          hasProtectedKey: false,
         }}
       />,
     );

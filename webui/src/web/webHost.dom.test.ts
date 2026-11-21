@@ -130,7 +130,6 @@ describe('web host', () => {
       api_key: 'AIzaSyMain12345678901234567',
       fallback_keys: ['AIzaSyBackup1234567890123456'],
       preferred_model: 'gemini-2.5-flash',
-      has_protected_key: false,
     });
 
     // null keeps what is saved, like the desktop contract.

@@ -22,9 +22,6 @@ afterEach(() => {
 });
 
 const baseProps = {
-  isValidatingEnvironment: false,
-  onRunValidation: vi.fn(),
-  validationResult: null,
   onCopyReport: vi.fn().mockResolvedValue(undefined),
 };
 
@@ -66,89 +63,6 @@ describe('DiagnosticsSection', () => {
     expect(screen.queryByLabelText('Sbobina con il problema (facoltativa)')).toBeNull();
   });
 
-  it('shows no check rows before the environment check runs', () => {
-    const onRunValidation = vi.fn();
-    render(<DiagnosticsSection {...baseProps} onRunValidation={onRunValidation} />);
-
-    const environment = within(screen.getByRole('region', { name: 'Verifica ambiente' }));
-    expect(screen.queryByText('da verificare')).toBeNull();
-    expect(screen.queryByText('FFmpeg')).toBeNull();
-    expect(environment.getByText('Verifica ora')).toBeTruthy();
-    fireEvent.click(environment.getByRole('button', { name: 'Verifica ambiente' }));
-    expect(onRunValidation).toHaveBeenCalledOnce();
-  });
-
-  it('renders "Verifica in corso..." and is disabled while validating', () => {
-    render(<DiagnosticsSection {...baseProps} isValidatingEnvironment />);
-
-    const btn = screen.getByTitle('Verifica in corso…');
-    expect(btn.hasAttribute('disabled')).toBe(true);
-    expect(screen.getByText('Verifica in corso...')).toBeTruthy();
-  });
-
-  it('shows only the summary when every check passes', () => {
-    const { container } = render(
-      <DiagnosticsSection
-        {...baseProps}
-        validationResult={{
-          ok: true,
-          summary: 'Ambiente pronto.',
-          checks: [
-            { id: 'api_key', label: 'API Key Gemini', status: 'ok', message: 'Chiave API valida' },
-            { id: 'config', label: 'Config locale', status: 'ok', message: 'Config scrivibile' },
-          ],
-        }}
-      />,
-    );
-
-    expect(screen.getByText('Ambiente pronto.')).toBeTruthy();
-    expect(container.querySelector('.alert-card.is-success')).toBeTruthy();
-    expect(screen.queryByText('API Key Gemini')).toBeNull();
-    expect(screen.queryByText('Config locale')).toBeNull();
-    expect(screen.queryByRole('list', { name: 'Problemi rilevati' })).toBeNull();
-    expect(screen.getByLabelText('Riesegui verifica ambiente')).toBeTruthy();
-  });
-
-  it('lists only the failing and warning checks with their details', () => {
-    const { container } = render(
-      <DiagnosticsSection
-        {...baseProps}
-        validationResult={{
-          ok: false,
-          summary: 'Ambiente incompleto: correggi gli errori segnalati.',
-          checks: [
-            { id: 'api_key', label: 'API Key Gemini', status: 'warning', message: 'API key assente', details: "Inserisci una chiave se vuoi verificare l'accesso al modello." },
-            { id: 'ffmpeg', label: 'FFmpeg', status: 'error', message: 'FFmpeg mancante' },
-            { id: 'config', label: 'Config locale', status: 'ok', message: 'Config scrivibile' },
-          ],
-        }}
-      />,
-    );
-
-    expect(container.querySelector('.alert-card.is-error')).toBeTruthy();
-    const problems = within(screen.getByRole('list', { name: 'Problemi rilevati' }));
-    expect(problems.getAllByRole('listitem')).toHaveLength(2);
-    expect(problems.getByText('FFmpeg mancante')).toBeTruthy();
-    expect(problems.getByText(/Inserisci una chiave/)).toBeTruthy();
-    expect(screen.queryByText('Config locale')).toBeNull();
-  });
-
-  it('uses a warning banner when the only problems are warnings', () => {
-    const { container } = render(
-      <DiagnosticsSection
-        {...baseProps}
-        validationResult={{
-          ok: true,
-          has_warnings: true,
-          summary: 'Ambiente pronto con avvisi: verifica le segnalazioni.',
-          checks: [{ id: 'api_key', label: 'API Key Gemini', status: 'warning', message: 'API key assente' }],
-        }}
-      />,
-    );
-
-    expect(container.querySelector('.alert-card.is-warning')).toBeTruthy();
-  });
-
   it('shows the copied state when the report is copied', async () => {
     const onCopyReport = vi.fn().mockResolvedValue(undefined);
     render(<DiagnosticsSection {...baseProps} onCopyReport={onCopyReport} />);
@@ -173,7 +87,7 @@ describe('DiagnosticsSection', () => {
 
   it('sends reports from the app in web builds with Sentry, and lets the user stop the automatic ones', async () => {
     setHostCapabilities({ kind: 'web', reportByEmail: false, environmentCheck: false });
-    render(<DiagnosticsSection {...baseProps} showEnvironmentCheck={false} />);
+    render(<DiagnosticsSection {...baseProps} />);
 
     const support = within(screen.getByRole('region', { name: 'Segnala un problema' }));
     // One step: the window attaches the report itself, so no copy and no email.
@@ -200,7 +114,7 @@ describe('DiagnosticsSection', () => {
     pinClockNearReports();
     setHostCapabilities({ kind: 'web', reportByEmail: false, environmentCheck: false });
     rememberReport({ code: 'A1B2C3D4', sentAt: '2026-11-17T10:30:00.000Z', kind: 'bug' });
-    render(<DiagnosticsSection {...baseProps} showEnvironmentCheck={false} />);
+    render(<DiagnosticsSection {...baseProps} />);
 
     const list = screen.getByRole('list', { name: 'Le tue segnalazioni' });
     // The reports belong with the button that sent them.
@@ -224,7 +138,7 @@ describe('DiagnosticsSection', () => {
     setHostCapabilities({ kind: 'web', reportByEmail: false, environmentCheck: false });
     rememberReport({ code: 'A1B2C3D4', sentAt: '2026-11-17T10:30:00.000Z', kind: 'bug' });
     rememberReport({ code: 'E5F60718', sentAt: '2026-11-17T11:00:00.000Z', kind: 'idea', excerpt: 'Il titolo della lezione non si salva' });
-    render(<DiagnosticsSection {...baseProps} showEnvironmentCheck={false} />);
+    render(<DiagnosticsSection {...baseProps} />);
 
     const [withExcerpt, older] = within(screen.getByRole('list', { name: 'Le tue segnalazioni' })).getAllByRole('listitem');
     const title = within(withExcerpt).getByText('Il titolo della lezione non si salva');
@@ -243,7 +157,7 @@ describe('DiagnosticsSection', () => {
     rememberReport({ code: 'A1B2C3D4', sentAt: '2026-11-17T10:30:00.000Z', kind: 'bug' });
     const writeText = vi.fn(async (_text: string) => {});
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
-    render(<DiagnosticsSection {...baseProps} showEnvironmentCheck={false} />);
+    render(<DiagnosticsSection {...baseProps} />);
 
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Copia codice A1B2C3D4' })); });
     expect(writeText).toHaveBeenCalledWith('A1B2C3D4');
@@ -293,7 +207,7 @@ describe('DiagnosticsSection', () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
       setHostCapabilities({ kind: 'web', reportByEmail: false, environmentCheck: false });
-      render(<DiagnosticsSection {...baseProps} showEnvironmentCheck={false} />);
+      render(<DiagnosticsSection {...baseProps} />);
 
       fireEvent.click(screen.getByRole('switch', { name: 'Invia report automatici degli errori' }));
       expect(localStorage.getItem(AUTO_REPORTS_KEY)).toBe('off');

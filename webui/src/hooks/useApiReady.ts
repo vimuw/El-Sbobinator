@@ -1,17 +1,12 @@
 import { reportClientError } from '../diagnostics';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ModelOption, SettingsPayload } from '../bridge';
-import { credentialStorageWarning } from '../credentialStorage';
 import { DEFAULT_MODEL } from '../utils';
 
 export function useApiReady(appendConsole: (msg: string) => void) {
   const [apiReady, setApiReady] = useState(false);
   const [bridgeDelayed, setBridgeDelayed] = useState(false);
   const [apiKey, setApiKey] = useState('');
-  const [hasProtectedKey, setHasProtectedKey] = useState(false);
-  const [apiKeyInsecure, setApiKeyInsecure] = useState(false);
-  const [apiKeyInsecureReason, setApiKeyInsecureReason] = useState('');
-  const [configRecoveredFrom, setConfigRecoveredFrom] = useState('');
   const [fallbackKeys, setFallbackKeys] = useState<string[]>([]);
   const [configuredFallbackKeyCount, setConfiguredFallbackKeyCount] = useState(0);
   const [preferredModel, setPreferredModel] = useState(DEFAULT_MODEL);
@@ -28,18 +23,8 @@ export function useApiReady(appendConsole: (msg: string) => void) {
     appendConsoleRef.current = appendConsole;
   }, [appendConsole]);
 
-  useEffect(() => {
-    if (apiKey) setHasProtectedKey(false);
-  }, [apiKey]);
-
   const applySettings = useCallback((cfg: SettingsPayload | undefined) => {
-    const nextApiKey = String(cfg?.api_key ?? '');
-    setApiKey(nextApiKey);
-    setHasProtectedKey(Boolean(cfg?.has_protected_key) && !nextApiKey);
-    const storageWarning = credentialStorageWarning(cfg?.credential_storage, cfg?.credential_storage ? cfg.api_key_insecure : false);
-    setApiKeyInsecure(Boolean(storageWarning || cfg?.api_key_insecure));
-    setApiKeyInsecureReason(storageWarning || String(cfg?.api_key_insecure_reason ?? ''));
-    setConfigRecoveredFrom(String(cfg?.config_recovered_from ?? ''));
+    setApiKey(String(cfg?.api_key ?? ''));
     setFallbackKeys(Array.isArray(cfg?.fallback_keys) ? cfg.fallback_keys : []);
     setConfiguredFallbackKeyCount(Number(cfg?.configuredFallbackKeyCount ?? 0));
     setPreferredModel(cfg?.preferred_model || DEFAULT_MODEL);
@@ -123,12 +108,6 @@ export function useApiReady(appendConsole: (msg: string) => void) {
     bridgeDelayed,
     apiKey,
     setApiKey,
-    hasProtectedKey,
-    apiKeyInsecure,
-    setApiKeyInsecure,
-    apiKeyInsecureReason,
-    setApiKeyInsecureReason,
-    configRecoveredFrom,
     fallbackKeys,
     setFallbackKeys,
     configuredFallbackKeyCount,
