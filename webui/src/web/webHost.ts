@@ -1,10 +1,10 @@
 import type { FileDescriptor } from '../appState';
-import type { ArchiveSession, PywebviewApi, StorageUsagePart, ValidationResult } from '../bridge';
+import type { ArchiveSession, PywebviewApi, StorageUsagePart } from '../bridge';
 import { APP_VERSION, WEB_PREVIEW_BUILD } from '../branding';
 import { profileModel } from '../generationProfile';
 import { setHostCapabilities } from '../hostCapabilities';
 import { STORAGE_KEYS } from '../storageKeys';
-import { GEMINI_KEY_PATTERN, formatSize } from '../utils';
+import { formatSize } from '../utils';
 import { createWorkerAudioSource } from './audioPort';
 import { createCheckpointStore } from './checkpointStore';
 import { createDriveConnection, driveEnabled, type DriveConnection } from './drive/driveConfig';
@@ -492,18 +492,6 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
       }
       return { ok: true, result: usage.getDailyUsage(primary, reserves, model) };
     },
-    // Format check only: a real request would spend free-tier quota.
-    validate_environment: async (apiKey) => {
-      const key = (apiKey ?? loadWebKeys()[0] ?? '').trim();
-      const valid = GEMINI_KEY_PATTERN.test(key);
-      const result: ValidationResult = {
-        ok: valid,
-        summary: valid ? 'Chiave API nel formato corretto.' : 'Chiave API mancante o nel formato sbagliato.',
-        checks: [{ id: 'api_key', label: 'Chiave API', status: valid ? 'ok' : 'error', message: valid ? 'Formato valido' : 'Inserisci una chiave che inizia con AIza… o AQ.' }],
-      };
-      return { ok: true, result };
-    },
-
     ask_files: async () => acceptFiles(await promptWebFiles(true)),
     upload_browser_files: async files => acceptFiles(files),
     ask_media_file: async () => acceptFiles(await promptWebFiles(false))[0] ?? null,
@@ -874,8 +862,6 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
         return { ok: false, error: error instanceof DOMException && error.name === 'QuotaExceededError' ? storageErrorMessage(error) : error instanceof Error ? error.message : String(error) };
       }
     },
-    cleanup_old_sessions: async () => ({ ok: true, removed: 0, freed_bytes: 0, errors: 0, candidates: 0 }),
-
     open_url: async url => {
       window.open(url, '_blank', 'noopener,noreferrer');
       return { ok: true };
@@ -884,9 +870,6 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
       window.open(url, '_blank', 'noopener,noreferrer');
       return { ok: true };
     },
-    show_notification: async () => {},
-    flash_window: async () => ({ ok: true }),
-    close_window: async () => ({ ok: true }),
 
     get_diagnostic_report: async () => {
       const recent = frontendEvents.slice(-20).map(line => `- ${line}`).join('\n') || '- nessuno';

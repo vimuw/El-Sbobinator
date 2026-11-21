@@ -21,7 +21,6 @@ describe('useConfirmModal', () => {
   it('generates appropriate copy for stop-processing and dispatches stop', async () => {
     const filesRef = { current: [] as FileItem[] };
     const foldersRef = { current: [] };
-    const startProcessingRef = { current: vi.fn() };
 
     const { result } = renderHook(() =>
       useConfirmModal({
@@ -32,7 +31,6 @@ describe('useConfirmModal', () => {
         setArchiveSessions,
         setArchiveTotal,
         refreshArchiveSessions,
-        startProcessingRef,
         executeRetryFromArchive,
         normalizeSessionDir,
         appendConsole,
@@ -71,7 +69,6 @@ describe('useConfirmModal', () => {
       ],
     };
     const foldersRef = { current: [] };
-    const startProcessingRef = { current: vi.fn() };
 
     const { result } = renderHook(() =>
       useConfirmModal({
@@ -82,7 +79,6 @@ describe('useConfirmModal', () => {
         setArchiveSessions,
         setArchiveTotal,
         refreshArchiveSessions,
-        startProcessingRef,
         executeRetryFromArchive,
         normalizeSessionDir,
         appendConsole,
@@ -125,7 +121,6 @@ describe('useConfirmModal', () => {
         setArchiveSessions,
         setArchiveTotal,
         refreshArchiveSessions,
-        startProcessingRef: { current: vi.fn() },
         executeRetryFromArchive,
         normalizeSessionDir,
         appendConsole,
@@ -159,7 +154,6 @@ describe('useConfirmModal', () => {
         setArchiveSessions,
         setArchiveTotal,
         refreshArchiveSessions,
-        startProcessingRef: { current: vi.fn() },
         executeRetryFromArchive,
         normalizeSessionDir,
         appendConsole,
@@ -184,7 +178,6 @@ describe('useConfirmModal', () => {
         setArchiveSessions,
         setArchiveTotal,
         refreshArchiveSessions,
-        startProcessingRef: { current: vi.fn() },
         executeRetryFromArchive,
         normalizeSessionDir,
         appendConsole,
@@ -224,7 +217,6 @@ describe('useConfirmModal', () => {
         setArchiveSessions,
         setArchiveTotal,
         refreshArchiveSessions,
-        startProcessingRef: { current: vi.fn() },
         executeRetryFromArchive,
         normalizeSessionDir,
         appendConsole,
@@ -250,52 +242,5 @@ describe('useConfirmModal', () => {
     });
     expect(dispatch).toHaveBeenCalledWith({ type: 'queue/remove_sessions', sessionDirs: ['/s/two', '/s/three'] });
     delete window.pywebview;
-  });
-
-  it('handles quit-app confirmation and calls close_window', () => {
-    const filesRef = { current: [] as FileItem[] };
-    const foldersRef = { current: [] };
-    const startProcessingRef = { current: vi.fn() };
-    const closeWindowMock = vi.fn().mockResolvedValue({ ok: true });
-    window.pywebview = {
-      api: {
-        close_window: closeWindowMock,
-      },
-    };
-
-    const isQuittingRef = { current: false };
-    const { result } = renderHook(() =>
-      useConfirmModal({
-        dispatch,
-        filesRef,
-        foldersRef,
-        onFoldersChange,
-        setArchiveSessions,
-        setArchiveTotal,
-        refreshArchiveSessions,
-        startProcessingRef,
-        executeRetryFromArchive,
-        normalizeSessionDir,
-        appendConsole,
-        isQuittingRef,
-      }),
-    );
-
-    act(() => {
-      result.current.requestQuitConfirmation();
-    });
-
-    expect(result.current.confirmAction).toEqual({ type: 'quit-app' });
-    expect(result.current.confirmModalCopy?.title).toBe('Elaborazione in corso');
-    expect(result.current.confirmModalCopy?.confirmLabel).toBe('Interrompi ed esci');
-    expect(result.current.confirmModalCopy?.cancelLabel).toBe('Continua elaborazione');
-
-    act(() => {
-      result.current.handleConfirmAction();
-    });
-
-    expect(closeWindowMock).toHaveBeenCalled();
-    expect(isQuittingRef.current).toBe(true);
-    expect(result.current.confirmAction).toBeNull();
   });
 });

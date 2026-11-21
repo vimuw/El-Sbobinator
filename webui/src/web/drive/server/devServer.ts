@@ -1,8 +1,7 @@
 import { handleDriveRequest, type DriveServerEnv } from './driveServer';
 
-// The Drive login's server half on the web dev server (npm run dev:web:drive): Vite sends every
-// other /api request to the desktop backend (vite.config.ts), which has no /api/drive. The same
-// handler as the site's Pages Function (functions/api/drive/[action].ts), on Node's request.
+// The Drive login's server half on the web dev server (npm run dev:web:drive): the same handler as
+// the site's Pages Function (functions/api/drive/[action].ts), on Node's request.
 
 export const DRIVE_API_PREFIX = '/api/drive/';
 

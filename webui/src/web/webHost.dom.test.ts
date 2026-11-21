@@ -134,8 +134,6 @@ describe('web host', () => {
     await api.save_settings!(null, null, 'gemini-3.8-flash');
     expect((await api.load_settings!()).fallback_keys).toEqual(['AIzaSyBackup1234567890123456']);
 
-    expect((await api.validate_environment!('not-a-key')).result?.ok).toBe(false);
-    expect((await api.validate_environment!('AIzaSyMain12345678901234567')).result?.ok).toBe(true);
     expect(fetchSpy).not.toHaveBeenCalled();
 
     await api.save_settings!('', [], 'gemini-3.8-flash');

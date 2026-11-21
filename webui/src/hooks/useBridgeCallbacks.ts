@@ -22,13 +22,12 @@ export function useBridgeCallbacks(options: {
   setRegeneratePrompt: (data: { filename: string; mode?: 'completed' | 'resume'; sessionDir?: string } | null) => void;
   setAskNewKeyPrompt: (open: boolean) => void;
   autoContinueRef: React.RefObject<boolean>;
-  startProcessingRef: React.RefObject<(isContinuation?: boolean, overrideLowDisk?: boolean, forceRetry?: boolean) => Promise<boolean>>;
+  startProcessingRef: React.RefObject<(isContinuation?: boolean) => Promise<boolean>>;
   onFileContinued: () => void;
   onBatchReset: () => void;
   onBatchFullyDone: (data: ProcessDonePayload) => void;
   clearCompletionFlash: () => void;
   onRevisionWarning?: (data: FileDonePayload) => void;
-  batchTotal?: number;
   addNotification?: (
     title: string,
     message: string,
@@ -41,7 +40,6 @@ export function useBridgeCallbacks(options: {
       actionData?: unknown;
     }
   ) => void;
-  onRequestQuitConfirmation?: () => void;
   // Web previews with Drive sync.
   onArchiveChangedRemotely?: () => void;
   onDocumentChangedElsewhere?: (data: { session_dir: string }) => void;
@@ -60,7 +58,6 @@ export function useBridgeCallbacks(options: {
     autoContinueRef,
     startProcessingRef,
     addNotification,
-    batchTotal = 0,
   } = options;
 
   const dispatchRef = useRef(dispatch);
@@ -74,8 +71,6 @@ export function useBridgeCallbacks(options: {
   const clearCompletionFlashRef = useRef(options.clearCompletionFlash);
   const onRevisionWarningRef = useRef(options.onRevisionWarning);
   const addNotificationRef = useRef(addNotification);
-  const batchTotalRef = useRef(batchTotal);
-  const onRequestQuitConfirmationRef = useRef(options.onRequestQuitConfirmation);
   const onArchiveChangedRemotelyRef = useRef(options.onArchiveChangedRemotely);
   const onDocumentChangedElsewhereRef = useRef(options.onDocumentChangedElsewhere);
   const onDriveNeedsReconnectRef = useRef(options.onDriveNeedsReconnect);
@@ -93,8 +88,6 @@ export function useBridgeCallbacks(options: {
     clearCompletionFlashRef.current = options.clearCompletionFlash;
     onRevisionWarningRef.current = options.onRevisionWarning;
     addNotificationRef.current = options.addNotification;
-    batchTotalRef.current = options.batchTotal ?? 0;
-    onRequestQuitConfirmationRef.current = options.onRequestQuitConfirmation;
     onArchiveChangedRemotelyRef.current = options.onArchiveChangedRemotely;
     onDocumentChangedElsewhereRef.current = options.onDocumentChangedElsewhere;
     onDriveNeedsReconnectRef.current = options.onDriveNeedsReconnect;
@@ -105,25 +98,11 @@ export function useBridgeCallbacks(options: {
     window.elSbobinatorBridge = createBridge({
       dispatch: (...args) => dispatchRef.current(...args),
       appendConsole: msg => appendConsoleRef.current(msg),
-      onRequestQuitConfirmation: () => { onRequestQuitConfirmationRef.current?.(); },
       onArchiveChangedRemotely: () => { onArchiveChangedRemotelyRef.current?.(); },
       onDocumentChangedElsewhere: data => { onDocumentChangedElsewhereRef.current?.(data); },
       onDriveNeedsReconnect: () => { onDriveNeedsReconnectRef.current?.(); },
       onPreferredModelChanged: data => { onPreferredModelChangedRef.current?.(data); },
-      onRegenerate: data => {
-        setRegeneratePromptRef.current(data);
-        if (!document.hasFocus()) {
-          void window.pywebview?.api?.flash_window?.();
-          if (localStorage.getItem('notifications_enabled') !== 'false' && window.pywebview?.api?.show_notification) {
-            const isCompleted = data.mode === 'completed';
-            const title = `⚠️ Conferma richiesta — ${data.filename}`;
-            const message = isCompleted
-              ? `Il file "${data.filename}" risulta già completato. Scegli se usare la versione pronta o rigenerare da zero.`
-              : `Ci sono progressi salvati per "${data.filename}". Scegli se riprendere o ricominciare da capo.`;
-            void window.pywebview.api.show_notification(title, message);
-          }
-        }
-      },
+      onRegenerate: data => { setRegeneratePromptRef.current(data); },
       onFilesDropped: (droppedFiles: FileDescriptor[]) => {
         if (appStateRef.current === 'canceling') return;
         const filesToAdd = droppedFiles.map(f => ({
@@ -148,15 +127,6 @@ export function useBridgeCallbacks(options: {
             'warning',
             'system'
           );
-        }
-        if (!document.hasFocus()) {
-          void window.pywebview?.api?.flash_window?.();
-          if (localStorage.getItem('notifications_enabled') !== 'false' && window.pywebview?.api?.show_notification) {
-            void window.pywebview.api.show_notification(
-              '⚠️ Chiavi esaurite — El Sbobinator',
-              newKeyNotice(),
-            );
-          }
         }
       },
       onDismissNewKey: () => {
@@ -203,27 +173,6 @@ export function useBridgeCallbacks(options: {
           }
           // Note: revision warnings are already added via onRevisionWarning -> handleRevisionWarning inside App.tsx
         }
-
-        if (!document.hasFocus() && (batchTotalRef.current ?? 0) <= 1) {
-          void window.pywebview?.api?.flash_window?.();
-          if (localStorage.getItem('notifications_enabled') !== 'false' && currentFile && window.pywebview?.api?.show_notification) {
-            if (isWarning) {
-              void window.pywebview.api.show_notification(
-                `⚠️ Sbobina pronta con avvisi — ${currentFile.name}`,
-                'Completata con alcune parti non revisionate. Apri l\'app per rivederle.',
-              );
-            } else {
-              const model = data.effective_model || currentFile.effectiveModel;
-              const modelPart = model ? ` con ${shortModelName(model)}` : '';
-              const elapsed = currentFile.startedAt ? Math.round((Date.now() - currentFile.startedAt) / 60000) : null;
-              const elapsedPart = elapsed !== null && elapsed > 0 ? ` · ${elapsed} min` : '';
-              void window.pywebview.api.show_notification(
-                `✅ Sbobina pronta — ${currentFile.name}`,
-                `Elaborata con successo${modelPart}${elapsedPart}. Disponibile nell'applicazione.`,
-              );
-            }
-          }
-        }
       },
       onFileFailed: data => {
         const currentFile = filesRef.current?.find(file => file.id === data.id);
@@ -258,27 +207,6 @@ export function useBridgeCallbacks(options: {
           }
         }
 
-        if (!document.hasFocus()) {
-          void window.pywebview?.api?.flash_window?.();
-          if (localStorage.getItem('notifications_enabled') !== 'false' && currentFile && window.pywebview?.api?.show_notification) {
-            if (isGoogleServerOverload) {
-              void window.pywebview.api.show_notification(
-                `⚠️ Server occupati — ${currentFile.name}`,
-                "I server di Google Gemini sono temporaneamente sovraccarichi. L'app proverà a riprendere o puoi cliccare su 'Riprova' tra qualche minuto.",
-              );
-            } else if (isPaused) {
-              void window.pywebview.api.show_notification(
-                `⏸️ Elaborazione in pausa — ${currentFile.name}`,
-                friendlyError,
-              );
-            } else {
-              void window.pywebview.api.show_notification(
-                `❌ Errore elaborazione — ${currentFile.name}`,
-                friendlyError,
-              );
-            }
-          }
-        }
       },
     });
     return () => {

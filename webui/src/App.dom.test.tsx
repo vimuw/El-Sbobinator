@@ -309,68 +309,6 @@ describe('App — ready-empty mode (valid API key, no files)', () => {
   });
 });
 
-describe('App ? low disk start warning', () => {
-  beforeEach(() => {
-    vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
-  });
-
-  it('shows a blocking low-disk modal and retries with override', async () => {
-    const startProcessing = vi.fn()
-      .mockResolvedValueOnce({
-        ok: false,
-        low_disk_warning: {
-          needed_bytes: 2_147_483_648,
-          free_bytes: 536_870_912,
-          location: 'C:\\Temp',
-          kind: 'combined',
-          file_name: 'lesson.mp3',
-        },
-      })
-      .mockResolvedValueOnce({ ok: true });
-
-    setPywebview({
-      get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [] }),
-      get_archive_folders: vi.fn().mockResolvedValue({ ok: true, folders: [] }),
-      check_path_exists: vi.fn().mockResolvedValue({ ok: true, exists: true }),
-      start_processing: startProcessing,
-    });
-
-    vi.mocked(useQueuePersistence).mockImplementation((_files, _structuralVersion, dispatch) => {
-      React.useEffect(() => {
-        dispatch({
-          type: 'queue/add',
-          files: [{
-            id: 'file-1',
-            name: 'lesson.mp3',
-            size: 123,
-            duration: 60,
-            path: 'C:\\Media\\lesson.mp3',
-            status: 'queued',
-            progress: 0,
-            phase: 0,
-          }],
-        });
-      }, [dispatch]);
-    });
-
-    await act(async () => { render(<App />); });
-    await act(async () => {
-      fireEvent.click(await screen.findByText('Avvia sbobinatura (1 file)'));
-    });
-
-    expect(await screen.findByRole('heading', { name: 'Spazio libero insufficiente' })).toBeTruthy();
-    expect(screen.getAllByText(/lesson\.mp3/).length).toBeGreaterThan(0);
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('Continua comunque'));
-    });
-
-    expect(startProcessing).toHaveBeenCalledTimes(2);
-    expect(startProcessing.mock.calls[0][4]).toBe(false);
-    expect(startProcessing.mock.calls[1][4]).toBe(true);
-  });
-});
-
 describe('App — executeRetryFromArchive concurrency protection', () => {
   beforeEach(() => {
     vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
@@ -657,144 +595,6 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
     });
   });
 
-  describe('onBatchFullyDone native OS notifications', () => {
-    let capturedOptions: Parameters<typeof useBridgeCallbacks>[0] | null = null;
-    const showNotification = vi.fn();
-    const flashWindow = vi.fn();
-
-    beforeEach(() => {
-      showNotification.mockClear();
-      flashWindow.mockClear();
-      setPywebview({
-        get_completed_sessions: vi.fn().mockResolvedValue({ ok: true, sessions: [] }),
-        get_archive_folders: vi.fn().mockResolvedValue({ ok: true, folders: [] }),
-        show_notification: showNotification,
-        flash_window: flashWindow,
-      });
-
-      vi.mocked(useBridgeCallbacks).mockImplementation((options) => {
-        capturedOptions = options;
-        return undefined;
-      });
-
-      vi.spyOn(document, 'hasFocus').mockReturnValue(false);
-      localStorage.setItem('notifications_enabled', 'true');
-    });
-
-    afterEach(() => {
-      vi.restoreAllMocks();
-    });
-
-    it('shows successful batch notification and flashes taskbar when all files completed successfully', async () => {
-      await act(async () => { render(<App />); });
-      expect(capturedOptions).not.toBeNull();
-
-      await act(async () => {
-        capturedOptions.onBatchFullyDone({
-          total: 3,
-          completed: 3,
-          completed_with_warnings: 0,
-          failed: 0,
-          cancelled: false,
-        });
-      });
-
-      expect(flashWindow).toHaveBeenCalled();
-      expect(showNotification).toHaveBeenCalledWith(
-        '✅ Batch completato — El Sbobinator',
-        '3 sbobine elaborate con successo.',
-      );
-    });
-
-    it('shows warnings batch notification when some files have warnings', async () => {
-      await act(async () => { render(<App />); });
-
-      await act(async () => {
-        capturedOptions.onBatchFullyDone({
-          total: 3,
-          completed: 2,
-          completed_with_warnings: 1,
-          failed: 0,
-          cancelled: false,
-        });
-      });
-
-      expect(showNotification).toHaveBeenCalledWith(
-        '⚠️ Batch completato con avvisi — El Sbobinator',
-        'Elaborazione terminata con avvisi. Sbobine con avvisi: 1/3.',
-      );
-    });
-
-    it('shows errors batch notification when some files failed', async () => {
-      await act(async () => { render(<App />); });
-
-      await act(async () => {
-        capturedOptions.onBatchFullyDone({
-          total: 3,
-          completed: 1,
-          completed_with_warnings: 1,
-          failed: 1,
-          cancelled: false,
-        });
-      });
-
-      expect(showNotification).toHaveBeenCalledWith(
-        '⚠️ Batch completato con errori — El Sbobinator',
-        "Elaborazione terminata. Riuscite: 2/3. Fallite: 1. Apri l'app per i dettagli.",
-      );
-    });
-
-    it('does not show notification when batch was cancelled', async () => {
-      await act(async () => { render(<App />); });
-
-      await act(async () => {
-        capturedOptions.onBatchFullyDone({
-          total: 3,
-          completed: 1,
-          completed_with_warnings: 1,
-          failed: 1,
-          cancelled: true,
-        });
-      });
-
-      expect(showNotification).not.toHaveBeenCalled();
-    });
-
-    it('does not show notification when notifications_enabled is false', async () => {
-      localStorage.setItem('notifications_enabled', 'false');
-      await act(async () => { render(<App />); });
-
-      await act(async () => {
-        capturedOptions.onBatchFullyDone({
-          total: 3,
-          completed: 3,
-          completed_with_warnings: 0,
-          failed: 0,
-          cancelled: false,
-        });
-      });
-
-      expect(showNotification).not.toHaveBeenCalled();
-    });
-
-    it('does not show notification when document has focus', async () => {
-      vi.spyOn(document, 'hasFocus').mockReturnValue(true);
-      await act(async () => { render(<App />); });
-
-      await act(async () => {
-        capturedOptions.onBatchFullyDone({
-          total: 3,
-          completed: 3,
-          completed_with_warnings: 0,
-          failed: 0,
-          cancelled: false,
-        });
-      });
-
-      expect(showNotification).not.toHaveBeenCalled();
-    });
-  });
-
   describe('App — Queue management interactions', () => {
     it('handles clear-all confirmation dialog and clear completed', async () => {
       vi.mocked(useApiReady).mockReturnValue(mockApiReadyWithKey);
@@ -1015,6 +815,38 @@ describe('App — executeRetryFromArchive concurrency protection', () => {
       window.dispatchEvent(event);
 
       expect(preventDefaultSpy).toHaveBeenCalled();
+    });
+
+    it('lets a busy page go without asking once the host is leaving it (another tab took over)', async () => {
+      vi.mocked(useQueuePersistence).mockImplementation((_files, _structuralVersion, dispatch) => {
+        React.useEffect(() => {
+          dispatch({
+            type: 'queue/add',
+            files: [{
+              id: 'file-retry',
+              name: 'lesson.mp3',
+              size: 123,
+              duration: 60,
+              path: 'C:\\Media\\lesson.mp3',
+              status: 'done',
+              progress: 100,
+              phase: 0,
+              isRetryingBlocks: true,
+            }],
+          });
+        }, [dispatch]);
+      });
+      const leaving = window as unknown as { __elSbobinatorQuitting?: boolean };
+      try {
+        await act(async () => {
+          render(<App />);
+        });
+        // web/webHost.ts leaveTab() sets the flag before reloading into the waiting page.
+        leaving.__elSbobinatorQuitting = true;
+        expect(window.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(true);
+      } finally {
+        delete leaving.__elSbobinatorQuitting;
+      }
     });
 
     it('opens the report email in a new tab during a run: this page stays and asks nothing', async () => {
