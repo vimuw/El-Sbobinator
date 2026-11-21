@@ -116,14 +116,25 @@ export const EditorTextStyle = TextStyle.extend({
   },
 });
 
+const BLOCKS = 'p,li,td,th,div,blockquote,pre,h1,h2,h3,h4,h5,h6,ul,ol,table';
+
+/**
+ * A run with no block around or inside it, as in a one-line Docs copy. Saved
+ * HTML always wraps text in blocks, so this is clipboard content whose block
+ * is only chosen where it lands.
+ */
+const outsideBlocks = (element: HTMLElement) => !element.closest(BLOCKS) && !element.querySelector(BLOCKS);
+
 const normalOverBold = (element: HTMLElement) => {
   const weight = element.style.fontWeight;
-  return weight && !isBoldWeight(weight) && inheritsBold(element) ? {} : false;
+  return weight && !isBoldWeight(weight) && (inheritsBold(element) || outsideBlocks(element)) ? {} : false;
 };
 
 /**
  * Normal weight written over bold heading text, as Docs does. Saved HTML
  * keeps neither data attributes nor `b` tags, so a span's context decides.
+ * A pasted run outside any block keeps its explicit normal weight too; the
+ * paste cleanup drops the mark again where the landing block is not bold.
  */
 export const Unbold = Mark.create({
   name: 'unbold',

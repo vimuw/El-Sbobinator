@@ -117,6 +117,26 @@ describe('Docs-style bold on headings', () => {
     expect(weightOf(editor, 'Testo', paragraph)).toEqual([]);
   });
 
+  // A one-line Docs copy has inline spans only: no block tells the weight.
+  const docsRun = (text: string, weight: number) => `<span style="font-size:11pt;font-family:Arial,sans-serif;color:#000000;background-color:transparent;font-weight:${weight};font-style:normal;font-variant:normal;text-decoration:none;vertical-align:baseline;white-space:pre;white-space:pre-wrap;">${text}</span>`;
+  const docsLine = `<meta charset="utf-8"><b style="font-weight:normal;" id="docs-internal-guid-1a2b3c4d-7fff-0a1b-2c3d-4e5f6a7b8c9d">${docsRun('Normale', 400)}${docsRun(' Grassetto', 700)}</b>`;
+
+  it.each([
+    { target: 'a heading', content: '<h2>Titolo</h2>', normal: ['unbold'], bold: [] },
+    { target: 'a paragraph', content: '<p>Testo</p>', normal: [], bold: ['bold'] },
+  ])('keeps the weight of a one-line Docs copy pasted into $target, also after reopening', async ({ content, normal, bold }) => {
+    const { editor } = await openEditor(content);
+    act(() => { editor.commands.setTextSelection(editor.state.doc.firstChild!.nodeSize - 1); editor.view.pasteHTML(docsLine, new Event('paste') as ClipboardEvent); });
+    expect(weightOf(editor, 'Normale')).toEqual(normal);
+    expect(weightOf(editor, ' Grassetto')).toEqual(bold);
+    const reopened = (await openEditor(normalizePreviewHtmlContent(editor.getHTML()))).editor;
+    expect(weightOf(reopened, 'Normale')).toEqual(normal);
+    expect(weightOf(reopened, ' Grassetto')).toEqual(bold);
+    const start = 1 + textNodes(reopened)[0].text!.length;
+    act(() => { reopened.commands.setTextSelection({ from: start, to: start + 'Normale'.length }); });
+    expect(editorIsBold(reopened)).toBe(false);
+  });
+
   it('copies normal heading text as not bold to Docs and pastes it back unchanged', async () => {
     const { editor, element } = await openEditor('<h2>Titolo prova</h2><p></p>');
     act(() => { editor.commands.setTextSelection({ from: 1, to: 7 }); editor.commands.toggleBold(); editor.commands.selectAll(); });
