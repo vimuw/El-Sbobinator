@@ -17,7 +17,7 @@ import {
   isLostFileError,
   isModelAccessError,
 } from './pipeline/retry';
-import { FileMismatchError, defaultSettings, runPipeline, type AudioSource, type PageState, type PipelineEnv, type PipelineReporter } from './pipeline/run';
+import { FileMismatchError, defaultSettings, duration, runPipeline, type AudioSource, type PageState, type PipelineEnv, type PipelineReporter } from './pipeline/run';
 import { webSessionHtmlPath } from './webSessions';
 import { fileIdentity, hasProgress, newSession, type CheckpointStore, type SessionState } from './pipeline/session';
 
@@ -338,7 +338,7 @@ export async function runWebFile(options: WebRunOptions): Promise<WebRunOutcome>
       await store.save(state);
     }
     const timing = state.phaseMs;
-    emit('appendConsole', `Tempi: taglio ${(timing.cut / 1000).toFixed(1)}s, codifica ${(timing.encode / 1000).toFixed(1)}s, trascrizione ${(timing.phase1 / 1000).toFixed(0)}s, revisione ${(timing.phase2 / 1000).toFixed(0)}s.`);
+    emit('appendConsole', `Tempi: taglio ${duration(timing.cut)}, codifica ${duration(timing.encode)}, trascrizione ${duration(timing.phase1)}, revisione ${duration(timing.phase2)}.`);
     outcome = finish(state, state.archiveSessionDir);
     return outcome;
   } catch (error) {

@@ -163,6 +163,8 @@ describe('runWebFile', () => {
     expect(archived[0]).toMatchObject({ input_name: 'Lezione.mp3', completion_status: 'completed', body: expect.stringContaining('<h1>Lezione</h1>') });
     expect([...records.values()][0].archiveSessionDir).toBe('web-session://s1');
     expect(named('processDone')).toEqual([expect.objectContaining({ cancelled: false, completed: 1, failed: 0, total: 1 })]);
+    // Phase times in minutes and seconds (the test clock never moves).
+    expect(named('appendConsole')).toContain('Tempi: taglio 0 s, codifica 0 s, trascrizione 0 s, revisione 0 s.');
     expect(events.at(-1)![0]).toBe('processDone');
     expect(audio.disposed).toBe(1);
   });

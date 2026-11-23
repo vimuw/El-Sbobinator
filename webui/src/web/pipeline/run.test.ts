@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PROMPT_REVISIONE, PROMPT_SISTEMA } from '../../generationProfile';
 import { NOTICE_PREFIX } from '../../phaseLabels';
 import { CancelledError, QuotaDailyLimitError } from './retry';
-import { FileMismatchError, defaultSettings, retryFailedSections, runPipeline, type AudioSource, type PipelineEnv, type PreparedAudio } from './run';
+import { FileMismatchError, defaultSettings, duration, retryFailedSections, runPipeline, type AudioSource, type PipelineEnv, type PreparedAudio } from './run';
 import { newSession, type CheckpointStore, type SessionState } from './session';
 
 type GeminiBody = {
@@ -116,6 +116,29 @@ afterEach(() => {
 describe('runPipeline', () => {
   it('uses the desktop settings for a new session', () => {
     expect(defaultSettings('gemini-3.6-flash')).toEqual({ model: 'gemini-3.6-flash', chunkSec: 900, stepSec: 840, macroCharLimit: 22000 });
+  });
+
+  it('writes console durations in seconds under a minute, minutes and seconds above', () => {
+    expect(duration(400)).toBe('0 s');
+    expect(duration(41_000)).toBe('41 s');
+    expect(duration(59_600)).toBe('1 min');
+    expect(duration(258_000)).toBe('4 min 18 s');
+  });
+
+  it('logs the time and thinking tokens of every transcription block and revision section', async () => {
+    let clock = 0;
+    const answer = (text: string, elapsedMs: number, thoughts?: number): Reply => () => {
+      clock += elapsedMs;
+      return { json: { candidates: [{ content: { parts: [{ text }] }, finishReason: 'STOP' }], ...(thoughts === undefined ? {} : { usageMetadata: { thoughtsTokenCount: thoughts } }) } };
+    };
+    mockGemini([answer(chunkText(1), 41_000, 3120), answer('## R\n\nTesto rivisto.', 65_000)]);
+    const { env, consoleLines } = makeEnv(fakeAudio(1), { now: () => clock });
+
+    await runPipeline(session('gemini-3.6-flash', 22000), env);
+
+    expect(consoleLines).toContainEqual(expect.stringMatching(/^Risposta Gemini per il blocco 1\/1 in 41 s: \d+ caratteri, 3120 token di ragionamento\.$/));
+    // No usage reported: the line just leaves the tokens out.
+    expect(consoleLines).toContainEqual(expect.stringMatching(/^Revisione della sezione 1\/1 in 1 min 5 s: \d+ caratteri\.$/));
   });
 
   it('transcribes every chunk, revises the sections and exports the body', async () => {
