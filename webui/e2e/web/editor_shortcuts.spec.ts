@@ -6,7 +6,7 @@ test('shared shortcuts live in the header and dismiss without closing or editing
   await page.setViewportSize({ width: 1680, height: 1000 });
   const audio = testInfo.outputPath('scorciatoie.mp3');
   writeSilentWav(audio);
-  await page.goto('/?simulazione=1');
+  await page.goto('/?simulazione=rapida');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(audio);

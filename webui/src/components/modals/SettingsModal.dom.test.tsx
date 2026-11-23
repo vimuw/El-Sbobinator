@@ -14,7 +14,6 @@ import { DEFAULT_CAPABILITIES, setHostCapabilities } from '../../hostCapabilitie
 import { IDBFactory } from 'fake-indexeddb';
 import { createApiUsageStore } from '../../web/apiUsage';
 import { createWebPywebviewApi } from '../../web/webHost';
-import { MODEL_25_ACCESS_NOTE_WEB } from './settings/ModelSection';
 import { APP_VERSION } from '../../branding';
 import { BACKDROP_SHAKE_MS } from '../../hooks/useBackdropDismiss';
 import { UNSAVED_CHANGES_HINT } from './UnsavedChangesHint';
@@ -559,11 +558,11 @@ describe('SettingsModal — main-section interactions', () => {
 });
 
 describe('SettingsModal — model section', () => {
-  it('shows the 2.5 Flash default badge and its access tooltip', async () => {
+  it('shows the 3.6 Flash default badge and the "Più lento" note of the slower models', async () => {
     const models = [
-      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: '', default_chunk_minutes: 12 },
-      { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: '', default_chunk_minutes: 15 },
-      { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', summary: '', default_chunk_minutes: 15 },
+      { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: '', default_chunk_minutes: 15, is_default: true },
+      { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', summary: 'Più lento', default_chunk_minutes: 15 },
+      { id: 'gemini-4-hydrogen', label: 'Gemini 4 Hydrogen', summary: 'Più lento', default_chunk_minutes: 15 },
     ];
     const { rerender } = render(
       <SettingsModal
@@ -581,46 +580,30 @@ describe('SettingsModal — model section', () => {
     // The closed select shows only the choice; the Default badge appears while choosing
     expect(trigger.textContent).not.toContain('Default');
     fireEvent.click(trigger);
-    const selectedOption = screen.getByRole('option', { name: /^Gemini 3.6 Flash/i });
+    const selectedOption = screen.getByRole('option', { name: /^Gemini 3.6 Flash.*Default/i });
     expect(selectedOption.getAttribute('aria-selected')).toBe('true');
-    expect(selectedOption.textContent).not.toContain('Default');
+    expect(selectedOption.textContent).not.toContain('Più lento');
     expect(screen.getAllByRole('option')).toHaveLength(3);
-    expect(screen.queryByRole('option', { name: /Gemini 3\.5 Flash|Gemini 3\.7 Flash/i })).toBeNull();
-    const legacyOption = screen.getByRole('option', { name: /Gemini 2.5 Flash.*Default/i });
-    const accessNote = MODEL_25_ACCESS_NOTE_WEB;
-    expect(legacyOption.querySelector('[title]')?.getAttribute('title')).toBe(accessNote);
-    expect(screen.queryByText(accessNote)).toBeNull();
+    expect(screen.queryByRole('option', { name: /Gemini 2\.5 Flash/i })).toBeNull();
+    // Written out, not a tooltip: touch screens show it too.
+    expect(screen.getByRole('option', { name: /^Gemini 3.8 Flash/i }).textContent).toContain('(Più lento)');
+    expect(screen.getByRole('option', { name: /^Gemini 4 Hydrogen/i }).textContent).toContain('(Più lento)');
     fireEvent.click(trigger);
-    rerender(<SettingsModal {...makeProps({ availableModels: models, preferredModel: 'gemini-2.5-flash' })} />);
-    const legacyTrigger = screen.getByRole('button', { name: /Gemini 2.5 Flash/i });
-    expect(legacyTrigger.querySelector('[title]')?.getAttribute('title')).toBe(accessNote);
-    expect(screen.queryByText('Fast and capable')).toBeNull();
-  });
-
-  it('tells web users that a key without 2.5 Flash moves to 3.6 Flash by itself', async () => {
-    const models = [
-      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: '', default_chunk_minutes: 15 },
-      { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: '', default_chunk_minutes: 15 },
-    ];
-    render(<SettingsModal {...makeProps({ availableModels: models, preferredModel: 'gemini-2.5-flash' })} />);
-    await act(async () => {
-      fireEvent.click(screen.getAllByText('Generale')[0].closest('button')!);
-    });
-    const trigger = screen.getByRole('button', { name: /Gemini 2.5 Flash/i });
-    expect(trigger.querySelector('[title]')?.getAttribute('title')).toBe(MODEL_25_ACCESS_NOTE_WEB);
+    rerender(<SettingsModal {...makeProps({ availableModels: models, preferredModel: 'gemini-4-hydrogen' })} />);
+    expect(screen.getByRole('button', { name: /Gemini 4 Hydrogen/i }).textContent).toContain('(Più lento)');
   });
 
   it('calls setPreferredModel when another model is selected', async () => {
     const models = [
-      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', summary: 'Fast', default_chunk_minutes: 12 },
-      { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: 'Successore consigliato', default_chunk_minutes: 15 },
+      { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', summary: '', default_chunk_minutes: 15 },
+      { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', summary: 'Più lento', default_chunk_minutes: 15 },
     ];
     const setPreferredModel = vi.fn();
     render(
       <SettingsModal
         {...makeProps({
           availableModels: models,
-          preferredModel: 'gemini-2.5-flash',
+          preferredModel: 'gemini-3.6-flash',
           setPreferredModel,
         })}
       />,
@@ -628,11 +611,11 @@ describe('SettingsModal — model section', () => {
     await act(async () => {
       fireEvent.click(screen.getAllByText('Generale')[0].closest('button')!);
     });
-    const trigger = screen.getByRole('button', { name: /Gemini 2.5 Flash/i });
+    const trigger = screen.getByRole('button', { name: /Gemini 3.6 Flash/i });
     fireEvent.click(trigger);
-    const option = screen.getByRole('option', { name: /^Gemini 3.6 Flash/i });
+    const option = screen.getByRole('option', { name: /^Gemini 3.8 Flash/i });
     fireEvent.click(option);
-    expect(setPreferredModel).toHaveBeenCalledWith('gemini-3.6-flash');
+    expect(setPreferredModel).toHaveBeenCalledWith('gemini-3.8-flash');
   });
 });
 
@@ -812,19 +795,19 @@ describe('SettingsModal on the web host', () => {
   it('shows from the web host which key is exhausted today and which takes over', async () => {
     const values = new Map<string, string>();
     const usage = createApiUsageStore({ getItem: key => values.get(key) ?? null, setItem: (key, value) => void values.set(key, value) });
-    usage.markQuotaExhausted('AIzaSyPrimary1234567890123', 'gemini-2.5-flash');
+    usage.markQuotaExhausted('AIzaSyPrimary1234567890123', 'gemini-3.8-flash');
     localStorage.setItem(STORAGE_KEYS.WEB_GEMINI_KEYS_V1, 'AIzaSyPrimary1234567890123\nAIzaSyReserve1234567890456');
     setPywebview(createWebPywebviewApi(() => {}, { database: new IDBFactory(), usage }) as unknown as Record<string, unknown>);
     onTestFinished(() => localStorage.removeItem(STORAGE_KEYS.WEB_GEMINI_KEYS_V1));
 
-    render(<SettingsModal {...makeProps({ apiKey: 'AIzaSyPrimary1234567890123', fallbackKeys: ['AIzaSyReserve1234567890456'], preferredModel: 'gemini-2.5-flash' })} />);
+    render(<SettingsModal {...makeProps({ apiKey: 'AIzaSyPrimary1234567890123', fallbackKeys: ['AIzaSyReserve1234567890456'], preferredModel: 'gemini-3.8-flash' })} />);
 
     expect(await screen.findByText('Esaurita oggi')).toBeTruthy();
     expect(screen.getByText('Attiva')).toBeTruthy();
     expect(screen.getByTestId('api-key-availability').textContent).toContain('1 di 2 disponibili oggi · si ricaricano alle 09:00');
     expect(screen.getByTestId('api-key-availability').getAttribute('title')).toContain('Reset quote: ore 09:00 (ora italiana / 00:00 PT)');
     expect(screen.getByRole('table', { name: 'Disponibilità delle chiavi per modello' })).toBeTruthy();
-    expect(screen.getByRole('cell', { name: 'Chiave Principale: non disponibile per Gemini 2.5 Flash' })).toBeTruthy();
+    expect(screen.getByRole('cell', { name: 'Chiave Principale: non disponibile per Gemini 3.8 Flash' })).toBeTruthy();
     expect(screen.getByRole('cell', { name: 'Chiave Principale: disponibile per Gemini 3.6 Flash' })).toBeTruthy();
   });
 

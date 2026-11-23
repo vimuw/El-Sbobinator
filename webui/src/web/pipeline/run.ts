@@ -135,7 +135,15 @@ const PHASE2_SPAN: [number, number] = [0.7, 0.95];
 // ends, with its counter, so the percent never lags the step bar (filled by workDone) by a step.
 const spanAt = ([from, to]: [number, number], done: number, total: number) => from + (to - from) * (total > 0 ? done / total : 0);
 const mib = (bytes: number) => `${(bytes / 1048576).toFixed(1)} MB`;
-const seconds = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
+/** A console duration: "41 s" under a minute, "4 min 18 s" above. */
+export function duration(ms: number): string {
+  const total = Math.max(0, Math.round(ms / 1000));
+  if (total < 60) return `${total} s`;
+  const rest = total % 60;
+  return `${Math.floor(total / 60)} min${rest ? ` ${rest} s` : ''}`;
+}
+// ", 3120 token di ragionamento" when Gemini reports them.
+const thoughts = (tokens: number | undefined) => (tokens === undefined ? '' : `, ${tokens} token di ragionamento`);
 
 function withTimeout(timeoutSec: number, outer: AbortSignal): AbortSignal {
   const timeout = AbortSignal.timeout(timeoutSec * 1000);
@@ -301,7 +309,7 @@ function createPipeline(state: SessionState, env: PipelineEnv) {
     state.durationSec = cut.durationSec;
     await save();
     const total = cut.plan.length;
-    reporter.console(`Audio: ${cut.description}, ${total} blocchi da ${Math.round(state.settings.chunkSec / 60)} min (taglio in ${seconds(cut.cutMs)}).`);
+    reporter.console(`Audio: ${cut.description}, ${total} blocchi da ${Math.round(state.settings.chunkSec / 60)} min (taglio in ${duration(cut.cutMs)}).`);
     reporter.totals(total, null);
     reporter.workDone('chunks', state.chunkTexts.length, total);
     if (state.chunkTexts.length) reporter.console(`Ripresa dal blocco ${state.chunkTexts.length + 1}/${total}.`);
@@ -409,7 +417,7 @@ function createPipeline(state: SessionState, env: PipelineEnv) {
           });
           // A request left running after Stop must not log or apply its late answer.
           throwIfCancelled();
-          reporter.console(`Risposta Gemini per il ${label} in ${seconds(env.now() - startedAt)}: ${result.text.length} caratteri.`);
+          reporter.console(`Risposta Gemini per il ${label} in ${duration(env.now() - startedAt)}: ${result.text.length} caratteri${thoughts(result.thoughtsTokens)}.`);
           if (!result.text) throw new Error('Risposta vuota dal modello (text=None)');
           const degenerate = detectDegenerateOutput(result.text);
           if (degenerate) throw new DegenerateOutputError(degenerate);
@@ -511,6 +519,7 @@ function createPipeline(state: SessionState, env: PipelineEnv) {
     const label = `sezione ${index + 1}/${total}`;
     try {
       const result = await withKeys(() => retryWithQuota(async () => {
+        const startedAt = env.now();
         const response = await client.generate({
           model: model.id,
           systemInstruction: PROMPT_REVISIONE,
@@ -518,6 +527,9 @@ function createPipeline(state: SessionState, env: PipelineEnv) {
           temperature: PIPELINE_DEFAULTS.phase2Temperature,
           signal: withTimeout(PIPELINE_DEFAULTS.requestTimeoutSec, signal),
         });
+        // A request left running after Stop must not log its late answer.
+        throwIfCancelled();
+        reporter.console(`Revisione della ${label} in ${duration(env.now() - startedAt)}: ${response.text.length} caratteri${thoughts(response.thoughtsTokens)}.`);
         if (!response.text) throw new Error('Risposta vuota dal modello in revisione.');
         return response;
       }, retryEnv, PIPELINE_DEFAULTS.phase2RetrySleepSec, label));

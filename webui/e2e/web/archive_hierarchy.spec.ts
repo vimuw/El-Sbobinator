@@ -6,7 +6,7 @@ test('selected lesson titles remain accessible above a scrolling destination lis
   const names = ['Patologia generale - Lezione 11 - Infiammazione e risposta immunitaria', 'Fisiopatologia - Lezione 12 - Meccanismi di danno cellulare'];
   const sessions = names.map(name => ({ name }));
   // Two simulated runs make two archive records for the real multiselection UI.
-  await page.goto('/?simulazione=1');
+  await page.goto('/?simulazione=rapida');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(names.map(name => ({ name: `${name}.mp3`, mimeType: 'audio/mpeg', buffer: Buffer.alloc(2048) })));
@@ -46,7 +46,7 @@ test('selected lesson titles remain accessible above a scrolling destination lis
 });
 
 test('Enter opens collection options without navigating and still opens a focused collection', async ({ page }) => {
-  await page.goto('/?simulazione=1');
+  await page.goto('/?simulazione=rapida');
   await page.getByRole('button', { name: 'Archivio', exact: true }).waitFor();
   await page.evaluate(async () => {
     await window.pywebview?.api?.save_archive_folders?.([
@@ -74,7 +74,7 @@ test('organizes archive lessons in nested collections and persists moves across 
     mimeType: 'audio/wav',
     buffer: fs.readFileSync(writeSilentWav(testInfo.outputPath('hierarchy.mp3'))),
   };
-  await page.goto('/?simulazione=1');
+  await page.goto('/?simulazione=rapida');
   const chooserPromise = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooserPromise).setFiles(fixture);

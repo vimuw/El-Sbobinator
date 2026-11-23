@@ -5,10 +5,6 @@ import { CustomSelect } from './CustomSelect';
 import { Cpu } from 'lucide-react';
 import { SettingsSectionHeading } from './SettingsLayout';
 
-// Google gives 2.5 Flash only to projects that already used it. The site then moves the key to
-// 3.6 Flash by itself (webRun.ts).
-export const MODEL_25_ACCESS_NOTE_WEB = 'Google consente l’uso solo a chi ha già usato questo modello. Se la tua chiave non può usarlo, passo da solo a Gemini 3.6 Flash.';
-
 interface ModelSectionProps {
   preferredModel: string;
   setPreferredModel: (model: string) => void;
@@ -34,9 +30,8 @@ export const ModelSection: React.FC<ModelSectionProps> = React.memo(({
       value: m.id,
       label: m.label,
       badge: (m.is_default || m.id === DEFAULT_MODEL) ? 'Default' : undefined,
-      tooltip: m.id === 'gemini-2.5-flash'
-        ? MODEL_25_ACCESS_NOTE_WEB
-        : undefined,
+      // The profile's short note (e.g. "Più lento"), shown as text so touch screens see it too.
+      sublabel: m.summary || undefined,
     })),
     [sortedModels],
   );

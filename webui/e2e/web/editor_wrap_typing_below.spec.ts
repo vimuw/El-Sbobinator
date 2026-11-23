@@ -8,7 +8,7 @@ for (const zoom of [1, 1.1, 0.9]) test(`typing below two late wrap figures prese
   await page.setViewportSize({ width: 1280, height: 900 });
   const audio = info.outputPath('late-wrap.mp3');
   writeSilentWav(audio);
-  await page.goto('/?simulazione=1');
+  await page.goto('/?simulazione=rapida');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(audio);

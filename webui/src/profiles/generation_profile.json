@@ -6,34 +6,34 @@
     "chunk_continuation": "\n\nATTENZIONE: Stai continuando una stesura. Questo è l'ultimo paragrafo che hai generato nel blocco precedente:\n\"...{previous_tail}\"\n\nRiprendi il discorso da qui IN MODO FLUIDO. Usa la stessa grandezza per i titoli. Se all'inizio di questo blocco c'è sovrapposizione, NON ripetere testualmente le frasi già dette, ma se compare anche solo un dettaglio nuovo includilo."
   },
   "models": {
-    "default": "gemini-2.5-flash",
+    "default": "gemini-3.6-flash",
     "legacy_aliases": {
+      "gemini-2.5-flash": "gemini-3.6-flash",
       "gemini-3.5-flash": "gemini-3.6-flash",
       "gemini-3.7-flash": "gemini-3.8-flash"
     },
     "options": [
-      {
-        "id": "gemini-2.5-flash",
-        "label": "Gemini 2.5 Flash",
-        "summary": "",
-        "default_chunk_minutes": 15,
-        "default_macro_char_limit": 22000,
-        "phase1_temperature": 0.35,
-        "phase1_thinking_budget": 16384,
-        "is_default": true
-      },
       {
         "id": "gemini-3.6-flash",
         "label": "Gemini 3.6 Flash",
         "summary": "",
         "default_chunk_minutes": 15,
         "default_macro_char_limit": 22000,
-        "phase1_temperature": 0.35
+        "phase1_temperature": 0.35,
+        "is_default": true
       },
       {
         "id": "gemini-3.8-flash",
         "label": "Gemini 3.8 Flash",
-        "summary": "",
+        "summary": "Più lento",
+        "default_chunk_minutes": 15,
+        "default_macro_char_limit": 22000,
+        "phase1_temperature": 0.35
+      },
+      {
+        "id": "gemini-4-hydrogen",
+        "label": "Gemini 4 Hydrogen",
+        "summary": "Più lento",
         "default_chunk_minutes": 15,
         "default_macro_char_limit": 22000,
         "phase1_temperature": 0.35

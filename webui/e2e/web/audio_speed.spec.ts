@@ -4,7 +4,7 @@ import { expectPlaybackAudioReady, writeSilentWav } from '../audioFixture';
 test('changing playback speed keeps the scrubber and controls in place', async ({ page }, info) => {
   const fixture = info.outputPath('speed.mp3');
   writeSilentWav(fixture);
-  await page.goto('/?simulazione=1');
+  await page.goto('/?simulazione=rapida');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(fixture);

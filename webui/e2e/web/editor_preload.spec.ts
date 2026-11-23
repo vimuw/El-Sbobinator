@@ -6,7 +6,7 @@ test('the first opened transcript skips the editor and player loading placeholde
   writeSilentWav(fixture);
   const editorChunk = page.waitForRequest(/RichTextEditor/, { timeout: 10_000 }).catch(() => null);
 
-  await page.goto('/?simulazione=1');
+  await page.goto('/?simulazione=rapida');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(fixture);

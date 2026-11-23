@@ -4,7 +4,7 @@ import { writeSilentWav } from '../audioFixture';
 test('Escape in the find bar and in Trova e sostituisci closes only the search', async ({ page }, testInfo) => {
   const audio = testInfo.outputPath('ricerca.mp3');
   writeSilentWav(audio);
-  await page.goto('/?simulazione=1');
+  await page.goto('/?simulazione=rapida');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(audio);

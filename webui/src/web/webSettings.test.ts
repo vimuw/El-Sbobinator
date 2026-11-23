@@ -5,11 +5,9 @@ import {
   SPIKE_KEYS_STORAGE_KEY,
   WEB_MODEL_OPTIONS,
   adoptSpikeKeys,
-  loadUnavailableModels,
   loadWebKeys,
   loadWebModel,
   parseKeyLines,
-  rememberUnavailableModel,
   saveWebModel,
 } from './webSettings';
 
@@ -57,39 +55,29 @@ describe('web settings', () => {
     expect(values.has(SPIKE_KEYS_STORAGE_KEY)).toBe(false);
   });
 
-  it('remembers a missing model for the main key only, never storing the key', () => {
-    const values = stubStorage({});
-    const key = 'AIzaSyMainKey1234567890123';
-    rememberUnavailableModel(key, 'gemini-2.5-flash');
-    rememberUnavailableModel(key, 'gemini-2.5-flash');
-
-    expect(loadUnavailableModels(key)).toEqual(['gemini-2.5-flash']);
-    expect(values.get(STORAGE_KEYS.WEB_UNAVAILABLE_MODELS_V1)).not.toContain(key);
-    // A new main key may belong to a project that has the model.
-    expect(loadUnavailableModels('AIzaSyOtherKey123456789012')).toEqual([]);
-    expect(loadUnavailableModels('')).toEqual([]);
-  });
-
-  it('gives a fresh browser the default model', () => {
+  it('gives a fresh browser the default model, 3.6 Flash', () => {
     stubStorage({});
-    expect(loadWebModel()).toBe('gemini-2.5-flash');
+    expect(loadWebModel()).toBe('gemini-3.6-flash');
   });
 
-  it('moves a 3.6 Flash saved as the old default to 2.5 Flash once', () => {
-    stubStorage({ [STORAGE_KEYS.WEB_MODEL_V1]: 'gemini-3.6-flash' });
-    expect(loadWebModel()).toBe('gemini-2.5-flash');
-    expect(loadWebModel()).toBe('gemini-2.5-flash');
+  it('moves a saved 2.5 Flash, which Google retired, to 3.6 Flash', () => {
+    stubStorage({ [STORAGE_KEYS.WEB_MODEL_V2]: 'gemini-2.5-flash' });
+    expect(loadWebModel()).toBe('gemini-3.6-flash');
+    expect(saveWebModel('gemini-2.5-flash')).toBe(true);
+    expect(loadWebModel()).toBe('gemini-3.6-flash');
+  });
 
-    // Picked again by hand after the move: the migration never runs twice.
-    expect(saveWebModel('gemini-3.6-flash')).toBe(true);
+  it('moves the v1 model to v2 once, a retired model to its successor', () => {
+    const values = stubStorage({ [STORAGE_KEYS.WEB_MODEL_V1]: 'gemini-2.5-flash' });
     expect(loadWebModel()).toBe('gemini-3.6-flash');
-    expect(loadWebModel()).toBe('gemini-3.6-flash');
+    expect(values.get(STORAGE_KEYS.WEB_MODEL_V2)).toBe('gemini-3.6-flash');
+    expect(values.has(STORAGE_KEYS.WEB_MODEL_V1)).toBe(false);
   });
 
   it('keeps a model chosen before the first read', () => {
-    stubStorage({ [STORAGE_KEYS.WEB_MODEL_V1]: 'gemini-3.6-flash' });
-    saveWebModel('gemini-3.6-flash');
-    expect(loadWebModel()).toBe('gemini-3.6-flash');
+    stubStorage({ [STORAGE_KEYS.WEB_MODEL_V1]: 'gemini-2.5-flash' });
+    saveWebModel('gemini-3.8-flash');
+    expect(loadWebModel()).toBe('gemini-3.8-flash');
   });
 
   it('leaves other saved models where they are', () => {
@@ -98,15 +86,8 @@ describe('web settings', () => {
     expect(loadWebModel()).toBe('gemini-3.8-flash');
   });
 
-  it('keeps 3.6 Flash for a main key already known to lack 2.5 Flash', () => {
-    const key = 'AIzaSyMainKey1234567890123';
-    stubStorage({ [STORAGE_KEYS.WEB_GEMINI_KEYS_V1]: key, [STORAGE_KEYS.WEB_MODEL_V1]: 'gemini-3.6-flash' });
-    rememberUnavailableModel(key, 'gemini-2.5-flash');
+  it('ignores the unavailable-models entry older builds left', () => {
+    stubStorage({ [STORAGE_KEYS.WEB_MODEL_V2]: 'gemini-3.6-flash', [STORAGE_KEYS.WEB_UNAVAILABLE_MODELS_V1]: '{"key":"x","models":["gemini-3.6-flash"]}' });
     expect(loadWebModel()).toBe('gemini-3.6-flash');
-  });
-
-  it('ignores a damaged unavailable-models entry', () => {
-    stubStorage({ [STORAGE_KEYS.WEB_UNAVAILABLE_MODELS_V1]: '{broken' });
-    expect(loadUnavailableModels('AIzaSyMainKey1234567890123')).toEqual([]);
   });
 });

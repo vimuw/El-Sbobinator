@@ -461,12 +461,12 @@ export const readAndOptimizeImageAsDataUrl = async (
   return optimizeDataUrlImage(rawDataUrl, options);
 };
 
-export const DEFAULT_MODEL = 'gemini-2.5-flash';
+export const DEFAULT_MODEL = 'gemini-3.6-flash';
 
 export const MODEL_ORDER: string[] = [
-  'gemini-2.5-flash',
   'gemini-3.6-flash',
   'gemini-3.8-flash',
+  'gemini-4-hydrogen',
 ];
 
 export const MODEL_DISPLAY_NAMES: Record<string, string> = {
@@ -475,6 +475,7 @@ export const MODEL_DISPLAY_NAMES: Record<string, string> = {
   'gemini-3.6-flash': 'Gemini 3.6 Flash',
   'gemini-3.7-flash': 'Gemini 3.7 Flash',
   'gemini-3.8-flash': 'Gemini 3.8 Flash',
+  'gemini-4-hydrogen': 'Gemini 4 Hydrogen',
 };
 
 export function getModelDisplayName(modelId: string): string {

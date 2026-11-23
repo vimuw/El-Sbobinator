@@ -42,10 +42,8 @@ import {
 import {
   WEB_MODEL_OPTIONS,
   adoptSpikeKeys,
-  loadUnavailableModels,
   loadWebKeys,
   loadWebModel,
-  rememberUnavailableModel,
   saveWebKeys,
   saveWebModel,
 } from './webSettings';
@@ -148,17 +146,6 @@ export function createBridgeEmitter(target: () => Window['elSbobinatorBridge']):
   };
 }
 
-// webRun reports only the main key's 404s. Later runs start with the replacement (none: the chosen
-// model stays), and the app's settings are told, so they show the model really in use.
-export function mainKeyModelUnavailable(mainKey: string, emit: EmitBridgeEvent) {
-  return (model: string, replacement: string | null) => {
-    rememberUnavailableModel(mainKey, model);
-    if (replacement && loadWebModel() === model && saveWebModel(replacement)) {
-      emit('preferredModelChanged', { from: model, to: replacement });
-    }
-  };
-}
-
 async function describeDevice(archive: WebArchive, space: string): Promise<string> {
   const sessions = await archive.list().then(list => String(list.length), () => 'non leggibile');
   const lines = [
@@ -176,6 +163,8 @@ async function describeDevice(archive: WebArchive, space: string): Promise<strin
 export interface WebHostOptions {
   /** M0 simulated run (?simulazione=1): no Gemini calls, no audio work. */
   simulation?: boolean;
+  /** Pause between simulated steps (?simulazione=rapida: none); the fake pipeline's default otherwise. */
+  simulationStepMs?: number;
   /** IndexedDB holding checkpoints and the archive (tests pass fake-indexeddb). */
   database?: IDBFactory;
   /** navigator.storage: persistence request and usage estimate. */
@@ -541,8 +530,6 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
           file: blob,
           keys,
           model: preferredModel,
-          unavailableModels: loadUnavailableModels(keys[0]),
-          onModelUnavailable: mainKeyModelUnavailable(keys[0], emit),
           emit,
           controller: run,
           store: checkpoints(),
@@ -578,6 +565,7 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
         emit,
         signal: run.signal,
         saveDocument: saveArchive,
+        stepMs: options.simulationStepMs,
       }).catch(error => {
         emit('fileFailed', { index: 0, id: file.id, error: error instanceof Error ? error.message : String(error) });
         emit('processDone', { cancelled: false, completed: 0, failed: 1, total: 1 });
@@ -957,15 +945,18 @@ export async function initWebHost(): Promise<boolean> {
   let hideWaiting = () => {};
   await claimActiveTab({ onWaiting: takeOver => { hideWaiting = showWaitingPage(takeOver); }, onLost: () => leaveTab() });
   hideWaiting();
-  // ?simulazione=1 keeps the M0 simulated run (no Gemini calls) for demos and the smoke test.
-  const simulation = new URLSearchParams(window.location.search).get('simulazione') === '1';
+  // ?simulazione=1 keeps the M0 simulated run (no Gemini calls) for demos and the smoke test;
+  // ?simulazione=rapida skips its pauses, for browser tests that only need a finished sbobina.
+  const simulationMode = new URLSearchParams(window.location.search).get('simulazione');
+  const simulation = simulationMode === '1' || simulationMode === 'rapida';
+  const simulationStepMs = simulationMode === 'rapida' ? 0 : undefined;
   // The trash comes with the Drive sync: hidden, like it, in the released site.
   setHostCapabilities({ permanentDelete: !driveEnabled(), reportByEmail: !monitoringEnabled() });
   adoptSpikeKeys();
   // Lets index.css size controls for touch on tablets.
   document.documentElement.dataset.host = 'web';
   const emit = createBridgeEmitter(() => window.elSbobinatorBridge);
-  window.pywebview = { api: createWebPywebviewApi(emit, { simulation }) };
+  window.pywebview = { api: createWebPywebviewApi(emit, { simulation, simulationStepMs }) };
   window.dispatchEvent(new Event('pywebviewready'));
   return true;
 }

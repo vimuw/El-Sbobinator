@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PROMPT_REVISIONE, PROMPT_SISTEMA } from '../../generationProfile';
 import { NOTICE_PREFIX } from '../../phaseLabels';
 import { CancelledError, QuotaDailyLimitError } from './retry';
-import { FileMismatchError, defaultSettings, retryFailedSections, runPipeline, type AudioSource, type PipelineEnv, type PreparedAudio } from './run';
+import { FileMismatchError, defaultSettings, duration, retryFailedSections, runPipeline, type AudioSource, type PipelineEnv, type PreparedAudio } from './run';
 import { newSession, type CheckpointStore, type SessionState } from './session';
 
 type GeminiBody = {
@@ -100,7 +100,7 @@ function makeEnv(audio: AudioSource, overrides: Partial<PipelineEnv> = {}) {
   return { env, saved, phases, consoleLines, workDone, warnings, controller };
 }
 
-function session(model = 'gemini-2.5-flash', macroCharLimit = 400): SessionState {
+function session(model = 'gemini-3.6-flash', macroCharLimit = 400): SessionState {
   const state = newSession('s1', { name: 'Fisiologia L1.m4a', size: 10, headHash: 'h' }, { ...defaultSettings(model), macroCharLimit });
   return state;
 }
@@ -118,6 +118,29 @@ describe('runPipeline', () => {
     expect(defaultSettings('gemini-3.6-flash')).toEqual({ model: 'gemini-3.6-flash', chunkSec: 900, stepSec: 840, macroCharLimit: 22000 });
   });
 
+  it('writes console durations in seconds under a minute, minutes and seconds above', () => {
+    expect(duration(400)).toBe('0 s');
+    expect(duration(41_000)).toBe('41 s');
+    expect(duration(59_600)).toBe('1 min');
+    expect(duration(258_000)).toBe('4 min 18 s');
+  });
+
+  it('logs the time and thinking tokens of every transcription block and revision section', async () => {
+    let clock = 0;
+    const answer = (text: string, elapsedMs: number, thoughts?: number): Reply => () => {
+      clock += elapsedMs;
+      return { json: { candidates: [{ content: { parts: [{ text }] }, finishReason: 'STOP' }], ...(thoughts === undefined ? {} : { usageMetadata: { thoughtsTokenCount: thoughts } }) } };
+    };
+    mockGemini([answer(chunkText(1), 41_000, 3120), answer('## R\n\nTesto rivisto.', 65_000)]);
+    const { env, consoleLines } = makeEnv(fakeAudio(1), { now: () => clock });
+
+    await runPipeline(session('gemini-3.6-flash', 22000), env);
+
+    expect(consoleLines).toContainEqual(expect.stringMatching(/^Risposta Gemini per il blocco 1\/1 in 41 s: \d+ caratteri, 3120 token di ragionamento\.$/));
+    // No usage reported: the line just leaves the tokens out.
+    expect(consoleLines).toContainEqual(expect.stringMatching(/^Revisione della sezione 1\/1 in 1 min 5 s: \d+ caratteri\.$/));
+  });
+
   it('transcribes every chunk, revises the sections and exports the body', async () => {
     const replies: Reply[] = [okText(chunkText(1)), okText(chunkText(2)), okText(chunkText(3))];
     for (let i = 0; i < 4; i += 1) replies.push(body => okText(`## Rivisto\n\n${body.contents[0].parts[0].text!.slice(0, 40)}`));
@@ -127,10 +150,10 @@ describe('runPipeline', () => {
 
     const state = await runPipeline(session(), env);
 
-    // Phase 1: system prompt, chunk prompt with the previous tail, inline Opus, 2.5 Flash thinking budget.
+    // Phase 1: system prompt, chunk prompt with the previous tail, inline Opus, no thinking budget.
     const first = calls[0].body;
     expect(first.systemInstruction.parts[0].text).toBe(PROMPT_SISTEMA);
-    expect(first.generationConfig).toEqual({ temperature: 0.35, thinkingConfig: { thinkingBudget: 16384 } });
+    expect(first.generationConfig).toEqual({ temperature: 0.35 });
     expect(first.contents[0].parts[1].inlineData).toEqual({ mimeType: 'audio/ogg', data: btoa('audio 0') });
     expect(first.contents[0].parts[0].text).not.toContain('ATTENZIONE');
     expect(calls[1].body.contents[0].parts[0].text).toContain(`"...${chunkText(1).trim().slice(-2000)}"`);
@@ -227,7 +250,7 @@ describe('runPipeline', () => {
     expect(state.keyRotations).toBe(1);
     // The settings learn which key ran out, on the session's model, and that the next one works.
     expect(usage.recordFailure).toHaveBeenCalledTimes(1);
-    expect(usage.recordFailure.mock.calls[0].slice(0, 2)).toEqual(['KEY-1', 'gemini-2.5-flash']);
+    expect(usage.recordFailure.mock.calls[0].slice(0, 2)).toEqual(['KEY-1', 'gemini-3.6-flash']);
     expect(usage.recordSuccess.mock.calls.map(call => call[0])).toEqual(['KEY-2', 'KEY-2']);
     expect(consoleLines.join('\n')).toContain('continuo con la chiave 2/2');
     expect(consoleLines.join('\n')).not.toContain('KEY-');
@@ -239,7 +262,7 @@ describe('runPipeline', () => {
     const quota = { status: 429, json: { error: { status: 'RESOURCE_EXHAUSTED', message: 'exceeded your current quota' } } };
     mockGemini([truncated(1), okText(chunkText(2)), quota, invalid, truncated(3), okText('## R\n\nTesto rivisto.')]);
     const { env, warnings } = makeEnv(fakeAudio(3), { keys: ['KEY-1', 'KEY-2', 'KEY-3'] });
-    await runPipeline(session('gemini-2.5-flash', 22000), env);
+    await runPipeline(session('gemini-3.6-flash', 22000), env);
     expect(warnings).toEqual([
       ['truncated_output', 'Gemini ha troncato il testo del blocco 1: potrebbe mancarne la parte finale'],
       ['fallback_key_in_use', 'Quota giornaliera della chiave 1 esaurita: continuo con la chiave 2 di 3'],
@@ -260,7 +283,7 @@ describe('runPipeline', () => {
     const bad = { status: 400, json: { error: { status: 'INVALID_ARGUMENT', message: 'bad' } } };
     mockGemini([okText(chunkText(1)), bad, bad]);
     const { env, phases, warnings } = makeEnv(fakeAudio(1), {});
-    const state = await runPipeline(session('gemini-2.5-flash', 22000), env);
+    const state = await runPipeline(session('gemini-3.6-flash', 22000), env);
     expect(warnings).toEqual([['unrevised_blocks', '1 sezione inclusa senza revisione (sezione 1)']]);
     expect(state.failedBlocks).toEqual([0]);
     expect(state.revised![0]).toBe(state.macroBlocks![0].trim());
@@ -345,7 +368,7 @@ describe('retryFailedSections', () => {
     expect(state.body).toBe('<h1>vecchio</h1>');
   });
 
-  const notFound = { status: 404, json: { error: { status: 'NOT_FOUND', message: 'models/gemini-2.5-flash is not found for API version v1beta.' } } };
+  const notFound = { status: 404, json: { error: { status: 'NOT_FOUND', message: 'models/gemini-3.6-flash is not found for API version v1beta.' } } };
 
   it('skips a reserve key that lacks the model and revises with the next one', async () => {
     const { calls } = mockGemini([quota, notFound, okText('## B\n\nSeconda rivista.'), okText('## C\n\nTerza rivista.')]);
@@ -353,17 +376,17 @@ describe('retryFailedSections', () => {
     const result = await retryFailedSections(finished(), env);
     expect(calls.map(call => call.key)).toEqual(['KEY-1', 'KEY-2', 'KEY-3', 'KEY-3']);
     expect(result).toEqual({ retried: [1, 2], remaining: [], cancelled: false, quotaExhausted: false });
-    expect(warnings).toContainEqual(['fallback_key_model_missing', 'La chiave di riserva 2 non può usare Gemini 2.5 Flash: l’ho saltata']);
+    expect(warnings).toContainEqual(['fallback_key_model_missing', 'La chiave di riserva 2 non può usare Gemini 3.6 Flash: l’ho saltata']);
   });
 
   it('names every skipped reserve key in one warning', async () => {
     mockGemini([quota, notFound, notFound, okText('## B\n\nSeconda rivista.'), okText('## C\n\nTerza rivista.')]);
     const { env, warnings } = makeEnv(fakeAudio(1), { keys: ['KEY-1', 'KEY-2', 'KEY-3', 'KEY-4'] });
     expect(await retryFailedSections(finished(), env)).toEqual({ retried: [1, 2], remaining: [], cancelled: false, quotaExhausted: false });
-    expect(warnings).toContainEqual(['fallback_key_model_missing', 'Le chiavi di riserva 2, 3 non possono usare Gemini 2.5 Flash: le ho saltate']);
+    expect(warnings).toContainEqual(['fallback_key_model_missing', 'Le chiavi di riserva 2, 3 non possono usare Gemini 3.6 Flash: le ho saltate']);
   });
 
-  // Sentry ELSBOBINATOR-WEB-4: main key out of quota, the only reserve key without 2.5 Flash.
+  // Sentry ELSBOBINATOR-WEB-4: main key out of quota, the only reserve key without the model.
   it('names the reserve key that lacks the model when no key can revise', async () => {
     mockGemini([quota, notFound, notFound]);
     const state = finished();

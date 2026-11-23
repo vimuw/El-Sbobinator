@@ -63,7 +63,7 @@ function setup(overrides: Partial<WebRunOptions> = {}, initial: SessionState[] =
     descriptor,
     file,
     keys: ['KEY-1'],
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.6-flash',
     emit: (name, payload) => { events.push([name, payload]); },
     controller,
     store,
@@ -86,7 +86,7 @@ function setup(overrides: Partial<WebRunOptions> = {}, initial: SessionState[] =
 }
 
 async function checkpoint(stage: SessionState['stage'], extra: Partial<SessionState> = {}): Promise<SessionState> {
-  const state = newSession('old', await fileIdentity(file, descriptor.name), defaultSettings('gemini-2.5-flash'));
+  const state = newSession('old', await fileIdentity(file, descriptor.name), defaultSettings('gemini-3.6-flash'));
   state.stage = stage;
   state.plan = [{ index: 0, startSec: 0, durationSec: 900 }, { index: 1, startSec: 840, durationSec: 900 }];
   state.chunkTexts = [chunkText(1)];
@@ -163,6 +163,8 @@ describe('runWebFile', () => {
     expect(archived[0]).toMatchObject({ input_name: 'Lezione.mp3', completion_status: 'completed', body: expect.stringContaining('<h1>Lezione</h1>') });
     expect([...records.values()][0].archiveSessionDir).toBe('web-session://s1');
     expect(named('processDone')).toEqual([expect.objectContaining({ cancelled: false, completed: 1, failed: 0, total: 1 })]);
+    // Phase times in minutes and seconds (the test clock never moves).
+    expect(named('appendConsole')).toContain('Tempi: taglio 0 s, codifica 0 s, trascrizione 0 s, revisione 0 s.');
     expect(events.at(-1)![0]).toBe('processDone');
     expect(audio.disposed).toBe(1);
   });
@@ -184,32 +186,48 @@ describe('runWebFile', () => {
 
   it('applies the model chosen now to a session that has no chunk yet', async () => {
     const fetchMock = mockGemini([okText(chunkText(1)), okText('## R\n\nTesto rivisto.')]);
-    // Stopped after the cut with 3.6 Flash: two planned chunks, none transcribed.
-    const stale = await checkpoint('phase1', { chunkTexts: [], settings: defaultSettings('gemini-3.6-flash') });
+    // Stopped after the cut with 3.8 Flash: two planned chunks, none transcribed.
+    const stale = await checkpoint('phase1', { chunkTexts: [], settings: defaultSettings('gemini-3.8-flash') });
     const askRegenerate = vi.fn(async () => false);
-    const { options, named, records } = setup({ model: 'gemini-2.5-flash', askRegenerate }, [stale]);
+    const { options, named, records } = setup({ model: 'gemini-3.6-flash', askRegenerate }, [stale]);
 
     await expect(runWebFile(options)).resolves.toBe('completed');
 
     expect(askRegenerate).not.toHaveBeenCalled();
-    expect(named('updateModel')).toEqual(['gemini-2.5-flash']);
-    expect(String(fetchMock.mock.calls[0][0])).toContain('/models/gemini-2.5-flash:generateContent');
+    expect(named('updateModel')).toEqual(['gemini-3.6-flash']);
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/models/gemini-3.6-flash:generateContent');
     const saved = records.get('old')!;
-    expect(saved.settings).toEqual(defaultSettings('gemini-2.5-flash'));
+    expect(saved.settings).toEqual(defaultSettings('gemini-3.6-flash'));
     // Planned again with the new chunk length, not refused as a different file.
     expect(saved.plan).toHaveLength(1);
   });
 
   it('keeps the session model once a chunk is transcribed', async () => {
     const fetchMock = mockGemini([okText(chunkText(2)), okText('## R\n\nTesto rivisto.')]);
-    const started = await checkpoint('phase1', { settings: defaultSettings('gemini-3.6-flash') });
-    const { options, named, records } = setup({ model: 'gemini-2.5-flash', createAudio: () => fakeAudio(2) }, [started]);
+    const started = await checkpoint('phase1', { settings: defaultSettings('gemini-3.8-flash') });
+    const { options, named, records } = setup({ model: 'gemini-3.6-flash', createAudio: () => fakeAudio(2) }, [started]);
 
     await expect(runWebFile(options)).resolves.toBe('completed');
 
+    expect(named('updateModel')).toEqual(['gemini-3.8-flash']);
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/models/gemini-3.8-flash:generateContent');
+    expect(records.get('old')!.settings).toEqual(defaultSettings('gemini-3.8-flash'));
+  });
+
+  it('goes on with 3.6 Flash, and records it, for a session started with the retired 2.5 Flash', async () => {
+    const fetchMock = mockGemini([okText(chunkText(2)), okText('## R\n\nTesto rivisto.')]);
+    const started = await checkpoint('phase1', { settings: { ...defaultSettings('gemini-3.6-flash'), model: 'gemini-2.5-flash' } });
+    const { options, named, records, archived } = setup({ model: 'gemini-3.8-flash', createAudio: () => fakeAudio(2) }, [started]);
+
+    await expect(runWebFile(options)).resolves.toBe('completed');
+
+    expect(named('appendConsole')).toContain('ℹ Gemini 2.5 Flash non è più disponibile: continuo con Gemini 3.6 Flash.');
     expect(named('updateModel')).toEqual(['gemini-3.6-flash']);
     expect(String(fetchMock.mock.calls[0][0])).toContain('/models/gemini-3.6-flash:generateContent');
-    expect(records.get('old')!.settings).toEqual(defaultSettings('gemini-3.6-flash'));
+    // The blocks already written stay: only the rest is transcribed.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(records.get('old')!.settings.model).toBe('gemini-3.6-flash');
+    expect(archived[0]).toMatchObject({ effective_model: 'gemini-3.6-flash' });
   });
 
   it('reuses an archived completed session without calling Gemini', async () => {
@@ -301,180 +319,44 @@ describe('runWebFile', () => {
     expect(named('processDone')).toEqual([expect.objectContaining({ paused: 1, failed: 0 })]);
   });
 
-  describe('model fallback before the first block', () => {
+  describe('no model switch when the first block fails', () => {
     const overloaded: Reply = { status: 503, json: { error: { status: 'UNAVAILABLE', message: 'The model is overloaded.' } } };
-    const notFound: Reply = { status: 404, json: { error: { status: 'NOT_FOUND', message: 'models/gemini-2.5-flash is not found for API version v1beta.' } } };
+    const notFoundFor = (model: string): Reply => ({ status: 404, json: { error: { status: 'NOT_FOUND', message: `models/${model} is not found for API version v1beta.` } } });
     // One call plus the three busy retries of retryWithQuota.
     const busyFirstBlock = () => Array<Reply>(4).fill(overloaded);
     const calledModels = (fetchMock: ReturnType<typeof mockGemini>) =>
       fetchMock.mock.calls.map(([url]) => /models\/([^:]+):/.exec(String(url))![1]);
+    const models = [
+      ['gemini-3.6-flash', 'Gemini 3.6 Flash'],
+      ['gemini-3.8-flash', 'Gemini 3.8 Flash'],
+      ['gemini-4-hydrogen', 'Gemini 4 Hydrogen'],
+    ] as const;
 
-    it('starts over with 2.5 Flash when 3.6 Flash stays busy on the first block', async () => {
-      const fetchMock = mockGemini([...busyFirstBlock(), okText(chunkText(1)), okText('## R\n\nTesto rivisto.')]);
-      const { options, named, archived, records } = setup({ model: 'gemini-3.6-flash' });
-
-      await expect(runWebFile(options)).resolves.toBe('completed');
-
-      expect(calledModels(fetchMock)).toEqual([...Array(4).fill('gemini-3.6-flash'), 'gemini-2.5-flash', 'gemini-2.5-flash']);
-      expect(named('updateModel')).toEqual(['gemini-3.6-flash', 'gemini-2.5-flash']);
-      expect(named('processingWarning')).toContainEqual({ code: 'web_model_switched', message: expect.stringContaining('ricomincio con Gemini 2.5 Flash') });
-      expect(named('fileFailed')).toEqual([]);
-      expect(archived[0]).toMatchObject({ effective_model: 'gemini-2.5-flash' });
-      expect([...records.values()][0].settings).toEqual(defaultSettings('gemini-2.5-flash'));
-    });
-
-    it('keeps 3.6 Flash and pauses when a block was already written with it', async () => {
-      const started = await checkpoint('phase1', { settings: defaultSettings('gemini-3.6-flash') });
+    it.each(models)('pauses on a busy first block with %s, without trying another model', async model => {
       const fetchMock = mockGemini(busyFirstBlock());
-      const { options, named } = setup({ model: 'gemini-3.6-flash', createAudio: () => fakeAudio(2) }, [started]);
+      const { options, named, records } = setup({ model });
 
       await expect(runWebFile(options)).resolves.toBe('paused');
 
-      expect(new Set(calledModels(fetchMock))).toEqual(new Set(['gemini-3.6-flash']));
-      expect(named('fileFailed')).toEqual([expect.objectContaining({ error: 'phase1_chunk_failed_2' })]);
-    });
-
-    it('moves a key without 2.5 Flash to 3.6 Flash and remembers it', async () => {
-      const fetchMock = mockGemini([notFound, okText(chunkText(1)), okText('## R\n\nTesto rivisto.')]);
-      const onModelUnavailable = vi.fn();
-      const { options, named } = setup({ model: 'gemini-2.5-flash', onModelUnavailable });
-
-      await expect(runWebFile(options)).resolves.toBe('completed');
-
-      expect(calledModels(fetchMock)).toEqual(['gemini-2.5-flash', 'gemini-3.6-flash', 'gemini-3.6-flash']);
-      expect(onModelUnavailable).toHaveBeenCalledWith('gemini-2.5-flash', 'gemini-3.6-flash');
-      expect(named('processingWarning')).toContainEqual({ code: 'web_model_switched', message: expect.stringContaining('non può usare Gemini 2.5 Flash') });
-    });
-
-    it('starts with 3.6 Flash when the key is known to lack 2.5 Flash, and never tries 2.5 again', async () => {
-      const fetchMock = mockGemini(busyFirstBlock());
-      const { options, named } = setup({ model: 'gemini-2.5-flash', unavailableModels: ['gemini-2.5-flash'] });
-
-      await expect(runWebFile(options)).resolves.toBe('paused');
-
-      expect(new Set(calledModels(fetchMock))).toEqual(new Set(['gemini-3.6-flash']));
-      expect(named('updateModel')).toEqual(['gemini-3.6-flash']);
-      expect(named('appendConsole')).toContainEqual(expect.stringContaining('non ha accesso a Gemini 2.5 Flash: uso Gemini 3.6 Flash'));
-    });
-
-    it('does not claim a model switch when a resumed session keeps its own model', async () => {
-      // Written with 2.5 Flash before this device learned the key lacks it: the session keeps 2.5.
-      const started = await checkpoint('phase1');
-      const fetchMock = mockGemini([okText(chunkText(2)), okText('## R\n\nTesto rivisto.')]);
-      const { options, named } = setup({ model: 'gemini-2.5-flash', unavailableModels: ['gemini-2.5-flash'], createAudio: () => fakeAudio(2) }, [started]);
-
-      await expect(runWebFile(options)).resolves.toBe('completed');
-
-      expect(new Set(calledModels(fetchMock))).toEqual(new Set(['gemini-2.5-flash']));
-      expect(named('appendConsole')).not.toContainEqual(expect.stringContaining('non ha accesso'));
-    });
-
-    it('keeps the busy pause when the key also lacks the model it switched to, and remembers that', async () => {
-      const fetchMock = mockGemini([...busyFirstBlock(), notFound]);
-      const onModelUnavailable = vi.fn();
-      const { options, named, records } = setup({ model: 'gemini-3.6-flash', onModelUnavailable });
-
-      await expect(runWebFile(options)).resolves.toBe('paused');
-
-      expect(calledModels(fetchMock)).toEqual([...Array(4).fill('gemini-3.6-flash'), 'gemini-2.5-flash']);
+      expect(new Set(calledModels(fetchMock))).toEqual(new Set([model]));
+      expect(named('updateModel')).toEqual([model]);
       expect(named('fileFailed')).toEqual([expect.objectContaining({ error: 'phase1_chunk_failed_1', retry_reason: 'circuit_breaker_paused' })]);
-      // Remembered for the key, but the chosen 3.6 Flash stays the saved model.
-      expect(onModelUnavailable).toHaveBeenCalledWith('gemini-2.5-flash', null);
-      expect(named('updateModel')).toEqual(['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-3.6-flash']);
-      expect(named('processingWarning')).toContainEqual({ code: 'web_model_switched', message: null });
-      expect([...records.values()][0].settings).toEqual(defaultSettings('gemini-3.6-flash'));
+      expect(named('processingWarning')).not.toContainEqual(expect.objectContaining({ code: 'web_model_switched' }));
+      expect([...records.values()][0].settings).toEqual(defaultSettings(model));
     });
 
-    it('switches only this run, without remembering, when a reserve key lacks 2.5 Flash', async () => {
-      const fetchMock = mockGemini([quota, notFound, quota, okText(chunkText(1)), okText('## R\n\nTesto rivisto.')]);
-      const onModelUnavailable = vi.fn();
-      const { options, named } = setup({ model: 'gemini-2.5-flash', keys: ['KEY-1', 'KEY-2'], onModelUnavailable });
-
-      await expect(runWebFile(options)).resolves.toBe('completed');
-
-      const calledKeys = fetchMock.mock.calls.map(([, init]) => new Headers(init?.headers).get('x-goog-api-key'));
-      expect(calledModels(fetchMock).slice(0, 2)).toEqual(['gemini-2.5-flash', 'gemini-2.5-flash']);
-      expect(calledKeys.slice(0, 2)).toEqual(['KEY-1', 'KEY-2']);
-      expect(calledModels(fetchMock).slice(2)).toEqual(Array(3).fill('gemini-3.6-flash'));
-      expect(onModelUnavailable).not.toHaveBeenCalled();
-      expect(named('processingWarning')).toContainEqual({ code: 'web_model_switched', message: expect.stringContaining('La chiave di riserva 2 non può usare Gemini 2.5 Flash') });
-    });
-
-    const notFoundFor = (model: string): Reply => ({ status: 404, json: { error: { status: 'NOT_FOUND', message: `models/${model} is not found for API version v1beta.` } } });
-
-    it('moves 3.8 Flash missing for the key to 2.5 Flash', async () => {
-      const fetchMock = mockGemini([notFoundFor('gemini-3.8-flash'), okText(chunkText(1)), okText('## R\n\nTesto rivisto.')]);
-      const onModelUnavailable = vi.fn();
-      const { options, named, archived } = setup({ model: 'gemini-3.8-flash', onModelUnavailable });
-
-      await expect(runWebFile(options)).resolves.toBe('completed');
-
-      expect(calledModels(fetchMock)).toEqual(['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.5-flash']);
-      expect(onModelUnavailable).toHaveBeenCalledWith('gemini-3.8-flash', 'gemini-2.5-flash');
-      expect(named('processingWarning')).toContainEqual({ code: 'web_model_switched', message: expect.stringContaining('non può usare Gemini 3.8 Flash: sbobino con Gemini 2.5 Flash') });
-      expect(archived[0]).toMatchObject({ effective_model: 'gemini-2.5-flash' });
-    });
-
-    it('moves 3.8 Flash to 3.6 Flash when the key is known to lack 2.5 Flash', async () => {
-      const fetchMock = mockGemini([notFoundFor('gemini-3.8-flash'), okText(chunkText(1)), okText('## R\n\nTesto rivisto.')]);
-      const onModelUnavailable = vi.fn();
-      const { options, named, archived } = setup({ model: 'gemini-3.8-flash', unavailableModels: ['gemini-2.5-flash'], onModelUnavailable });
-
-      await expect(runWebFile(options)).resolves.toBe('completed');
-
-      expect(calledModels(fetchMock)).toEqual(['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.6-flash']);
-      expect(onModelUnavailable).toHaveBeenCalledWith('gemini-3.8-flash', 'gemini-3.6-flash');
-      expect(named('fileFailed')).toEqual([]);
-      expect(archived[0]).toMatchObject({ effective_model: 'gemini-3.6-flash' });
-    });
-
-    it('moves a busy 3.8 Flash to 3.6 Flash when the key is known to lack 2.5 Flash', async () => {
-      const fetchMock = mockGemini([...busyFirstBlock(), okText(chunkText(1)), okText('## R\n\nTesto rivisto.')]);
-      const { options, named } = setup({ model: 'gemini-3.8-flash', unavailableModels: ['gemini-2.5-flash'] });
-
-      await expect(runWebFile(options)).resolves.toBe('completed');
-
-      expect(calledModels(fetchMock)).toEqual([...Array(4).fill('gemini-3.8-flash'), 'gemini-3.6-flash', 'gemini-3.6-flash']);
-      expect(named('processingWarning')).toContainEqual({ code: 'web_model_switched', message: expect.stringContaining('ricomincio con Gemini 3.6 Flash') });
-    });
-
-    it('tries 2.5 and then 3.6 Flash after 3.8 Flash, naming all three when none is available', async () => {
-      const fetchMock = mockGemini(['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-3.6-flash'].map(notFoundFor));
-      const onModelUnavailable = vi.fn();
-      const { options, named } = setup({ model: 'gemini-3.8-flash', onModelUnavailable });
+    it.each(models)('stops when the key lacks %s, naming only that model', async (model, label) => {
+      const fetchMock = mockGemini([notFoundFor(model)]);
+      const { options, named } = setup({ model });
 
       await expect(runWebFile(options)).resolves.toBe('failed');
 
-      expect(calledModels(fetchMock)).toEqual(['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-3.6-flash']);
-      expect(onModelUnavailable.mock.calls).toEqual([['gemini-3.8-flash', 'gemini-2.5-flash'], ['gemini-2.5-flash', 'gemini-3.6-flash']]);
+      expect(calledModels(fetchMock)).toEqual([model]);
       expect(named('fileFailed')).toEqual([{
         index: 0,
         id: 'f1',
-        error: 'Gemini 3.8 Flash, Gemini 2.5 Flash e Gemini 3.6 Flash non sono disponibili per questa chiave API: scegli un altro modello nelle impostazioni o usa un’altra chiave.',
+        error: `${label} non è disponibile per questa chiave API: scegli un altro modello nelle impostazioni o usa un’altra chiave.`,
       }]);
-    });
-
-    it('names only the model tried when the key is known to lack the other one', async () => {
-      const fetchMock = mockGemini([notFound]);
-      const { options, named } = setup({ model: 'gemini-2.5-flash', unavailableModels: ['gemini-3.6-flash'] });
-
-      await expect(runWebFile(options)).resolves.toBe('failed');
-
-      expect(calledModels(fetchMock)).toEqual(['gemini-2.5-flash']);
-      expect(named('fileFailed')).toEqual([expect.objectContaining({
-        error: 'Gemini 2.5 Flash non è disponibile per questa chiave API: scegli un altro modello nelle impostazioni o usa un’altra chiave.',
-      })]);
-    });
-
-    it('does not switch away from 2.5 Flash when it is only busy', async () => {
-      const fetchMock = mockGemini(busyFirstBlock());
-      const { options, named } = setup({ model: 'gemini-2.5-flash' });
-
-      await expect(runWebFile(options)).resolves.toBe('paused');
-
-      expect(named('processingWarning')).not.toContainEqual(expect.objectContaining({ code: 'web_model_switched' }));
-
-      expect(new Set(calledModels(fetchMock))).toEqual(new Set(['gemini-2.5-flash']));
     });
   });
 });

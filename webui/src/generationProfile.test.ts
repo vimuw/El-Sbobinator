@@ -41,18 +41,29 @@ describe('generation profile', () => {
   });
 
   it('keeps the model defaults of the desktop registry', () => {
-    expect(PROFILE_MODEL_OPTIONS.map(option => option.id)).toEqual(['gemini-2.5-flash', 'gemini-3.6-flash', 'gemini-3.8-flash']);
-    expect(PROFILE_DEFAULT_MODEL).toBe('gemini-2.5-flash');
+    // 2.5 Flash left on 2026-12-01 (Google routes it to a Lite model): 3.6 Flash is the default.
+    expect(PROFILE_MODEL_OPTIONS.map(option => option.id)).toEqual(['gemini-3.6-flash', 'gemini-3.8-flash', 'gemini-4-hydrogen']);
+    expect(PROFILE_DEFAULT_MODEL).toBe('gemini-3.6-flash');
     expect(DEFAULT_MODEL).toBe(PROFILE_DEFAULT_MODEL);
-    expect(profileModel('gemini-2.5-flash').phase1_thinking_budget).toBe(16384);
-    expect(profileModel('gemini-3.8-flash').phase1_thinking_budget).toBeUndefined();
+    expect(PROFILE_MODEL_OPTIONS.filter(option => option.is_default).map(option => option.id)).toEqual(['gemini-3.6-flash']);
+    // Every model keeps its own thinking: no budget is sent.
+    expect(PROFILE_MODEL_OPTIONS.filter(option => option.phase1_thinking_budget !== undefined)).toEqual([]);
+    expect(profileModel('gemini-4-hydrogen').label).toBe('Gemini 4 Hydrogen');
+    // The slower models say so in Settings.
+    expect(Object.fromEntries(PROFILE_MODEL_OPTIONS.map(option => [option.id, option.summary]))).toEqual({
+      'gemini-3.6-flash': '',
+      'gemini-3.8-flash': 'Più lento',
+      'gemini-4-hydrogen': 'Più lento',
+    });
     for (const option of PROFILE_MODEL_OPTIONS) {
       expect(option.default_chunk_minutes).toBe(15);
       expect(option.default_macro_char_limit).toBe(22000);
       expect(option.phase1_temperature).toBe(0.35);
     }
     expect(sanitizeModelName('gemini-3.7-flash')).toBe('gemini-3.8-flash');
-    expect(sanitizeModelName(' gemini-2.5-flash ')).toBe('gemini-2.5-flash');
+    expect(sanitizeModelName(' gemini-3.6-flash ')).toBe('gemini-3.6-flash');
+    // Saved settings and paused sessions with the retired 2.5 Flash go on with 3.6 Flash.
+    expect(sanitizeModelName('gemini-2.5-flash')).toBe('gemini-3.6-flash');
     expect(sanitizeModelName('gemini-1.5-pro')).toBe(PROFILE_DEFAULT_MODEL);
   });
 });

@@ -1,7 +1,8 @@
 import { test as base } from '@playwright/test';
 
 // A dummy key in the right format: these tests never call Gemini (they open the app with
-// ?simulazione=1, the M0 simulated run). Every page of the test starts past the key setup.
+// ?simulazione=rapida or ?simulazione=1, the M0 simulated run with or without its pauses).
+// Every page of the test starts past the key setup.
 const DUMMY_KEY = 'AIzaSyE2EDUMMYKEY000000000000000000000';
 
 export const test = base.extend({

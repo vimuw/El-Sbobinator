@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import os from 'node:os';
 import path from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
 
@@ -20,6 +21,11 @@ const DRIVE_SPECS = /(?:^|[\\/])drive[^\\/]*\.spec\.ts$/;
 // Frame-by-frame layout measurements: with other workers busy, dropped frames look like jumps.
 // They run alone, after the other projects (a focused run of these files can skip those with --no-deps).
 const TIMING_SPECS = /(?:^|[\\/])processing_transitions\.spec\.ts$/;
+// Locally at most three workers, fewer on small machines or when memory is short; --workers
+// overrides it. On a 12-thread, 16 GB PC (2026-11-22, whole suite): 2 workers 5.4 min, CPU at most
+// 56% for 90% of the run; 3 workers 4.0 min, 77%, never saturated; 4 workers 3.3 min, 93%,
+// saturated at times, the load that made the desktop lag. CI keeps Playwright's default.
+const localWorkers = Math.max(1, Math.min(3, Math.floor(os.cpus().length / 4), Math.floor(os.freemem() / 2 ** 30)));
 
 function build(outDir: string, clientId: string | undefined) {
   const env = { ...process.env };
@@ -53,6 +59,7 @@ export default defineConfig({
   expect: { timeout: 10000 },
   // Each test gets a fresh browser context, so localStorage never leaks between tests.
   fullyParallel: true,
+  workers: process.env.CI ? undefined : localWorkers,
   retries: 0,
   reporter: 'list',
   use: {

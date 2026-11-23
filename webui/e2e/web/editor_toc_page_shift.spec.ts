@@ -9,7 +9,7 @@ test('the open index moves the page instead of narrowing it', async ({ page }, i
   await page.setViewportSize({ width: 1000, height: 900 });
   const audio = info.outputPath('toc-page-shift.mp3');
   writeSilentWav(audio);
-  await page.goto('/?simulazione=1');
+  await page.goto('/?simulazione=rapida');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(audio);
