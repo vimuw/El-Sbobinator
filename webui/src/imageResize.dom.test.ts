@@ -42,7 +42,8 @@ describe('image resize preview', () => {
     const { editor, send } = setup('tc', layout, scale);
     send('pointermove', 0, 30 * scale);
     const ghost = document.querySelector<HTMLElement>('.editor-image-resize-preview')!;
-    expect(ghost.style.transform).toBe('translate3d(100px, 200px, 0)');
+    // Browsers read a zero length back as 0px.
+    expect(ghost.style.transform).toBe('translate3d(100px, 200px, 0px)');
     expect(Number.parseFloat(ghost.querySelector('img')!.style.height)).toBeCloseTo(118 * scale);
     send('pointerup', 0, 30 * scale);
     expect(editor.state.doc.nodeAt(1)!.attrs.offsetY).toBe(0);

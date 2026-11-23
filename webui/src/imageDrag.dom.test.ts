@@ -267,7 +267,7 @@ describe('wrap drag across a zoom change', () => {
     scale = 1.1;
     window.dispatchEvent(new Event(EDITOR_ZOOM_EVENT));
     window.dispatchEvent(pointer('pointermove', 60 * scale, dropY * scale));
-    expect(document.querySelector<HTMLElement>('.editor-image-drag-preview')!.style.width).toBe(`${224 * scale}px`);
+    expect(Number.parseFloat(document.querySelector<HTMLElement>('.editor-image-drag-preview')!.style.width)).toBeCloseTo(224 * scale);
     window.dispatchEvent(pointer('pointerup', 60 * scale, dropY * scale));
     const images: number[] = [];
     editor.state.doc.descendants(node => { if (node.type.name === 'floatingImage') images.push(node.attrs.width); });
