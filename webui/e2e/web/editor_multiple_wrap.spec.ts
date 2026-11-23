@@ -9,7 +9,7 @@ for (const { count, width } of [{ count: 2, width: 56 }, { count: 4, width: 56 }
   await page.setViewportSize({ width: 1400, height: 1000 });
   const audio = info.outputPath('multiple-wrap.mp3');
   writeSilentWav(audio);
-  await page.goto('/?simulazione=1');
+  await page.goto('/?simulazione=rapida');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(audio);

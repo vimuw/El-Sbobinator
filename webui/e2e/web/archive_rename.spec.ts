@@ -3,7 +3,7 @@ import { expect, test } from './keyedTest';
 import { writeSilentWav } from '../audioFixture';
 
 test('renames archived lessons in root and collections while preserving files and completion dates', async ({ page }, testInfo) => {
-  await page.goto('/?simulazione=1');
+  await page.goto('/?simulazione=rapida');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles({

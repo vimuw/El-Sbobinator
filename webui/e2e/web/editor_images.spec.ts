@@ -15,7 +15,7 @@ async function openImageEditor(page: Page, audio: string) {
   writeSilentWav(audio);
   // Vite can become ready before FastAPI; opening the app in that window leaves
   // bootstrap at HTTP 502 and prevents the editor fixture from starting.
-  await page.goto('/?simulazione=1');
+  await page.goto('/?simulazione=rapida');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(audio);
@@ -1940,7 +1940,7 @@ test('text-only copy exports standalone styles through keyboard, button and brow
   fs.writeFileSync(testInfo.outputPath('portable-text-clipboard.json'), JSON.stringify(buttonFormats));
   // A separate document with no app stylesheet verifies the portable HTML path.
   const destination = await context.newPage();
-  await destination.goto('/?simulazione=1');
+  await destination.goto('/?simulazione=rapida');
   await destination.setContent('<html><body><div contenteditable="true" id="destination"></div></body></html>');
   await destination.locator('#destination').focus();
   await destination.keyboard.press('Control+v');
@@ -2016,7 +2016,7 @@ test('inline and arbitrary image wrap preserve text, editing, undo and native cl
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const audio = testInfo.outputPath('image_layout.mp3');
   writeSilentWav(audio);
-  await page.goto('/?simulazione=1');
+  await page.goto('/?simulazione=rapida');
   const chooserPromise = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooserPromise).setFiles(audio);

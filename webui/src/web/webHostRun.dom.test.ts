@@ -122,6 +122,31 @@ describe('web host with the real pipeline', () => {
     await vi.waitFor(async () => expect((await window.pywebview!.api.is_processing_active!()).active).toBe(false));
   });
 
+  it('?simulazione=rapida runs the simulated steps without their pauses; ?simulazione=1 keeps them', async () => {
+    const { fetchMock } = mockGemini([]);
+    vi.stubGlobal('indexedDB', database);
+    window.elSbobinatorBridge = {} as Window['elSbobinatorBridge'];
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const runFor = async (search: string, name: string, ms: number) => {
+      window.history.replaceState(null, '', search);
+      await initWebHost();
+      const [file] = await window.pywebview!.api.upload_browser_files!([new File(['a'], name)]);
+      expect(await window.pywebview!.api.start_processing!([file], KEY, true, 'gemini-3.8-flash')).toEqual({ ok: true });
+      await vi.advanceTimersByTimeAsync(ms);
+    };
+
+    await runFor('/?simulazione=1', 'Lenta.mp3', 100);
+    expect(await window.pywebview!.api.get_completed_sessions!()).toMatchObject({ total: 0 });
+    await vi.runAllTimersAsync();
+    await vi.waitFor(async () => expect((await window.pywebview!.api.is_processing_active!()).active).toBe(false));
+    expect(await window.pywebview!.api.get_completed_sessions!()).toMatchObject({ total: 1 });
+
+    await runFor('/?simulazione=rapida', 'Rapida.mp3', 100);
+    await vi.waitFor(async () => expect((await window.pywebview!.api.is_processing_active!()).active).toBe(false));
+    expect(await window.pywebview!.api.get_completed_sessions!()).toMatchObject({ total: 2 });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('runs a file with the main key and the saved keys, archives it and opens it in the editor', async () => {
     localStorage.setItem(STORAGE_KEYS.WEB_GEMINI_KEYS_V1, `${KEY}\nAIzaSyBackup1234567890123456`);
     const { keys } = mockGemini([quota, okText(chunkText(1)), okText(chunkText(2)), okText('## Rivisto\n\nTesto rivisto della lezione.')]);

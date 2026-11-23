@@ -24,7 +24,7 @@ for (const scenario of [
   test(`undo survives reopen via ${scenario.route}, old ${scenario.delay} released ${scenario.release}`, async ({ page }, testInfo) => {
     const audio = testInfo.outputPath('autosave-undo.mp3');
     writeSilentWav(audio);
-    await page.goto('/?simulazione=1');
+    await page.goto('/?simulazione=rapida');
     const chooser = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
     await (await chooser).setFiles(audio);

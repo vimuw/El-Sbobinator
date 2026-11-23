@@ -5,7 +5,7 @@ import { readZip } from '../../src/web/zipArchive';
 const DUMMY_KEY = 'AIzaSyE2EDUMMYKEY000000000000000000000';
 
 async function openSimulatedSbobina(page: Page) {
-  await page.goto('/?simulazione=1');
+  await page.goto('/?simulazione=rapida');
   await page.getByLabel('Chiave API Gemini').fill(DUMMY_KEY);
   await page.getByRole('button', { name: 'Salva e inizia' }).click();
   const chooserPromise = page.waitForEvent('filechooser');

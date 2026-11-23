@@ -9,7 +9,7 @@ test('native clipboard exports the displayed positions of consecutive wrap image
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const audio = info.outputPath('wrap-clipboard.mp3');
   writeSilentWav(audio);
-  await page.goto('/?simulazione=1');
+  await page.goto('/?simulazione=rapida');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(audio);

@@ -5,7 +5,7 @@ import { writeSilentWav } from '../audioFixture';
 import { expectAutosaved } from '../autosave';
 
 test('opening a full-text archive result highlights the query in the editor', async ({ page }, testInfo) => {
-  await page.goto('/?simulazione=1');
+  await page.goto('/?simulazione=rapida');
   const chooserPromise = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooserPromise).setFiles({

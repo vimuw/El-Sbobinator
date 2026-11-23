@@ -6,7 +6,7 @@ import type { Editor } from '@tiptap/core';
 
 async function openEditor(page: Page, audio: string) {
   writeSilentWav(audio);
-  await page.goto('/?simulazione=1');
+  await page.goto('/?simulazione=rapida');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(audio);
