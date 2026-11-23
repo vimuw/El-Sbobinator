@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
+import { Table, TableCell, TableHeader, TableRow } from '@tiptap/extension-table';
 import { EditorDocumentStyle } from './editorDocumentStyle';
-import { clipboardPlainText, DOCUMENT_FORMATTING, editorFormattingVariables, formatPortableHtml, pointSize } from './documentFormatting';
+import { clipboardPlainText, DOCUMENT_FORMATTING, editorFormattingVariables, formatPortableHtml, isDefaultBlockStyle, pointSize } from './documentFormatting';
 import { createNativeClipboardFormats, NATIVE_SLICE_MIME } from './editorClipboard';
 import { prepareHtmlForClipboardSync } from './utils';
 
@@ -40,6 +41,19 @@ describe('Shared document formatting', () => {
     expect(prepareHtmlForClipboardSync(portable)).toBe(portable);
     const model = native(portable);
     expect(styles(model, 'paragraph')[model.dsl_spacers.indexOf('\n', model.dsl_spacers.indexOf('Esplicita'))].ps_ls).toBeCloseTo(DOCUMENT_FORMATTING.table.lineHeight, 4);
+  });
+  it('does not store the browser-rounded table leading as direct formatting on internal paste', () => {
+    expect(isDefaultBlockStyle('line-height', '1.71429', null, true)).toBe(true);
+    expect(isDefaultBlockStyle('line-height', '1.71429', null, false)).toBe(false);
+    expect(isDefaultBlockStyle('line-height', '1.8', null, true)).toBe(false);
+    const portable = prepareHtmlForClipboardSync('<table><tr><td><p>Cella</p><p style="line-height:1.8">Scelta</p></td></tr></table>');
+    expect(body(portable).querySelector('td p')!.getAttribute('style')).toContain('line-height: 1.71429');
+    const editor = new Editor({ extensions: [StarterKit, Table, TableRow, TableCell, TableHeader, EditorDocumentStyle], content: portable });
+    try {
+      const styles: unknown[] = [];
+      editor.state.doc.descendants(node => { if (node.type.name === 'paragraph') styles.push(node.attrs.documentStyle?.['line-height']); });
+      expect(styles).toEqual([undefined, '1.8']);
+    } finally { editor.destroy(); }
   });
   it('preserves inherited table typography, explicit cell fonts and repeated preparation', () => {
     const portable = prepareHtmlForClipboardSync('<p>Fuori</p><table><tr><td><p>Cella</p></td><td><p style="font-size:14pt">Esplicita</p></td><th><p>Testata</p></th></tr></table>');
