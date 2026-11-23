@@ -32,7 +32,9 @@ export const isDefaultBlockStyle = (property: string, value: string, level: numb
   switch (property) {
     case 'font-family': return value.replace(/["']/g, '').trim().toLowerCase() === formatting.fontFamily.toLowerCase();
     case 'font-size': return near(value, fontPt, formatting.fontSizePt);
-    case 'line-height': return value === String(heading?.lineHeight ?? (inTable ? formatting.table.lineHeight : formatting.lineHeight));
+    // Browsers read unitless numbers back at 6 significant digits (1.7142857 -> 1.71429).
+    case 'line-height': return /^\d*\.?\d+$/.test(value.trim())
+      && Math.abs(Number(value) - (heading?.lineHeight ?? (inTable ? formatting.table.lineHeight : formatting.lineHeight))) < 1e-5;
     case 'margin-top': return near(value, heading?.beforePt ?? 0);
     case 'margin-bottom': return near(value, heading?.afterPt ?? (inTable ? 0 : formatting.paragraphGapPt));
     case 'font-weight': return Boolean(heading) && (value === 'bold' ? 700 : Number(value)) === heading!.fontWeight;

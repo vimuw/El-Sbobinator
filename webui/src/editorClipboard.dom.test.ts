@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { EDITOR_CONTENT_WIDTH_PX } from './documentFormatting';
+import { DOCUMENT_FORMATTING, EDITOR_CONTENT_WIDTH_PX } from './documentFormatting';
 import { clipboardImageSize, createNativeClipboardFormats, NATIVE_IMAGES_MIME, NATIVE_SLICE_MIME, setClipboardFormats, writeEditorClipboard } from './editorClipboard';
 import { videoLink } from './editorLinks';
 import { prepareHtmlForClipboardSync } from './utils';
@@ -146,7 +146,8 @@ describe('Editor native image clipboard', () => {
       expect(style(doc, 'paragraph', text.indexOf(paragraph) + paragraph.length)).toMatchObject({ ps_ls: 1.15, ps_sb: 0, ps_sa: 0 });
     }
     // JSDOM has no font layout; custom CSS leading uses the fallback ratio.
-    expect(style(doc, 'paragraph', text.indexOf('Cella') + 'Cella'.length)).toMatchObject({ ps_ls: 1.7142857, ps_sb: 0, ps_sa: 0 });
+    // The CSS value reads back at 6 significant digits, as in browsers.
+    expect(style(doc, 'paragraph', text.indexOf('Cella') + 'Cella'.length)).toMatchObject({ ps_ls: expect.closeTo(DOCUMENT_FORMATTING.table.lineHeight, 4), ps_sb: 0, ps_sa: 0 });
     expect(style(doc, 'text', text.indexOf('grassetto'))).toMatchObject({ ts_bd: true, ts_ff: 'Arial', ts_fs: 11 });
     expect(style(doc, 'paragraph', text.indexOf('Prima voce') + 'Prima voce'.length)?.ps_il).toBe(36);
     expect(style(doc, 'list', text.indexOf('Prima voce') + 'Prima voce'.length)).toMatchObject({ ls_nest: 0 });
