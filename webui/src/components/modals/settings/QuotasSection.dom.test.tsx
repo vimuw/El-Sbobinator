@@ -4,6 +4,7 @@ import { render, screen } from '@testing-library/react';
 import { QuotasSection } from './QuotasSection';
 import { ApiStatusSection } from './ApiStatusSection';
 import type { ApiUsageResult } from '../../../bridge';
+import { MODEL_ORDER } from '../../../utils';
 
 describe('QuotasSection', () => {
   const dummyUsage: ApiUsageResult = {
@@ -15,8 +16,8 @@ describe('QuotasSection', () => {
     is_degraded_mode: false,
     degraded_reason: null,
     project_limits: {
-      'gemini-2.5-flash': {
-        model_name: 'gemini-2.5-flash',
+      'gemini-3.8-flash': {
+        model_name: 'gemini-3.8-flash',
         rpd_limit: 20,
         rpm_limit: 5,
         tpm_limit: 250000,
@@ -71,9 +72,11 @@ describe('QuotasSection', () => {
     expect(Array.from(container.querySelectorAll('summary')).map(el => el.textContent?.trim()))
       .toEqual(['Quote per modello']);
     expect(container.querySelector('details')?.open).toBe(false);
-    const selectedModel = screen.getByText('Gemini 2.5 Flash');
-    expect(screen.getByText('Gemini 3.6 Flash')).toBeTruthy();
+    // The default, 3.6 Flash, is the selected one; the retired 2.5 Flash is not listed.
+    const selectedModel = screen.getByText('Gemini 3.6 Flash');
     expect(screen.getByText('Gemini 3.8 Flash')).toBeTruthy();
+    expect(screen.getByText('Gemini 4 Hydrogen')).toBeTruthy();
+    expect(screen.queryByText('Gemini 2.5 Flash')).toBeNull();
     expect(screen.queryByText('Gemini 3.5 Flash')).toBeNull();
     expect(screen.queryByText('Gemini 3.7 Flash')).toBeNull();
     expect(screen.getAllByText('Selezionato')).toHaveLength(1);
@@ -104,9 +107,9 @@ describe('QuotasSection', () => {
   });
 
   it('states limits shared by every model once in the footnote', () => {
-    const base = dummyUsage.project_limits!['gemini-2.5-flash'];
+    const base = dummyUsage.project_limits!['gemini-3.8-flash'];
     const sameLimits = Object.fromEntries(
-      ['gemini-2.5-flash', 'gemini-3.6-flash', 'gemini-3.8-flash'].map(id => [id, { ...base, model_name: id, rpd_limit: 20, rpm_limit: 5 }])
+      MODEL_ORDER.map(id => [id, { ...base, model_name: id, rpd_limit: 20, rpm_limit: 5 }])
     );
     render(<QuotasSection apiUsage={{ ...dummyUsage, project_limits: sameLimits }} />);
 

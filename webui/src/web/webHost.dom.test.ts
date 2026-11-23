@@ -5,8 +5,7 @@ import { DEFAULT_CAPABILITIES, getHostCapabilities, setHostCapabilities } from '
 import { STORAGE_KEYS } from '../storageKeys';
 import type { BridgeEventName } from './fakePipeline';
 import { createApiUsageStore } from './apiUsage';
-import { createBridgeEmitter, createWebPywebviewApi, initWebHost, mainKeyModelUnavailable, modelMissingRetryMessage } from './webHost';
-import { loadUnavailableModels, loadWebModel, saveWebModel } from './webSettings';
+import { createBridgeEmitter, createWebPywebviewApi, initWebHost, modelMissingRetryMessage } from './webHost';
 
 function recorder() {
   const events: Array<{ name: BridgeEventName; payload: unknown }> = [];
@@ -101,33 +100,16 @@ describe('web host', () => {
     expect(api?.stream_media_file).toBeTypeOf('function');
   });
 
-  it('tells the app when a main-key 404 changes the saved model, so Settings shows it', () => {
-    const { events, emit } = recorder();
-    saveWebModel('gemini-2.5-flash');
-    const onModelUnavailable = mainKeyModelUnavailable('AIzaSyMain12345678901234567', emit);
-
-    onModelUnavailable('gemini-2.5-flash', 'gemini-3.6-flash');
-    expect(loadWebModel()).toBe('gemini-3.6-flash');
-    expect(loadUnavailableModels('AIzaSyMain12345678901234567')).toEqual(['gemini-2.5-flash']);
-    expect(events).toEqual([{ name: 'preferredModelChanged', payload: { from: 'gemini-2.5-flash', to: 'gemini-3.6-flash' } }]);
-
-    // No replacement, or a saved model other than the missing one: the saved choice stays, nothing to tell.
-    onModelUnavailable('gemini-3.6-flash', null);
-    onModelUnavailable('gemini-3.8-flash', 'gemini-2.5-flash');
-    expect(loadWebModel()).toBe('gemini-3.6-flash');
-    expect(events).toHaveLength(1);
-  });
-
   it('keeps keys one per line in localStorage and never validates them online', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     const api = createWebPywebviewApi(recorder().emit);
 
-    await api.save_settings!(' AIzaSyMain12345678901234567 ', ['AIzaSyBackup1234567890123456', ''], 'gemini-2.5-flash');
+    await api.save_settings!(' AIzaSyMain12345678901234567 ', ['AIzaSyBackup1234567890123456', ''], 'gemini-3.8-flash');
     expect(localStorage.getItem(STORAGE_KEYS.WEB_GEMINI_KEYS_V1)).toBe('AIzaSyMain12345678901234567\nAIzaSyBackup1234567890123456');
     expect(await api.load_settings!()).toMatchObject({
       api_key: 'AIzaSyMain12345678901234567',
       fallback_keys: ['AIzaSyBackup1234567890123456'],
-      preferred_model: 'gemini-2.5-flash',
+      preferred_model: 'gemini-3.8-flash',
     });
 
     // null keeps what is saved, like the desktop contract.
@@ -252,11 +234,11 @@ describe('web host', () => {
   });
 
   it('modelMissingRetryMessage: names the key to replace, never another model, since a retry keeps the session model', () => {
-    const main = modelMissingRetryMessage(1, 'gemini-2.5-flash');
-    expect(main).toBe('La chiave principale non può usare Gemini 2.5 Flash, il modello di questa sbobina: sostituiscila nelle impostazioni con una chiave che possa usarlo.');
+    const main = modelMissingRetryMessage(1, 'gemini-3.8-flash');
+    expect(main).toBe('La chiave principale non può usare Gemini 3.8 Flash, il modello di questa sbobina: sostituiscila nelle impostazioni con una chiave che possa usarlo.');
     expect(main).not.toContain('scegli un altro modello');
-    expect(modelMissingRetryMessage(2, 'gemini-2.5-flash')).toBe(
-      'La chiave di riserva 2 non può usare Gemini 2.5 Flash e la quota della chiave principale è esaurita: riprova domani o sostituisci la chiave di riserva nelle impostazioni.',
+    expect(modelMissingRetryMessage(2, 'gemini-3.8-flash')).toBe(
+      'La chiave di riserva 2 non può usare Gemini 3.8 Flash e la quota della chiave principale è esaurita: riprova domani o sostituisci la chiave di riserva nelle impostazioni.',
     );
   });
 });

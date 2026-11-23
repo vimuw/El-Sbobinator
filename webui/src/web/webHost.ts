@@ -42,10 +42,8 @@ import {
 import {
   WEB_MODEL_OPTIONS,
   adoptSpikeKeys,
-  loadUnavailableModels,
   loadWebKeys,
   loadWebModel,
-  rememberUnavailableModel,
   saveWebKeys,
   saveWebModel,
 } from './webSettings';
@@ -145,17 +143,6 @@ export function createBridgeEmitter(target: () => Window['elSbobinatorBridge']):
   return (name, payload) => {
     queue.push({ name, payload });
     if (timer === null) timer = setTimeout(drain, 0);
-  };
-}
-
-// webRun reports only the main key's 404s. Later runs start with the replacement (none: the chosen
-// model stays), and the app's settings are told, so they show the model really in use.
-export function mainKeyModelUnavailable(mainKey: string, emit: EmitBridgeEvent) {
-  return (model: string, replacement: string | null) => {
-    rememberUnavailableModel(mainKey, model);
-    if (replacement && loadWebModel() === model && saveWebModel(replacement)) {
-      emit('preferredModelChanged', { from: model, to: replacement });
-    }
   };
 }
 
@@ -543,8 +530,6 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
           file: blob,
           keys,
           model: preferredModel,
-          unavailableModels: loadUnavailableModels(keys[0]),
-          onModelUnavailable: mainKeyModelUnavailable(keys[0], emit),
           emit,
           controller: run,
           store: checkpoints(),

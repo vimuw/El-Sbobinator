@@ -114,7 +114,7 @@ describe('web host with the real pipeline', () => {
     await initWebHost();
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const [file] = await window.pywebview!.api.upload_browser_files!([new File(['a'], 'Demo.mp3')]);
-    expect(await window.pywebview!.api.start_processing!([file], KEY, true, 'gemini-2.5-flash')).toEqual({ ok: true });
+    expect(await window.pywebview!.api.start_processing!([file], KEY, true, 'gemini-3.8-flash')).toEqual({ ok: true });
     await vi.runAllTimersAsync();
     expect(fetchMock).not.toHaveBeenCalled();
     expect(await window.pywebview!.api.get_completed_sessions!()).toMatchObject({ total: 1 });
@@ -153,8 +153,8 @@ describe('web host with the real pipeline', () => {
     const { api, named, finished } = host();
     const [file] = await api.upload_browser_files!([new File(['audio-a'], 'Fisiologia.mp3')]);
 
-    expect(await api.start_processing!([file], KEY, true, 'gemini-2.5-flash')).toEqual({ ok: true });
-    expect(await api.start_processing!([file], KEY, true, 'gemini-2.5-flash')).toMatchObject({ ok: false });
+    expect(await api.start_processing!([file], KEY, true, 'gemini-3.8-flash')).toEqual({ ok: true });
+    expect(await api.start_processing!([file], KEY, true, 'gemini-3.8-flash')).toMatchObject({ ok: false });
     await finished();
 
     expect(keys).toEqual([KEY, 'AIzaSyBackup1234567890123456', 'AIzaSyBackup1234567890123456', 'AIzaSyBackup1234567890123456']);
@@ -169,7 +169,7 @@ describe('web host with the real pipeline', () => {
     mockGemini([okText(chunkText(1)), okText('## Rivisto\n\nTesto rivisto della lezione.')]);
     const first = host(1);
     const [file] = await first.api.upload_browser_files!([new File(['audio-a'], 'Istologia.mp3')]);
-    await first.api.start_processing!([file], KEY, true, 'gemini-2.5-flash');
+    await first.api.start_processing!([file], KEY, true, 'gemini-3.8-flash');
     await first.finished();
     const [done] = first.named('fileDone') as Array<{ html_path: string; session_dir: string }>;
     expect(await first.api.save_html_content!(done.html_path, '<h1>Istologia</h1><p>Appunto aggiunto a mano.</p>', 1)).toEqual({ ok: true, saved: true });
@@ -198,7 +198,7 @@ describe('web host with the real pipeline', () => {
   });
 
   it('after a browser restart, shows and uses the model from the settings for a checkpoint with no chunk', async () => {
-    // A run stopped with 3.6 Flash before its first chunk, then the model was set to 2.5 Flash.
+    // A run stopped with 3.6 Flash before its first chunk, then the model was set to 3.8 Flash.
     const audio = new File(['audio della lezione'], 'Lezione.mp3');
     const stale = newSession('stale', await fileIdentity(audio, audio.name), defaultSettings('gemini-3.6-flash'));
     stale.plan = [{ index: 0, startSec: 0, durationSec: 900 }, { index: 1, startSec: 840, durationSec: 900 }];
@@ -207,12 +207,12 @@ describe('web host with the real pipeline', () => {
     const { api, named, finished } = host(1);
     const [file] = await api.upload_browser_files!([audio]);
 
-    await api.start_processing!([file], KEY, true, 'gemini-2.5-flash');
+    await api.start_processing!([file], KEY, true, 'gemini-3.8-flash');
     await finished();
 
-    expect(named('updateModel')).toEqual(['gemini-2.5-flash']);
-    expect(String(fetchMock.mock.calls[0][0])).toContain('/models/gemini-2.5-flash:');
-    expect(named('fileDone')).toEqual([expect.objectContaining({ effective_model: 'gemini-2.5-flash' })]);
+    expect(named('updateModel')).toEqual(['gemini-3.8-flash']);
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/models/gemini-3.8-flash:');
+    expect(named('fileDone')).toEqual([expect.objectContaining({ effective_model: 'gemini-3.8-flash' })]);
   });
 
   it('asks before leaving the page only while a run is active', async () => {
@@ -223,10 +223,10 @@ describe('web host with the real pipeline', () => {
     expect(leaveBlocked()).toBe(false);
 
     // A path the page no longer holds never starts a run.
-    await api.start_processing!([{ ...file, path: 'local://gone/a.mp3' }], KEY, true, 'gemini-2.5-flash');
+    await api.start_processing!([{ ...file, path: 'local://gone/a.mp3' }], KEY, true, 'gemini-3.8-flash');
     expect(leaveBlocked()).toBe(false);
 
-    await api.start_processing!([file], KEY, true, 'gemini-2.5-flash');
+    await api.start_processing!([file], KEY, true, 'gemini-3.8-flash');
     await vi.waitFor(() => expect(named('askNewKey')).toHaveLength(1));
     expect(leaveBlocked()).toBe(true);
     await api.answer_new_key!('AIzaSyNuova123456789012345678');
@@ -237,7 +237,7 @@ describe('web host with the real pipeline', () => {
     mockGemini([quota]);
     const stopped = host(1);
     const [other] = await stopped.api.upload_browser_files!([new File(['b'], 'b.mp3')]);
-    await stopped.api.start_processing!([other], KEY, true, 'gemini-2.5-flash');
+    await stopped.api.start_processing!([other], KEY, true, 'gemini-3.8-flash');
     await vi.waitFor(() => expect(stopped.named('askNewKey')).toHaveLength(1));
     expect(leaveBlocked()).toBe(true);
     await stopped.api.stop_processing!();
@@ -247,7 +247,7 @@ describe('web host with the real pipeline', () => {
     vi.useFakeTimers();
     const demo = createWebPywebviewApi(() => {}, { simulation: true });
     const [sample] = await demo.upload_browser_files!([new File(['c'], 'c.mp3')]);
-    await demo.start_processing!([sample], KEY, true, 'gemini-2.5-flash');
+    await demo.start_processing!([sample], KEY, true, 'gemini-3.8-flash');
     expect(leaveBlocked()).toBe(true);
     await vi.runAllTimersAsync();
     expect(leaveBlocked()).toBe(false);
@@ -261,7 +261,7 @@ describe('web host with the real pipeline', () => {
     mockGemini([quota, okText(chunkText(1)), okText('## R\n\nTesto rivisto.')]);
     const { api, named, finished } = host(1);
     const [file] = await api.upload_browser_files!([new File(['a'], 'a.mp3')]);
-    await api.start_processing!([file], KEY, true, 'gemini-2.5-flash');
+    await api.start_processing!([file], KEY, true, 'gemini-3.8-flash');
     await vi.waitFor(() => expect(named('askNewKey')).toHaveLength(1));
 
     const opened: Array<{ href: string; target: string }> = [];
@@ -292,7 +292,7 @@ describe('web host with the real pipeline', () => {
     mockGemini([]);
     const { api } = host();
     const gone: FileDescriptor = { id: 'x', name: 'a.mp3', path: 'local://gone/a.mp3', size: 1 };
-    expect(await api.start_processing!([gone], KEY, true, 'gemini-2.5-flash')).toMatchObject({ ok: false, error: expect.stringContaining('selezionalo di nuovo') });
+    expect(await api.start_processing!([gone], KEY, true, 'gemini-3.8-flash')).toMatchObject({ ok: false, error: expect.stringContaining('selezionalo di nuovo') });
     expect((await api.is_processing_active!()).active).toBe(false);
   });
 
@@ -302,7 +302,7 @@ describe('web host with the real pipeline', () => {
     mockGemini([okText(chunkText(1)), quota]);
     const first = host();
     const [queued] = await first.api.upload_browser_files!([audio]);
-    await first.api.start_processing!([queued], KEY, true, 'gemini-2.5-flash');
+    await first.api.start_processing!([queued], KEY, true, 'gemini-3.8-flash');
     await vi.waitFor(() => expect(first.named('askNewKey')).toHaveLength(1));
     await first.api.answer_new_key!('');
     await first.finished();
@@ -316,7 +316,7 @@ describe('web host with the real pipeline', () => {
     expect(relinked).toMatchObject({ name: 'Lezione.mp3' });
 
     const { fetchMock } = mockGemini([okText(chunkText(2)), okText('## R\n\nTesto rivisto.')]);
-    await second.api.start_processing!([{ ...relinked!, id: queued.id }], KEY, true, 'gemini-2.5-flash');
+    await second.api.start_processing!([{ ...relinked!, id: queued.id }], KEY, true, 'gemini-3.8-flash');
     await vi.waitFor(() => expect(second.named('askRegenerate')).toEqual([{ filename: 'Lezione.mp3', mode: 'resume', sessionDir: '' }]));
     await second.api.answer_regenerate!(false);
     await second.finished();
@@ -330,7 +330,7 @@ describe('web host with the real pipeline', () => {
     mockGemini([okText(chunkText(1)), quota]);
     const first = host();
     const [queued] = await first.api.upload_browser_files!([new File(['audio uno'], 'Lezione.mp3')]);
-    await first.api.start_processing!([queued], KEY, true, 'gemini-2.5-flash');
+    await first.api.start_processing!([queued], KEY, true, 'gemini-3.8-flash');
     await vi.waitFor(() => expect(first.named('askNewKey')).toHaveLength(1));
     await first.api.answer_new_key!('');
     await first.finished();
@@ -339,7 +339,7 @@ describe('web host with the real pipeline', () => {
     pickNextFile(new File(['un altro audio diverso'], 'Lezione.mp3'));
     const relinked = await second.api.ask_media_file!();
     const { fetchMock } = mockGemini([okText(chunkText(1)), okText(chunkText(2)), okText('## R\n\nTesto rivisto.')]);
-    await second.api.start_processing!([relinked!], KEY, true, 'gemini-2.5-flash');
+    await second.api.start_processing!([relinked!], KEY, true, 'gemini-3.8-flash');
     await second.finished();
 
     expect(second.named('askRegenerate')).toEqual([]);
@@ -350,7 +350,7 @@ describe('web host with the real pipeline', () => {
     const { keys } = mockGemini([quota, okText(chunkText(1)), okText('## R\n\nTesto rivisto.')]);
     const { api, named, finished } = host(1);
     const [file] = await api.upload_browser_files!([new File(['a'], 'a.mp3')]);
-    await api.start_processing!([file], KEY, true, 'gemini-2.5-flash');
+    await api.start_processing!([file], KEY, true, 'gemini-3.8-flash');
     await vi.waitFor(() => expect(named('askNewKey')).toHaveLength(1));
     await api.answer_new_key!(' AIzaSyNuova123456789012345678 ');
     await finished();
@@ -362,7 +362,7 @@ describe('web host with the real pipeline', () => {
     mockGemini([okText(chunkText(1)), quota]);
     const { api, named, finished } = host();
     const [file] = await api.upload_browser_files!([new File(['a'], 'a.mp3')]);
-    await api.start_processing!([file], KEY, true, 'gemini-2.5-flash');
+    await api.start_processing!([file], KEY, true, 'gemini-3.8-flash');
     await vi.waitFor(() => expect(named('askNewKey')).toHaveLength(1));
     await api.stop_processing!();
     await finished();
@@ -377,7 +377,7 @@ describe('web host with the real pipeline', () => {
       mockGemini([okText(chunkText(1)), bad, bad]);
       const run = host(1);
       const [file] = await run.api.upload_browser_files!([new File(['a'], 'Lezione.mp3')]);
-      await run.api.start_processing!([file], KEY, true, 'gemini-2.5-flash');
+      await run.api.start_processing!([file], KEY, true, 'gemini-3.8-flash');
       await run.finished();
       const [done] = run.named('fileDone') as Array<{ session_dir: string; html_path: string; revision_failed_blocks: number[] }>;
       expect(done.revision_failed_blocks).toEqual([1]);
@@ -462,12 +462,12 @@ describe('web host with the real pipeline', () => {
     it('names the reserve key that lacks the model instead of asking to retry later', async () => {
       const { api, done } = await finishedWithWarnings();
       localStorage.setItem(STORAGE_KEYS.WEB_GEMINI_KEYS_V1, `${KEY}\nAIzaSyBackup1234567890123456`);
-      const notFound: Reply = { status: 404, json: { error: { status: 'NOT_FOUND', message: 'models/gemini-2.5-flash is not found for API version v1beta.' } } };
+      const notFound: Reply = { status: 404, json: { error: { status: 'NOT_FOUND', message: 'models/gemini-3.8-flash is not found for API version v1beta.' } } };
       mockGemini([quota, notFound]);
       expect(await api.retry_failed_revision_blocks!(done.session_dir)).toMatchObject({
         ok: false,
         remaining_failed_blocks: [1],
-        error: 'La chiave di riserva 2 non può usare Gemini 2.5 Flash e la quota della chiave principale è esaurita: riprova domani o sostituisci la chiave di riserva nelle impostazioni.',
+        error: 'La chiave di riserva 2 non può usare Gemini 3.8 Flash e la quota della chiave principale è esaurita: riprova domani o sostituisci la chiave di riserva nelle impostazioni.',
       });
     });
 
@@ -475,12 +475,12 @@ describe('web host with the real pipeline', () => {
     // Settings changed nothing: the user got the same 404 and the same text on every retry.
     it('tells to replace the main key when it lacks the session model', async () => {
       const { api, done } = await finishedWithWarnings();
-      const notFound: Reply = { status: 404, json: { error: { status: 'NOT_FOUND', message: 'models/gemini-2.5-flash is not found for API version v1beta.' } } };
+      const notFound: Reply = { status: 404, json: { error: { status: 'NOT_FOUND', message: 'models/gemini-3.8-flash is not found for API version v1beta.' } } };
       mockGemini([notFound]);
       expect(await api.retry_failed_revision_blocks!(done.session_dir)).toMatchObject({
         ok: false,
         remaining_failed_blocks: [1],
-        error: 'La chiave principale non può usare Gemini 2.5 Flash, il modello di questa sbobina: sostituiscila nelle impostazioni con una chiave che possa usarlo.',
+        error: 'La chiave principale non può usare Gemini 3.8 Flash, il modello di questa sbobina: sostituiscila nelle impostazioni con una chiave che possa usarlo.',
       });
     });
 
