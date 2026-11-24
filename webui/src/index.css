@@ -4688,10 +4688,30 @@ input::-webkit-contacts-auto-fill-button {
   justify-content: flex-start;
 }
 
+/* The glass circle belongs to the pill itself, not to the dock around it: dragging the pill
+   toward the other corner then carries the whole circle instead of leaving it behind. */
 .editor-player-dock:has(> .audio-player.is-collapsed) {
   width: auto;
-  padding: 2px;
+  padding: 0;
+  border: none;
   border-radius: var(--radius-pill);
+  background: none;
+  box-shadow: none;
+}
+
+.editor-player-dock > .audio-player.is-collapsed > .player-pill {
+  width: 50px;
+  height: 50px;
+  border: 1px solid var(--border-floating);
+  background: var(--bg-floating);
+  box-shadow: var(--shadow-md);
+}
+
+/* The ring keeps the 2px inset the dock's padding gave it. */
+.editor-player-dock > .audio-player.is-collapsed > .player-pill > .player-pill-ring {
+  inset: 2px;
+  width: calc(100% - 4px);
+  height: calc(100% - 4px);
 }
 
 /* Folding wipes the bar into the pill's corner; unfolding wipes it back out of that corner.
