@@ -261,6 +261,25 @@ describe('app surfaces', () => {
     expect(rule('.editor-fullpage-title-button::after')).toMatch(/^\s*content: ' ';\s*white-space: pre;\s*$/);
   });
 
+  it('writes the editor header\'s tinted Copia documento in a green that reads on its tint, hover included', () => {
+    // Scarica .docx leads as the filled green pill (images reach Google Docs from every device);
+    // Copia documento takes the same green as a tint, so its text has to stay readable on it.
+    const body = rule('.editor-fullpage-actions .icon-button.editor-fullpage-copy')!;
+    expect(body).toMatch(/background: var\(--accent-subtle\);/);
+    expect(body).toMatch(/color: var\(--accent-text\);/);
+    expect(rule('.editor-fullpage-actions .settings-pill-button.editor-fullpage-docx')).not.toMatch(/background|color:/);
+    expect(rule('.editor-fullpage-actions .icon-button.editor-fullpage-copy:hover')).toMatch(
+      /background: color-mix\(in srgb, var\(--accent-text\) 18%, transparent\);/);
+    for (const dark of [false, true]) {
+      const header = themeValue(dark ? '--bg-base' : '--editor-chrome-bg', dark);
+      const text = themeValue('--accent-text', dark);
+      const fills = { resting: mix(themeValue('--accent-subtle', dark), header), hovered: mix(text, header, 0.18) };
+      for (const [state, fill] of Object.entries(fills)) {
+        expect(contrast(text, fill), `${dark ? 'dark' : 'light'} ${state}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
   it('frames every floating surface in the light theme as clearly as the dark one does', () => {
     // A menu in #e9e5dc on the #f0ede6 header (1.07:1), with a 0.16 hairline and a 0.08 shadow,
     // read as part of the page, while the dark theme's menus stood out from everything; one in

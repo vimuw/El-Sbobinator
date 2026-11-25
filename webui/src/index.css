@@ -4947,17 +4947,14 @@ input::-webkit-contacts-auto-fill-button {
   .editor-shortcuts-audio .editor-shortcuts-list > div { grid-template-columns: minmax(0, 1fr); gap: 6px; }
 }
 
-/* Header utilities are round outline buttons beside the filled Copia documento pill. */
+/* Header utilities are round buttons beside the two export pills. */
 .editor-fullpage-actions .icon-button:not(.modal-icon-button) {
   width: 32px;
   height: 32px;
   border-radius: var(--radius-pill);
 }
 
-.editor-fullpage-actions .settings-pill-button.editor-fullpage-copy {
-  /* Fixed width keeps the button from resizing between "Copia documento" and
-     "Copiato!", while icon and label stay grouped in the center. */
-  min-width: 152px;
+.editor-fullpage-actions .settings-pill-button.editor-fullpage-docx {
   min-height: 32px;
   height: 32px;
   gap: 7px;
@@ -4966,22 +4963,33 @@ input::-webkit-contacts-auto-fill-button {
   white-space: nowrap;
 }
 
-.editor-fullpage-actions .settings-pill-button.editor-fullpage-copy.is-copied {
-  background: var(--success-subtle);
-  border-color: var(--success-ring);
-  color: var(--success-text);
-  box-shadow: none;
-}
-
-/* Scarica .docx (web): an outline pill, quieter than the filled Copia documento. */
-.editor-fullpage-actions .icon-button.editor-fullpage-docx {
+/* Copia documento: a tinted green pill beside the filled Scarica .docx. The file is the surer way
+   into Google Docs (images arrive from every device), so it leads; the copy is the quick one. */
+.editor-fullpage-actions .icon-button.editor-fullpage-copy {
+  /* Fixed width keeps the button from resizing between "Copia documento" and
+     "Copiato!", while icon and label stay grouped in the center. */
   width: auto;
+  min-width: 152px;
   gap: 7px;
   padding: 0 0.85rem;
-  border-color: var(--border-subtle);
+  border-color: var(--accent-ring);
+  background: var(--accent-subtle);
+  color: var(--accent-text);
   font-size: var(--text-xs);
   font-weight: 600;
   white-space: nowrap;
+}
+
+.editor-fullpage-actions .icon-button.editor-fullpage-copy:hover {
+  border-color: color-mix(in srgb, var(--accent-text) 40%, transparent);
+  background: color-mix(in srgb, var(--accent-text) 18%, transparent);
+  color: var(--accent-text);
+}
+
+.editor-fullpage-actions .icon-button.editor-fullpage-copy.is-copied {
+  background: var(--success-subtle);
+  border-color: var(--success-ring);
+  color: var(--success-text);
 }
 
 /* Phone: the copy starts from the "…" menu, which closes, so a pill beside "…" confirms it,
@@ -5021,8 +5029,8 @@ input::-webkit-contacts-auto-fill-button {
    kept only a few letters. Landscape tablets and desktops have room for both. */
 @media (max-width: 1024px) {
   .editor-fullpage-copy-label { display: none; }
-  .editor-fullpage-actions .settings-pill-button.editor-fullpage-copy { width: 32px; min-width: 32px; padding: 0; }
-  .editor-fullpage-actions .icon-button.editor-fullpage-docx { width: 32px; padding: 0; }
+  .editor-fullpage-actions .settings-pill-button.editor-fullpage-docx { width: 32px; min-width: 32px; padding: 0; }
+  .editor-fullpage-actions .icon-button.editor-fullpage-copy { width: 32px; min-width: 32px; padding: 0; }
 }
 
 .editor-fullpage-actions .icon-button.icon-button--active {

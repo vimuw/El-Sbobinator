@@ -464,7 +464,7 @@ export function EditorFullPage({
                 <button
                   type="button"
                   onClick={handleDownloadDocx}
-                  className="icon-button editor-fullpage-docx"
+                  className="settings-pill-button editor-fullpage-docx"
                   title="Scarica un file Word (.docx) con testo e immagini: aprilo con Google Docs, anche da iPad o telefono."
                   aria-label="Scarica .docx"
                 >
@@ -475,7 +475,8 @@ export function EditorFullPage({
               {!isPhone && (
                 <button
                   onClick={() => void handleCopy()}
-                  className={`settings-pill-button editor-fullpage-copy${isCopied ? ' is-copied' : ''}`}
+                  type="button"
+                  className={`icon-button editor-fullpage-copy${isCopied ? ' is-copied' : ''}`}
                   title={isCopied ? 'Copiato!' : 'Copia tutto il documento mantenendo la formattazione, pronto da incollare in Google Docs o Word.'}
                   aria-label="Copia documento"
                   aria-busy={isCopying}

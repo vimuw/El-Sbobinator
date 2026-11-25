@@ -259,9 +259,13 @@ describe('EditorFullPage autosave', () => {
     expect(shortcutsIndex).toBeGreaterThan(copyIndex);
     expect(themeIndex).toBeGreaterThan(shortcutsIndex);
 
-    // Copia documento is the header's filled primary pill; the utilities stay icon buttons.
-    expect(copyBtn.classList.contains('settings-pill-button')).toBe(true);
-    expect(copyBtn.classList.contains('icon-button')).toBe(false);
+    // Scarica .docx is the header's filled primary pill, the surer way into Google Docs; Copia
+    // documento is the tinted one beside it, and the utilities stay icon buttons.
+    const docxBtn = screen.getByRole('button', { name: 'Scarica .docx' });
+    expect(docxBtn.classList.contains('settings-pill-button')).toBe(true);
+    expect(docxBtn.classList.contains('icon-button')).toBe(false);
+    expect(copyBtn.classList.contains('settings-pill-button')).toBe(false);
+    expect(copyBtn.classList.contains('editor-fullpage-copy')).toBe(true);
     expect(themeBtn.classList.contains('icon-button')).toBe(true);
 
     // Toggling theme calls setThemeMode
