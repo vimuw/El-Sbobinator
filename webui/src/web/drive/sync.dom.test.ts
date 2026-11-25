@@ -2,12 +2,12 @@ import { IDBFactory } from 'fake-indexeddb';
 import katex from 'katex';
 import { describe, expect, it, vi } from 'vitest';
 import { DOCUMENTS, inTransaction, requestValue } from '../webDatabase';
-import { createWebArchive, webSessionHtmlPath, type NewArchiveSession } from '../webSessions';
+import { createWebArchive, emptyTrash, webSessionHtmlPath, type NewArchiveSession } from '../webSessions';
 import { createDriveApi } from './driveApi';
 import { createFakeDrive, type FakeDrive } from './fakeDrive';
 import { CONFLICT_SUFFIX, syncOnce } from './sync';
 import { FOLDERS_FILE, sessionFileName, toSessionFile } from './syncFormat';
-import { bindAccount, readMeta, trackArchive } from './syncState';
+import { bindAccount, markDisconnected, readMeta, trackArchive } from './syncState';
 
 // Two "devices" (two IndexedDB factories) syncing through the same in-memory Drive.
 
@@ -234,6 +234,123 @@ describe('Drive sync between two devices', () => {
     expect(await pc.sync()).toMatchObject({ uploaded: 1 });
     await ipad.sync();
     expect(await ipad.body(session.session_dir)).toBe('<p>in treno</p>');
+  });
+
+  it('brings back from Drive the sbobine deleted or trashed after "Disconnetti", and sends the edits made meanwhile', async () => {
+    const drive = createFakeDrive();
+    const pc = device(drive, 'pc');
+    const ipad = device(drive, 'ipad');
+    await bindAccount(pc.factory, 'studente@example.com');
+    const purged = await pc.archive.create(input('Anatomia'), '<p>ossa</p>');
+    const trashed = await pc.archive.create(input('Fisiologia'), '<p>cuore</p>');
+    const edited = await pc.archive.create(input('Biochimica'), '<p>enzimi</p>');
+    await pc.sync();
+    await ipad.sync();
+
+    await markDisconnected(pc.factory, now().toISOString());
+    await pc.archive.delete(purged.session_dir);
+    await pc.archive.trash(trashed.session_dir, now().toISOString());
+    await pc.archive.saveHtml(edited.html_path, '<p>enzimi e coenzimi</p>', Date.now());
+
+    await bindAccount(pc.factory, 'studente@example.com');
+    expect(await pc.sync()).toMatchObject({ downloaded: 2, uploaded: 1, removed: 0, conflicts: 0 });
+    expect((await pc.raw.list()).map(session => session.name).sort()).toEqual(['Anatomia', 'Biochimica', 'Fisiologia']);
+    expect(await pc.raw.listTrash()).toEqual([]);
+    expect(await pc.body(purged.session_dir)).toBe('<p>ossa</p>');
+    expect(drive.files().map(file => (file.content as { deleted_at?: string }).deleted_at)).toEqual([undefined, undefined, undefined]);
+    expect(await ipad.sync()).toMatchObject({ downloaded: 1, removed: 0 });
+    expect((await ipad.raw.list())).toHaveLength(3);
+    expect(await ipad.body(edited.session_dir)).toBe('<p>enzimi e coenzimi</p>');
+    // In the sync again: a deletion now goes to Drive.
+    await pc.archive.delete(purged.session_dir);
+    await pc.sync();
+    expect(await ipad.sync()).toMatchObject({ removed: 1 });
+  });
+
+  it('still sends a deletion made before "Disconnetti", when it was still in the sync', async () => {
+    const drive = createFakeDrive();
+    const pc = device(drive, 'pc');
+    const ipad = device(drive, 'ipad');
+    await bindAccount(pc.factory, 'studente@example.com');
+    const session = await pc.archive.create(input('Istologia'), '<p>tessuti</p>');
+    await pc.sync();
+    await ipad.sync();
+
+    await pc.archive.delete(session.session_dir);
+    await markDisconnected(pc.factory, now().toISOString());
+    await bindAccount(pc.factory, 'studente@example.com');
+    await pc.sync();
+    expect(await pc.raw.list()).toEqual([]);
+    expect(await ipad.sync()).toMatchObject({ removed: 1 });
+  });
+
+  it('still sends a trashing marked before "Disconnetti" when the trash is emptied after it', async () => {
+    const drive = createFakeDrive();
+    const pc = device(drive, 'pc');
+    const ipad = device(drive, 'ipad');
+    await bindAccount(pc.factory, 'studente@example.com');
+    const session = await pc.archive.create(input('Anatomia'), '<p>ossa</p>');
+    await pc.sync();
+    await ipad.sync();
+
+    // Trashed in the sync, before a round sent it (offline, or in the seconds before the round).
+    await pc.archive.trash(session.session_dir, now().toISOString());
+    await markDisconnected(pc.factory, now().toISOString());
+    expect(await emptyTrash(pc.archive)).toBe(1);
+    await bindAccount(pc.factory, 'studente@example.com');
+    await pc.sync();
+    expect(await pc.raw.list()).toEqual([]);
+    expect(await pc.raw.listTrash()).toEqual([]);
+    expect(await ipad.sync()).toMatchObject({ removed: 1 });
+    expect(await ipad.raw.list()).toEqual([]);
+  });
+
+  it('takes out of the trash a sbobina edited and then trashed after "Disconnetti", and sends the edit', async () => {
+    const drive = createFakeDrive();
+    const pc = device(drive, 'pc');
+    const ipad = device(drive, 'ipad');
+    await bindAccount(pc.factory, 'studente@example.com');
+    const session = await pc.archive.create(input('Fisiologia'), '<p>cuore</p>');
+    await pc.sync();
+    await ipad.sync();
+
+    await markDisconnected(pc.factory, now().toISOString());
+    await pc.archive.saveHtml(session.html_path, '<p>cuore, rivisto da scollegato</p>', Date.now());
+    await pc.archive.update(session.session_dir, { name: 'Fisiologia 1' });
+    await pc.archive.trash(session.session_dir, now().toISOString());
+
+    const joined = await bindAccount(pc.factory, 'studente@example.com');
+    await pc.sync();
+    expect(await pc.body(session.session_dir)).toBe('<p>cuore, rivisto da scollegato</p>');
+    expect(await pc.raw.listTrash()).toEqual([]);
+    // The archive shown is read again (driveService: onArchiveChanged).
+    expect(joined).toEqual({ reset: false, restored: 1 });
+    expect(await ipad.sync()).toMatchObject({ downloaded: 1, conflicts: 0 });
+    expect(await ipad.raw.get(session.session_dir)).toMatchObject({ name: 'Fisiologia 1' });
+    expect((await ipad.raw.get(session.session_dir))?.trashed_at).toBeUndefined();
+    expect(await ipad.body(session.session_dir)).toBe('<p>cuore, rivisto da scollegato</p>');
+  });
+
+  it('keeps both texts when Drive changed too while a sbobina was edited and trashed after "Disconnetti"', async () => {
+    const drive = createFakeDrive();
+    const pc = device(drive, 'pc');
+    const ipad = device(drive, 'ipad');
+    await bindAccount(pc.factory, 'studente@example.com');
+    const session = await pc.archive.create(input('Fisiologia'), '<p>cuore</p>');
+    await pc.sync();
+    await ipad.sync();
+
+    await markDisconnected(pc.factory, now().toISOString());
+    await pc.archive.saveHtml(session.html_path, '<p>cuore, rivisto da scollegato</p>', Date.now());
+    await pc.archive.trash(session.session_dir, now().toISOString());
+    await ipad.archive.saveHtml(session.html_path, '<p>cuore, rivisto su iPad</p>', Date.now());
+    await ipad.sync();
+
+    await bindAccount(pc.factory, 'studente@example.com');
+    expect(await pc.sync()).toMatchObject({ conflicts: 1 });
+    const bodies = await Promise.all((await pc.raw.list()).map(item => pc.body(item.session_dir)));
+    expect(bodies.sort()).toEqual(['<p>cuore, rivisto da scollegato</p>', '<p>cuore, rivisto su iPad</p>']);
+    expect(await pc.raw.listTrash()).toEqual([]);
   });
 
   it('cleans a malicious body from Drive before it reaches IndexedDB', async () => {

@@ -1,5 +1,5 @@
 import type { ArchiveFolder, ArchiveSession } from '../../bridge';
-import { SYNC, inTransaction, requestValue } from '../webDatabase';
+import { SESSIONS, SYNC, inTransaction, requestValue } from '../webDatabase';
 import { createWebArchive, type ArchiveMarks, type SaveHtmlResult, type WebArchive } from '../webSessions';
 
 // Local state of the Drive sync, in the IndexedDB store `sync`: one record per sbobina (its Drive
@@ -21,6 +21,10 @@ export interface SessionSyncRecord {
   updated_at: string;
   /** Deleted for good here (out of the trash): Drive keeps only a mark without text. */
   deleted_at?: string;
+  /** Changed after "Disconnetti": a deletion or a trashing made then stays here (rejoin). */
+  while_disconnected?: boolean;
+  /** Edited after "Disconnetti" (text, name, metadata), not only trashed: rejoin keeps the edit. */
+  edited_while_disconnected?: boolean;
 }
 
 export interface FoldersSyncState {
@@ -50,6 +54,8 @@ export interface SyncMeta {
   deferred: DeferredFile[];
   /** Google account this state belongs to: another account starts from scratch. */
   account?: string;
+  /** When "Disconnetti" was pressed; cleared by the next connection (rejoin). */
+  disconnected_at?: string;
 }
 
 function newMeta(): SyncMeta {
@@ -77,23 +83,79 @@ export async function writeMeta(factory: IDBFactory | undefined, update: (meta: 
 }
 
 /**
+ * "Disconnetti": from now on this browser is out of the sync. Its changes are still marked, the
+ * ones made after this as made while disconnected, and the state stays for the same account.
+ */
+export async function markDisconnected(factory: IDBFactory | undefined, at: string): Promise<void> {
+  await writeMeta(factory, meta => ({ ...meta, disconnected_at: meta.disconnected_at ?? at }));
+}
+
+/**
+ * Back in the sync after "Disconnetti", as an unlinked Dropbox or OneDrive folder linked again:
+ * Drive and this browser are joined, and a deletion made while disconnected deletes nothing on
+ * Drive. A sbobina deleted for good meanwhile forgets its Drive file, trashed meanwhile it takes
+ * Drive's version again, and the next round lists Drive from scratch to bring those files back.
+ * One edited and then trashed meanwhile comes out of the trash here instead, with its edit, which
+ * goes up (or, if Drive changed too, makes a conflict copy). The other changes made meanwhile
+ * (edits, renames, new sbobine, restores) go up as usual. A change still unsent at "Disconnetti",
+ * made while in the sync, still goes to Drive with every change after it (markSession).
+ * Returns the state to store and how many sbobine came out of the trash.
+ */
+async function rejoin(transaction: IDBTransaction, meta: SyncMeta): Promise<{ meta: SyncMeta; restored: number }> {
+  const store = transaction.objectStore(SYNC);
+  const sessionStore = transaction.objectStore(SESSIONS);
+  const [entries, sessions] = await Promise.all([
+    requestValue(store.getAll() as IDBRequest<Array<SessionSyncRecord | SyncMeta>>),
+    requestValue(sessionStore.getAll() as IDBRequest<ArchiveSession[]>),
+  ]);
+  const byDir = new Map(sessions.map(session => [session.session_dir, session]));
+  const since = meta.disconnected_at ?? '';
+  let restored = 0;
+  for (const entry of entries) {
+    if (entry.key === META_KEY || !(entry as SessionSyncRecord).while_disconnected) continue;
+    const { while_disconnected: _flag, edited_while_disconnected: edited, ...record } = entry as SessionSyncRecord;
+    const session = byDir.get(record.session_dir);
+    if (record.file_id && record.deleted_at) store.delete(record.key);
+    else if (record.file_id && session?.trashed_at && session.trashed_at >= since) {
+      if (edited) {
+        // The record keeps its mark and the Drive version it last saw: the edit is never taken for older.
+        const { trashed_at: _trashed, ...live } = session;
+        sessionStore.put(live satisfies ArchiveSession);
+        store.put(record satisfies SessionSyncRecord);
+        restored += 1;
+      } else {
+        const { remote_modified: _seen, ...unseen } = record;
+        store.put({ ...unseen, dirty: false } satisfies SessionSyncRecord);
+      }
+    } else store.put(record satisfies SessionSyncRecord);
+  }
+  const { disconnected_at: _at, watermark: _watermark, ...next } = meta;
+  return { meta: next, restored };
+}
+
+/**
  * Binds the sync state to the account just connected. Another account's Drive has none of the files
  * recorded here: records and watermark go, so the next round sends every sbobina to the new Drive.
- * Returns whether the state was reset.
+ * The same account after "Disconnetti" rejoins (above). Returns whether the state was reset, and
+ * how many sbobine the rejoin took out of the trash (the archive shown must be read again).
  */
-export async function bindAccount(factory: IDBFactory | undefined, account: string): Promise<boolean> {
-  return inTransaction(factory, SYNC, 'readwrite', async transaction => {
+export async function bindAccount(factory: IDBFactory | undefined, account: string): Promise<{ reset: boolean; restored: number }> {
+  return inTransaction(factory, [SESSIONS, SYNC], 'readwrite', async transaction => {
     const store = transaction.objectStore(SYNC);
     const meta = await requestValue(store.get(META_KEY) as IDBRequest<SyncMeta | undefined>);
     // First account of this state: whatever it holds was synced with it.
-    if (meta?.account === undefined) {
-      store.put({ ...(meta ?? newMeta()), account });
-      return false;
+    if (meta?.account === undefined || meta.account === account) {
+      if (meta?.disconnected_at === undefined) {
+        if (meta?.account === undefined) store.put({ ...(meta ?? newMeta()), account });
+        return { reset: false, restored: 0 };
+      }
+      const joined = await rejoin(transaction, meta);
+      store.put({ ...joined.meta, account });
+      return { reset: false, restored: joined.restored };
     }
-    if (meta.account === account) return false;
     store.clear();
     store.put({ ...newMeta(), device_id: meta.device_id, account });
-    return true;
+    return { reset: true, restored: 0 };
   });
 }
 
@@ -187,9 +249,15 @@ async function recordDriveFile(factory: IDBFactory | undefined, before: SessionS
   });
 }
 
-/** A local change to send, marked in the transaction (over SYNC) of the write it describes. */
-async function markSession(store: IDBObjectStore, sessionDir: string, at: string, deleted: boolean): Promise<void> {
-  const current = await requestValue(store.get(sessionKey(sessionDir)) as IDBRequest<SessionSyncRecord | undefined>);
+/**
+ * A local change to send, marked in the transaction (over SYNC) of the write it describes.
+ * `fields`: the session fields an update changed (`trashed_at` alone for a trashing or a restore).
+ */
+async function markSession(store: IDBObjectStore, sessionDir: string, at: string, deleted: boolean, fields?: string[]): Promise<void> {
+  const [current, meta] = await Promise.all([
+    requestValue(store.get(sessionKey(sessionDir)) as IDBRequest<SessionSyncRecord | undefined>),
+    requestValue(store.get(META_KEY) as IDBRequest<SyncMeta | undefined>),
+  ]);
   // Never synced and deleted: nothing to tell Drive.
   if (deleted && !current?.file_id) {
     store.delete(sessionKey(sessionDir));
@@ -200,6 +268,13 @@ async function markSession(store: IDBObjectStore, sessionDir: string, at: string
   const record: SessionSyncRecord = { ...current, key: sessionKey(sessionDir), session_dir: sessionDir, dirty: true, updated_at: updatedAt };
   if (deleted) record.deleted_at = updatedAt;
   else delete record.deleted_at;
+  // After "Disconnetti" a deletion stays here (rejoin). A record still carrying a change from before
+  // it, made in the sync, is not flagged: that change (a trashing too) goes to Drive with the rest.
+  if (meta?.disconnected_at !== undefined && !(current?.dirty && !current.while_disconnected)) {
+    record.while_disconnected = true;
+    const trashing = fields?.length === 1 && fields[0] === 'trashed_at';
+    if (!deleted && !trashing) record.edited_while_disconnected = true;
+  }
   store.put(record);
 }
 
@@ -239,7 +314,7 @@ export function syncMarks(now: () => Date = () => new Date()): ArchiveMarks {
     store: SYNC,
     async session(transaction, sessionDir, { deleted = false, at, fields } = {}) {
       if (fields && !syncedFields(fields)) return;
-      await markSession(transaction.objectStore(SYNC), sessionDir, at ?? now().toISOString(), deleted);
+      await markSession(transaction.objectStore(SYNC), sessionDir, at ?? now().toISOString(), deleted, fields);
     },
     async folders(transaction, before, after) {
       const store = transaction.objectStore(SYNC);

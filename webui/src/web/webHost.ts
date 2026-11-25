@@ -272,6 +272,7 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
         if (sessionDir === openInEditor) emit('documentChangedElsewhere', { session_dir: sessionDir });
       }
     },
+    onArchiveChanged: () => emit('archiveChangedRemotely'),
     onNeedsReconnect: () => emit('driveNeedsReconnect'),
     archive: () => archive,
   }) : null;
