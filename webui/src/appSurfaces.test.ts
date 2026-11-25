@@ -244,6 +244,23 @@ describe('app surfaces', () => {
     expect(contrast(themeValue('--btn-primary-text', true), themeValue('--accent-bg', true))).toBeGreaterThanOrEqual(3);
   });
 
+  it('frames only the name when the editor title opens for renaming, with nothing moving', () => {
+    // The field's ring, drawn outside it, pressed against the file icon, and a frame taking in the
+    // icon too moved it. Button and field share one box clear of the icon; the ring is inside it.
+    const shared = index.match(/\.editor-fullpage-title-button,\s*\.editor-fullpage-title-input,\s*\.editor-fullpage-title-field::after \{([^}]*)\}/)?.[1];
+    expect(shared).toMatch(/padding: 0 6px;/);
+    expect(shared).toMatch(/border: 1px solid transparent;/);
+    for (const selector of ['.editor-fullpage-title-button', '.editor-fullpage-title-field', '.editor-fullpage-title-input']) {
+      expect(rule(selector), selector).not.toMatch(/margin|padding/);
+    }
+    expect(rule('.editor-fullpage-title')).not.toMatch(/margin|padding/);
+    expect(rule('.editor-fullpage-title-input:focus-visible')).toMatch(/^\s*outline-offset: var\(--focus-ring-inset\);\s*$/);
+    // The field's hidden copy keeps a space for the caret; the button keeps the same one, or the
+    // field opened a space wider and pushed the Autosave pill beside it.
+    expect(index).toMatch(/\n\.editor-fullpage-title-field::after \{[^}]*content: attr\(data-value\) ' ';/);
+    expect(rule('.editor-fullpage-title-button::after')).toMatch(/^\s*content: ' ';\s*white-space: pre;\s*$/);
+  });
+
   it('frames every floating surface in the light theme as clearly as the dark one does', () => {
     // A menu in #e9e5dc on the #f0ede6 header (1.07:1), with a 0.16 hairline and a 0.08 shadow,
     // read as part of the page, while the dark theme's menus stood out from everything; one in

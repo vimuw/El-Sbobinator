@@ -676,6 +676,19 @@ describe('EditorFullPage title rename', () => {
     expect(field().dataset.value).toBe('Lezione 1 — anatomia del rene');
   });
 
+  // The field frames the name alone: the file icon stays outside it, where it was.
+  it('keeps the file icon outside the name field while renaming', () => {
+    render(<RenameHarness onRename={vi.fn().mockResolvedValue(undefined)} />);
+    const icon = () => document.querySelector('.editor-fullpage-title > svg:first-child');
+    const before = icon();
+    expect(before).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Lezione 1' }));
+    expect(icon()).not.toBeNull();
+    expect(titleInput().closest('.editor-fullpage-title-field')!.querySelector('svg')).toBeNull();
+    expect(document.querySelectorAll('.editor-fullpage-title svg')).toHaveLength(1);
+  });
+
   it('drops the new name on Escape without closing the editor', async () => {
     const onRename = vi.fn().mockResolvedValue(undefined);
     const onClose = vi.fn();

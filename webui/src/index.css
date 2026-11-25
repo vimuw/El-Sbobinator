@@ -4814,13 +4814,14 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 /* As in Google Docs, the title is the name field: a click edits it in place. Button and field share
-   their box, so the text keeps its place when the field opens. */
+   their box, 7px clear of the file icon, so neither the icon nor the text moves when the field opens,
+   and the frame and its ring take in the name alone. */
 .editor-fullpage-title-button,
 .editor-fullpage-title-input,
 .editor-fullpage-title-field::after {
   min-width: 0;
   height: 28px;
-  padding: 0 7px;
+  padding: 0 6px;
   border: 1px solid transparent;
   border-radius: var(--radius-lg);
   font: inherit;
@@ -4829,7 +4830,6 @@ input::-webkit-contacts-auto-fill-button {
 
 .editor-fullpage-title-button {
   flex: 0 1 auto;
-  margin-left: -4px;
   background: transparent;
   text-align: left;
   cursor: text;
@@ -4838,6 +4838,13 @@ input::-webkit-contacts-auto-fill-button {
 
 .editor-fullpage-title-button:hover {
   border-color: var(--border-default);
+}
+
+/* The same trailing space the field keeps for the caret, so the two are as wide and the Autosave
+   pill beside them stays put when the field opens. */
+.editor-fullpage-title-button::after {
+  content: ' ';
+  white-space: pre;
 }
 
 /* The field is as wide as the name, as the button was, and grows with the typing up to 480px:
@@ -4849,7 +4856,6 @@ input::-webkit-contacts-auto-fill-button {
   flex: 0 1 auto;
   min-width: 0;
   max-width: 480px;
-  margin-left: -4px;
 }
 
 .editor-fullpage-title-field::after {
@@ -4860,12 +4866,17 @@ input::-webkit-contacts-auto-fill-button {
   visibility: hidden;
 }
 
-/* Focus shows with the shared :focus-visible ring. */
+/* The shared focus ring is drawn inside the field: outside it pressed against the file icon, and
+   the title, which clips its overflow, cut it on the left. */
 .editor-fullpage-title-input {
   grid-area: 1 / 1;
   width: 100%;
   background: var(--bg-input);
   border-color: var(--border-default);
+}
+
+.editor-fullpage-title-input:focus-visible {
+  outline-offset: var(--focus-ring-inset);
 }
 
 .editor-shortcuts-dialog {
