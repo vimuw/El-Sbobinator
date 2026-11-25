@@ -1,45 +1,25 @@
+# Leftovers of the desktop app (now on the desktop-2.7 branch) that older checkouts still
+# hold: Python caches and virtual envs, PyInstaller output, smoke-test profiles.
 __pycache__/
 *.py[cod]
-*$py.class
 .ruff_cache/
 .pytest_cache/
-
-# Local config (API key saved in user home dir)
-config.json
-.sbobinatore_config.json
-.el_sbobinator_config.json
-.el_sbobinator_sessions/
-
-# Audio/Video processing temp
-sbobinatore_temp_*.mp3
-*_Sbobina.html
-*_Sbobina.md
-Sbobina_Definitiva.html
-Sbobina_Definitiva.md
-pdf_output.txt
-
-# PyInstaller build artifacts
+.venv/
+.dependency-tools/
 *.spec
 build/
 dist/
-build_new/
-test_dist/
+_smoke/
+coverage-python.xml
+tools/resize_icon.py
 
 # Local dev artifacts
-_smoke/
 Thumbs.db
 .DS_Store
 *.log
 
-# Coverage and type-check output artifacts
-.coverage
-coverage.xml
-coverage-python.xml
-htmlcov/
+# Coverage output
 webui/coverage/
-pyright_clean.txt
-pyright_errors.txt
-pyright_full.txt
 
 # Media files
 *.mp3
@@ -51,11 +31,7 @@ pyright_full.txt
 *.mkv
 *.pdf
 
-# Virtual envs
-.venv/
-.dependency-tools/
-venv/
-env/
+# Local environment
 .env
 
 # WebUI artifacts
@@ -97,12 +73,6 @@ pnpm-debug.log*
 progress.md
 ORIGINAL_REQUEST.md
 learning_proposal.md
-
-# Developer local scratch tools
-tools/resize_icon.py
-
-# Temporary changelog generated during build/release
-/release_changelog.md
 
 # Keep developer documentation private to this checkout.
 /docs/
