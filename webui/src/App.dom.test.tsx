@@ -215,10 +215,10 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { name: /Impostazioni/ }, { timeout: 5000 })).toBeTruthy();
   });
 
-  it('console toggle button is disabled in setup mode', async () => {
+  it('offers no console in setup mode, and marks the settings gear for the missing key', async () => {
     await act(async () => { render(<App />); });
-    const consoleBtn = screen.getByLabelText('Mostra console') as HTMLButtonElement;
-    expect(consoleBtn.disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Mostra console' })).toBeNull();
+    expect(screen.getByLabelText('Apri impostazioni').getAttribute('aria-description')).toBe('Attenzione: manca la chiave API');
   });
 
 });
@@ -233,9 +233,11 @@ describe('App — ready-empty mode (valid API key, no files)', () => {
     expect(screen.getByText('Trascina i file qui')).toBeTruthy();
   });
 
-  it('shows API ready status in header', async () => {
+  it('leaves the settings gear unmarked while the key is ready', async () => {
     await act(async () => { render(<App />); });
-    expect(screen.getByLabelText('API pronta')).toBeTruthy();
+    const settings = screen.getByLabelText('Apri impostazioni');
+    expect(settings.getAttribute('aria-description')).toBeNull();
+    expect(settings.querySelector('.sidebar-badge')).toBeNull();
   });
 
   it('footer links are visible', async () => {
@@ -244,13 +246,12 @@ describe('App — ready-empty mode (valid API key, no files)', () => {
     expect(screen.queryByText(/caffè/)).toBeNull();
   });
 
-  it('console toggle button is disabled when queue is empty', async () => {
+  it('offers no console while the queue is empty', async () => {
     await act(async () => { render(<App />); });
-    const consoleBtn = screen.getByLabelText('Mostra console') as HTMLButtonElement;
-    expect(consoleBtn.disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Mostra console' })).toBeNull();
   });
 
-  it('console toggle button is enabled and shows console panel when clicked if files are in queue, and closes/disables when queue becomes empty', async () => {
+  it('offers the console in the Dashboard when files are in queue, and takes it away when the queue becomes empty', async () => {
     let localDispatch: React.Dispatch<ProcessingAction> | null = null;
     vi.mocked(useQueuePersistence).mockImplementation((_files, _structuralVersion, dispatch) => {
       localDispatch = dispatch;
@@ -272,20 +273,22 @@ describe('App — ready-empty mode (valid API key, no files)', () => {
     });
 
     await act(async () => { render(<App />); });
-    const consoleBtn = screen.getByLabelText('Mostra console') as HTMLButtonElement;
-    expect(consoleBtn.disabled).toBe(false);
+    // Not in the sidebar any more: in the page, where the console goes.
+    const consoleBtn = screen.getByRole('button', { name: 'Mostra console' });
+    expect(consoleBtn.closest('nav')).toBeNull();
 
     await act(async () => {
       fireEvent.click(consoleBtn);
     });
     expect(screen.getByRole('heading', { name: 'Console' })).toBeTruthy();
+    expect(localStorage.getItem(STORAGE_KEYS.SHOW_CONSOLE)).toBe('true');
+    expect(screen.queryByRole('button', { name: 'Mostra console' })).toBeNull();
 
     await act(async () => {
       localDispatch({ type: 'queue/remove', id: 'file-1' });
     });
 
-    const consoleBtnAfter = screen.getByLabelText('Mostra console') as HTMLButtonElement;
-    expect(consoleBtnAfter.disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Mostra console' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Console' })).toBeNull();
   });
 
@@ -302,10 +305,16 @@ describe('App — ready-empty mode (valid API key, no files)', () => {
 
     await act(async () => { render(<App />); });
 
-    const consoleBtn = screen.getByLabelText('Mostra console') as HTMLButtonElement;
-    expect(consoleBtn.disabled).toBe(false);
     expect(screen.getByRole('heading', { name: 'Console' })).toBeTruthy();
     expect(localStorage.getItem(STORAGE_KEYS.SHOW_CONSOLE)).toBe('true');
+
+    // The panel closes itself, and the choice is kept for the next start.
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Chiudi console' }));
+    });
+    expect(screen.queryByRole('heading', { name: 'Console' })).toBeNull();
+    expect(localStorage.getItem(STORAGE_KEYS.SHOW_CONSOLE)).toBe('false');
+    expect(screen.getByRole('button', { name: 'Mostra console' })).toBeTruthy();
   });
 });
 

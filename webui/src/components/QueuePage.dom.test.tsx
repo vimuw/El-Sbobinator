@@ -325,6 +325,36 @@ describe('QueuePage Component', () => {
       await screen.findByTestId('processing-banner-slot');
       expect(screen.queryByTestId('console-hint')).toBeNull();
     });
+
+    it('offers the console by the run: under the progress once the hint is retired, where the console goes otherwise', async () => {
+      localStorage.setItem(STORAGE_KEYS.CONSOLE_HINT_V1, 'done');
+      const setShowConsole = vi.fn();
+      const props = { console: { ...defaultProps.console, setShowConsole } };
+      const { rerender } = render(idle(props));
+      // No run: below the lists, where the console opens.
+      const below = screen.getByRole('button', { name: 'Mostra console' });
+      expect(screen.getByTestId('processing-slot').contains(below)).toBe(false);
+
+      await startRun(rerender, props);
+      const toggles = screen.getAllByRole('button', { name: 'Mostra console' });
+      expect(toggles).toHaveLength(1);
+      expect(screen.getByTestId('processing-banner-slot').contains(toggles[0])).toBe(true);
+      fireEvent.click(toggles[0]);
+      expect(setShowConsole).toHaveBeenCalledWith(true);
+      expect(localStorage.getItem(STORAGE_KEYS.SHOW_CONSOLE)).toBe('true');
+
+      rerender(running({ console: { ...props.console, showConsole: true } }));
+      fireEvent.click(screen.getByRole('button', { name: 'Nascondi console' }));
+      expect(setShowConsole).toHaveBeenLastCalledWith(false);
+      expect(localStorage.getItem(STORAGE_KEYS.SHOW_CONSOLE)).toBe('false');
+    });
+
+    it('leaves the toggle out while the hint is up, so the run never offers the console twice', async () => {
+      const { rerender } = render(idle());
+      await startRun(rerender);
+      expect(await screen.findByTestId('console-hint')).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Mostra console' })).toBeNull();
+    });
   });
 
   it('keeps the footer links whole for screen readers while a phone shows short labels', () => {

@@ -19,10 +19,7 @@ function renderSidebar(overrides: Partial<Parameters<typeof NavSidebar>[0]> = {}
     appState: 'idle' as const,
     themeMode: 'light' as const,
     setThemeMode: vi.fn(),
-    showConsole: false,
-    setShowConsole: vi.fn(),
     setIsSettingsOpen: vi.fn(),
-    consoleDisabled: false,
     unreadNotificationsCount: 0,
     isNotificationsOpen: false,
     setIsNotificationsOpen: vi.fn(),
@@ -64,9 +61,50 @@ describe('NavSidebar badges', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
-  it('keeps the API status dot still during a run', () => {
-    renderSidebar({ appState: 'processing' });
-    const status = screen.getByLabelText('API pronta');
-    expect(status.querySelector('.animate-pulse')).toBeNull();
+});
+
+describe('NavSidebar footer', () => {
+  it('keeps theme, notifications, report and settings, with the settings last and no console', () => {
+    renderSidebar();
+    const footer = screen.getByRole('button', { name: 'Apri impostazioni' }).closest('nav')!;
+    const names = Array.from(footer.querySelectorAll('button')).map(button => button.getAttribute('aria-label'));
+    expect(names.slice(-4)).toEqual(['Tema scuro', 'Apri notifiche', 'Segnala un problema', 'Apri impostazioni']);
+    expect(screen.queryByRole('button', { name: 'Mostra console' })).toBeNull();
+  });
+
+  it('gives the theme toggle the same animation class as the editor one', () => {
+    renderSidebar();
+    expect(screen.getByRole('button', { name: 'Tema scuro' }).classList.contains('theme-toggle-btn')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Apri notifiche' }).classList.contains('theme-toggle-btn')).toBe(false);
+  });
+
+  it('shows nothing about the Gemini key while it is ready, nor during the short wait for the host', () => {
+    for (const props of [{}, { apiReady: false }, { appState: 'processing' as const }]) {
+      const { unmount } = renderSidebar(props);
+      const settings = screen.getByRole('button', { name: 'Apri impostazioni' });
+      expect(settings.querySelector('.sidebar-badge')).toBeNull();
+      expect(settings.getAttribute('aria-description')).toBeNull();
+      // The old "API pronta" dot beside the tools is gone.
+      expect(screen.queryByLabelText('API pronta')).toBeNull();
+      unmount();
+    }
+  });
+
+  it('marks the settings gear when the Gemini key needs attention, keeping its name', () => {
+    const cases = [
+      [{ hasApiKey: false, isApiKeyValid: false }, 'warning', 'manca la chiave API'],
+      [{ isApiKeyValid: false }, 'warning', 'chiave API non valida'],
+      [{ apiReady: false, bridgeDelayed: true }, 'alert', 'connessione in ritardo'],
+    ] as const;
+    for (const [props, tone, problem] of cases) {
+      const { unmount } = renderSidebar(props);
+      const settings = screen.getByRole('button', { name: 'Apri impostazioni' });
+      const badge = within(settings).getByTestId(`sidebar-badge-${tone}`);
+      expect(badge).toBeTruthy();
+      expect(settings.getAttribute('aria-description')).toBe(`Attenzione: ${problem}`);
+      fireEvent.mouseEnter(settings.parentElement!);
+      expect(screen.getByText(`Impostazioni: ${problem}`)).toBeTruthy();
+      unmount();
+    }
   });
 });

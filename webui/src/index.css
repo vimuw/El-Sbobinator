@@ -5,15 +5,17 @@
 @import "./theme.css";
 
 /* ── Theme Mode Toggle Button Animation ─────────── */
-.theme-toggle-btn svg {
+/* Same in the editor header and the sidebar. `button.` outweighs the later `.sidebar-nav-item svg`
+   rules, which would otherwise drop the rotation there. */
+button.theme-toggle-btn svg {
   transition: transform var(--duration-slow) var(--ease-spring-soft), color var(--duration-base) var(--ease-out);
 }
 
-.theme-toggle-btn:hover svg {
+button.theme-toggle-btn:hover svg {
   transform: rotate(18deg) scale(1.05);
 }
 
-.theme-toggle-btn:active svg {
+button.theme-toggle-btn:active svg {
   transform: rotate(-25deg) scale(0.92);
 }
 
@@ -3914,48 +3916,45 @@ input::-webkit-contacts-auto-fill-button {
 .sidebar-badge.tone-warning { --badge-color: var(--warning-text); }
 .sidebar-badge.tone-neutral { --badge-color: var(--text-muted); }
 
-/* Only the live states pulse: a linked account at rest or waiting for a tap stays still. */
+/* Only the live states pulse: a key to fix waits for a tap and stays still. */
 .sidebar-badge.tone-success .sidebar-badge-halo,
 .sidebar-badge.tone-warning .sidebar-badge-halo,
 .sidebar-badge.tone-neutral .sidebar-badge-halo {
   animation: none;
 }
 
-/* On the round avatar the state dot sits on the rim at the bottom right, as on account pictures. */
-.sidebar-account-avatar .sidebar-badge {
-  top: auto;
-  bottom: -1px;
-  right: -1px;
-  width: 8px;
-  height: 8px;
+/* Google Drive in the sidebar (SidebarAccount): the cloud draws the sync state. At rest it is
+   as quiet as the tools around it; only a problem takes a colour, and during a round an arrow
+   rises into the cloud while the cloud stays put. */
+.sidebar-drive-cloud {
+  color: var(--text-muted);
 }
 
-/* Not linked: a soft solid disc with the figure, the same size as the linked initial. */
-.sidebar-account-empty {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--text-muted) 16%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-muted) 28%, transparent);
-  color: var(--text-secondary);
-  transition: background-color var(--duration-base) var(--ease-out), color var(--duration-base) var(--ease-out);
+/* In sync: the tick alone turns green (lucide's CloudCheck draws it first), the cloud stays as
+   grey as the tools around it. */
+.sidebar-drive-cloud.is-ok svg path:first-child {
+  stroke: var(--success-text);
 }
 
-.group\/util:hover .sidebar-account-empty {
-  color: var(--text-primary);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-muted) 45%, transparent);
+.sidebar-drive-cloud.is-reconnect {
+  color: var(--warning-text);
 }
 
-/* The Google account at the foot of the sidebar, set apart from the tools above it. */
-.sidebar-account-divider {
-  display: block;
-  width: 20px;
-  height: 1px;
-  margin: 2px 0;
-  background: var(--border-subtle);
+.sidebar-drive-cloud.is-error {
+  color: var(--error-text);
+}
+
+/* CloudTransfer: the arrow comes up from below, rises into the cloud and fades, the cloud still.
+   Only straight up: a turning mark never lands on whole pixels and blurs at 18px. */
+.sidebar-drive-cloud.is-syncing .sidebar-drive-mark {
+  animation: sidebar-drive-rise 1.4s var(--ease-out) infinite;
+}
+
+@keyframes sidebar-drive-rise {
+  0% { transform: translateY(4px); opacity: 0; }
+  25% { opacity: 1; }
+  70% { transform: translateY(-1px); opacity: 1; }
+  100% { transform: translateY(-2px); opacity: 0; }
 }
 
 /* The account menu of the sidebar (SidebarAccount): framed like the notifications panel. */
@@ -3964,31 +3963,6 @@ input::-webkit-contacts-auto-fill-button {
   border: 1px solid var(--border-floating);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-floating);
-}
-
-.sidebar-account-link {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 8px;
-  border-radius: var(--radius-lg);
-  font-size: var(--text-label);
-  font-weight: 500;
-  color: var(--text-secondary);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-}
-
-.sidebar-account-link:hover:not(:disabled) {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.sidebar-account-link:disabled {
-  opacity: 0.6;
-  cursor: default;
 }
 
 .sidebar-badge-dot {
@@ -6012,6 +5986,34 @@ input::-webkit-contacts-auto-fill-button {
   color: var(--text-primary);
 }
 
+/* Showing or hiding the console, from the Dashboard (ConsoleToggle): a quiet text button under the
+   progress during a run, and where the console goes once the run is over. */
+.console-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: var(--radius-lg);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-label);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--duration-state) var(--ease-out), color var(--duration-state) var(--ease-out);
+}
+
+.console-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.console-toggle-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+}
+
 /* KaTeX Math Node */
 .math-node-inline {
   display: inline-flex;
@@ -6487,18 +6489,6 @@ input::-webkit-contacts-auto-fill-button {
     display: none;
   }
 
-  /* Without its tooltip the API dot is a coloured spot nobody can read, and its 42px let
-     "Segnala un problema" and the Drive account fit a 360px phone. The setup page and the
-     queue say when a key is missing or wrong. */
-  .app-sidebar .sidebar-tooltip-anchor:has(> .sidebar-api-status) {
-    display: none !important; /* over SidebarTooltip's inline display */
-  }
-
-  .app-sidebar .sidebar-account-divider {
-    width: 1px;
-    height: 20px;
-    margin: 0 2px;
-  }
 }
 
 /* iPhone Safari zooms the page into any field whose text is under 16px and leaves it zoomed.

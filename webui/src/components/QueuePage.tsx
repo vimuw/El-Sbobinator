@@ -4,6 +4,7 @@ import { type DragEndEvent, type SensorDescriptor, type SensorOptions } from '@d
 import { Loader2 } from 'lucide-react';
 import { AppFooterLinks } from './AppFooterLinks';
 import { ConsoleHint } from './ConsoleHint';
+import { ConsoleToggle } from './ConsoleToggle';
 import { useConsoleHint } from '../hooks/useConsoleHint';
 import type { ArchiveFolder, ArchiveSession } from '../bridge';
 import { type AppStatus, type FileItem, type ProcessingWarning, type RunOutcome, getDoneFiles, getPendingFiles } from '../appState';
@@ -264,13 +265,16 @@ export function QueuePage({
   }, [isDragging, handleDragLeave]);
 
   const consoleHint = useConsoleHint(appState === 'processing', appState === 'idle' && batchTotal > 0, showConsole);
-  // Opened from the hint, the console (at the bottom of the column) is brought into view.
+  // Opened from under the progress (the hint or the toggle), the console at the bottom of the
+  // column is brought into view.
   const revealConsoleRef = useRef(false);
-  const openConsoleFromHint = useCallback(() => {
-    revealConsoleRef.current = true;
-    setShowConsole(true);
-    localStorage.setItem(STORAGE_KEYS.SHOW_CONSOLE, 'true');
+  const setConsoleOpen = useCallback((open: boolean, reveal = false) => {
+    revealConsoleRef.current = open && reveal;
+    setShowConsole(open);
+    localStorage.setItem(STORAGE_KEYS.SHOW_CONSOLE, String(open));
   }, [setShowConsole]);
+  const openConsoleFromHint = useCallback(() => setConsoleOpen(true, true), [setConsoleOpen]);
+  const closeConsole = useCallback(() => setConsoleOpen(false), [setConsoleOpen]);
   useEffect(() => {
     if (!showConsole || !revealConsoleRef.current) return;
     revealConsoleRef.current = false;
@@ -362,6 +366,9 @@ export function QueuePage({
                       onStop={handleQueueStop}
                     />
                     <ConsoleHint visible={consoleHint.visible} onOpen={openConsoleFromHint} onDismiss={consoleHint.dismiss} />
+                    {!consoleHint.visible && !isConsoleDisabled && (
+                      <ConsoleToggle open={showConsole} onToggle={() => setConsoleOpen(!showConsole, true)} />
+                    )}
                   </motion.div>
                 ) : (
                   <motion.div key="dropzone" className="flex flex-col gap-4" {...fade}>
@@ -436,7 +443,13 @@ export function QueuePage({
             appState={appState}
             isConsoleExpanded={isConsoleExpanded}
             setIsConsoleExpanded={setIsConsoleExpanded}
+            onClose={closeConsole}
           />
+        )}
+        {/* After a run the logs stay reachable where the console goes; during one the toggle sits
+            under the progress instead. */}
+        {!showConsole && !showProcessingBanner && !isConsoleDisabled && uiMode !== 'setup' && uiMode !== 'loading' && (
+          <ConsoleToggle open={false} onToggle={() => setConsoleOpen(true)} />
         )}
       </div>
       <AppFooterLinks />

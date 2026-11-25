@@ -333,7 +333,6 @@ export default function App() {
 
   const hasApiKey = Boolean(apiKey.trim());
   const isApiKeyValid = GEMINI_KEY_PATTERN.test(apiKey.trim());
-  const isConsoleDisabled = !hasApiKey || !isApiKeyValid || !(files.length > 0 || appState === 'processing' || appState === 'canceling' || completionFlash);
 
   const lastCompletedAt = useMemo(() => files.reduce((latest, file) => Math.max(latest, file.completedAt ?? 0), 0), [files]);
   useTabTitle({
@@ -509,11 +508,6 @@ export default function App() {
     setIsSettingsOpen(true);
   }, [setIsSettingsOpen]);
 
-  const handleOpenDriveSettings = useCallback(() => {
-    setSettingsInitialTab('drive');
-    setIsSettingsOpen(true);
-  }, [setIsSettingsOpen]);
-
   const handleShowKeptAudio = useCallback(() => {
     setIsSettingsOpen(false);
     setSettingsInitialTab(undefined);
@@ -545,11 +539,7 @@ export default function App() {
         appState={appState}
         themeMode={themeMode}
         setThemeMode={setThemeMode}
-        showConsole={showConsole}
-        setShowConsole={setShowConsole}
         setIsSettingsOpen={setIsSettingsOpen}
-        onOpenStorageSettings={handleOpenDriveSettings}
-        consoleDisabled={isConsoleDisabled}
         unreadNotificationsCount={unreadNotificationsCount}
         isNotificationsOpen={isNotificationsOpen}
         setIsNotificationsOpen={setIsNotificationsOpen}
