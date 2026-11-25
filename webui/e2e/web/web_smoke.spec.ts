@@ -34,7 +34,7 @@ test('runs the simulated pipeline and opens the sample document without a backen
 
   await expect(page.getByText('Trascrizione e sbobinatura')).toBeVisible();
   await expect(page.getByText('Sbobinatura completata!')).toBeVisible({ timeout: 20_000 });
-  await page.locator('.queue-card.is-completed', { hasText: 'Lezione web.mp3' }).click();
+  await page.locator('.queue-card.is-completed', { hasText: 'Lezione web' }).click();
 
   await expect(page.locator('.tiptap-editor h1')).toHaveText('Lezione web');
   // The player is docked with the file kept in this browser (blob: URL allowed by the CSP).
@@ -48,7 +48,7 @@ test('runs the simulated pipeline and opens the sample document without a backen
   // Closing steps back in the history: let it land before reloading.
   await expect.poll(() => new URL(page.url()).hash).toBe('');
   await page.reload();
-  await expect(page.locator('.queue-card.is-completed', { hasText: 'Lezione web.mp3' })).toBeVisible();
+  await expect(page.locator('.queue-card.is-completed', { hasText: 'Lezione web' })).toBeVisible();
   expect(violations).toEqual([]);
 });
 
@@ -132,6 +132,33 @@ test('settings keep keys in the browser and hide desktop-only sections @web-smok
   await page.getByRole('button', { name: 'Rimuovi', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Configura la tua API Key' })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('el-sbobinator.web.gemini-keys.v1'))).toBeNull();
+});
+
+// On a phone the settings card has no X: the footer's "Annulla" (or "Chiudi") closes it within
+// thumb reach and the page title takes the whole row. The wide card keeps the X.
+test('settings close button shows only in the wide card @web-smoke', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await saveKey(page);
+  const openSettings = page.getByRole('button', { name: 'Apri impostazioni' });
+  const close = page.getByRole('button', { name: 'Chiudi finestra' });
+  const title = page.getByRole('heading', { name: 'Generale', exact: true });
+  await openSettings.click();
+  await expect(title).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Annulla' })).toBeVisible();
+  await expect(close).toBeHidden();
+  // Without the X the title row keeps only the side padding (24px) on the right.
+  const titleBox = await title.boundingBox();
+  const headerBox = await title.locator('xpath=../..').boundingBox();
+  expect(headerBox!.x + headerBox!.width - (titleBox!.x + titleBox!.width)).toBeLessThanOrEqual(25);
+
+  await page.getByRole('button', { name: 'Annulla' }).click();
+  await expect(title).toHaveCount(0);
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openSettings.click();
+  await expect(close).toBeVisible();
+  await close.click();
+  await expect(title).toHaveCount(0);
 });
 
 // iPad Safari's 100vh includes the area behind its toolbars and cut off the sidebar bottom and the

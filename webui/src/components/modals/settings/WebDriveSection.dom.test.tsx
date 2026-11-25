@@ -14,6 +14,11 @@ import { WebDriveEraseSection, WebDriveExportRow, WebDriveSection } from './WebD
 // Impostazioni → Google Drive, and the "Esporta nel mio Drive" row of the backup), sharing one
 // status, on the real web host with a fake login and Drive.
 
+// lucide's cloud-sync outline and refresh-cw's first arrow: which icon a button draws.
+const CLOUD_SYNC_OUTLINE = 'M20.996 15.251A4.5 4.5 0 0 0 17.495 8h-1.79a7 7 0 1 0-12.709 5.607';
+const REFRESH_ARROW = 'M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8';
+const svgPaths = (element: Element) => Array.from(element.querySelectorAll('svg path')).map(path => path.getAttribute('d'));
+
 function DriveCards() {
   const drive = useDriveStatus();
   return (
@@ -52,9 +57,16 @@ describe('WebDriveSection', () => {
     const linkButton = await screen.findByRole('button', { name: 'Collega Google Drive' });
     await waitFor(() => expect((linkButton as HTMLButtonElement).disabled).toBe(false));
     expect(screen.queryAllByRole('radio')).toEqual([]);
-    expect(screen.getByTestId('web-drive-reasons').textContent).toContain('le ritrovi sugli altri dispositivi');
-    // The button answers the reasons on its left; what goes to Drive is the detail after it.
+    // The reasons of the sidebar menu, word for word; the scope after them does not name the
+    // hidden folder a second time.
+    expect(Array.from(screen.getByTestId('web-drive-reasons').querySelectorAll('li')).map(item => item.textContent))
+      .toEqual(['le ritrovi sugli altri dispositivi', 'se il browser le cancella, restano su Drive', 'in una cartella nascosta che vede solo l’app']);
+    expect(screen.getByTestId('web-drive-scope').textContent).not.toContain('cartella nascosta');
+    // The button answers the reasons on their right, at its own width (no full-width bar); what
+    // goes to Drive is the detail after it.
     expect(screen.getByTestId('web-drive-reasons').parentElement!.nextElementSibling).toBe(linkButton.parentElement);
+    expect(linkButton.parentElement!.className).toContain('settings-callout-action');
+    expect(linkButton.className).not.toContain('w-full');
     expect(linkButton.compareDocumentPosition(screen.getByTestId('web-drive-scope')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Elimina tutti i miei dati da Drive' })).toBeNull();
 
@@ -76,13 +88,23 @@ describe('WebDriveSection', () => {
     const expired = screen.getByTestId('web-drive-last-sync');
     expect(expired.textContent).toContain('non vanno su Drive finché non riconnetti');
     expect(expired.className).toContain('--warning-text');
-    expect(screen.queryByRole('button', { name: 'Sincronizza ora' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Sincronizza' })).toBeNull();
+    // The line above already says to reconnect: the button is the redo arrows alone, beside the
+    // way out, and keeps its name for touch and screen readers.
+    expect(reconnect.textContent).toBe('');
+    expect(reconnect.className).toContain('is-icon');
+    expect(reconnect.getAttribute('title')).toBe('Riconnetti');
+    expect(svgPaths(reconnect)).toContain(REFRESH_ARROW);
     fireEvent.click(reconnect);
     expect(login.calls).toEqual(['link']);
-    await screen.findByRole('button', { name: 'Sincronizza ora' });
+    // The sync is the Drive cloud with arrows, with a short label, never the reconnect's arrows.
+    const sync = await screen.findByRole('button', { name: 'Sincronizza' });
+    expect(sync.textContent).toBe('Sincronizza');
+    expect(svgPaths(sync)).toContain(CLOUD_SYNC_OUTLINE);
+    expect(svgPaths(sync)).not.toContain(REFRESH_ARROW);
   });
 
-  it('"Sincronizza ora" during an elaborazione says it waits for its end instead of seeming to do nothing', async () => {
+  it('"Sincronizza" during an elaborazione says it waits for its end instead of seeming to do nothing', async () => {
     let waiting = false;
     const status = () => ({
       available: true, connected: true, email: 'studente@example.com', needs_reconnect: false, syncing: false,
@@ -91,7 +113,7 @@ describe('WebDriveSection', () => {
     // The host keeps the round for the end of the Gemini run (driveService), as during a real one.
     window.pywebview = { api: { get_drive_status: async () => status(), sync_drive_now: async () => { waiting = true; return status(); } } };
     render(<DriveCards />);
-    const sync = await screen.findByRole('button', { name: 'Sincronizza ora' });
+    const sync = await screen.findByRole('button', { name: 'Sincronizza' });
     await waitFor(() => expect(screen.getByTestId('web-drive-last-sync').textContent).toMatch(/^Ultima sincronizzazione: /));
 
     fireEvent.click(sync);
@@ -103,51 +125,40 @@ describe('WebDriveSection', () => {
     expect((sync as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it('disconnecting asks what to do with Drive first, and "Disconnetti" deletes nothing', async () => {
+  it('"Scollega Drive" unlinks at once, as in the sidebar menu, and deletes nothing', async () => {
     const drive = createFakeDrive();
+    drive.put('raccolte.json', emptyFolders);
     const { login } = setup(drive, { token: true, email: 'studente@example.com' });
     render(<DriveCards />);
     await waitFor(() => expect(screen.getByTestId('web-drive-last-sync').textContent).toMatch(/^Ultima sincronizzazione: /), { timeout: 5000 });
     drive.setOffline(true);
-    fireEvent.click(screen.getByRole('button', { name: 'Sincronizza ora' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sincronizza' }));
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Google Drive non raggiungibile'));
     drive.setOffline(false);
 
-    // The way out sits in the account box, beside "Sincronizza ora"; the question opens under the
-    // box and nothing happens before an answer.
+    // The way out sits in the account box, beside "Sincronizza".
     const account = screen.getByTestId('web-drive-account');
     // Avatar and text form one block that keeps its width; the actions wrap under it on a phone
     // instead of squeezing the text to a word per line.
     const identity = within(account).getByTestId('web-drive-identity');
     expect(identity.className).toContain('flex-[1_1_14rem]');
     expect(identity.contains(screen.getByTestId('web-drive-last-sync'))).toBe(true);
-    expect(identity.contains(within(account).getByRole('button', { name: 'Disconnetti questo browser' }))).toBe(false);
-    fireEvent.click(within(account).getByRole('button', { name: 'Disconnetti questo browser' }));
-    expect(login.disconnects).toHaveLength(0);
-    // Under the box: when it syncs, then the question.
+    const leave = within(account).getByRole('button', { name: 'Scollega Drive' });
+    expect(identity.contains(leave)).toBe(false);
+    expect(leave.getAttribute('title')).toBe('Scollega Drive');
     expect(account.nextElementSibling).toBe(screen.getByTestId('web-drive-when'));
-    expect(screen.getByTestId('web-drive-when').nextElementSibling).toBe(screen.getByRole('group', { name: 'Smetti di usare Google Drive' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Annulla' }));
-    expect(screen.getByTestId('web-drive-status').textContent).toBe('Collegato come studente@example.com');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Disconnetti questo browser' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Disconnetti' }));
+    // Linking again brings everything back, so no question, as in the sidebar; erasing Drive
+    // is only in its own section.
+    const files = drive.files().length;
+    fireEvent.click(leave);
     await screen.findByRole('button', { name: 'Collega Google Drive' });
+    expect(screen.queryByRole('button', { name: 'Annulla' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /elimina/i })).toBeNull();
     expect(login.disconnects).toHaveLength(1);
     expect(choice()).toBe('browser');
+    expect(drive.files()).toHaveLength(files);
     expect(screen.queryByRole('alert')).toBeNull();
-  });
-
-  it('"Disconnetti ed elimina" empties the hidden folder', async () => {
-    const drive = createFakeDrive();
-    drive.put('raccolte.json', emptyFolders);
-    const { login } = setup(drive, { token: true, email: 'studente@example.com' });
-    render(<DriveCards />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Disconnetti questo browser' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Disconnetti ed elimina' }));
-    await waitFor(() => expect(choice()).toBe('browser'));
-    expect(drive.files()).toEqual([]);
-    expect(login.disconnects).toHaveLength(1);
   });
 
   it('"Elimina tutti i miei dati da Drive" asks first, with the other ways to do it', async () => {

@@ -5,15 +5,17 @@
 @import "./theme.css";
 
 /* ── Theme Mode Toggle Button Animation ─────────── */
-.theme-toggle-btn svg {
+/* Same in the editor header and the sidebar. `button.` outweighs the later `.sidebar-nav-item svg`
+   rules, which would otherwise drop the rotation there. */
+button.theme-toggle-btn svg {
   transition: transform var(--duration-slow) var(--ease-spring-soft), color var(--duration-base) var(--ease-out);
 }
 
-.theme-toggle-btn:hover svg {
+button.theme-toggle-btn:hover svg {
   transform: rotate(18deg) scale(1.05);
 }
 
-.theme-toggle-btn:active svg {
+button.theme-toggle-btn:active svg {
   transform: rotate(-25deg) scale(0.92);
 }
 
@@ -924,11 +926,12 @@ button {
   box-shadow: inset 0 0 0 1px var(--border-default);
 }
 
-/* At the right of the page title, which leaves room for it (pr-14 / md:pr-16). */
+/* At the right of the page title, which leaves room for it (md:pr-16). Wide card only: on a
+   phone the footer's "Annulla" / "Chiudi" does the same within thumb reach, and the title takes
+   the whole row. */
 .settings-close {
+  display: none;
   position: absolute;
-  top: 18px;
-  right: 14px;
   /* Above the page title, which comes later in the column. */
   z-index: 1;
 }
@@ -972,6 +975,7 @@ button {
 
   /* Wide card: level with the taller title (pt-8 of the header, less its own padding). */
   .settings-close {
+    display: inline-flex;
     top: 28px;
     right: 24px;
   }
@@ -3914,48 +3918,45 @@ input::-webkit-contacts-auto-fill-button {
 .sidebar-badge.tone-warning { --badge-color: var(--warning-text); }
 .sidebar-badge.tone-neutral { --badge-color: var(--text-muted); }
 
-/* Only the live states pulse: a linked account at rest or waiting for a tap stays still. */
+/* Only the live states pulse: a key to fix waits for a tap and stays still. */
 .sidebar-badge.tone-success .sidebar-badge-halo,
 .sidebar-badge.tone-warning .sidebar-badge-halo,
 .sidebar-badge.tone-neutral .sidebar-badge-halo {
   animation: none;
 }
 
-/* On the round avatar the state dot sits on the rim at the bottom right, as on account pictures. */
-.sidebar-account-avatar .sidebar-badge {
-  top: auto;
-  bottom: -1px;
-  right: -1px;
-  width: 8px;
-  height: 8px;
+/* Google Drive in the sidebar (SidebarAccount): the cloud draws the sync state. At rest it is
+   as quiet as the tools around it; only a problem takes a colour, and during a round an arrow
+   rises into the cloud while the cloud stays put. */
+.sidebar-drive-cloud {
+  color: var(--text-muted);
 }
 
-/* Not linked: a soft solid disc with the figure, the same size as the linked initial. */
-.sidebar-account-empty {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--text-muted) 16%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-muted) 28%, transparent);
-  color: var(--text-secondary);
-  transition: background-color var(--duration-base) var(--ease-out), color var(--duration-base) var(--ease-out);
+/* In sync: the tick alone turns green (lucide's CloudCheck draws it first), the cloud stays as
+   grey as the tools around it. */
+.sidebar-drive-cloud.is-ok svg path:first-child {
+  stroke: var(--success-text);
 }
 
-.group\/util:hover .sidebar-account-empty {
-  color: var(--text-primary);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-muted) 45%, transparent);
+.sidebar-drive-cloud.is-reconnect {
+  color: var(--warning-text);
 }
 
-/* The Google account at the foot of the sidebar, set apart from the tools above it. */
-.sidebar-account-divider {
-  display: block;
-  width: 20px;
-  height: 1px;
-  margin: 2px 0;
-  background: var(--border-subtle);
+.sidebar-drive-cloud.is-error {
+  color: var(--error-text);
+}
+
+/* CloudTransfer: the arrow comes up from below, rises into the cloud and fades, the cloud still.
+   Only straight up: a turning mark never lands on whole pixels and blurs at 18px. */
+.sidebar-drive-cloud.is-syncing .sidebar-drive-mark {
+  animation: sidebar-drive-rise 1.4s var(--ease-out) infinite;
+}
+
+@keyframes sidebar-drive-rise {
+  0% { transform: translateY(4px); opacity: 0; }
+  25% { opacity: 1; }
+  70% { transform: translateY(-1px); opacity: 1; }
+  100% { transform: translateY(-2px); opacity: 0; }
 }
 
 /* The account menu of the sidebar (SidebarAccount): framed like the notifications panel. */
@@ -3964,31 +3965,6 @@ input::-webkit-contacts-auto-fill-button {
   border: 1px solid var(--border-floating);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-floating);
-}
-
-.sidebar-account-link {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 8px;
-  border-radius: var(--radius-lg);
-  font-size: var(--text-label);
-  font-weight: 500;
-  color: var(--text-secondary);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-}
-
-.sidebar-account-link:hover:not(:disabled) {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.sidebar-account-link:disabled {
-  opacity: 0.6;
-  cursor: default;
 }
 
 .sidebar-badge-dot {
@@ -4688,10 +4664,30 @@ input::-webkit-contacts-auto-fill-button {
   justify-content: flex-start;
 }
 
+/* The glass circle belongs to the pill itself, not to the dock around it: dragging the pill
+   toward the other corner then carries the whole circle instead of leaving it behind. */
 .editor-player-dock:has(> .audio-player.is-collapsed) {
   width: auto;
-  padding: 2px;
+  padding: 0;
+  border: none;
   border-radius: var(--radius-pill);
+  background: none;
+  box-shadow: none;
+}
+
+.editor-player-dock > .audio-player.is-collapsed > .player-pill {
+  width: 50px;
+  height: 50px;
+  border: 1px solid var(--border-floating);
+  background: var(--bg-floating);
+  box-shadow: var(--shadow-md);
+}
+
+/* The ring keeps the 2px inset the dock's padding gave it. */
+.editor-player-dock > .audio-player.is-collapsed > .player-pill > .player-pill-ring {
+  inset: 2px;
+  width: calc(100% - 4px);
+  height: calc(100% - 4px);
 }
 
 /* Folding wipes the bar into the pill's corner; unfolding wipes it back out of that corner.
@@ -4820,13 +4816,14 @@ input::-webkit-contacts-auto-fill-button {
 }
 
 /* As in Google Docs, the title is the name field: a click edits it in place. Button and field share
-   their box, so the text keeps its place when the field opens. */
+   their box, 7px clear of the file icon, so neither the icon nor the text moves when the field opens,
+   and the frame and its ring take in the name alone. */
 .editor-fullpage-title-button,
 .editor-fullpage-title-input,
 .editor-fullpage-title-field::after {
   min-width: 0;
   height: 28px;
-  padding: 0 7px;
+  padding: 0 6px;
   border: 1px solid transparent;
   border-radius: var(--radius-lg);
   font: inherit;
@@ -4835,7 +4832,6 @@ input::-webkit-contacts-auto-fill-button {
 
 .editor-fullpage-title-button {
   flex: 0 1 auto;
-  margin-left: -4px;
   background: transparent;
   text-align: left;
   cursor: text;
@@ -4844,6 +4840,13 @@ input::-webkit-contacts-auto-fill-button {
 
 .editor-fullpage-title-button:hover {
   border-color: var(--border-default);
+}
+
+/* The same trailing space the field keeps for the caret, so the two are as wide and the Autosave
+   pill beside them stays put when the field opens. */
+.editor-fullpage-title-button::after {
+  content: ' ';
+  white-space: pre;
 }
 
 /* The field is as wide as the name, as the button was, and grows with the typing up to 480px:
@@ -4855,7 +4858,6 @@ input::-webkit-contacts-auto-fill-button {
   flex: 0 1 auto;
   min-width: 0;
   max-width: 480px;
-  margin-left: -4px;
 }
 
 .editor-fullpage-title-field::after {
@@ -4866,12 +4868,17 @@ input::-webkit-contacts-auto-fill-button {
   visibility: hidden;
 }
 
-/* Focus shows with the shared :focus-visible ring. */
+/* The shared focus ring is drawn inside the field: outside it pressed against the file icon, and
+   the title, which clips its overflow, cut it on the left. */
 .editor-fullpage-title-input {
   grid-area: 1 / 1;
   width: 100%;
   background: var(--bg-input);
   border-color: var(--border-default);
+}
+
+.editor-fullpage-title-input:focus-visible {
+  outline-offset: var(--focus-ring-inset);
 }
 
 .editor-shortcuts-dialog {
@@ -4942,17 +4949,14 @@ input::-webkit-contacts-auto-fill-button {
   .editor-shortcuts-audio .editor-shortcuts-list > div { grid-template-columns: minmax(0, 1fr); gap: 6px; }
 }
 
-/* Header utilities are round outline buttons beside the filled Copia documento pill. */
+/* Header utilities are round buttons beside the two export pills. */
 .editor-fullpage-actions .icon-button:not(.modal-icon-button) {
   width: 32px;
   height: 32px;
   border-radius: var(--radius-pill);
 }
 
-.editor-fullpage-actions .settings-pill-button.editor-fullpage-copy {
-  /* Fixed width keeps the button from resizing between "Copia documento" and
-     "Copiato!", while icon and label stay grouped in the center. */
-  min-width: 152px;
+.editor-fullpage-actions .settings-pill-button.editor-fullpage-docx {
   min-height: 32px;
   height: 32px;
   gap: 7px;
@@ -4961,22 +4965,33 @@ input::-webkit-contacts-auto-fill-button {
   white-space: nowrap;
 }
 
-.editor-fullpage-actions .settings-pill-button.editor-fullpage-copy.is-copied {
-  background: var(--success-subtle);
-  border-color: var(--success-ring);
-  color: var(--success-text);
-  box-shadow: none;
-}
-
-/* Scarica .docx (web): an outline pill, quieter than the filled Copia documento. */
-.editor-fullpage-actions .icon-button.editor-fullpage-docx {
+/* Copia documento: a tinted green pill beside the filled Scarica .docx. The file is the surer way
+   into Google Docs (images arrive from every device), so it leads; the copy is the quick one. */
+.editor-fullpage-actions .icon-button.editor-fullpage-copy {
+  /* Fixed width keeps the button from resizing between "Copia documento" and
+     "Copiato!", while icon and label stay grouped in the center. */
   width: auto;
+  min-width: 152px;
   gap: 7px;
   padding: 0 0.85rem;
-  border-color: var(--border-subtle);
+  border-color: var(--accent-ring);
+  background: var(--accent-subtle);
+  color: var(--accent-text);
   font-size: var(--text-xs);
   font-weight: 600;
   white-space: nowrap;
+}
+
+.editor-fullpage-actions .icon-button.editor-fullpage-copy:hover {
+  border-color: color-mix(in srgb, var(--accent-text) 40%, transparent);
+  background: color-mix(in srgb, var(--accent-text) 18%, transparent);
+  color: var(--accent-text);
+}
+
+.editor-fullpage-actions .icon-button.editor-fullpage-copy.is-copied {
+  background: var(--success-subtle);
+  border-color: var(--success-ring);
+  color: var(--success-text);
 }
 
 /* Phone: the copy starts from the "…" menu, which closes, so a pill beside "…" confirms it,
@@ -5016,8 +5031,8 @@ input::-webkit-contacts-auto-fill-button {
    kept only a few letters. Landscape tablets and desktops have room for both. */
 @media (max-width: 1024px) {
   .editor-fullpage-copy-label { display: none; }
-  .editor-fullpage-actions .settings-pill-button.editor-fullpage-copy { width: 32px; min-width: 32px; padding: 0; }
-  .editor-fullpage-actions .icon-button.editor-fullpage-docx { width: 32px; padding: 0; }
+  .editor-fullpage-actions .settings-pill-button.editor-fullpage-docx { width: 32px; min-width: 32px; padding: 0; }
+  .editor-fullpage-actions .icon-button.editor-fullpage-copy { width: 32px; min-width: 32px; padding: 0; }
 }
 
 .editor-fullpage-actions .icon-button.icon-button--active {
@@ -5992,6 +6007,34 @@ input::-webkit-contacts-auto-fill-button {
   color: var(--text-primary);
 }
 
+/* Showing or hiding the console, from the Dashboard (ConsoleToggle): a quiet text button under the
+   progress during a run, and where the console goes once the run is over. */
+.console-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: var(--radius-lg);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-label);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--duration-state) var(--ease-out), color var(--duration-state) var(--ease-out);
+}
+
+.console-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.console-toggle-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+}
+
 /* KaTeX Math Node */
 .math-node-inline {
   display: inline-flex;
@@ -6467,18 +6510,6 @@ input::-webkit-contacts-auto-fill-button {
     display: none;
   }
 
-  /* Without its tooltip the API dot is a coloured spot nobody can read, and its 42px let
-     "Segnala un problema" and the Drive account fit a 360px phone. The setup page and the
-     queue say when a key is missing or wrong. */
-  .app-sidebar .sidebar-tooltip-anchor:has(> .sidebar-api-status) {
-    display: none !important; /* over SidebarTooltip's inline display */
-  }
-
-  .app-sidebar .sidebar-account-divider {
-    width: 1px;
-    height: 20px;
-    margin: 0 2px;
-  }
 }
 
 /* iPhone Safari zooms the page into any field whose text is under 16px and leaves it zoomed.

@@ -58,7 +58,8 @@ export interface ArchiveMarks {
   store: string;
   /**
    * A sbobina changed. `deleted`: deleted for good, the deletion counting as made at `at`.
-   * `fields`: the metadata fields an update changed (some never leave this device).
+   * `fields`: the metadata fields an update changed (some never leave this device); `trashed_at`
+   * alone for a trashing or a restore.
    */
   session(transaction: IDBTransaction, sessionDir: string, change?: { deleted?: boolean; at?: string; fields?: string[] }): Promise<void>;
   /** The folder tree changed from `before` to `after`. */
@@ -198,7 +199,7 @@ export function createWebArchive(factory: IDBFactory | undefined = globalThis.in
         if (!session) return false;
         if (!session.trashed_at) transaction.objectStore(SESSIONS).put({ ...session, trashed_at: at } satisfies ArchiveSession);
         // Trash and restore travel as the file's deleted_at: the other devices follow.
-        await marks?.session(transaction, dir);
+        await marks?.session(transaction, dir, { fields: ['trashed_at'] });
         return true;
       });
     },
@@ -210,7 +211,7 @@ export function createWebArchive(factory: IDBFactory | undefined = globalThis.in
         if (!session) return null;
         const { trashed_at: _trashedAt, ...restored } = session;
         transaction.objectStore(SESSIONS).put(restored satisfies ArchiveSession);
-        await marks?.session(transaction, dir);
+        await marks?.session(transaction, dir, { fields: ['trashed_at'] });
         return restored;
       });
     },

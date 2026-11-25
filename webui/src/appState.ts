@@ -30,6 +30,14 @@ export type FileItem = {
   isRetryingBlocks?: boolean;
 };
 
+/**
+ * A finished sbobina's name as the archive shows it. Completions saved before fileDone carried
+ * the archive's name have no title: their audio file's name, without the extension, stands in.
+ */
+export function doneFileTitle(file: Pick<FileItem, 'name' | 'title'>): string {
+  return file.title || file.name.replace(/\.[^.]+$/, '') || file.name;
+}
+
 export function getPendingFiles(files: FileItem[]): FileItem[] {
   return files.filter(f => f.status !== 'done');
 }
@@ -91,6 +99,8 @@ export type FileDonePayload = {
   output_dir?: string;
   html_path?: string;
   session_dir?: string;
+  /** The archived sbobina's name, without the audio file's extension. */
+  title?: string;
   effective_model?: string;
   completion_status?: 'completed' | 'completed_with_warnings';
   revision_failed_blocks?: number[];
@@ -282,10 +292,11 @@ function nextOutcome(prev: ProcessingState, next: ProcessingState, action: Proce
       const warnings = runWarnings.filter(warning => AFTER_DONE_WARNING_CODES.has(warning.code));
       if (current?.fileId === data.id && !warnings.length && !failedBlocks.length) return null;
       if (!warnings.length && !failedBlocks.length && data.completion_status !== 'completed_with_warnings') return current;
+      const doneFile = next.files.find(file => file.id === data.id);
       return keepOutcome(current, {
         kind: 'warning',
         fileId: data.id,
-        fileName: name(data.id),
+        fileName: doneFile ? doneFileTitle(doneFile) : '',
         htmlPath: data.output_html || data.html_path,
         sessionDir: data.output_dir || data.session_dir,
         revisionFailedBlocks: failedBlocks,
@@ -529,6 +540,8 @@ function reduceProcessing(state: ProcessingState, action: ProcessingAction): Pro
                 phase: 3,
                 outputHtml: action.data.output_html || action.data.html_path,
                 outputDir: action.data.output_dir || action.data.session_dir,
+                // A name chosen in the archive before this completion wins over the run's.
+                title: file.title || action.data.title || undefined,
                 phaseText: undefined,
                 errorText: undefined,
                 errorDetail: undefined,

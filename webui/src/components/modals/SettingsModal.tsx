@@ -485,8 +485,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </nav>
 
               <div className="flex-1 min-h-0 flex flex-col min-w-0 bg-[var(--bg-surface)] relative">
-                {/* One close button for both layouts (index.css .settings-close), over the right end
-                    of the page title, so the tabs of the compact card keep the whole row. */}
+                {/* The wide card's close button (index.css .settings-close), over the right end of the
+                    page title. The compact card hides it: its footer button closes within thumb reach. */}
                 <button
                   type="button"
                   onClick={handleClose}
@@ -496,9 +496,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 >
                   <X className="w-4 h-4" />
                 </button>
-                {/* The page title stays put above the scrolling content and leaves room for the
-                    close button placed over its right end. */}
-                <div className="pl-6 pr-14 md:pl-8 md:pr-16 pt-6 md:pt-8 pb-4 border-b border-[var(--border-subtle)]">
+                {/* The page title stays put above the scrolling content and, in the wide card, leaves
+                    room for the close button placed over its right end. */}
+                <div className="px-6 md:pl-8 md:pr-16 pt-6 md:pt-8 pb-4 border-b border-[var(--border-subtle)]">
                   <SettingsPageHeader {...TAB_HEADERS[activeTab]} />
                 </div>
                 <div ref={contentRef} data-testid="settings-content" className="app-scroll flex-1 overflow-y-auto overflow-x-hidden px-6 md:px-8 pt-5 pb-6 md:pb-8 space-y-6 [scrollbar-gutter:stable]">

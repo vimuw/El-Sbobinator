@@ -14,7 +14,7 @@ test('opening a full-text archive result highlights the query in the editor', as
     buffer: fs.readFileSync(writeSilentWav(testInfo.outputPath('fulltext-find.mp3'))),
   });
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  const completed = page.locator('.queue-card.is-completed', { hasText: 'Fisiologia.mp3' });
+  const completed = page.locator('.queue-card.is-completed', { hasText: 'Fisiologia' });
   await expect(completed).toBeVisible({ timeout: 20_000 });
   // The web sample lesson has no medical terms: give it four mentions of "cardiac".
   await completed.getByRole('heading').click();

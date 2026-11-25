@@ -1,4 +1,2 @@
-# Dependency fingerprints and executable shell scripts must not vary by checkout OS.
+# The dependency fingerprint must not vary by checkout OS.
 webui/package-lock.json text eol=lf
-*.command text eol=lf
-*.sh text eol=lf

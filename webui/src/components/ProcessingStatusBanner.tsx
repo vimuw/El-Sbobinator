@@ -125,7 +125,7 @@ function getPhaseInfo(appState: AppStatus, currentPhase: string): PhaseInfo {
   return { icon: <Loader className={ICON_CLASS} />, iconAnimation: 'spin', title: 'Elaborazione in corso', kind: 'normal' };
 }
 
-// The backend reports recoverable problems as phase messages (see generation_service.py, phase1_service.py and phaseLabels.ts).
+// The pipeline reports recoverable problems as phase messages (see web/pipeline/retry.ts and phaseLabels.ts).
 // The console keeps the technical details; the banner says what is happening in plain words.
 function getProcessingNotice(currentPhase: string): ProcessingNotice | null {
   const phase = currentPhase.trim();

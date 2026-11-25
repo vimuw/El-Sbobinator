@@ -3,7 +3,7 @@ import { STORAGE_KEYS } from '../storageKeys';
 
 // The console is closed by default and many people never learn what it is for. The first few
 // runs started with it closed say what it shows, right under the progress; opening the console
-// once (from here or the sidebar) or closing the hint retires it for good.
+// once (from here or its toggle in the Dashboard) or closing the hint retires it for good.
 export const CONSOLE_HINT_RUNS = 3;
 const RETIRED = 'done';
 

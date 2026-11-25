@@ -54,7 +54,8 @@ export interface WebRunOptions {
   /** Shows the new key dialog and waits for answer_new_key. */
   askNewKey: () => Promise<string | null | 'timeout'>;
   saveArchive: (session: Omit<ArchiveSession, 'session_dir' | 'html_path'>, body: string) => Promise<ArchiveSession>;
-  archiveExists: (sessionDir: string) => Promise<boolean>;
+  /** The archived sbobina's name, or null when it is gone (deleted or in the trash). */
+  archivedName: (sessionDir: string) => Promise<string | null>;
   sleep?: PipelineEnv['sleep'];
   now?: () => number;
   wakeLock?: ScreenWakeLock;
@@ -177,11 +178,14 @@ export async function runWebFile(options: WebRunOptions): Promise<WebRunOutcome>
         emit('appendConsole', `Rigenero ${descriptor.name} da capo: elimino la sessione precedente...`);
         await store.delete(state.id);
         state = null;
-      } else if (state.stage === 'done' && state.archiveSessionDir && await options.archiveExists(state.archiveSessionDir)) {
-        emit('appendConsole', 'Sbobina già pronta: uso la versione esistente.');
-        outcome = finish(state, state.archiveSessionDir, true);
-        return outcome;
       } else {
+        const doneDir = state.stage === 'done' ? state.archiveSessionDir : undefined;
+        const existingName = doneDir ? await options.archivedName(doneDir) : null;
+        if (doneDir && existingName !== null) {
+          emit('appendConsole', 'Sbobina già pronta: uso la versione esistente.');
+          outcome = finish(state, doneDir, existingName, true);
+          return outcome;
+        }
         state.resumes += 1;
       }
     } else if (state && descriptor.resume_session === false) {
@@ -229,7 +233,9 @@ export async function runWebFile(options: WebRunOptions): Promise<WebRunOutcome>
     };
     await runPipeline(state, env);
 
-    if (!state.archiveSessionDir || !await options.archiveExists(state.archiveSessionDir)) {
+    let sessionDir = state.archiveSessionDir;
+    let archivedName = sessionDir ? await options.archivedName(sessionDir) : null;
+    if (!sessionDir || archivedName === null) {
       const failed = (state.failedBlocks ?? []).map(index => index + 1);
       const archived = await options.saveArchive({
         name: state.title ?? descriptor.name.replace(/\.[^.]+$/, ''),
@@ -243,12 +249,13 @@ export async function runWebFile(options: WebRunOptions): Promise<WebRunOutcome>
         revision_failed_blocks: failed,
         input_identity: state.file,
       }, state.body!);
-      state.archiveSessionDir = archived.session_dir;
+      sessionDir = state.archiveSessionDir = archived.session_dir;
+      archivedName = archived.name;
       await store.save(state);
     }
     const timing = state.phaseMs;
     emit('appendConsole', `Tempi: taglio ${duration(timing.cut)}, codifica ${duration(timing.encode)}, trascrizione ${duration(timing.phase1)}, revisione ${duration(timing.phase2)}.`);
-    outcome = finish(state, state.archiveSessionDir);
+    outcome = finish(state, sessionDir, archivedName);
     return outcome;
   } catch (error) {
     if (signal.aborted || error instanceof CancelledError) {
@@ -283,7 +290,8 @@ export async function runWebFile(options: WebRunOptions): Promise<WebRunOutcome>
     return session.stage === 'phase1' && session.chunkTexts.length === 0;
   }
 
-  function finish(done: SessionState, sessionDir: string, reusedExisting = false): WebRunOutcome {
+  // The archive's name, not the audio file's: Recenti and the editor show what the archive shows.
+  function finish(done: SessionState, sessionDir: string, title: string, reusedExisting = false): WebRunOutcome {
     const failed = (done.failedBlocks ?? []).map(index => index + 1);
     const status = failed.length ? 'completed_with_warnings' : 'completed';
     const htmlPath = webSessionHtmlPath(sessionDir);
@@ -295,6 +303,7 @@ export async function runWebFile(options: WebRunOptions): Promise<WebRunOutcome>
       html_path: htmlPath,
       output_dir: sessionDir,
       session_dir: sessionDir,
+      title,
       effective_model: done.settings.model,
       completion_status: status,
       revision_failed_blocks: failed,

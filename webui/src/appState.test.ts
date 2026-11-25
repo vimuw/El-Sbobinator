@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createInitialProcessingState, getDoneFiles, getPendingFiles, initialProcessingState, isSuccessfulProcessDone, processingReducer, type FileItem, type ProcessingAction } from './appState';
+import { createInitialProcessingState, doneFileTitle, getDoneFiles, getPendingFiles, initialProcessingState, isSuccessfulProcessDone, processingReducer, type FileItem, type ProcessingAction } from './appState';
 
 
 function makeFile(overrides: Partial<FileItem> = {}): FileItem {
@@ -130,6 +130,22 @@ describe('processingReducer', () => {
     const s1 = processingReducer(s0, { type: 'bridge/update_progress', value: 0.55 });
     expect(s1.activeProgress).toBe(55);
     expect(s1.files).toBe(s0.files); // same array reference
+  });
+
+  it('bridge/file_done takes the archive title, unless the sbobina already has one', () => {
+    const files = [makeFile({ id: 'a', name: 'Fisiologia - lezione 3.mp3' }), makeFile({ id: 'b', name: 'b.mp3', title: 'Rinominata' })];
+    let state = processingReducer({ ...initialProcessingState, files }, { type: 'bridge/file_done', data: { id: 'a', index: 0, output_dir: 'a', title: 'Fisiologia - lezione 3' } });
+    state = processingReducer(state, { type: 'bridge/file_done', data: { id: 'b', index: 0, output_dir: 'b', title: 'b' } });
+    expect(state.files.map(file => file.title)).toEqual(['Fisiologia - lezione 3', 'Rinominata']);
+    // The audio file's name stays as it is: duplicate checks compare it.
+    expect(state.files[0].name).toBe('Fisiologia - lezione 3.mp3');
+  });
+
+  it('doneFileTitle drops only the last extension of an untitled completion', () => {
+    expect(doneFileTitle({ name: 'Fisiologia - lezione 3.mp3' })).toBe('Fisiologia - lezione 3');
+    expect(doneFileTitle({ name: 'Cap. 2.1 ripasso.m4a' })).toBe('Cap. 2.1 ripasso');
+    expect(doneFileTitle({ name: 'senza-estensione' })).toBe('senza-estensione');
+    expect(doneFileTitle({ name: 'lezione.mp3', title: 'Cardio 1' })).toBe('Cardio 1');
   });
 
   it('bridge/file_done sets completedAt to a current timestamp', () => {
@@ -659,6 +675,7 @@ describe('processingReducer', () => {
       const truncated = run(queued(), start('a'), warn('truncated_output', 'Gemini ha troncato il testo del blocco 2'), warn('fallback_key_in_use', 'Quota esaurita'), done([]));
       expect(truncated.runOutcome).toMatchObject({
         kind: 'warning',
+        fileName: 'a',
         htmlPath: 'web-session://s1/sbobina.html',
         sessionDir: 'web-session://s1',
         warnings: [{ code: 'truncated_output', message: 'Gemini ha troncato il testo del blocco 2' }],

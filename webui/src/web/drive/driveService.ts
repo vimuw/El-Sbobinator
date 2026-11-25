@@ -4,7 +4,7 @@ import { DriveAuthError, type DriveAuth } from './auth';
 import { DriveError, type DriveApi } from './driveApi';
 import { ExportError, exportToDrive } from './exportDrive';
 import { syncOnce, type SyncReport } from './sync';
-import { bindAccount, readMeta, resetSyncState } from './syncState';
+import { bindAccount, markDisconnected, readMeta, resetSyncState } from './syncState';
 
 // When the Drive sync runs: at startup, when the page comes back to the foreground or online, and a
 // few seconds after the last local change; never while a Gemini run works (the round waits for
@@ -27,6 +27,8 @@ export interface DriveServiceOptions {
   /** The editor has this sbobina open: a remote change waits. */
   isOpenInEditor?: (sessionDir: string) => boolean | Promise<boolean>;
   onReport?: (report: SyncReport) => void;
+  /** The archive changed outside a round (linking again took sbobine out of the trash): read it again. */
+  onArchiveChanged?: () => void;
   /** A round found the login expired (401). */
   onNeedsReconnect?: () => void;
   delayMs?: number;
@@ -175,7 +177,9 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
     cancelTimer();
     waitingForRun = false;
     syncing = false;
-    await auth.disconnect();
+    // The login goes at once (no round starts after this); while the server confirms, the state
+    // learns that a deletion made from here on stays in this browser (syncState.ts rejoin).
+    await Promise.all([auth.disconnect(), markDisconnected(factory, now().toISOString())]);
     lastSyncAt = null;
     error = null;
     return status();
@@ -211,8 +215,9 @@ export function createDriveService(options: DriveServiceOptions): DriveService {
             try {
               const email = await api.accountEmail();
               if (!email) throw new Error('Google Drive non ha indicato l’account collegato.');
-              await bindAccount(factory, email);
+              const { restored } = await bindAccount(factory, email);
               auth.setAccount(email);
+              if (restored) options.onArchiveChanged?.();
             } catch (caught) {
               // The remembered account (if any) stays for the next tap.
               auth.expire();

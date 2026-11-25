@@ -13,7 +13,7 @@ for (const zoom of [1, 1.1, 0.9]) test(`typing below two late wrap figures prese
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(audio);
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  const completed = page.locator('.queue-card.is-completed', { hasText: 'late-wrap.mp3' });
+  const completed = page.locator('.queue-card.is-completed', { hasText: 'late-wrap' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
   await expectPlaybackAudioReady(page);

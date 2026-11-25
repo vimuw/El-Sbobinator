@@ -216,6 +216,42 @@ describe('Drive sync service', () => {
     expect(pc.service.status()).toMatchObject({ last_sync_at: null, error: null });
   });
 
+  it('brings back on the next connection a sbobina deleted after "Disconnetti": Drive keeps it', async () => {
+    const drive = createFakeDrive();
+    const pc = device(drive, 'pc');
+    const session = await pc.archive.create(input('Istologia'), '<p>tessuti</p>');
+    await pc.service.connect();
+    await pc.service.disconnect();
+    await pc.archive.delete(session.session_dir);
+    expect(await createWebArchive(pc.factory).list()).toEqual([]);
+
+    await pc.service.connect();
+    expect((await createWebArchive(pc.factory).list()).map(item => item.name)).toEqual(['Istologia']);
+    expect(drive.files()).toHaveLength(1);
+    expect(drive.files()[0].content).toMatchObject({ body: '<p>tessuti</p>' });
+    expect((await readMeta(pc.factory)).disconnected_at).toBeUndefined();
+  });
+
+  it('has the archive read again when linking takes out of the trash a sbobina edited after "Disconnetti"', async () => {
+    const drive = createFakeDrive();
+    const onArchiveChanged = vi.fn();
+    const pc = device(drive, 'pc', { onArchiveChanged });
+    const session = await pc.archive.create(input('Istologia'), '<p>tessuti</p>');
+    await pc.service.connect();
+    await pc.service.disconnect();
+    await pc.archive.saveHtml(session.html_path, '<p>tessuti ed epiteli</p>', Date.now());
+    await pc.archive.trash(session.session_dir, new Date().toISOString());
+
+    await pc.service.connect();
+    expect(onArchiveChanged).toHaveBeenCalledTimes(1);
+    expect((await createWebArchive(pc.factory).list()).map(item => item.name)).toEqual(['Istologia']);
+    expect(drive.files()[0].content).toMatchObject({ body: '<p>tessuti ed epiteli</p>' });
+    // Linking again with nothing restored reads nothing again.
+    await pc.service.disconnect();
+    await pc.service.connect();
+    expect(onArchiveChanged).toHaveBeenCalledTimes(1);
+  });
+
   it('starts from scratch on another account, sending every sbobina to its Drive', async () => {
     const first = createFakeDrive();
     const pc = device(first, 'pc', { token: true, email: 'studente@example.com' });

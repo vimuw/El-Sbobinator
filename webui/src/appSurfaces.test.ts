@@ -244,6 +244,42 @@ describe('app surfaces', () => {
     expect(contrast(themeValue('--btn-primary-text', true), themeValue('--accent-bg', true))).toBeGreaterThanOrEqual(3);
   });
 
+  it('frames only the name when the editor title opens for renaming, with nothing moving', () => {
+    // The field's ring, drawn outside it, pressed against the file icon, and a frame taking in the
+    // icon too moved it. Button and field share one box clear of the icon; the ring is inside it.
+    const shared = index.match(/\.editor-fullpage-title-button,\s*\.editor-fullpage-title-input,\s*\.editor-fullpage-title-field::after \{([^}]*)\}/)?.[1];
+    expect(shared).toMatch(/padding: 0 6px;/);
+    expect(shared).toMatch(/border: 1px solid transparent;/);
+    for (const selector of ['.editor-fullpage-title-button', '.editor-fullpage-title-field', '.editor-fullpage-title-input']) {
+      expect(rule(selector), selector).not.toMatch(/margin|padding/);
+    }
+    expect(rule('.editor-fullpage-title')).not.toMatch(/margin|padding/);
+    expect(rule('.editor-fullpage-title-input:focus-visible')).toMatch(/^\s*outline-offset: var\(--focus-ring-inset\);\s*$/);
+    // The field's hidden copy keeps a space for the caret; the button keeps the same one, or the
+    // field opened a space wider and pushed the Autosave pill beside it.
+    expect(index).toMatch(/\n\.editor-fullpage-title-field::after \{[^}]*content: attr\(data-value\) ' ';/);
+    expect(rule('.editor-fullpage-title-button::after')).toMatch(/^\s*content: ' ';\s*white-space: pre;\s*$/);
+  });
+
+  it('writes the editor header\'s tinted Copia documento in a green that reads on its tint, hover included', () => {
+    // Scarica .docx leads as the filled green pill (images reach Google Docs from every device);
+    // Copia documento takes the same green as a tint, so its text has to stay readable on it.
+    const body = rule('.editor-fullpage-actions .icon-button.editor-fullpage-copy')!;
+    expect(body).toMatch(/background: var\(--accent-subtle\);/);
+    expect(body).toMatch(/color: var\(--accent-text\);/);
+    expect(rule('.editor-fullpage-actions .settings-pill-button.editor-fullpage-docx')).not.toMatch(/background|color:/);
+    expect(rule('.editor-fullpage-actions .icon-button.editor-fullpage-copy:hover')).toMatch(
+      /background: color-mix\(in srgb, var\(--accent-text\) 18%, transparent\);/);
+    for (const dark of [false, true]) {
+      const header = themeValue(dark ? '--bg-base' : '--editor-chrome-bg', dark);
+      const text = themeValue('--accent-text', dark);
+      const fills = { resting: mix(themeValue('--accent-subtle', dark), header), hovered: mix(text, header, 0.18) };
+      for (const [state, fill] of Object.entries(fills)) {
+        expect(contrast(text, fill), `${dark ? 'dark' : 'light'} ${state}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
   it('frames every floating surface in the light theme as clearly as the dark one does', () => {
     // A menu in #e9e5dc on the #f0ede6 header (1.07:1), with a 0.16 hairline and a 0.08 shadow,
     // read as part of the page, while the dark theme's menus stood out from everything; one in

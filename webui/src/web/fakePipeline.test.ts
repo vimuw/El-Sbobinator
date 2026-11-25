@@ -45,7 +45,7 @@ describe('fake pipeline (M0)', () => {
 
     const names = events.map(e => e.name);
     expect(names.slice(-2)).toEqual(['fileDone', 'processDone']);
-    expect(events.at(-2)?.payload).toMatchObject({ id: 'file-1', output_html: 'web-session://s1/sbobina.html', session_dir: 'web-session://s1', completion_status: 'completed' });
+    expect(events.at(-2)?.payload).toMatchObject({ id: 'file-1', output_html: 'web-session://s1/sbobina.html', session_dir: 'web-session://s1', title: 'Lezione 1', completion_status: 'completed' });
     expect(events.at(-1)?.payload).toMatchObject({ cancelled: false, completed: 1, total: 1 });
     expect(saved.at(-1)).toContain('<h1>Lezione 1</h1>');
     expect(saved.at(-1)).toContain('Documento di esempio');

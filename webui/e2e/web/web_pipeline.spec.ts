@@ -68,14 +68,14 @@ test('transcribes a file through the real pipeline and opens it in the editor @w
   expect(log.generate[0].audio).not.toBeNull();
   expect(log.generate[1].audio).toBeNull();
 
-  await page.locator('.queue-card.is-completed', { hasText: 'Fisiologia renale.mp3' }).click();
+  await page.locator('.queue-card.is-completed', { hasText: 'Fisiologia renale' }).click();
   await expect(page.locator('.tiptap-editor h1')).toHaveText('Fisiologia renale');
   await expect(page.locator('.tiptap-editor')).toContainText('testo rivisto');
 
   // The checkpoint and the archive survive a reload.
   await closeEditor(page);
   await page.reload();
-  await expect(page.locator('.queue-card.is-completed', { hasText: 'Fisiologia renale.mp3' })).toBeVisible();
+  await expect(page.locator('.queue-card.is-completed', { hasText: 'Fisiologia renale' })).toBeVisible();
   expect(await page.evaluate(async () => (await indexedDB.databases()).map(db => db.name))).toContain('el-sbobinator-web');
 });
 
@@ -90,7 +90,7 @@ test('reopens an edited sbobina from the archive after a reload and in a new tab
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
   await expect(page.getByText('Sbobinatura completata!')).toBeVisible({ timeout: 40_000 });
 
-  await page.locator('.queue-card.is-completed', { hasText: 'Istologia.mp3' }).click();
+  await page.locator('.queue-card.is-completed', { hasText: 'Istologia' }).click();
   const editor = page.locator('.tiptap-editor');
   await expect(editor.locator('h1')).toHaveText('Istologia');
   await editor.locator('p').last().click();
@@ -174,7 +174,7 @@ test('plays the lecture in the editor; after a reload asks for the file and keep
   await expect(page.getByText('Sbobinatura completata!')).toBeVisible({ timeout: 40_000 });
 
   // The temporary copy is gone; the file is still in the page, so the editor plays it.
-  await page.locator('.queue-card.is-completed', { hasText: 'Anatomia.mp3' }).click();
+  await page.locator('.queue-card.is-completed', { hasText: 'Anatomia' }).click();
   await expect(page.locator('.tiptap-editor h1')).toHaveText('Anatomia');
   await expectAudioPlays(page);
   expect(await storedAudio(page)).toBe(0);

@@ -134,7 +134,7 @@ async function firstSbobinaLinkedToDrive(page: Page) {
 
 async function syncNow(page: Page) {
   const panel = await openDriveSettings(page);
-  await panel.getByRole('button', { name: 'Sincronizza ora' }).click();
+  await panel.getByRole('button', { name: 'Sincronizza' }).click();
   await expect(panel.getByTestId('web-drive-last-sync')).toContainText('Ultima sincronizzazione');
   return panel;
 }

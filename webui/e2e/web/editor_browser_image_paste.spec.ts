@@ -11,7 +11,7 @@ async function openEditor(page: Page, audio: string) {
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(audio);
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  const completed = page.locator('.queue-card.is-completed', { hasText: audio.split(/[\\/]/).pop()! });
+  const completed = page.locator('.queue-card.is-completed', { hasText: audio.split(/[\\/]/).pop()!.replace(/\.[^.]+$/, '') });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
   await expect(page.locator('.tiptap-editor')).toBeVisible();
@@ -71,7 +71,7 @@ test('browser Copy image and screenshot paste embed pixels, support undo and sur
     await expect.poll(readHtml).toBe(pasted);
     await expectAutosaved(page);
     await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
-    await page.locator('.queue-card.is-completed', { hasText: 'browser_copy_image.mp3' }).getByRole('heading').click();
+    await page.locator('.queue-card.is-completed', { hasText: 'browser_copy_image' }).getByRole('heading').click();
     await expect(editor).toBeVisible();
     await expect.poll(persistedHtml).toBe(pasted.replace(/ title="[^"]*"/g, ''));
     await expect.poll(() => editor.locator('img.editor-image-asset').evaluate(node => (node as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);

@@ -335,14 +335,18 @@ describe('CompletedFileCard', () => {
     expect(onPreview.mock.calls[0][1]).toBe('Cardio 1');
   });
 
-  it('renders completed file card with name and details', () => {
+  it('shows and opens a completion saved without a title under the audio name minus its extension', () => {
+    const onPreview = vi.fn();
     render(
       <CompletedFileCard
         file={makeFile({ status: 'done', outputHtml: '/out/file.html' })}
-        onRemove={vi.fn()} onPreview={vi.fn()}
+        onRemove={vi.fn()} onPreview={onPreview}
       />,
     );
-    expect(screen.getByText('lezione.mp3')).toBeTruthy();
+    expect(screen.getByText('lezione')).toBeTruthy();
+    expect(screen.queryByText('lezione.mp3')).toBeNull();
+    fireEvent.click(screen.getByLabelText("Apri lezione nell'editor"));
+    expect(onPreview.mock.calls[0][1]).toBe('lezione');
   });
 
   it('puts its secondary actions on the card instead of a ⋮ menu', () => {
@@ -367,7 +371,7 @@ describe('CompletedFileCard', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Apri' }));
-    expect(onPreview).toHaveBeenCalledWith('/out/file.html', 'lezione.mp3', undefined, 'f1', undefined);
+    expect(onPreview).toHaveBeenCalledWith('/out/file.html', 'lezione', undefined, 'f1', undefined);
   });
 
   it('removes from Recenti with a plain ✕, not a red delete that reads as losing the sbobina', () => {
@@ -397,8 +401,8 @@ describe('CompletedFileCard', () => {
         onRemove={vi.fn()} onPreview={onPreview}
       />,
     );
-    fireEvent.click(screen.getByText('lezione.mp3'));
-    expect(onPreview).toHaveBeenCalledWith('/out/file.html', 'lezione.mp3', '/src/f.mp3', 'f1', undefined);
+    fireEvent.click(screen.getByText('lezione'));
+    expect(onPreview).toHaveBeenCalledWith('/out/file.html', 'lezione', '/src/f.mp3', 'f1', undefined);
   });
 
   it('passes outputDir as sessionDir when previewing a completed file', () => {
@@ -410,8 +414,8 @@ describe('CompletedFileCard', () => {
         onRemove={vi.fn()} onPreview={onPreview}
       />,
     );
-    fireEvent.click(screen.getByText('lezione.mp3'));
-    expect(onPreview).toHaveBeenCalledWith('/out/file.html', 'lezione.mp3', '/src/f.mp3', 'f1', '/sessions/s1');
+    fireEvent.click(screen.getByText('lezione'));
+    expect(onPreview).toHaveBeenCalledWith('/out/file.html', 'lezione', '/src/f.mp3', 'f1', '/sessions/s1');
   });
 
   it('renders the collection indicator for completed files', () => {
@@ -486,7 +490,7 @@ describe('CompletedFileCard open affordance', () => {
     expect(screen.getByRole('button', { name: 'Rimuovi dai Recenti' })).toBeTruthy();
     fireEvent.click(openButton);
     expect(onPreview).toHaveBeenCalledTimes(1);
-    expect(onPreview).toHaveBeenCalledWith('/out/file.html', 'lezione.mp3', '/src/f.mp3', 'f1', '/sessions/s1');
+    expect(onPreview).toHaveBeenCalledWith('/out/file.html', 'lezione', '/src/f.mp3', 'f1', '/sessions/s1');
   });
 
   it('makes the card focusable and opens the editor with Enter or Space', () => {
@@ -494,7 +498,7 @@ describe('CompletedFileCard open affordance', () => {
     const { container } = render(<CompletedFileCard file={openableFile()} onRemove={vi.fn()} onPreview={onPreview} />);
     const card = container.querySelector('.queue-card') as HTMLElement;
     expect(card.tabIndex).toBe(0);
-    expect(card.getAttribute('aria-label')).toBe("Apri lezione.mp3 nell'editor");
+    expect(card.getAttribute('aria-label')).toBe("Apri lezione nell'editor");
     fireEvent.keyDown(card, { key: 'Enter' });
     fireEvent.keyDown(card, { key: ' ' });
     expect(onPreview).toHaveBeenCalledTimes(2);

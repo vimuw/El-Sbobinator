@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, Cloud, FolderUp, Loader2, LogOut, MonitorSmartphone, RefreshCw, ShieldCheck, Trash2, X } from 'lucide-react';
+import { Check, Cloud, CloudSync, EyeOff, FolderUp, Loader2, LogOut, MonitorSmartphone, RefreshCw, ShieldCheck, Trash2, X } from 'lucide-react';
 import type { DriveExportResult } from '../../../bridge';
 import { DRIVE_HEALTH_LABEL, DRIVE_WAITING_FOR_RUN, driveHealth, formatLastSync, type DriveController, type DriveHealth } from '../../../hooks/useDriveStatus';
 import { InlineConfirm, SettingsCallout, SettingsCardLabel, SettingsMoreInfo, SettingsPanel, SettingsRow, StatusBadge, type StatusBadgeTone } from './SettingsLayout';
@@ -34,21 +34,27 @@ export function DriveAvatar({ email, size = 32 }: { email: string | null; size?:
   );
 }
 
-// Why to link, as in the sidebar account menu.
-const LINK_REASONS: Array<[React.ElementType, string]> = [
+// Why to link, the same here and in the sidebar's Google Drive menu, which has no way to these
+// settings and so says all they say before linking.
+export const DRIVE_LINK_REASONS: Array<[React.ElementType, string]> = [
   [MonitorSmartphone, 'le ritrovi sugli altri dispositivi'],
   [ShieldCheck, 'se il browser le cancella, restano su Drive'],
+  [EyeOff, 'in una cartella nascosta che vede solo l’app'],
 ];
 
-// What the sync carries, in view rather than folded, beside the account it applies to.
-function DriveScope() {
+/** What the sync leaves out, in the sidebar menu; "Cosa va su Drive" says it at length. */
+export const DRIVE_STAYS_HERE = 'audio e chiavi API restano in questo browser';
+
+// What the sync carries, in view rather than folded, beside the account it applies to. Unlinked,
+// the reasons above already name the hidden folder: the first line does not say it again.
+function DriveScope({ linked }: { linked: boolean }) {
   return (
     <div data-testid="web-drive-scope" className="space-y-2">
       <SettingsCardLabel block>Cosa va su Drive</SettingsCardLabel>
       <ul className="space-y-1.5 text-xs">
         <li className="flex items-start gap-2 text-[var(--text-primary)]">
           <Check className="w-4 h-4 shrink-0 text-[var(--success-text)]" aria-hidden="true" />
-          <span>Testi delle sbobine e raccolte, in una cartella nascosta che solo El Sbobinator vede.</span>
+          <span>{linked ? 'Testi delle sbobine e raccolte, in una cartella nascosta che solo El Sbobinator vede.' : 'Testi delle sbobine e raccolte.'}</span>
         </li>
         <li className="flex items-start gap-2 text-[var(--text-secondary)]">
           <X className="w-4 h-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />
@@ -61,7 +67,6 @@ function DriveScope() {
 
 export const WebDriveSection: React.FC<{ drive: DriveController }> = ({ drive }) => {
   const { status, busy, choose, connect, syncNow, leave } = drive;
-  const [confirmLeave, setConfirmLeave] = useState(false);
 
   const connected = Boolean(status?.connected);
   const health = driveHealth(status, busy);
@@ -69,9 +74,6 @@ export const WebDriveSection: React.FC<{ drive: DriveController }> = ({ drive })
     choose('drive');
     connect();
   };
-  const stop = (erase: boolean) => leave(erase, next => {
-    if (!next.connected) setConfirmLeave(false);
-  });
   const error = status?.error && (
     <p role="alert" data-testid="web-drive-error" className="text-xs text-[var(--error-text)]">{status.error}</p>
   );
@@ -84,8 +86,9 @@ export const WebDriveSection: React.FC<{ drive: DriveController }> = ({ drive })
         title="Account Google"
         description="Le sbobine ora sono solo in questo browser."
       >
-        {/* The reasons and, on their right, the action that answers them, in one card; what goes
-            to Drive is the detail after it. */}
+        {/* The reasons and, on their right, the action that answers them, in one card: the wide
+            card keeps no empty band. Where it is too narrow (phone) the button wraps under them,
+            as in the sidebar's narrow menu. What goes to Drive is the detail after it. */}
         <SettingsCallout
           testId="web-drive-link"
           tone="accent"
@@ -98,7 +101,7 @@ export const WebDriveSection: React.FC<{ drive: DriveController }> = ({ drive })
           )}
         >
           <ul data-testid="web-drive-reasons" className="space-y-1.5 text-[var(--text-primary)]">
-            {LINK_REASONS.map(([Icon, text]) => (
+            {DRIVE_LINK_REASONS.map(([Icon, text]) => (
               <li key={text} className="flex items-start gap-2">
                 <Icon className="w-4 h-4 shrink-0 text-[var(--accent-text)]" aria-hidden="true" />
                 <span>{text}</span>
@@ -107,7 +110,7 @@ export const WebDriveSection: React.FC<{ drive: DriveController }> = ({ drive })
           </ul>
         </SettingsCallout>
         {error}
-        <DriveScope />
+        <DriveScope linked={false} />
       </SettingsPanel>
     );
   }
@@ -140,54 +143,45 @@ export const WebDriveSection: React.FC<{ drive: DriveController }> = ({ drive })
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0 ml-auto">
+          {/* Each action has its own icon: the cloud with arrows is the Drive sync, the plain arrows
+              redo the login. The expired line beside it already says to reconnect, so that icon
+              needs no label. */}
           {status?.needs_reconnect ? (
-            <button type="button" onClick={connect} disabled={busy !== null} className="app-button-secondary is-settings-action">
-              {busy === 'connect' ? spinner : <RefreshCw className="w-4 h-4" />}
-              <span>Riconnetti</span>
+            <button
+              type="button"
+              onClick={connect}
+              disabled={busy !== null}
+              aria-label="Riconnetti"
+              title="Riconnetti"
+              className="app-button-secondary is-settings-action is-icon"
+            >
+              {busy === 'connect' ? spinner : <RefreshCw className="w-4 h-4" aria-hidden="true" />}
             </button>
           ) : (
             <button type="button" onClick={syncNow} disabled={busy !== null || Boolean(status?.syncing || status?.waiting_for_run)} className="app-button-secondary is-settings-action">
-              {busy === 'sync' ? spinner : <RefreshCw className="w-4 h-4" />}
-              <span>Sincronizza ora</span>
+              {busy === 'sync' || status?.syncing ? spinner : <CloudSync className="w-4 h-4" aria-hidden="true" />}
+              <span>Sincronizza</span>
             </button>
           )}
+          {/* As "Scollega Drive" in the sidebar menu, with no question: the sbobine stay here and
+              the copy on Drive is kept, so linking again brings everything back. Erasing Drive,
+              which cannot be undone, is only in "Elimina i dati da Drive", with its confirmation. */}
           <button
             type="button"
-            onClick={() => setConfirmLeave(true)}
-            disabled={busy !== null || confirmLeave}
-            aria-label="Disconnetti questo browser"
-            title="Disconnetti questo browser"
+            onClick={() => leave(false)}
+            disabled={busy !== null}
+            aria-label="Scollega Drive"
+            title="Scollega Drive"
             className="app-button-secondary is-settings-action is-icon"
           >
-            <LogOut className="w-4 h-4" />
+            {busy === 'disconnect' ? spinner : <LogOut className="w-4 h-4" aria-hidden="true" />}
           </button>
         </div>
       </div>
       <p data-testid="web-drive-when" className="text-xs text-[var(--text-secondary)]">Si sincronizza da solo all’apertura e qualche secondo dopo ogni modifica, mai durante un’elaborazione.</p>
-
-      {confirmLeave && (
-        <InlineConfirm
-          icon={LogOut}
-          label="Smetti di usare Google Drive"
-          title="Smettere di usare Google Drive?"
-          actions={(
-            <>
-              <button type="button" onClick={() => setConfirmLeave(false)} disabled={busy !== null} className="app-button-secondary is-settings-action">Annulla</button>
-              <button type="button" onClick={() => stop(false)} disabled={busy !== null} className="app-button-secondary is-settings-action">
-                {busy === 'disconnect' && spinner}<span>Disconnetti</span>
-              </button>
-              <button type="button" onClick={() => stop(true)} disabled={busy !== null} className="app-button-secondary is-settings-action is-danger">
-                {busy === 'erase' && spinner}<span>Disconnetti ed elimina</span>
-              </button>
-            </>
-          )}
-        >
-          <p>Le sbobine restano in questo browser. Con <strong>Disconnetti</strong> la copia su Drive resta e puoi ricollegarti quando vuoi; con <strong>Disconnetti ed elimina</strong> viene cancellata.</p>
-        </InlineConfirm>
-      )}
       {error}
 
-      <DriveScope />
+      <DriveScope linked />
     </SettingsPanel>
   );
 };

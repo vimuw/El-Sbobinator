@@ -1,12 +1,11 @@
 import { memo, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { motion } from 'motion/react';
-import { Archive, Bell, Layers, MessageSquareWarning, Moon, Settings, Sun, Terminal } from 'lucide-react';
+import { Archive, Bell, Layers, MessageSquareWarning, Moon, Settings, Sun } from 'lucide-react';
 import type { AppStatus } from '../appState';
-import { STORAGE_KEYS } from '../storageKeys';
 import { BrandLogo } from './BrandLogo';
 import { useReportProblem } from './useReportProblem';
 import { SidebarAccount } from './SidebarAccount';
-import { SidebarBadge, SidebarTooltip } from './sidebarParts';
+import { SidebarBadge, SidebarTooltip, type SidebarBadgeTone } from './sidebarParts';
 export type ActivePage = 'queue' | 'archive';
 
 const SIDEBAR_COLLAPSED_W = 54;
@@ -21,17 +20,12 @@ interface NavSidebarProps {
   appState: AppStatus;
   themeMode: 'light' | 'dark';
   setThemeMode: Dispatch<SetStateAction<'light' | 'dark'>>;
-  showConsole: boolean;
-  setShowConsole: (v: boolean) => void;
   setIsSettingsOpen: (v: boolean) => void;
-  consoleDisabled: boolean;
   unreadNotificationsCount: number;
   isNotificationsOpen: boolean;
   setIsNotificationsOpen: Dispatch<SetStateAction<boolean>>;
   shakeBell: boolean;
   completionFlash?: boolean;
-  /** Web builds with Drive sync: "Gestisci in Impostazioni" of the account menu. */
-  onOpenStorageSettings?: () => void;
 }
 
 const bellVariants = {
@@ -46,29 +40,23 @@ export const NavSidebar = memo(function NavSidebar({
   activePage, setActivePage,
   apiReady, bridgeDelayed, hasApiKey, isApiKeyValid, appState,
   themeMode, setThemeMode,
-  showConsole, setShowConsole,
   setIsSettingsOpen,
-  consoleDisabled,
   unreadNotificationsCount,
   isNotificationsOpen,
   setIsNotificationsOpen,
   shakeBell,
   completionFlash = false,
-  onOpenStorageSettings,
 }: NavSidebarProps) {
   const report = useReportProblem();
 
-  const apiStatusColor = !apiReady
-    ? (bridgeDelayed ? 'var(--error-text)' : 'var(--warning-text)')
-    : !hasApiKey ? 'var(--text-muted)'
-    : !isApiKeyValid ? 'var(--warning-text)'
-    : 'var(--success-text)';
-
-  const apiStatusLabel = !apiReady
-    ? (bridgeDelayed ? 'Bridge in ritardo' : 'Connessione…')
-    : !hasApiKey ? 'Configura API'
-    : !isApiKeyValid ? 'Chiave non valida'
-    : 'API pronta';
+  // The Gemini key shows only when something is wrong with it, as a badge on the gear that leads to
+  // it: a dot that said "ready" at all times read as a second sync state beside Drive's. The short
+  // wait for the host at startup is not a problem worth a badge.
+  const apiProblem: { tone: SidebarBadgeTone; label: string } | null = !apiReady
+    ? (bridgeDelayed ? { tone: 'alert', label: 'connessione in ritardo' } : null)
+    : !hasApiKey ? { tone: 'warning', label: 'manca la chiave API' }
+    : !isApiKeyValid ? { tone: 'warning', label: 'chiave API non valida' }
+    : null;
 
   return (
     <nav
@@ -114,37 +102,12 @@ export const NavSidebar = memo(function NavSidebar({
 
       {/* Utility buttons */}
       <div className="px-1.5 pb-3.5 flex flex-col items-center gap-1.5" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 8 }}>
-        {/* API status */}
-        <SidebarTooltip label={apiStatusLabel}>
-          <div
-            aria-label={apiStatusLabel}
-            className="sidebar-api-status flex items-center justify-center rounded-lg text-xs font-medium w-9 h-9 cursor-default"
-            style={{ color: apiStatusColor }}
-          >
-            <span className="shrink-0 inline-flex items-center justify-center" style={{ width: 18, height: 18, lineHeight: 0 }}>
-              {/* Still on purpose: the Dashboard badge and the banner already show a run is live. */}
-              <span className="inline-flex h-2 w-2 rounded-full" style={{ background: apiStatusColor }} />
-            </span>
-          </div>
-        </SidebarTooltip>
-
         <UtilityButton
           icon={themeMode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           label={themeMode === 'dark' ? 'Tema chiaro' : 'Tema scuro'}
           active={false}
           onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
-        />
-        <UtilityButton
-          icon={<Terminal size={18} />}
-          label="Console: dettagli della sbobinatura"
-          ariaLabel="Mostra console"
-          active={showConsole}
-          onClick={() => {
-            const next = !showConsole;
-            setShowConsole(next);
-            localStorage.setItem(STORAGE_KEYS.SHOW_CONSOLE, String(next));
-          }}
-          disabled={!hasApiKey || !isApiKeyValid || consoleDisabled}
+          className="theme-toggle-btn"
         />
         <UtilityButton
           icon={
@@ -173,18 +136,22 @@ export const NavSidebar = memo(function NavSidebar({
           onClick={report.openReport}
         />
         {report.modal}
+        <SidebarAccount />
+        {/* Last, where settings usually are. */}
         <UtilityButton
           icon={
-            <Settings size={18} />
+            <span style={{ position: 'relative', display: 'inline-flex' }}>
+              <Settings size={18} />
+              {apiProblem && <SidebarBadge tone={apiProblem.tone} />}
+            </span>
           }
-          label="Impostazioni"
+          label={apiProblem ? `Impostazioni: ${apiProblem.label}` : 'Impostazioni'}
           ariaLabel="Apri impostazioni"
+          ariaDescription={apiProblem ? `Attenzione: ${apiProblem.label}` : undefined}
           active={false}
           onClick={() => setIsSettingsOpen(true)}
           placement="top"
         />
-        {/* Who you are, apart from the tools: at the foot like an account avatar. */}
-        <SidebarAccount onOpenStorageSettings={onOpenStorageSettings ?? (() => setIsSettingsOpen(true))} />
       </div>
     </nav>
   );
@@ -224,35 +191,37 @@ function NavItem({
 }
 
 function UtilityButton({
-  icon, label, ariaLabel, active, onClick, disabled, placement = 'right', anchorId,
+  icon, label, ariaLabel, ariaDescription, active, onClick, placement = 'right', anchorId, className,
 }: {
   icon: ReactNode;
   label: string;
   ariaLabel?: string;
+  /** Read after the name, so the name stays the same for the tests and screen-reader users. */
+  ariaDescription?: string;
   active: boolean;
   onClick: () => void;
-  disabled?: boolean;
   placement?: 'right' | 'top';
   /** Lets the panel this button opens point its caret at it. */
   anchorId?: string;
+  /** Extra classes, e.g. the theme toggle's animation shared with the editor. */
+  className?: string;
 }) {
   return (
-    <SidebarTooltip label={disabled ? 'Console non disponibile' : label} disabled={active} placement={placement}>
+    <SidebarTooltip label={label} disabled={active} placement={placement}>
       <button
         data-sidebar-anchor={anchorId}
         onClick={onClick}
         aria-label={ariaLabel || label}
-        disabled={disabled}
-        className="sidebar-nav-item w-9 h-9 flex items-center justify-center rounded-lg group/util"
+        aria-description={ariaDescription}
+        className={`sidebar-nav-item w-9 h-9 flex items-center justify-center rounded-lg group/util${className ? ` ${className}` : ''}`}
         style={{
           background: active ? 'var(--sidebar-active-bg)' : 'transparent',
-          color: disabled ? 'var(--text-muted)' : (active ? 'var(--sidebar-active-text)' : 'var(--text-secondary)'),
+          color: active ? 'var(--sidebar-active-text)' : 'var(--text-secondary)',
           border: 'none',
-          cursor: disabled ? 'not-allowed' : 'pointer',
-          opacity: disabled ? 0.4 : 1,
+          cursor: 'pointer',
         }}
       >
-        <span className="inline-flex items-center justify-center transition-transform duration-200 group-hover/util:scale-105" style={{ color: disabled ? 'var(--text-muted)' : (active ? 'var(--sidebar-active-text)' : 'var(--text-muted)'), lineHeight: 0 }}>
+        <span className="inline-flex items-center justify-center transition-transform duration-200 group-hover/util:scale-105" style={{ color: active ? 'var(--sidebar-active-text)' : 'var(--text-muted)', lineHeight: 0 }}>
           {icon}
         </span>
       </button>

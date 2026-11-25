@@ -6,7 +6,7 @@ import { fade } from './motion';
 import { MovedAddressBanner } from './components/MovedAddressBanner';
 import { hasMovedAddressNotice } from './movedAddress';
 import { type ElSbobinatorBridge, type PywebviewApi } from './bridge';
-import { createInitialProcessingState, processingReducer } from './appState';
+import { createInitialProcessingState, doneFileTitle, processingReducer } from './appState';
 import { GEMINI_KEY_PATTERN, normalizeSessionPath } from './utils';
 import { STORAGE_KEYS } from './storageKeys';
 import { useConsole } from './hooks/useConsole';
@@ -272,7 +272,7 @@ export default function App() {
   const openEditorForSession = useCallback(async (sessionDir: string) => {
     const key = normalizeSessionPath(sessionDir);
     const file = filesRef.current.find(item => item.status === 'done' && item.outputHtml && normalizeSessionPath(item.outputDir) === key);
-    if (file) return openPreview(file.outputHtml!, file.title || file.name, file.path, file.id, file.outputDir);
+    if (file) return openPreview(file.outputHtml!, doneFileTitle(file), file.path, file.id, file.outputDir);
     const session = archiveSessionsRef.current.find(item => normalizeSessionPath(item.session_dir) === key);
     if (!session) return false;
     return openPreview(session.html_path, session.name, session.input_path, undefined, session.session_dir);
@@ -333,7 +333,6 @@ export default function App() {
 
   const hasApiKey = Boolean(apiKey.trim());
   const isApiKeyValid = GEMINI_KEY_PATTERN.test(apiKey.trim());
-  const isConsoleDisabled = !hasApiKey || !isApiKeyValid || !(files.length > 0 || appState === 'processing' || appState === 'canceling' || completionFlash);
 
   const lastCompletedAt = useMemo(() => files.reduce((latest, file) => Math.max(latest, file.completedAt ?? 0), 0), [files]);
   useTabTitle({
@@ -360,7 +359,7 @@ export default function App() {
     const targetFile = filesRef.current.find(file => file.id === id);
     if (!targetFile) return;
     if (appStateRef.current !== 'idle' && targetFile.status !== 'done' && targetFile.status !== 'queued' && targetFile.status !== 'error') return;
-    setConfirmAction({ type: 'remove-file', fileId: id, fileName: targetFile.title || targetFile.name, isDone: targetFile.status === 'done' });
+    setConfirmAction({ type: 'remove-file', fileId: id, fileName: targetFile.status === 'done' ? doneFileTitle(targetFile) : targetFile.title || targetFile.name, isDone: targetFile.status === 'done' });
   }, [setConfirmAction]);
 
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -509,11 +508,6 @@ export default function App() {
     setIsSettingsOpen(true);
   }, [setIsSettingsOpen]);
 
-  const handleOpenDriveSettings = useCallback(() => {
-    setSettingsInitialTab('drive');
-    setIsSettingsOpen(true);
-  }, [setIsSettingsOpen]);
-
   const handleShowKeptAudio = useCallback(() => {
     setIsSettingsOpen(false);
     setSettingsInitialTab(undefined);
@@ -545,11 +539,7 @@ export default function App() {
         appState={appState}
         themeMode={themeMode}
         setThemeMode={setThemeMode}
-        showConsole={showConsole}
-        setShowConsole={setShowConsole}
         setIsSettingsOpen={setIsSettingsOpen}
-        onOpenStorageSettings={handleOpenDriveSettings}
-        consoleDisabled={isConsoleDisabled}
         unreadNotificationsCount={unreadNotificationsCount}
         isNotificationsOpen={isNotificationsOpen}
         setIsNotificationsOpen={setIsNotificationsOpen}

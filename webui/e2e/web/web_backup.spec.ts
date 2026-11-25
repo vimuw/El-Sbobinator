@@ -46,7 +46,7 @@ test('downloads a backup and restores sbobina, edit and audio in an empty browse
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
   await expect(page.getByText('Sbobinatura completata!')).toBeVisible({ timeout: 40_000 });
 
-  await page.locator('.queue-card.is-completed', { hasText: 'Cardiologia.mp3' }).click();
+  await page.locator('.queue-card.is-completed', { hasText: 'Cardiologia' }).click();
   const editor = page.locator('.tiptap-editor');
   await expect(editor.locator('h1')).toHaveText('Cardiologia');
   await editor.locator('p').last().click();

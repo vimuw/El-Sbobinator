@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, Copy } from 'lucide-react';
+import { Check, ChevronDown, Copy, X } from 'lucide-react';
 import type { AppStatus } from '../appState';
 
 const COLLAPSED_LINES = 3;
@@ -43,6 +43,8 @@ interface ConsolePanelProps {
   appState: AppStatus;
   isConsoleExpanded?: boolean;
   setIsConsoleExpanded?: (expanded: boolean | ((prev: boolean) => boolean)) => void;
+  /** Hides the console: its button left the sidebar, so the panel closes itself. */
+  onClose?: () => void;
 }
 
 export const ConsolePanel = memo(function ConsolePanel({
@@ -51,6 +53,7 @@ export const ConsolePanel = memo(function ConsolePanel({
   appState,
   isConsoleExpanded: propIsConsoleExpanded,
   setIsConsoleExpanded: propSetIsConsoleExpanded,
+  onClose,
 }: ConsolePanelProps) {
   const [localIsExpanded, setLocalIsExpanded] = useState(false);
   const isConsoleExpanded = propIsConsoleExpanded !== undefined ? propIsConsoleExpanded : localIsExpanded;
@@ -96,6 +99,18 @@ export const ConsolePanel = memo(function ConsolePanel({
           >
             <ChevronDown size={15} style={{ transform: isConsoleExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
           </button>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex items-center justify-center w-[var(--icon-button-xs)] h-[var(--icon-button-xs)] rounded-md hover:bg-[var(--border-subtle)] transition-colors"
+              title="Chiudi console"
+              aria-label="Chiudi console"
+              style={{ color: 'var(--console-heading)' }}
+            >
+              <X size={14} aria-hidden="true" />
+            </button>
+          )}
         </div>
       </div>
       {isConsoleExpanded ? (
