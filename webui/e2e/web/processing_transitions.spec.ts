@@ -61,7 +61,7 @@ test('the player stays at the bottom while the editor is loading', async ({ page
   });
   await queueFile(page, audioFixture(info, 'loading.mp3'));
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  const completed = page.locator('.queue-card.is-completed', { hasText: 'loading.mp3' });
+  const completed = page.locator('.queue-card.is-completed', { hasText: 'loading' });
   await expect(completed).toBeVisible({ timeout: 15_000 });
   await completed.getByRole('heading').click();
 

@@ -13,7 +13,7 @@ async function openSimulatedSbobina(page: Page) {
   await (await chooserPromise).setFiles({ name: 'Lezione immagini.mp3', mimeType: 'audio/mpeg', buffer: Buffer.alloc(2048) });
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
   await expect(page.getByText('Sbobinatura completata!')).toBeVisible({ timeout: 20_000 });
-  await page.locator('.queue-card.is-completed', { hasText: 'Lezione immagini.mp3' }).click();
+  await page.locator('.queue-card.is-completed', { hasText: 'Lezione immagini' }).click();
   await expect(page.locator('.tiptap-editor h1')).toBeVisible();
 }
 
@@ -69,7 +69,8 @@ test('pasted images keep their quality and travel inside the .docx download @web
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Scarica .docx' }).click();
   const download = await downloadPromise;
-  expect(download.suggestedFilename()).toMatch(/\.docx$/);
+  // Opened from Recenti: the sbobina's name, not the audio file's (no "Lezione immagini.mp3.docx").
+  expect(download.suggestedFilename()).toBe('Lezione immagini.docx');
   const stream = await download.createReadStream();
   const chunks: Buffer[] = [];
   for await (const chunk of stream) chunks.push(chunk as Buffer);

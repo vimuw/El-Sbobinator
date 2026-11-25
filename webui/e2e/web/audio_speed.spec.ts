@@ -9,7 +9,7 @@ test('changing playback speed keeps the scrubber and controls in place', async (
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(fixture);
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  const completed = page.locator('.queue-card.is-completed', { hasText: 'speed.mp3' });
+  const completed = page.locator('.queue-card.is-completed', { hasText: 'speed' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
   await expectPlaybackAudioReady(page);

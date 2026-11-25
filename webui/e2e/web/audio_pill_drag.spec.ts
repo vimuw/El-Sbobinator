@@ -12,7 +12,7 @@ test('dragging the folded player carries its whole glass circle', async ({ page 
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(fixture);
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  const completed = page.locator('.queue-card.is-completed', { hasText: 'pill.mp3' });
+  const completed = page.locator('.queue-card.is-completed', { hasText: 'pill' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
   await expectPlaybackAudioReady(page);

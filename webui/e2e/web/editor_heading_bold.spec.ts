@@ -32,7 +32,7 @@ test('Ctrl+B follows the visible heading weight through save, reopen and copy', 
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(audio);
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  const completed = page.locator('.queue-card.is-completed', { hasText: 'heading-bold.mp3' });
+  const completed = page.locator('.queue-card.is-completed', { hasText: 'heading-bold' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
   const editor = page.locator('.tiptap-editor');

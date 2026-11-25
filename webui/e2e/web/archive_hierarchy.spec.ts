@@ -11,7 +11,7 @@ test('selected lesson titles remain accessible above a scrolling destination lis
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(names.map(name => ({ name: `${name}.mp3`, mimeType: 'audio/mpeg', buffer: Buffer.alloc(2048) })));
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  for (const name of names) await expect(page.locator('.queue-card.is-completed', { hasText: `${name}.mp3` })).toBeVisible({ timeout: 30_000 });
+  for (const name of names) await expect(page.locator('.queue-card.is-completed', { hasText: name })).toBeVisible({ timeout: 30_000 });
   await page.evaluate(async () => {
     await window.pywebview?.api?.save_archive_folders?.(Array.from({ length: 24 }, (_, index) => ({ id: `destination-${index}`, name: `Raccolta ${index + 1}`, color: '', session_dirs: [] })));
   });

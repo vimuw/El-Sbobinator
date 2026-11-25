@@ -11,7 +11,7 @@ test('shared shortcuts live in the header and dismiss without closing or editing
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(audio);
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  const completed = page.locator('.queue-card.is-completed', { hasText: 'scorciatoie.mp3' });
+  const completed = page.locator('.queue-card.is-completed', { hasText: 'scorciatoie' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
   await expectPlaybackAudioReady(page);

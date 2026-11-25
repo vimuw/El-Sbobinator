@@ -546,9 +546,9 @@ export function createWebPywebviewApi(emit: EmitBridgeEvent, options: WebHostOpt
           askNewKey: () => askNewKey(run.signal),
           saveArchive,
           // A sbobina in the trash no longer counts as done: the run makes a new one.
-          archiveExists: async sessionDir => {
+          archivedName: async sessionDir => {
             const session = await archive.get(sessionDir);
-            return session !== null && !session.trashed_at;
+            return session && !session.trashed_at ? session.name : null;
           },
         }).catch(error => {
           emit('fileFailed', { index: 0, id: file.id, error: error instanceof Error ? error.message : String(error) });

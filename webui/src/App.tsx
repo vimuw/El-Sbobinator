@@ -6,7 +6,7 @@ import { fade } from './motion';
 import { MovedAddressBanner } from './components/MovedAddressBanner';
 import { hasMovedAddressNotice } from './movedAddress';
 import { type ElSbobinatorBridge, type PywebviewApi } from './bridge';
-import { createInitialProcessingState, processingReducer } from './appState';
+import { createInitialProcessingState, doneFileTitle, processingReducer } from './appState';
 import { GEMINI_KEY_PATTERN, normalizeSessionPath } from './utils';
 import { STORAGE_KEYS } from './storageKeys';
 import { useConsole } from './hooks/useConsole';
@@ -272,7 +272,7 @@ export default function App() {
   const openEditorForSession = useCallback(async (sessionDir: string) => {
     const key = normalizeSessionPath(sessionDir);
     const file = filesRef.current.find(item => item.status === 'done' && item.outputHtml && normalizeSessionPath(item.outputDir) === key);
-    if (file) return openPreview(file.outputHtml!, file.title || file.name, file.path, file.id, file.outputDir);
+    if (file) return openPreview(file.outputHtml!, doneFileTitle(file), file.path, file.id, file.outputDir);
     const session = archiveSessionsRef.current.find(item => normalizeSessionPath(item.session_dir) === key);
     if (!session) return false;
     return openPreview(session.html_path, session.name, session.input_path, undefined, session.session_dir);
@@ -360,7 +360,7 @@ export default function App() {
     const targetFile = filesRef.current.find(file => file.id === id);
     if (!targetFile) return;
     if (appStateRef.current !== 'idle' && targetFile.status !== 'done' && targetFile.status !== 'queued' && targetFile.status !== 'error') return;
-    setConfirmAction({ type: 'remove-file', fileId: id, fileName: targetFile.title || targetFile.name, isDone: targetFile.status === 'done' });
+    setConfirmAction({ type: 'remove-file', fileId: id, fileName: targetFile.status === 'done' ? doneFileTitle(targetFile) : targetFile.title || targetFile.name, isDone: targetFile.status === 'done' });
   }, [setConfirmAction]);
 
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));

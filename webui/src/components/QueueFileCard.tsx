@@ -4,7 +4,7 @@ import { DURATION, EASE_IN, enterTransition, exitTransition } from '../motion';
 import { AlertCircle, AlertTriangle, ArrowUpRight, CheckCircle, Clock, FileAudio, GripVertical, Mic, RotateCcw, Settings, X, XCircle } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { AppStatus, FileItem } from '../appState';
+import { type AppStatus, type FileItem, doneFileTitle } from '../appState';
 import type { ArchiveFolder } from '../bridge';
 import { errorLabel, formatDuration, formatRelativeTime, formatSize, isPausedError, isQuotaError, isResumableError, shortModelName } from '../utils';
 import { FolderIndicatorChip } from './FolderChip';
@@ -242,7 +242,7 @@ function CompletedFileCardInner({ file, onRemove, onPreview, onRetryFailedRevisi
       setIsRetryingBlocks(false);
     }
   };
-  const displayName = file.title || file.name;
+  const displayName = doneFileTitle(file);
   // A phone keeps the meta line to one line, so every card has the same height: size, duration,
   // model and the block warning take the ellipsis when it runs out, never the time.
   const isPhone = usePhoneLayout();

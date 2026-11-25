@@ -19,14 +19,14 @@ test('Back, Forward and reload keep the screen, editor included @web-smoke', asy
   await completeSimulatedRun(page, 'Lezione cronologia');
   const heading = page.locator('.tiptap-editor h1');
 
-  await page.locator('.queue-card.is-completed', { hasText: 'Lezione cronologia.mp3' }).click();
+  await page.locator('.queue-card.is-completed', { hasText: 'Lezione cronologia' }).click();
   await expect(heading).toHaveText('Lezione cronologia');
   await expect(page).toHaveURL(/simulazione=1#\/sbobina\/[0-9a-f-]+$/);
   const editorUrl = page.url();
 
   await page.goBack();
   await expect(heading).toHaveCount(0);
-  await expect(page.locator('.queue-card.is-completed', { hasText: 'Lezione cronologia.mp3' })).toBeVisible();
+  await expect(page.locator('.queue-card.is-completed', { hasText: 'Lezione cronologia' })).toBeVisible();
   expect(new URL(page.url()).hash).toBe('');
 
   await page.goForward();

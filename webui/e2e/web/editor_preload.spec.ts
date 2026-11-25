@@ -11,7 +11,7 @@ test('the first opened transcript skips the editor and player loading placeholde
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(fixture);
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  const completed = page.locator('.queue-card.is-completed', { hasText: 'preload.mp3' });
+  const completed = page.locator('.queue-card.is-completed', { hasText: 'preload' });
   await expect(completed).toBeVisible({ timeout: 15_000 });
   await editorChunk;
   await page.waitForLoadState('networkidle');

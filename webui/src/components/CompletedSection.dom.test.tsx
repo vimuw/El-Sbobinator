@@ -73,10 +73,10 @@ describe('CompletedSection', () => {
     ];
     const card = (name: string) => screen.getByText(name).closest('.queue-card') as HTMLElement;
     const { rerender } = render(<CompletedSection {...baseProps} doneFiles={files} keptAudioByDir={new Map([['/sessions/kept', true], ['/sessions/gone', false]])} />);
-    expect(within(card('persa.mp3')).getByTestId('completed-audio-not-kept').textContent).toBe('Audio non salvato');
-    expect(within(card('persa.mp3')).queryByText('147,0 MB')).toBeNull();
-    expect(within(card('tenuta.mp3')).queryByTestId('completed-audio-not-kept')).toBeNull();
-    expect(within(card('tenuta.mp3')).getByText('5,0 MB')).toBeTruthy();
+    expect(within(card('persa')).getByTestId('completed-audio-not-kept').textContent).toBe('Audio non salvato');
+    expect(within(card('persa')).queryByText('147,0 MB')).toBeNull();
+    expect(within(card('tenuta')).queryByTestId('completed-audio-not-kept')).toBeNull();
+    expect(within(card('tenuta')).getByText('5,0 MB')).toBeTruthy();
     // Until the archive loads nothing is claimed: the size stays.
     rerender(<CompletedSection {...baseProps} doneFiles={files} />);
     expect(screen.queryByTestId('completed-audio-not-kept')).toBeNull();
@@ -111,6 +111,6 @@ describe('CompletedSection', () => {
     const onPreview = vi.fn();
     render(<CompletedSection {...baseProps} onPreview={onPreview} doneFiles={[makeFile({ outputHtml: '/out/l.html' })]} />);
     fireEvent.click(screen.getByRole('button', { name: 'Apri' }));
-    expect(onPreview).toHaveBeenCalledWith('/out/l.html', 'lezione.mp3', undefined, 'f1', undefined);
+    expect(onPreview).toHaveBeenCalledWith('/out/l.html', 'lezione', undefined, 'f1', undefined);
   });
 });

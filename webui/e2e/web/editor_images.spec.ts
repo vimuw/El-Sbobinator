@@ -20,7 +20,7 @@ async function openImageEditor(page: Page, audio: string) {
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(audio);
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  const completed = page.locator('.queue-card.is-completed', { hasText: audio.split(/[\\/]/).pop()! });
+  const completed = page.locator('.queue-card.is-completed', { hasText: audio.split(/[\\/]/).pop()!.replace(/\.[^.]+$/, '') });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
   await expect(page.locator('.tiptap-editor')).toBeVisible();
@@ -110,7 +110,7 @@ test('soft breaks replace selections using the first selected styles and persist
     await commitEdit(page);
     if (profile === profiles.at(-1)) {
       await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
-      await page.locator('.queue-card.is-completed', { hasText: 'parity_soft_selection.mp3' }).getByRole('heading').click();
+      await page.locator('.queue-card.is-completed', { hasText: 'parity_soft_selection' }).getByRole('heading').click();
       await expect(editor).toBeVisible();
     } else {
       await editor.evaluate(root => { const instance = (root as HTMLElement & { editor: Editor }).editor; instance.chain().setMeta('addToHistory', false).setContent(instance.getHTML()).run(); });
@@ -179,7 +179,7 @@ test('soft breaks preserve combined styles, list structure, history and saved cl
     await commitEdit(page);
     if (offset === 5 && count === 2) {
       await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
-      await page.locator('.queue-card.is-completed', { hasText: 'parity_soft_break.mp3' }).getByRole('heading').click();
+      await page.locator('.queue-card.is-completed', { hasText: 'parity_soft_break' }).getByRole('heading').click();
       await expect(editor).toBeVisible();
     } else {
       await editor.evaluate(root => { const instance = (root as HTMLElement & { editor: Editor }).editor; instance.chain().setMeta('addToHistory', false).setContent(instance.getHTML()).run(); });
@@ -240,7 +240,7 @@ test('combined empty-line styles survive keyboard return, second Enter, autosave
     await expectAutosaved(page);
     await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
     await expect(editor).not.toBeVisible();
-    await page.locator('.queue-card.is-completed', { hasText: 'parity_empty_styles.mp3' }).getByRole('heading').click();
+    await page.locator('.queue-card.is-completed', { hasText: 'parity_empty_styles' }).getByRole('heading').click();
     await expect(editor).toBeVisible();
     await expect.poll(html).toBe(emptyHtml);
     let typedHtml = '';
@@ -279,7 +279,7 @@ test('combined empty-line styles survive keyboard return, second Enter, autosave
     fs.writeFileSync(testInfo.outputPath(`empty-styles-${name}-typed-clipboard.json`), JSON.stringify(await readClipboardFormats(page)));
     await expectAutosaved(page);
     await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
-    await page.locator('.queue-card.is-completed', { hasText: 'parity_empty_styles.mp3' }).getByRole('heading').click();
+    await page.locator('.queue-card.is-completed', { hasText: 'parity_empty_styles' }).getByRole('heading').click();
     await expect(editor).toBeVisible(); await expect.poll(html).toBe(typedHtml);
     await page.screenshot({ path: testInfo.outputPath(`empty-styles-${name}-editor.png`) });
   }
@@ -327,7 +327,7 @@ test('list second Enter on an empty parent exits one level and retains descendan
     await expectAutosaved(page);
     await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
     await expect(editor).not.toBeVisible();
-    await page.locator('.queue-card.is-completed', { hasText: 'parity_empty_enter.mp3' }).getByRole('heading').click();
+    await page.locator('.queue-card.is-completed', { hasText: 'parity_empty_enter' }).getByRole('heading').click();
     await expect(editor).toBeVisible();
     await expect.poll(() => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.isInitialized)).toBe(true);
     await expect.poll(getDocument).toEqual(exited); expect(await geometry()).toEqual(after);
@@ -1117,7 +1117,7 @@ test('representative mixed document preserves edits, merged table widths, image 
   await editor.focus(); await page.keyboard.press('Control+z'); expect((await read()).html).toBe(edited.html);
   await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
-  await page.locator('.queue-card.is-completed', { hasText: 'parity_representative.mp3' }).getByRole('heading').click();
+  await page.locator('.queue-card.is-completed', { hasText: 'parity_representative' }).getByRole('heading').click();
   await expect(editor).toBeVisible();
   const reopened = await read();
   expect(reopened.html.replaceAll('rgb(255, 238, 0)', '#ffee00')).toBe(edited.html.replaceAll('rgb(255, 238, 0)', '#ffee00'));
@@ -1194,7 +1194,7 @@ test('mixed wrap images and captions preserve surrounding content through histor
     await editor.focus(); await page.keyboard.press('Control+z'); expect((await read()).html).toBe(edited.html);
     await expectAutosaved(page);
     await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
-    await page.locator('.queue-card.is-completed', { hasText: 'parity_mixed_wrap.mp3' }).getByRole('heading').click();
+    await page.locator('.queue-card.is-completed', { hasText: 'parity_mixed_wrap' }).getByRole('heading').click();
     await expect(editor).toBeVisible();
     await expect.poll(() => editor.evaluate(root => Boolean((root as HTMLElement & { editor?: Editor }).editor))).toBe(true);
     const reopened = await read();
@@ -1425,7 +1425,7 @@ for (const layout of ['inline', 'wrap']) {
       await expect.poll(() => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getHTML())).toBe(saved);
       await expectAutosaved(page);
       await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
-      await page.locator('.queue-card.is-completed', { hasText: audio.split(/[\\/]/).pop()! }).getByRole('heading').click();
+      await page.locator('.queue-card.is-completed', { hasText: audio.split(/[\\/]/).pop()!.replace(/\.[^.]+$/, '') }).getByRole('heading').click();
       await expect(editor).toBeVisible();
       await expect.poll(() => editor.evaluate(root => (root as HTMLElement & { editor: Editor }).editor.getHTML())).toBe(saved);
       close((await image.boundingBox())!.width, preview.width);
@@ -1736,7 +1736,7 @@ test('Wrap images pasted into table cells stay inline, as in Docs, through copy 
   expect(model.dsl_entitypositionmap.inline.filter(Boolean)).toHaveLength(1);
   await expectAutosaved(page);
   await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
-  await page.locator('.queue-card.is-completed', { hasText: 'table_drag_anchor.mp3' }).getByRole('heading').click();
+  await page.locator('.queue-card.is-completed', { hasText: 'table_drag_anchor' }).getByRole('heading').click();
   await expect.poll(read).toEqual(original);
   await expect(figure).toHaveAttribute('data-layout', 'inline');
 });
@@ -1793,7 +1793,7 @@ for (const zoom of [{ key: 'Control+=', value: '1.1' }, { key: 'Control+-', valu
     await expect.poll(read).toEqual(moved);
     await expectAutosaved(page);
     await page.getByRole('button', { name: 'Torna indietro', exact: true }).click();
-    await page.locator('.queue-card.is-completed', { hasText: 'drag_zoom.mp3' }).getByRole('heading').click();
+    await page.locator('.queue-card.is-completed', { hasText: 'drag_zoom' }).getByRole('heading').click();
     await expect(editor).toBeVisible();
     await expect.poll(read).toEqual(moved);
     await expect.poll(async () => {
@@ -2021,10 +2021,10 @@ test('inline and arbitrary image wrap preserve text, editing, undo and native cl
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooserPromise).setFiles(audio);
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  const completed = page.locator('.queue-card.is-completed', { hasText: 'image_layout.mp3' });
+  const completed = page.locator('.queue-card.is-completed', { hasText: 'image_layout' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await expect(completed).toHaveClass(/cursor-pointer/);
-  await completed.getByRole('heading', { name: 'image_layout.mp3' }).click();
+  await completed.getByRole('heading', { name: 'image_layout' }).click();
   const editor = page.locator('.tiptap-editor');
   await expect(editor).toBeVisible();
   await expectPlaybackAudioReady(page);

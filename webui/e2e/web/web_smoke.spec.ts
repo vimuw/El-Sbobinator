@@ -34,7 +34,7 @@ test('runs the simulated pipeline and opens the sample document without a backen
 
   await expect(page.getByText('Trascrizione e sbobinatura')).toBeVisible();
   await expect(page.getByText('Sbobinatura completata!')).toBeVisible({ timeout: 20_000 });
-  await page.locator('.queue-card.is-completed', { hasText: 'Lezione web.mp3' }).click();
+  await page.locator('.queue-card.is-completed', { hasText: 'Lezione web' }).click();
 
   await expect(page.locator('.tiptap-editor h1')).toHaveText('Lezione web');
   // The player is docked with the file kept in this browser (blob: URL allowed by the CSP).
@@ -48,7 +48,7 @@ test('runs the simulated pipeline and opens the sample document without a backen
   // Closing steps back in the history: let it land before reloading.
   await expect.poll(() => new URL(page.url()).hash).toBe('');
   await page.reload();
-  await expect(page.locator('.queue-card.is-completed', { hasText: 'Lezione web.mp3' })).toBeVisible();
+  await expect(page.locator('.queue-card.is-completed', { hasText: 'Lezione web' })).toBeVisible();
   expect(violations).toEqual([]);
 });
 

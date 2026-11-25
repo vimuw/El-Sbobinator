@@ -14,7 +14,7 @@ test('styled empty paragraphs retain separate typography and typing marks throug
   await page.getByRole('button', { name: /Trascina i file qui o clicca per sfogliare/i }).click();
   await (await chooser).setFiles(audio);
   await page.getByRole('button', { name: /Avvia sbobinatura/i }).click();
-  const completed = page.locator('.queue-card.is-completed', { hasText: 'html-styled-empty.mp3' });
+  const completed = page.locator('.queue-card.is-completed', { hasText: 'html-styled-empty' });
   await expect(completed).toBeVisible({ timeout: 15000 });
   await completed.getByRole('heading').click();
   await expectPlaybackAudioReady(page);

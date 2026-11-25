@@ -203,7 +203,7 @@ describe('QueuePage Component', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Interrompi' }));
     expect(handleQueueStop).toHaveBeenCalledTimes(1);
-    expect(screen.getByText('fatta-2.mp3')).toBeTruthy();
+    expect(screen.getByText('fatta-2')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: "Apri l'Archivio" }));
     expect(onOpenArchive).toHaveBeenCalledTimes(1);
   });
@@ -228,7 +228,7 @@ describe('QueuePage Component', () => {
       // Read: only the sbobina without a copy says so.
       rerender(<QueuePage {...defaultProps} files={files} archiveSessions={[session('/sessions/kept', 5), session('/sessions/gone', 0)]} />);
       expect(claims()).toHaveLength(1);
-      expect(claims()[0]).toContain('persa.mp3');
+      expect(claims()[0]).toContain('persa');
     } finally {
       setHostCapabilities(DEFAULT_CAPABILITIES);
     }

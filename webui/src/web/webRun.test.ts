@@ -75,7 +75,7 @@ function setup(overrides: Partial<WebRunOptions> = {}, initial: SessionState[] =
       archived.push({ ...session, body });
       return { ...session, session_dir: 'web-session://s1', html_path: 'web-session://s1/sbobina.html' };
     },
-    archiveExists: async () => true,
+    archivedName: async () => 'Lezione',
     sleep: async (_secs, signal) => { if (signal.aborted) throw new CancelledError('annullato'); },
     now: () => 0,
     wakeLock: { supported: false, start: async () => {}, stop: async () => {} },
@@ -155,6 +155,8 @@ describe('runWebFile', () => {
       id: 'f1',
       session_dir: 'web-session://s1',
       html_path: 'web-session://s1/sbobina.html',
+      // The archive's name, so Recenti and the editor show no audio extension.
+      title: 'Lezione',
       completion_status: 'completed',
       revision_failed_blocks: [],
     })]);
@@ -234,13 +236,14 @@ describe('runWebFile', () => {
     const fetchMock = mockGemini([]);
     const done = await checkpoint('done', { archiveSessionDir: 'web-session://s1', body: '<h1>x</h1>' });
     const asked: string[] = [];
-    const { options, named } = setup({ askRegenerate: async mode => { asked.push(mode); return false; } }, [done]);
+    const { options, named } = setup({ askRegenerate: async mode => { asked.push(mode); return false; }, archivedName: async () => 'Lezione rinominata' }, [done]);
 
     await expect(runWebFile(options)).resolves.toBe('completed');
 
     expect(asked).toEqual(['completed']);
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(named('fileDone')).toEqual([expect.objectContaining({ session_dir: 'web-session://s1', html_path: 'web-session://s1/sbobina.html', reused_existing: true })]);
+    // The name it has in the archive now, renamed or not.
+    expect(named('fileDone')).toEqual([expect.objectContaining({ session_dir: 'web-session://s1', html_path: 'web-session://s1/sbobina.html', title: 'Lezione rinominata', reused_existing: true })]);
   });
 
   it('starts over on "rigenera": the old checkpoint is deleted', async () => {
