@@ -134,6 +134,33 @@ test('settings keep keys in the browser and hide desktop-only sections @web-smok
   expect(await page.evaluate(() => localStorage.getItem('el-sbobinator.web.gemini-keys.v1'))).toBeNull();
 });
 
+// On a phone the settings card has no X: the footer's "Annulla" (or "Chiudi") closes it within
+// thumb reach and the page title takes the whole row. The wide card keeps the X.
+test('settings close button shows only in the wide card @web-smoke', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await saveKey(page);
+  const openSettings = page.getByRole('button', { name: 'Apri impostazioni' });
+  const close = page.getByRole('button', { name: 'Chiudi finestra' });
+  const title = page.getByRole('heading', { name: 'Generale', exact: true });
+  await openSettings.click();
+  await expect(title).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Annulla' })).toBeVisible();
+  await expect(close).toBeHidden();
+  // Without the X the title row keeps only the side padding (24px) on the right.
+  const titleBox = await title.boundingBox();
+  const headerBox = await title.locator('xpath=../..').boundingBox();
+  expect(headerBox!.x + headerBox!.width - (titleBox!.x + titleBox!.width)).toBeLessThanOrEqual(25);
+
+  await page.getByRole('button', { name: 'Annulla' }).click();
+  await expect(title).toHaveCount(0);
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openSettings.click();
+  await expect(close).toBeVisible();
+  await close.click();
+  await expect(title).toHaveCount(0);
+});
+
 // iPad Safari's 100vh includes the area behind its toolbars and cut off the sidebar bottom and the
 // footer links. Chromium has no such toolbars, so this checks the layout follows the visible
 // height (dvh) and that the bottom controls are on screen at tablet sizes, including a short one.

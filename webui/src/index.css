@@ -926,11 +926,12 @@ button {
   box-shadow: inset 0 0 0 1px var(--border-default);
 }
 
-/* At the right of the page title, which leaves room for it (pr-14 / md:pr-16). */
+/* At the right of the page title, which leaves room for it (md:pr-16). Wide card only: on a
+   phone the footer's "Annulla" / "Chiudi" does the same within thumb reach, and the title takes
+   the whole row. */
 .settings-close {
+  display: none;
   position: absolute;
-  top: 18px;
-  right: 14px;
   /* Above the page title, which comes later in the column. */
   z-index: 1;
 }
@@ -974,6 +975,7 @@ button {
 
   /* Wide card: level with the taller title (pt-8 of the header, less its own padding). */
   .settings-close {
+    display: inline-flex;
     top: 28px;
     right: 24px;
   }
