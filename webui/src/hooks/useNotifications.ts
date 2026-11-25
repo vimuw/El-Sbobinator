@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { APP_VERSION } from '../branding';
 import type { NotificationMessage } from '../components/NotificationDropdown';
 import { STORAGE_KEYS } from '../storageKeys';
-import { compareVersions } from '../utils';
 
 export const NOTIFICATIONS_STORAGE_KEY = STORAGE_KEYS.NOTIFICATIONS_V1;
 
@@ -34,14 +32,10 @@ export interface AddNotificationOptions {
 export interface UseNotificationsOptions {
   onRetryFailedRevisionBlocks?: (sessionDir: string, fileId?: string) => Promise<void>;
   onOpenSettings?: () => void;
-  currentAppVersion?: string;
 }
 
-interface NotificationsBootstrap {
-  appVersion: string;
-  didUpgrade: boolean;
-  notifications: PersistedNotification[];
-}
+// Older builds announced each new version with a notification under this key: no longer shown.
+const UPDATE_SUCCESS_DEDUPE_PREFIX = 'update-success:';
 
 export function sanitizePersistedNotifications(list: unknown): PersistedNotification[] {
   if (!Array.isArray(list)) return [];
@@ -50,6 +44,7 @@ export function sanitizePersistedNotifications(list: unknown): PersistedNotifica
   for (const item of list) {
     if (!item || typeof item !== 'object') continue;
     const n = item as PersistedNotification;
+    if (typeof n.dedupeKey === 'string' && n.dedupeKey.startsWith(UPDATE_SUCCESS_DEDUPE_PREFIX)) continue;
 
     if (typeof n.message === 'string' && n.message.includes('regenerate_prompt_timeout')) {
       const cleanMessage = n.message
@@ -73,27 +68,13 @@ export function sanitizePersistedNotifications(list: unknown): PersistedNotifica
   return result;
 }
 
-function loadNotificationsBootstrap(currentAppVersion?: string): NotificationsBootstrap {
-  let storedList: unknown;
+function loadNotifications(): PersistedNotification[] {
   try {
     const stored = localStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
-    storedList = stored ? JSON.parse(stored) : [];
+    return sanitizePersistedNotifications(stored ? JSON.parse(stored) : []);
   } catch (_) {
-    storedList = [];
+    return [];
   }
-
-  const appVersion = currentAppVersion || APP_VERSION;
-  const notifications = sanitizePersistedNotifications(storedList);
-  let didUpgrade = false;
-
-  try {
-    const lastSeenVersion = localStorage.getItem(STORAGE_KEYS.LAST_SEEN_APP_VERSION_V1);
-    if (lastSeenVersion) {
-      didUpgrade = compareVersions(appVersion, lastSeenVersion) > 0;
-    }
-  } catch (_) {}
-
-  return { appVersion, didUpgrade, notifications };
 }
 
 export function useNotifications(options: UseNotificationsOptions = {}) {
@@ -102,8 +83,7 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
     optionsRef.current = options;
   });
 
-  const [bootstrap] = useState(() => loadNotificationsBootstrap(options.currentAppVersion));
-  const [rawNotifications, setRawNotifications] = useState<PersistedNotification[]>(bootstrap.notifications);
+  const [rawNotifications, setRawNotifications] = useState<PersistedNotification[]>(loadNotifications);
 
   useEffect(() => {
     try {
@@ -112,41 +92,10 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
   }, [rawNotifications]);
 
   useEffect(() => {
-    let committedNotifications = bootstrap.notifications;
-
-    if (bootstrap.didUpgrade) {
-      const successDedupeKey = `update-success:${bootstrap.appVersion}`;
-      const alreadyHasSuccess = committedNotifications.some(n => n.dedupeKey === successDedupeKey);
-      if (!alreadyHasSuccess) {
-        const successNotif: PersistedNotification = {
-          id: crypto.randomUUID(),
-          title: 'Aggiornamento completato',
-          message: `El Sbobinator è stato aggiornato alla versione ${bootstrap.appVersion}.`,
-          type: 'success',
-          category: 'update',
-          timestamp: Date.now(),
-          read: false,
-          persistent: true,
-          dedupeKey: successDedupeKey,
-        };
-        committedNotifications = [successNotif, ...committedNotifications].slice(0, 50);
-        setRawNotifications(committedNotifications);
-      }
-    }
-
-    let notificationsPersisted = true;
     try {
-      localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(committedNotifications));
-    } catch (_) {
-      notificationsPersisted = false;
-    }
-
-    if (!bootstrap.didUpgrade || notificationsPersisted) {
-      try {
-        localStorage.setItem(STORAGE_KEYS.LAST_SEEN_APP_VERSION_V1, bootstrap.appVersion);
-      } catch (_) {}
-    }
-  }, [bootstrap]);
+      localStorage.removeItem(STORAGE_KEYS.LAST_SEEN_APP_VERSION_V1);
+    } catch (_) {}
+  }, []);
 
   const deleteNotification = useCallback((id: string) => {
     setRawNotifications(prev => prev.filter(n => n.id !== id));

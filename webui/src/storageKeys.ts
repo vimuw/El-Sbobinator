@@ -10,6 +10,7 @@ export const STORAGE_KEYS = {
   QUEUE_V1: 'el-sbobinator.queue.v1',
   NOTIFICATIONS_V1: 'el-sbobinator.notifications.v1',
   THEME_V1: 'el-sbobinator.theme.v1',
+  // Older builds kept the last version seen here, to announce updates: only cleared now.
   LAST_SEEN_APP_VERSION_V1: 'el-sbobinator.last-seen-app-version.v1',
   // How many runs have shown the "open the console" hint, or "done" once it is retired.
   CONSOLE_HINT_V1: 'el-sbobinator.console-hint.v1',

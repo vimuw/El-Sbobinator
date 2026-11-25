@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { APP_VERSION } from '../branding';
 import { STORAGE_KEYS } from '../storageKeys';
 import {
   NOTIFICATIONS_STORAGE_KEY,
@@ -80,41 +79,45 @@ describe('useNotifications', () => {
       expect(result.current.rawNotifications[0].message).toContain('Nessuna scelta ricevuta');
     });
 
-    it('adds Aggiornamento completato notification when transitioning from a prior version', () => {
-      localStorage.setItem(STORAGE_KEYS.LAST_SEEN_APP_VERSION_V1, 'v2.5.1');
-      localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify([]));
-
-      const { result } = renderHook(() => useNotifications({ currentAppVersion: 'v2.6.0' }));
-      const successNotif = result.current.rawNotifications.find(n => n.dedupeKey === 'update-success:v2.6.0');
-      expect(successNotif).toBeDefined();
-      expect(successNotif?.title).toBe('Aggiornamento completato');
-      expect(successNotif?.message).toContain('v2.6.0');
-      expect(successNotif?.type).toBe('success');
-      expect(localStorage.getItem(STORAGE_KEYS.LAST_SEEN_APP_VERSION_V1)).toBe('v2.6.0');
-    });
-
-    it('does not consume the prior version when render aborts before effects commit', () => {
-      localStorage.setItem(STORAGE_KEYS.LAST_SEEN_APP_VERSION_V1, 'v2.5.1');
-      localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify([]));
-      vi.spyOn(console, 'error').mockImplementation(() => {});
-
-      expect(() =>
-        renderHook(() => {
-          useNotifications({ currentAppVersion: 'v2.6.0' });
-          throw new Error('abort before commit');
-        })
-      ).toThrow('abort before commit');
-
-      expect(localStorage.getItem(STORAGE_KEYS.LAST_SEEN_APP_VERSION_V1)).toBe('v2.5.1');
-    });
-
-    it('does not add duplicate Aggiornamento completato notification on subsequent loads', () => {
-      localStorage.setItem(STORAGE_KEYS.LAST_SEEN_APP_VERSION_V1, APP_VERSION);
+    it('announces no update when the app version changed since the last visit', () => {
+      localStorage.setItem(STORAGE_KEYS.LAST_SEEN_APP_VERSION_V1, 'v0.0.1');
       localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify([]));
 
       const { result } = renderHook(() => useNotifications());
-      const successNotifs = result.current.rawNotifications.filter(n => n.dedupeKey === `update-success:${APP_VERSION}`);
-      expect(successNotifs).toHaveLength(0);
+      expect(result.current.rawNotifications).toEqual([]);
+      expect(result.current.unreadNotificationsCount).toBe(0);
+      expect(localStorage.getItem(STORAGE_KEYS.LAST_SEEN_APP_VERSION_V1)).toBeNull();
+      expect(JSON.parse(localStorage.getItem(NOTIFICATIONS_STORAGE_KEY) ?? 'null')).toEqual([]);
+    });
+
+    it('drops the update notifications older builds saved', () => {
+      const saved: PersistedNotification[] = [
+        {
+          id: 'update-1',
+          title: 'Aggiornamento completato',
+          message: 'El Sbobinator è stato aggiornato alla versione v1.5.0.',
+          type: 'success',
+          category: 'update',
+          timestamp: 1000,
+          read: false,
+          persistent: true,
+          dedupeKey: 'update-success:v1.5.0',
+        },
+        {
+          id: 'kept-1',
+          title: 'Elaborazione completata',
+          message: 'Sbobina pronta.',
+          type: 'success',
+          category: 'processing',
+          timestamp: 2000,
+          read: false,
+        },
+      ];
+      localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(saved));
+
+      const { result } = renderHook(() => useNotifications());
+      expect(result.current.rawNotifications.map(n => n.id)).toEqual(['kept-1']);
+      expect(result.current.unreadNotificationsCount).toBe(1);
     });
 
     it('gracefully handles corrupt JSON in localStorage', () => {
