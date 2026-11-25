@@ -133,7 +133,7 @@ describe('privacy page of the web site', () => {
     expect(drive).toContain('non passano da server di El Sbobinator');
     expect(drive).toContain('lo cifra e lo salva in un cookie nel tuo browser, che le pagine del sito non possono leggere');
     expect(drive).toContain('niente database e nessun registro dei permessi');
-    expect(drive).toContain('“Disconnetti” revoca il permesso presso Google');
+    expect(drive).toContain('“Scollega Drive” revoca il permesso presso Google');
     // Not when the service does not answer: the cookie stays until the retry (auth.ts).
     expect(drive).toContain('ritenta di revocarlo e cancellarlo appena torna la connessione o alla visita successiva');
     // Cookies are no longer "none": only the Drive link's technical ones.

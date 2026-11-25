@@ -45,6 +45,8 @@ describe('WebStoragePage', () => {
     const scope = within(screen.getByRole('region', { name: 'Account Google' })).getByTestId('web-drive-scope');
     expect(scope.querySelector('details')).toBeNull();
     expect(scope.textContent).toContain('Audio delle lezioni e chiavi API: restano in questo browser');
+    // Linked, no reasons above it: the scope names the hidden folder itself.
+    expect(scope.textContent).toContain('in una cartella nascosta che solo El Sbobinator vede');
     // The erase button sits on the description's line, not alone under it.
     const erase = screen.getByRole('button', { name: 'Elimina tutti i miei dati da Drive' });
     expect(erase.previousElementSibling?.textContent).toContain('Cancella da Google Drive');
