@@ -13,7 +13,7 @@ import { DEFAULT_MODEL } from './utils';
 
 const sha256 = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex');
 
-// tests/core/test_generation_profile.py pins the same values on the Python side.
+// The same values the desktop app (branch desktop-2.7) pinned on the Python side.
 describe('generation profile', () => {
   it('sends the same prompts as the desktop pipeline', () => {
     expect(PROMPT_SISTEMA).toHaveLength(3102);

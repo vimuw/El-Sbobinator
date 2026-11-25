@@ -1,7 +1,6 @@
-// Phase messages are a text contract: pipelines report progress through `updatePhase(text)` and the
-// processing banner recognizes the stage, counters and retry notices from these words.
-// The desktop pipeline writes them in Python (pipeline.py, phase1_service.py, revision_service.py,
-// generation_service.py); the in-browser pipeline builds them here. Keep both sides in sync.
+// Phase messages are a text contract: the pipeline reports progress through `updatePhase(text)` and
+// the processing banner recognizes the stage, counters and retry notices from these words.
+// The in-browser pipeline builds them here, with the texts the desktop app (branch desktop-2.7) wrote.
 
 export const PHASE_PREFIX = {
   analysis: 'Fase: analisi',
@@ -62,7 +61,7 @@ export function parseRevisionIndex(phase: string): { current: number; total: num
   return match ? { current: Number(match[1]), total: Number(match[2]) } : null;
 }
 
-// Builders mirror the exact texts the desktop pipeline emits.
+// Builders keep the exact texts the desktop pipeline emitted.
 export const phaseText = {
   analysis: () => `${PHASE_PREFIX.analysis} file`,
   preconversion: () => `${PHASE_PREFIX.preconversion}: pre-conversione audio`,
