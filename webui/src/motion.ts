@@ -7,8 +7,6 @@ export const DURATION = { fast: 0.12, base: 0.2, slow: 0.32 } as const;
 
 export const EASE_OUT = [0.22, 1, 0.36, 1] as const;
 export const EASE_IN = [0.4, 0, 1, 1] as const;
-// For something that both leaves and travels, like a panel folding shut: it gathers, then settles.
-export const EASE_IN_OUT = [0.4, 0, 0.2, 1] as const;
 
 export const enterTransition = (duration: number = DURATION.base, delay = 0): Transition => ({ duration, ease: EASE_OUT, delay });
 export const exitTransition: Transition = { duration: DURATION.fast, ease: EASE_IN };
@@ -29,7 +27,10 @@ export const fadeUp = {
 // grows, and on leaving it folds back up, its height closing from the bottom as it fades, instead
 // of vanishing in place. It folds to the height of what takes its place, given as the presence's
 // `custom` (0 when nothing does), so that comes back with a fade alone and closing lasts as long
-// as opening. Fold and fade end together. The element must clip its content for the fold to show.
+// as opening. Fold and fade end together, on the opening's curve, as the logs expand and collapse
+// on one: it moves from the first frame and settles. On an ease-in-out it stood still for about
+// 100 ms after the click, then collapsed in a few frames. The element must clip its content for
+// the fold to show.
 // Brought back mid-fold, the same element re-enters: `open` names its height so it returns to
 // `auto` and grows with its content, rather than to the px read as the fold began.
 export const unfold = {
@@ -42,10 +43,7 @@ export const unfold = {
     folded: (foldTo: number = 0) => ({
       opacity: 0,
       height: foldTo,
-      transition: {
-        height: { duration: DURATION.slow, ease: EASE_IN_OUT },
-        opacity: { duration: DURATION.slow, ease: EASE_IN },
-      },
+      transition: enterTransition(DURATION.slow),
     }),
   },
 };
