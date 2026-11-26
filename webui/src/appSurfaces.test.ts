@@ -619,6 +619,13 @@ describe('app surfaces', () => {
     expect(token(theme, '--button-padding-lg')).toBe('0.375rem 1.125rem');
   });
 
+  it('centres the number in the count circle with proportional figures', () => {
+    // The quiet pills keep tabular figures; in the circle Manrope's tabular "1" left a gap on its
+    // right and pushed "21" about 0.8px left of centre.
+    expect(token(rule(':root .status-pill.is-quiet')!, 'font-variant-numeric')).toBe('tabular-nums');
+    expect(token(rule(':root .status-pill.is-quiet.is-count')!, 'font-variant-numeric')).toBe('normal');
+  });
+
   it('keeps the running segment sheen moving across the whole fill', () => {
     // The sheen eased out and then held still for 45% of the beat, so the bar read as stopping halfway.
     const sheen = rule('.phase-segment-fill.is-live::after')!;

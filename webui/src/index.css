@@ -428,9 +428,11 @@ button {
   background: transparent;
 }
 
-/* A bare number is a circle, not a stretched pill: as wide as it is tall up to two digits. */
+/* A bare number is a circle, not a stretched pill: as wide as it is tall up to two digits.
+   Proportional figures: Manrope's tabular "1" leaves a wide gap on its right that pushes the number off center. */
 :root .status-pill.is-quiet.is-count {
   justify-content: center;
+  font-variant-numeric: normal;
   box-sizing: border-box;
   min-width: 1.5rem;
   height: 1.5rem;
