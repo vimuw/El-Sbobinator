@@ -401,6 +401,26 @@ describe('NotificationDropdown component', () => {
     expect(handleClearAll).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps the header as tall once clearing all removes its buttons', () => {
+    // Emptied, the header lost its 28px buttons and shrank by 8px, pulling the filters up.
+    const props = {
+      isOpen: true,
+      onClose: vi.fn(),
+      onMarkAsRead: vi.fn(),
+      onMarkAllAsRead: vi.fn(),
+      onDelete: vi.fn(),
+      onClearAll: vi.fn(),
+    };
+    const { rerender } = render(<NotificationDropdown {...props} notifications={mockNotifications} />);
+    const actions = () => screen.getByTestId('notification-header-actions');
+    expect(actions().className).toContain('min-h-[var(--icon-button-xs)]');
+    expect(screen.getByRole('button', { name: /Cancella tutte le notifiche/i }).className).toContain('h-[var(--icon-button-xs)]');
+
+    rerender(<NotificationDropdown {...props} notifications={[]} />);
+    expect(actions().children).toHaveLength(0);
+    expect(actions().className).toContain('min-h-[var(--icon-button-xs)]');
+  });
+
   it('shows the decorative pointer only for a sidebar-aligned panel', () => {
     const props = {
       isOpen: true,
