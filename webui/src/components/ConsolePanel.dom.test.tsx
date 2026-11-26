@@ -59,6 +59,25 @@ describe('ConsolePanel', () => {
     expect(scroll.classList.contains('console-lines')).toBe(true);
   });
 
+  // Once eased down, the logs let go of their height before the tail replaced them, so for one
+  // frame they were back at full height (208 px for 81) and the panel jumped down and up again.
+  it('keeps the logs at the tail height until the tail replaces them', async () => {
+    const logs = Array.from({ length: 12 }, (_, i) => `[12:00:${String(i).padStart(2, '0')}] riga ${i}`);
+    const { container, rerender } = render(<ConsolePanel consoleLogs={logs} lastConsoleMessage="" appState="idle" isConsoleExpanded />);
+    const scroll = container.querySelector('.console-scroll') as HTMLElement;
+    const heights: string[] = [];
+    const watch = new MutationObserver(() => { if (scroll.isConnected) heights.push(scroll.style.height); });
+    watch.observe(scroll, { attributes: true, attributeFilter: ['style'] });
+    try {
+      rerender(<ConsolePanel consoleLogs={logs} lastConsoleMessage="" appState="idle" isConsoleExpanded={false} />);
+      await waitFor(() => expect(container.querySelector('.console-tail')).not.toBeNull());
+      expect(heights.length).toBeGreaterThan(0);
+      expect(heights).not.toContain('');
+    } finally {
+      watch.disconnect();
+    }
+  });
+
   // Opened already expanded (the choice outlives the console), the panel never showed its tail,
   // so with no log lines the logs eased all the way to 0 px and the last message popped in after.
   // They ease to one line of it instead.

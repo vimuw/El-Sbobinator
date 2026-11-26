@@ -125,10 +125,16 @@ export const ConsolePanel = memo(function ConsolePanel({
     void easing.finished.then(() => {
       if (easingRef.current !== easing) return;
       easingRef.current = null;
+      // Collapsed, the logs stay held at the tail's height until the tail replaces them: let go
+      // first, they were back at full height for the frame before React swapped them, and the
+      // panel jumped down and up again.
+      if (!isConsoleExpanded) {
+        setScrollShown(false);
+        return;
+      }
       el.style.height = '';
       el.style.overflowY = '';
-      if (isConsoleExpanded) el.scrollTop = el.scrollHeight;
-      else setScrollShown(false);
+      el.scrollTop = el.scrollHeight;
     });
   }, [isConsoleExpanded]);
   useEffect(() => () => easingRef.current?.stop(), []);
