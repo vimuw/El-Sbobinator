@@ -16,6 +16,7 @@ import { STORAGE_KEYS } from '../storageKeys';
 import { isTouchWeb } from '../hostCapabilities';
 import { EditorShortcuts } from './EditorShortcuts';
 import { KebabMenu, type KebabMenuItem } from './KebabMenu';
+import { ThemeToggleIcon } from './ThemeToggleIcon';
 import { ZOOM_OPTIONS } from './editor/toolbar/formatOptions';
 // Bundled with the editor page: a lazy player flashed "Caricamento player..." on every first open.
 import { AudioDockEmpty } from './AudioDockEmpty';
@@ -504,7 +505,7 @@ export function EditorFullPage({
                     aria-label={themeMode === 'dark' ? 'Attiva tema chiaro' : 'Attiva tema scuro'}
                     title={themeMode === 'dark' ? 'Tema chiaro' : 'Tema scuro'}
                   >
-                    {themeMode === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                    <ThemeToggleIcon themeMode={themeMode} className="w-4 h-4" />
                   </button>
                 </div>
               )}

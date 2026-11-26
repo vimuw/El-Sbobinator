@@ -5,18 +5,54 @@
 @import "./theme.css";
 
 /* ── Theme Mode Toggle Button Animation ─────────── */
-/* Same in the editor header and the sidebar. `button.` outweighs the later `.sidebar-nav-item svg`
-   rules, which would otherwise drop the rotation there. */
-button.theme-toggle-btn svg {
+/* Same in the editor header and the sidebar (ThemeToggleIcon). `button.` outweighs the later
+   `.sidebar-nav-item svg` rules. After a tap the new icon comes in: the sun opens its rays from
+   the middle, the moon swings in from the right. Hover turns the rays one step (8 rays, 45deg, so
+   they land where they started) or tilts the moon. `backwards` only: a filled animation would
+   hold the transform and switch off the hover. */
+button.theme-toggle-btn svg,
+button.theme-toggle-btn svg.lucide-sun > * {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
   transition: transform var(--duration-slow) var(--ease-spring-soft), color var(--duration-base) var(--ease-out);
 }
 
-button.theme-toggle-btn:hover svg {
-  transform: rotate(18deg) scale(1.05);
+button.theme-toggle-btn svg.lucide-moon.is-entering {
+  animation: theme-moon-in 460ms var(--ease-spring-soft) backwards;
 }
 
-button.theme-toggle-btn:active svg {
-  transform: rotate(-25deg) scale(0.92);
+button.theme-toggle-btn svg.lucide-sun.is-entering circle {
+  animation: theme-sun-core-in 380ms var(--ease-spring-soft) backwards;
+}
+
+button.theme-toggle-btn svg.lucide-sun.is-entering path {
+  animation: theme-sun-rays-in 460ms var(--ease-spring-soft) 60ms backwards;
+}
+
+@keyframes theme-moon-in {
+  from { transform: rotate(70deg) scale(0.55); opacity: 0; }
+}
+
+@keyframes theme-sun-core-in {
+  from { transform: scale(0.4); opacity: 0; }
+}
+
+@keyframes theme-sun-rays-in {
+  from { transform: rotate(-45deg) scale(0.5); opacity: 0; }
+}
+
+@media (hover: hover) {
+  button.theme-toggle-btn:hover svg.lucide-sun path {
+    transform: rotate(45deg);
+  }
+
+  button.theme-toggle-btn:hover svg.lucide-sun circle {
+    transform: scale(0.9);
+  }
+
+  button.theme-toggle-btn:hover svg.lucide-moon {
+    transform: rotate(-16deg);
+  }
 }
 
 /* ── Theme Mode Transition for UI Shell & Surfaces ─── */
@@ -3898,6 +3934,17 @@ input::-webkit-contacts-auto-fill-button {
 
 .sidebar-nav-item:hover svg {
   transform: scale(1.05);
+}
+
+/* An icon that swaps on a state (play/pause, the player pill) pops in; the component adds the
+   class only after the state first changes (useChangedSinceMount). `backwards` only, so the
+   hover transforms above keep working once it has played. */
+.icon-swap-in {
+  animation: icon-swap-in 240ms var(--ease-spring-soft) backwards;
+}
+
+@keyframes icon-swap-in {
+  from { transform: scale(0.5); opacity: 0; }
 }
 
 /* A status dot on a sidebar icon: one size, one border, and a halo on the shared beat. */
