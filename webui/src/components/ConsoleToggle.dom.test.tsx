@@ -16,4 +16,11 @@ describe('ConsoleToggle', () => {
     fireEvent.click(button);
     expect(onToggle).toHaveBeenCalledTimes(1);
   });
+
+  it('keeps its extra distance from Interrompi only under the progress', () => {
+    const { container, rerender } = render(<ConsoleToggle open={false} onToggle={() => {}} underProgress />);
+    expect(container.querySelector('.console-toggle-row')?.classList.contains('is-under-progress')).toBe(true);
+    rerender(<ConsoleToggle open={false} onToggle={() => {}} />);
+    expect(container.querySelector('.console-toggle-row')?.classList.contains('is-under-progress')).toBe(false);
+  });
 });

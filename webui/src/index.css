@@ -6324,6 +6324,10 @@ svg.lucide-trash-2 > * {
   margin-top: 8px;
 }
 
+.console-toggle-row.is-under-progress {
+  margin-top: 20px;
+}
+
 /* On hover the terminal icon waits for input: its prompt steps forward and its cursor blinks
    twice. Like the other icon animations, only a straight shift, and touch screens skip it. Lucide's
    terminal draws the cursor first and the prompt second; ConsoleToggle.dom.test.tsx checks the

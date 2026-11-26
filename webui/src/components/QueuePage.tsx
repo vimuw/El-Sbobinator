@@ -400,7 +400,7 @@ export function QueuePage({
                     />
                     <ConsoleHint visible={consoleHint.visible} onOpen={openConsoleFromHint} onDismiss={consoleHint.dismiss} />
                     {!consoleHint.visible && !isConsoleDisabled && (
-                      <ConsoleToggle open={showConsole} onToggle={() => setConsoleOpen(!showConsole, true)} />
+                      <ConsoleToggle open={showConsole} onToggle={() => setConsoleOpen(!showConsole, true)} underProgress />
                     )}
                   </motion.div>
                 ) : (
