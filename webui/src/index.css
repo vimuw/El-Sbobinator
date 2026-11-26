@@ -4545,6 +4545,34 @@ svg.lucide-trash-2 > * {
   border-color: var(--warning-ring);
 }
 
+/* A card that opens on click says so: the surface tints on hover and the sheet icon brightens. The
+   plain :hover border above loses to the dark-theme rule, so in dark nothing but a 5% icon scale
+   moved. A warning card keeps its amber border and icon. `svg.` ties the older lucide-file-text
+   scale rule and, coming after it, wins the transition, so the colour eases too. */
+.archive-session-card:not(.is-selected):hover,
+:root:not([data-theme="dark"]) .archive-session-card:not(.is-selected):hover,
+:root[data-theme="dark"] .archive-session-card:not(.is-selected):hover {
+  background: color-mix(in srgb, var(--text-primary) 4%, var(--card-queued-bg));
+}
+
+:root[data-theme="dark"] .archive-session-card:not(.is-selected, .is-warning):hover {
+  border-color: var(--border-strong);
+}
+
+.archive-session-card svg.session-card-icon {
+  color: var(--text-muted);
+  transition: color var(--duration-state) var(--ease-out), transform var(--duration-base) var(--ease-spring-soft);
+}
+
+.archive-session-card:hover .session-card-icon,
+.archive-session-card:focus-visible .session-card-icon {
+  color: var(--text-secondary);
+}
+
+.archive-session-card .session-card-icon.is-warning {
+  color: var(--warning-text);
+}
+
 /* ═══ SEARCH & FILTER CONTROLS ═══ */
 
 /* Flat at rest; once pinned it floats as a framed panel the list scrolls behind.

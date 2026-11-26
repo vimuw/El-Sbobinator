@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { act, render, screen, fireEvent } from '@testing-library/react';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { reportClientError } from '../../diagnostics';
@@ -7,14 +8,37 @@ import { DraggableSessionCard, SortableSessionCard } from './SessionCard';
 
 vi.mock('../../diagnostics', () => ({ reportClientError: vi.fn() }));
 
+// CSS specificity as [ids, classes/attributes/pseudo-classes, types], enough for index.css:
+// :where() counts nothing, :not()/:is()/:has() count their most specific argument.
+const compareSpecificity = (a: number[], b: number[]) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+const specificity = (selector: string): number[] => {
+  const total = [0, 0, 0];
+  const rest = selector
+    .replace(/:where\((?:[^()]|\([^()]*\))*\)/g, '')
+    .replace(/:(?:not|is|has)\(((?:[^()]|\([^()]*\))*)\)/g, (_, args: string) => {
+      const best = args.split(',').map(arg => specificity(arg.trim()))
+        .reduce((a, b) => (compareSpecificity(a, b) >= 0 ? a : b));
+      best.forEach((count, i) => { total[i] += count; });
+      return '';
+    })
+    .replace(/\[[^\]]*\]/g, () => { total[1] += 1; return ''; })
+    .replace(/::[\w-]+/g, () => { total[2] += 1; return ''; });
+  total[0] += (rest.match(/#[\w-]+/g) ?? []).length;
+  total[1] += (rest.match(/\.[\w-]+|:[\w-]+/g) ?? []).length;
+  total[2] += (rest.match(/(?:^|[\s>+~])[a-zA-Z][\w-]*/g) ?? []).length;
+  return total;
+};
+
+const { sortableKeyDown, sortable } = vi.hoisted(() => ({ sortableKeyDown: vi.fn(), sortable: { isDragging: false } }));
+
 vi.mock('@dnd-kit/sortable', () => ({
   useSortable: () => ({
-    attributes: {},
-    listeners: {},
+    attributes: { role: 'button', tabIndex: 0 },
+    listeners: { onKeyDown: sortableKeyDown },
     setNodeRef: vi.fn(),
     transform: null,
     transition: undefined,
-    isDragging: false,
+    isDragging: sortable.isDragging,
   }),
 }));
 
@@ -323,6 +347,134 @@ describe('SessionCard components selection styling', () => {
       expect(card2.style.borderColor).toBe('');
       expect(card2.style.background).toBe('');
     });
+  });
+});
+
+// The list's cards opened only on a mouse click: a plain div with no tabIndex, so Tab skipped every
+// sbobina in "Tutte le sbobine" and the keyboard could not open one.
+describe('SessionCard keyboard opening', () => {
+  beforeEach(() => {
+    sortableKeyDown.mockClear();
+    sortable.isDragging = false;
+  });
+
+  it('lets Tab reach a list card and Enter open it, but not Enter on its own controls', () => {
+    const onPreview = vi.fn();
+    render(
+      <DraggableSessionCard
+        session={mockSession}
+        allFolders={mockFolders}
+        onToggleSelect={vi.fn()}
+        onAssignToFolder={vi.fn()}
+        onRemoveFromFolder={vi.fn()}
+        onPreview={onPreview}
+        onDeleteSession={vi.fn()}
+      />,
+    );
+    const card = screen.getByRole('link', { name: mockSession.name });
+    expect(card.tabIndex).toBe(0);
+
+    fireEvent.keyDown(screen.getByRole('button', { name: `Seleziona ${mockSession.name}` }), { key: 'Enter' });
+    expect(onPreview).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(card, { key: ' ' });
+    expect(onPreview).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(card, { key: 'Enter' });
+    expect(onPreview).toHaveBeenCalledWith(mockSession.html_path, mockSession.name, mockSession.input_path, undefined, mockSession.session_dir);
+  });
+
+  it('opens a collection card on Enter and leaves Space to reordering', () => {
+    const onPreview = vi.fn();
+    const { container } = render(
+      <SortableSessionCard
+        session={mockSession}
+        folderColor="#3d6b3a"
+        disabled={false}
+        onRemove={vi.fn()}
+        onPreview={onPreview}
+        onDeleteSession={vi.fn()}
+      />,
+    );
+    const card = container.querySelector('.archive-session-card') as HTMLElement;
+
+    fireEvent.keyDown(card, { key: 'Enter' });
+    expect(onPreview).toHaveBeenCalledTimes(1);
+    expect(sortableKeyDown).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(card, { key: ' ' });
+    expect(sortableKeyDown).toHaveBeenCalledTimes(1);
+    expect(onPreview).toHaveBeenCalledTimes(1);
+  });
+
+  // dnd-kit drops a card picked up by keyboard on Enter from its own document listener; focus is
+  // still on the card, so the card must not open the sbobina for that same Enter.
+  it('does not open a collection card when Enter drops it after a keyboard drag', () => {
+    sortable.isDragging = true;
+    const onPreview = vi.fn();
+    const { container } = render(
+      <SortableSessionCard
+        session={mockSession}
+        folderColor="#3d6b3a"
+        disabled={false}
+        onRemove={vi.fn()}
+        onPreview={onPreview}
+        onDeleteSession={vi.fn()}
+      />,
+    );
+    const card = container.querySelector('.archive-session-card') as HTMLElement;
+
+    fireEvent.keyDown(card, { key: 'Enter' });
+    expect(onPreview).not.toHaveBeenCalled();
+  });
+
+  it('keeps the warning colour on the sheet icon of a card with warnings', () => {
+    const { container } = render(
+      <DraggableSessionCard
+        session={mockWarningSession}
+        allFolders={mockFolders}
+        onAssignToFolder={vi.fn()}
+        onRemoveFromFolder={vi.fn()}
+        onPreview={vi.fn()}
+        onDeleteSession={vi.fn()}
+      />,
+    );
+    expect(container.querySelector('.session-card-icon')?.classList.contains('is-warning')).toBe(true);
+  });
+
+  it('eases the sheet icon colour on hover instead of losing it to the older icon-scale rule', () => {
+    // jsdom resolves no cascaded transition, so pick the winning top-level rule of index.css by hand.
+    const style = document.createElement('style');
+    style.textContent = readFileSync('src/index.css', 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/@import[^;]*;/g, '');
+    document.head.appendChild(style);
+    try {
+      const { container } = render(
+        <DraggableSessionCard
+          session={mockSession}
+          allFolders={mockFolders}
+          onAssignToFolder={vi.fn()}
+          onRemoveFromFolder={vi.fn()}
+          onPreview={vi.fn()}
+          onDeleteSession={vi.fn()}
+        />,
+      );
+      const icon = container.querySelector('.session-card-icon')!;
+      let winner: { specificity: number[]; transition: string } | undefined;
+      for (const cssRule of Array.from(style.sheet!.cssRules)) {
+        if (!(cssRule instanceof CSSStyleRule)) continue;
+        const transition = cssRule.style.getPropertyValue('transition');
+        if (!transition) continue;
+        for (const selector of cssRule.selectorText.split(/,(?![^(]*\))/).map(part => part.trim())) {
+          if (!icon.matches(selector)) continue;
+          const weight = specificity(selector);
+          if (!winner || compareSpecificity(weight, winner.specificity) >= 0) winner = { specificity: weight, transition };
+        }
+      }
+      expect(winner?.transition).toMatch(/(^|,\s*)color\s/);
+      expect(winner?.transition).toMatch(/(^|,\s*)transform\s/);
+    } finally {
+      style.remove();
+    }
   });
 });
 
