@@ -116,7 +116,7 @@ export function SidebarAccount() {
             cursor: 'pointer',
           }}
         >
-          <span className={`sidebar-drive-cloud is-${cloud} inline-flex items-center justify-center transition-transform duration-200 group-hover/util:scale-105`} style={{ lineHeight: 0 }}>
+          <span className={`sidebar-drive-cloud is-${cloud} inline-flex items-center justify-center`} style={{ lineHeight: 0 }}>
             <CloudIcon size={18} aria-hidden="true" data-testid={`sidebar-drive-${cloud}`} />
           </span>
         </button>

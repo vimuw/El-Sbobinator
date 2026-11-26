@@ -487,6 +487,8 @@ describe('CompletedFileCard open affordance', () => {
     render(<CompletedFileCard file={openableFile()} onRemove={vi.fn()} onPreview={onPreview} />);
     const openButton = screen.getByRole('button', { name: 'Apri' });
     expect(openButton.className).toContain('completed-open-button');
+    // Its arrow moves the way it points on hover (index.css).
+    expect(openButton.querySelector('svg.lucide-arrow-up-right')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Rimuovi dai Recenti' })).toBeTruthy();
     fireEvent.click(openButton);
     expect(onPreview).toHaveBeenCalledTimes(1);

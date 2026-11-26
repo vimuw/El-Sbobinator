@@ -182,7 +182,7 @@ function NavItem({
           boxShadow: 'none',
         }}
       >
-        <span className="inline-flex items-center justify-center transition-transform duration-200 group-hover/nav:scale-105" style={{ position: 'relative', color: active ? 'var(--sidebar-active-text)' : 'var(--text-muted)', lineHeight: 0 }}>
+        <span className="inline-flex items-center justify-center" style={{ position: 'relative', color: active ? 'var(--sidebar-active-text)' : 'var(--text-muted)', lineHeight: 0 }}>
           {icon}
           {isProcessing && <SidebarBadge tone="processing" />}
         </span>
@@ -222,7 +222,7 @@ function UtilityButton({
           cursor: 'pointer',
         }}
       >
-        <span className="inline-flex items-center justify-center transition-transform duration-200 group-hover/util:scale-105" style={{ color: active ? 'var(--sidebar-active-text)' : 'var(--text-muted)', lineHeight: 0 }}>
+        <span className="inline-flex items-center justify-center" style={{ color: active ? 'var(--sidebar-active-text)' : 'var(--text-muted)', lineHeight: 0 }}>
           {icon}
         </span>
       </button>

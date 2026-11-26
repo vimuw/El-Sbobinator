@@ -51,6 +51,12 @@ describe('AudioPlayer', () => {
     render(<AudioPlayer src="/audio/test.mp3" />);
     expect(screen.getByRole('button', { name: 'Indietro di 10 secondi' }).title).toBe('Indietro di 10 secondi');
     expect(screen.getByRole('button', { name: 'Avanti di 10 secondi' }).title).toBe('Avanti di 10 secondi');
+    // index.css turns these arrows the way they jump, by the player-control class and lucide's.
+    for (const [name, icon] of [['Indietro di 10 secondi', 'lucide-rotate-ccw'], ['Avanti di 10 secondi', 'lucide-rotate-cw']]) {
+      const button = screen.getByRole('button', { name });
+      expect(button.classList.contains('player-control')).toBe(true);
+      expect(button.querySelector(`svg.${icon}`)).not.toBeNull();
+    }
   });
 
   it('leaves restart to the scrubber: no back-to-start control on desktop or phone', () => {

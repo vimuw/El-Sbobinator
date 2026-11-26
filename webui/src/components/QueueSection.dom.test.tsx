@@ -128,7 +128,10 @@ describe('QueueSection', () => {
 
   it('shows start button when idle with canStart', () => {
     render(<QueueSection {...makeProps({ pendingFiles: [makeFile()] })} />);
-    expect(screen.getByText(/Avvia sbobinatura/)).toBeTruthy();
+    const start = screen.getByRole('button', { name: /Avvia sbobinatura/ });
+    // Its Play steps forward on hover (index.css, .queue-start-button .lucide-play).
+    expect(start.classList.contains('queue-start-button')).toBe(true);
+    expect(start.querySelector('svg.lucide-play')).not.toBeNull();
   });
 
   it('calls onStart when start button is clicked', () => {
@@ -273,7 +276,9 @@ describe('QueueSection', () => {
 
   it('shows Svuota coda button when idle and files present', () => {
     render(<QueueSection {...makeProps({ pendingFiles: [makeFile()] })} />);
-    expect(screen.getByRole('button', { name: 'Svuota coda' })).toBeTruthy();
+    const clear = screen.getByRole('button', { name: 'Svuota coda' });
+    // Like every delete, its bin lifts the lid on hover (index.css, svg.lucide-trash-2).
+    expect(clear.querySelector('svg.lucide-trash-2')).not.toBeNull();
   });
 
   it('places Svuota coda in the section header, like Pulisci tutto in Recenti', () => {
@@ -392,6 +397,10 @@ describe('QueueSection', () => {
     );
     const resumeBtn = screen.getByText(/Riprendi elaborazione/);
     expect(resumeBtn).toBeTruthy();
+    // Its arrow winds back half a turn on hover (index.css, .queue-start-button .lucide-rotate-ccw).
+    const resumeButton = screen.getByRole('button', { name: /Riprendi elaborazione/ });
+    expect(resumeButton.classList.contains('queue-start-button')).toBe(true);
+    expect(resumeButton.querySelector('svg.lucide-rotate-ccw')).not.toBeNull();
     fireEvent.click(resumeBtn);
     expect(onResumeAll).toHaveBeenCalledTimes(1);
   });
