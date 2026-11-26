@@ -23,6 +23,39 @@ export const fadeUp = {
   exit: { opacity: 0, transition: exitTransition },
 };
 
+// A panel that opens downward at the foot of the page (the console): it fades in while its slot
+// grows, and on leaving it folds back up, its height closing from the bottom as it fades, instead
+// of vanishing in place. It folds to the height of what takes its place, given as the presence's
+// `custom` (0 when nothing does), so that comes back with a fade alone and closing lasts as long
+// as opening. Fold and fade end together, on the opening's curve, as the logs expand and collapse
+// on one: it moves from the first frame and settles. On an ease-in-out it stood still for about
+// 100 ms after the click, then collapsed in a few frames. The element must clip its content for
+// the fold to show.
+// Brought back mid-fold, the same element re-enters: `open` names its height so it returns to
+// `auto` and grows with its content, rather than to the px read as the fold began.
+export const unfold = {
+  initial: 'hidden',
+  animate: 'open',
+  exit: 'folded',
+  variants: {
+    hidden: { opacity: 0, y: 4 },
+    open: { opacity: 1, y: 0, height: 'auto', transition: enterTransition() },
+    folded: (foldTo: number = 0) => ({
+      opacity: 0,
+      height: foldTo,
+      transition: enterTransition(DURATION.slow),
+    }),
+  },
+};
+
+// What a closing panel gives way to: it was the first to leave on opening, so it fades as briefly
+// on the way back.
+export const quickFade = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1, transition: enterTransition(DURATION.fast) },
+  exit: { opacity: 0, transition: exitTransition },
+};
+
 // Children of a stagger container reveal one after another without moving.
 export const STAGGER_STEP = 0.04;
 

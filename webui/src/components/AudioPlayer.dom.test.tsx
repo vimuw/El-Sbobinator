@@ -15,10 +15,48 @@ describe('AudioPlayer', () => {
     expect(screen.getByLabelText('Avvia riproduzione')).toBeTruthy();
   });
 
+  it('pops the play/pause icon in only when it swaps, not when the player first shows', () => {
+    render(<AudioPlayer src="/audio/test.mp3" />);
+    const play = screen.getByRole('button', { name: 'Avvia riproduzione' });
+    expect(play.querySelector('svg.lucide-play')!.classList.contains('icon-swap-in')).toBe(false);
+
+    fireEvent.click(play);
+    const pause = screen.getByRole('button', { name: 'Metti in pausa' }).querySelector('svg')!;
+    expect(pause.classList.contains('lucide-pause')).toBe(true);
+    expect(pause.classList.contains('icon-swap-in')).toBe(true);
+  });
+
+  it('keeps the play/pause icon still when the player folds and unfolds after a swap', () => {
+    vi.useFakeTimers();
+    try {
+      render(<AudioPlayer src="/audio/test.mp3" />);
+      fireEvent.click(screen.getByRole('button', { name: 'Avvia riproduzione' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Riduci il player a icona' }));
+      act(() => { vi.advanceTimersByTime(280); });
+
+      // The pill shows the state it folded with: nothing swapped while it was on screen.
+      const pill = screen.getByRole('button', { name: /Mostra il player audio \(in riproduzione/ });
+      expect(pill.querySelector('svg.lucide-audio-lines')!.classList.contains('icon-swap-in')).toBe(false);
+
+      fireEvent.click(pill);
+      const pause = screen.getByRole('button', { name: 'Metti in pausa' }).querySelector('svg')!;
+      expect(pause.classList.contains('lucide-pause')).toBe(true);
+      expect(pause.classList.contains('icon-swap-in')).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('renders skip-back and skip-forward buttons', () => {
     render(<AudioPlayer src="/audio/test.mp3" />);
     expect(screen.getByRole('button', { name: 'Indietro di 10 secondi' }).title).toBe('Indietro di 10 secondi');
     expect(screen.getByRole('button', { name: 'Avanti di 10 secondi' }).title).toBe('Avanti di 10 secondi');
+    // index.css turns these arrows the way they jump, by the player-control class and lucide's.
+    for (const [name, icon] of [['Indietro di 10 secondi', 'lucide-rotate-ccw'], ['Avanti di 10 secondi', 'lucide-rotate-cw']]) {
+      const button = screen.getByRole('button', { name });
+      expect(button.classList.contains('player-control')).toBe(true);
+      expect(button.querySelector(`svg.${icon}`)).not.toBeNull();
+    }
   });
 
   it('leaves restart to the scrubber: no back-to-start control on desktop or phone', () => {

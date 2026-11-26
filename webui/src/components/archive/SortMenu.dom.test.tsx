@@ -9,8 +9,13 @@ describe('SortMenu component', () => {
 
     const button = screen.getByRole('button', { name: 'Cambia ordinamento' });
     expect(screen.queryByText('Create di recente')).toBeNull();
+    // index.css parts the two arrows on hover and while the menu is open.
+    expect(button.classList.contains('sort-menu-button')).toBe(true);
+    expect(button.querySelector('svg.lucide-arrow-up-down')).not.toBeNull();
+    expect(button.classList.contains('is-open')).toBe(false);
 
     fireEvent.click(button);
+    expect(button.classList.contains('is-open')).toBe(true);
     expect(Array.from(document.querySelectorAll('.kebab-item'), item => item.textContent?.trim())).toEqual([
       'Create di recente',
       'Aperte di recente',

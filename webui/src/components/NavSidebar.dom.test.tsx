@@ -9,7 +9,11 @@ afterEach(() => {
 });
 
 function renderSidebar(overrides: Partial<Parameters<typeof NavSidebar>[0]> = {}) {
-  const props = {
+  return render(<NavSidebar {...sidebarProps(overrides)} />);
+}
+
+function sidebarProps(overrides: Partial<Parameters<typeof NavSidebar>[0]> = {}) {
+  return {
     activePage: 'queue' as const,
     setActivePage: vi.fn(),
     apiReady: true,
@@ -26,7 +30,6 @@ function renderSidebar(overrides: Partial<Parameters<typeof NavSidebar>[0]> = {}
     shakeBell: false,
     ...overrides,
   };
-  return render(<NavSidebar {...props} />);
 }
 
 describe('NavSidebar badges', () => {
@@ -76,6 +79,50 @@ describe('NavSidebar footer', () => {
     renderSidebar();
     expect(screen.getByRole('button', { name: 'Tema scuro' }).classList.contains('theme-toggle-btn')).toBe(true);
     expect(screen.getByRole('button', { name: 'Apri notifiche' }).classList.contains('theme-toggle-btn')).toBe(false);
+  });
+
+  it('animates the theme icon in only after a switch, not when the sidebar first shows', () => {
+    const { rerender } = renderSidebar();
+    const first = screen.getByRole('button', { name: 'Tema scuro' }).querySelector('svg')!;
+    expect(first.classList.contains('lucide-moon')).toBe(true);
+    expect(first.classList.contains('is-entering')).toBe(false);
+
+    // Any other re-render leaves the icon on screen as it is.
+    rerender(<NavSidebar {...sidebarProps({ unreadNotificationsCount: 1 })} />);
+    expect(screen.getByRole('button', { name: 'Tema scuro' }).querySelector('svg')!.classList.contains('is-entering')).toBe(false);
+
+    rerender(<NavSidebar {...sidebarProps({ themeMode: 'dark' })} />);
+    const swapped = screen.getByRole('button', { name: 'Tema chiaro' }).querySelector('svg')!;
+    expect(swapped.classList.contains('lucide-sun')).toBe(true);
+    expect(swapped.classList.contains('is-entering')).toBe(true);
+  });
+
+  it('keeps the lucide classes the hover animations in index.css select', () => {
+    renderSidebar();
+    const cases = [
+      ['Dashboard', 'lucide-layers'],
+      ['Archivio', 'lucide-archive'],
+      ['Apri notifiche', 'lucide-bell'],
+      ['Segnala un problema', 'lucide-message-square-warning'],
+      ['Apri impostazioni', 'lucide-settings'],
+    ] as const;
+    for (const [button, iconClass] of cases) {
+      const sidebarButton = screen.getByRole('button', { name: button });
+      expect(sidebarButton.classList.contains('sidebar-nav-item')).toBe(true);
+      expect(sidebarButton.querySelector(`svg.${iconClass}`)).not.toBeNull();
+    }
+  });
+
+  it('never grows an icon on hover, so the hover animations play at its own pixel size', () => {
+    renderSidebar({ appState: 'processing', unreadNotificationsCount: 2 });
+    const buttons = Array.from(document.querySelectorAll('.sidebar-nav-item'));
+    expect(buttons.length).toBeGreaterThanOrEqual(6);
+    for (const button of buttons) {
+      const scaled = [button, ...Array.from(button.querySelectorAll('*'))]
+        .flatMap((el) => Array.from(el.classList))
+        .filter((token) => /(^|:)scale-/.test(token));
+      expect(scaled, button.getAttribute('aria-label') ?? '').toEqual([]);
+    }
   });
 
   it('shows nothing about the Gemini key while it is ready, nor during the short wait for the host', () => {

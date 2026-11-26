@@ -264,6 +264,12 @@ describe('EditorFullPage autosave', () => {
     const docxBtn = screen.getByRole('button', { name: 'Scarica .docx' });
     expect(docxBtn.classList.contains('settings-pill-button')).toBe(true);
     expect(docxBtn.classList.contains('icon-button')).toBe(false);
+    // The hover nudges of index.css: the download arrow drops, the back arrow slides left.
+    expect(docxBtn.classList.contains('editor-fullpage-docx')).toBe(true);
+    expect(docxBtn.querySelector('svg.lucide-download')).not.toBeNull();
+    const backBtn = screen.getByRole('button', { name: 'Torna indietro' });
+    expect(backBtn.classList.contains('editor-fullpage-back')).toBe(true);
+    expect(backBtn.querySelector('svg.lucide-arrow-left')).not.toBeNull();
     expect(copyBtn.classList.contains('settings-pill-button')).toBe(false);
     expect(copyBtn.classList.contains('editor-fullpage-copy')).toBe(true);
     expect(themeBtn.classList.contains('icon-button')).toBe(true);
@@ -343,6 +349,10 @@ describe('EditorFullPage autosave', () => {
       expect(copied.querySelector('ul ul li')?.textContent).toBe('due');
       expect(await item.data['text/plain'].text()).toContain('Testo importante');
       await waitFor(() => expect(screen.getByRole('button', { name: 'Copia documento' }).textContent).toContain('Copiato!'));
+      // The tick that draws itself in index.css (.editor-fullpage-copy.is-copied .lucide-check).
+      const copiedBtn = screen.getByRole('button', { name: 'Copia documento' });
+      expect(copiedBtn.classList.contains('is-copied')).toBe(true);
+      expect(copiedBtn.querySelector('svg.lucide-check')).not.toBeNull();
       // Without images the copy is complete: no pointer to the .docx.
       expect(screen.queryByTestId('editor-export-notice')).toBeNull();
     } finally {

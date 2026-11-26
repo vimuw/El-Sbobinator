@@ -203,7 +203,8 @@ export function NotificationDropdown({
                 )}
               </div>
 
-              <div className="flex items-center gap-1">
+              {/* Held at the buttons' height, so the header keeps its size once they go. */}
+              <div data-testid="notification-header-actions" className="flex items-center gap-1 min-h-[var(--icon-button-xs)]">
                 {unreadCount > 0 && (
                   <button
                     type="button"

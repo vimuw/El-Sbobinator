@@ -5,18 +5,54 @@
 @import "./theme.css";
 
 /* ── Theme Mode Toggle Button Animation ─────────── */
-/* Same in the editor header and the sidebar. `button.` outweighs the later `.sidebar-nav-item svg`
-   rules, which would otherwise drop the rotation there. */
-button.theme-toggle-btn svg {
+/* Same in the editor header and the sidebar (ThemeToggleIcon). `button.` outweighs the later
+   `.sidebar-nav-item svg` rules. After a tap the new icon comes in: the sun opens its rays from
+   the middle, the moon swings in from the right. Hover turns the rays one step (8 rays, 45deg, so
+   they land where they started) or tilts the moon. `backwards` only: a filled animation would
+   hold the transform and switch off the hover. */
+button.theme-toggle-btn svg,
+button.theme-toggle-btn svg.lucide-sun > * {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
   transition: transform var(--duration-slow) var(--ease-spring-soft), color var(--duration-base) var(--ease-out);
 }
 
-button.theme-toggle-btn:hover svg {
-  transform: rotate(18deg) scale(1.05);
+button.theme-toggle-btn svg.lucide-moon.is-entering {
+  animation: theme-moon-in 460ms var(--ease-spring-soft) backwards;
 }
 
-button.theme-toggle-btn:active svg {
-  transform: rotate(-25deg) scale(0.92);
+button.theme-toggle-btn svg.lucide-sun.is-entering circle {
+  animation: theme-sun-core-in 380ms var(--ease-spring-soft) backwards;
+}
+
+button.theme-toggle-btn svg.lucide-sun.is-entering path {
+  animation: theme-sun-rays-in 460ms var(--ease-spring-soft) 60ms backwards;
+}
+
+@keyframes theme-moon-in {
+  from { transform: rotate(70deg) scale(0.55); opacity: 0; }
+}
+
+@keyframes theme-sun-core-in {
+  from { transform: scale(0.4); opacity: 0; }
+}
+
+@keyframes theme-sun-rays-in {
+  from { transform: rotate(-45deg) scale(0.5); opacity: 0; }
+}
+
+@media (hover: hover) {
+  button.theme-toggle-btn:hover svg.lucide-sun path {
+    transform: rotate(45deg);
+  }
+
+  button.theme-toggle-btn:hover svg.lucide-sun circle {
+    transform: scale(0.9);
+  }
+
+  button.theme-toggle-btn:hover svg.lucide-moon {
+    transform: rotate(-16deg);
+  }
 }
 
 /* ── Theme Mode Transition for UI Shell & Surfaces ─── */
@@ -392,9 +428,11 @@ button {
   background: transparent;
 }
 
-/* A bare number is a circle, not a stretched pill: as wide as it is tall up to two digits. */
+/* A bare number is a circle, not a stretched pill: as wide as it is tall up to two digits.
+   Proportional figures: Manrope's tabular "1" leaves a wide gap on its right that pushes the number off center. */
 :root .status-pill.is-quiet.is-count {
   justify-content: center;
+  font-variant-numeric: normal;
   box-sizing: border-box;
   min-width: 1.5rem;
   height: 1.5rem;
@@ -2250,6 +2288,13 @@ button {
   scrollbar-color: var(--border-strong) transparent;
 }
 
+/* The collapsed tail and the scrolling logs keep the same room for a scrollbar, used or not, so
+   their lines wrap alike and stay put when one gives way to the other. */
+.console-lines {
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
+}
+
 .app-scroll {
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
@@ -3892,12 +3937,228 @@ input::-webkit-contacts-auto-fill-button {
   transform: scale(0.96);
 }
 
-.sidebar-nav-item svg {
-  transition: transform var(--duration-base) var(--ease-spring-soft);
+/* Each sidebar icon moves a part of itself on hover, once, and settles back when the pointer
+   leaves: the top layer lifts off the stack, the archive opens its lid, the bell swings, the
+   warning mark hops, the cloud floats, the gear turns one tooth (6 lobes, 60deg, so it lands on
+   the same pixels). Only translations and whole-step turns, which stay sharp at 18-20px. The
+   selectors follow lucide's own classes; NavSidebar.dom.test.tsx checks they are still there.
+   Touch screens skip it: a tap would leave the hover state stuck. */
+.sidebar-nav-item svg,
+.sidebar-nav-item svg > * {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  transition: transform var(--duration-slow) var(--ease-spring-soft);
 }
 
-.sidebar-nav-item:hover svg {
-  transform: scale(1.05);
+@media (hover: hover) {
+  .sidebar-nav-item:hover .lucide-layers > :first-child {
+    transform: translateY(-2px);
+  }
+
+  .sidebar-nav-item:hover .lucide-layers > :last-child {
+    transform: translateY(1px);
+  }
+
+  .sidebar-nav-item:hover .lucide-archive > rect {
+    transform: translateY(-2px);
+  }
+
+  .sidebar-nav-item:hover .lucide-bell {
+    transform-origin: 50% 8%;
+    animation: sidebar-bell-swing 620ms var(--ease-out);
+  }
+
+  .sidebar-nav-item:hover .lucide-bell > :first-child {
+    animation: sidebar-bell-clapper 620ms var(--ease-out);
+  }
+
+  /* The bubble tilts on its tail while the "!" pulses in place: the mark never leaves the
+     bubble's middle, so it cannot touch the top edge the way the old upward hop did. */
+  .sidebar-nav-item:hover .lucide-message-square-warning {
+    transform-origin: 12% 88%;
+    animation: sidebar-warning-tilt 560ms var(--ease-out);
+  }
+
+  .sidebar-nav-item:hover .lucide-message-square-warning > :not(:first-child) {
+    transform-origin: 12px 11px;
+    animation: sidebar-warning-pulse 560ms var(--ease-out);
+  }
+
+  .sidebar-nav-item:hover .sidebar-drive-cloud svg {
+    transform: translateY(-1.5px);
+  }
+
+  .sidebar-nav-item:hover .lucide-settings > path {
+    transform: rotate(60deg);
+  }
+}
+
+@keyframes sidebar-bell-swing {
+  0%, 100% { transform: rotate(0); }
+  20% { transform: rotate(14deg); }
+  45% { transform: rotate(-10deg); }
+  70% { transform: rotate(5deg); }
+  88% { transform: rotate(-2deg); }
+}
+
+@keyframes sidebar-bell-clapper {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-1.5px); }
+  50% { transform: translateX(1.5px); }
+  75% { transform: translateX(-0.5px); }
+}
+
+@keyframes sidebar-warning-tilt {
+  0%, 100% { transform: rotate(0); }
+  30% { transform: rotate(-7deg); }
+  60% { transform: rotate(3deg); }
+  82% { transform: rotate(-1deg); }
+}
+
+@keyframes sidebar-warning-pulse {
+  0%, 100% { transform: scale(1); }
+  35% { transform: scale(1.14); }
+  65% { transform: scale(0.94); }
+}
+
+/* ── Icon micro-animations outside the sidebar ─────────── */
+/* Same rules as the sidebar's: a part of the icon moves on hover, only straight shifts or a
+   short turn, never on touch screens. Selectors follow lucide's classes; the DOM tests of the
+   editor, the player, the queue, the sort menu and the trash buttons check they are still there. */
+.editor-fullpage-back svg,
+.editor-fullpage-docx svg > *,
+.completed-open-button svg,
+.queue-text-button svg,
+.player-control svg.lucide-rotate-ccw,
+.player-control svg.lucide-rotate-cw,
+svg.lucide-trash-2 > * {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  transition: transform var(--duration-slow) var(--ease-spring-soft);
+}
+
+@media (hover: hover) {
+  /* Directions: back slides left, download drops into the tray, open goes where it points. */
+  .editor-fullpage-back:hover svg {
+    transform: translateX(-2px);
+  }
+
+  .editor-fullpage-docx:hover:not(:disabled) .lucide-download > :not(:nth-child(2)) {
+    transform: translateY(2px);
+  }
+
+  .completed-open-button:hover svg {
+    transform: translate(1.5px, -1.5px);
+  }
+
+  .queue-text-button:hover .lucide-arrow-right {
+    transform: translateX(2px);
+  }
+
+  /* The player's 10-second jumps turn the way they jump; the "10" inside stays still. */
+  .player-control:hover .lucide-rotate-ccw {
+    transform: rotate(-25deg);
+  }
+
+  .player-control:hover .lucide-rotate-cw {
+    transform: rotate(25deg);
+  }
+
+  /* Every delete: the bin lifts its lid (the rim and the handle), wherever it is. */
+  :is(button, [role="menuitem"]):hover:not(:disabled) svg.lucide-trash-2 > :nth-child(n + 4) {
+    transform: translateY(-2px);
+  }
+}
+
+.player-control:active .lucide-rotate-ccw {
+  transform: rotate(-70deg);
+}
+
+.player-control:active .lucide-rotate-cw {
+  transform: rotate(70deg);
+}
+
+/* The queue's start pill: Play steps forward, "Riprendi" winds back half a turn like the cards'
+   own Riprova (QueueFileCard, -rotate-180), on the shared slow beat without a spring. */
+.queue-start-button svg {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  transition: transform var(--duration-slow) var(--ease-spring-soft);
+}
+
+.queue-start-button svg.lucide-rotate-ccw {
+  transition: transform var(--duration-slow) var(--ease-out);
+}
+
+/* The archive's sort button: the two arrows part, the up one up and the down one down, on hover
+   and while its menu is open. */
+.sort-menu-button svg {
+  opacity: 0.8;
+  transition: opacity var(--duration-base) var(--ease-out);
+}
+
+.sort-menu-button svg > * {
+  transform-box: view-box;
+  transition: transform var(--duration-slow) var(--ease-spring-soft);
+}
+
+.sort-menu-button.is-open svg {
+  opacity: 1;
+}
+
+.sort-menu-button.is-open .lucide-arrow-up-down > :nth-child(-n + 2) {
+  transform: translateY(1.5px);
+}
+
+.sort-menu-button.is-open .lucide-arrow-up-down > :nth-child(n + 3) {
+  transform: translateY(-1.5px);
+}
+
+@media (hover: hover) {
+  .queue-start-button:hover:not(:disabled) .lucide-play {
+    transform: translateX(1.5px);
+  }
+
+  .queue-start-button:hover:not(:disabled) .lucide-rotate-ccw {
+    transform: rotate(-180deg);
+  }
+
+  .sort-menu-button:hover svg {
+    opacity: 1;
+  }
+
+  .sort-menu-button:hover .lucide-arrow-up-down > :nth-child(-n + 2) {
+    transform: translateY(1.5px);
+  }
+
+  .sort-menu-button:hover .lucide-arrow-up-down > :nth-child(n + 3) {
+    transform: translateY(-1.5px);
+  }
+}
+
+/* An icon that swaps on a state (play/pause, the player pill) pops in; the component adds the
+   class only after the state first changes (useChangedSinceMount). `backwards` only, so the
+   hover transforms above keep working once it has played. */
+.icon-swap-in {
+  animation: icon-swap-in 240ms var(--ease-spring-soft) backwards;
+}
+
+@keyframes icon-swap-in {
+  from { transform: scale(0.5); opacity: 0; }
+}
+
+/* A tick that appears as a confirmation (copied, saved) draws itself from its short stroke.
+   The path is about 22.6 units long; a negative offset reveals it from its end, the left. */
+.editor-fullpage-copy.is-copied .lucide-check path,
+.editor-copied-toast .lucide-check path,
+.editor-autosave-badge .lucide-check path {
+  stroke-dasharray: 23 23;
+  animation: icon-check-draw 360ms var(--ease-out) backwards;
+}
+
+@keyframes icon-check-draw {
+  from { stroke-dashoffset: -23; }
+  to { stroke-dashoffset: 0; }
 }
 
 /* A status dot on a sidebar icon: one size, one border, and a halo on the shared beat. */
@@ -4282,6 +4543,34 @@ input::-webkit-contacts-auto-fill-button {
 :root[data-theme="dark"] .archive-session-card.is-warning:not(.is-selected) {
   background: var(--card-queued-bg);
   border-color: var(--warning-ring);
+}
+
+/* A card that opens on click says so: the surface tints on hover and the sheet icon brightens. The
+   plain :hover border above loses to the dark-theme rule, so in dark nothing but a 5% icon scale
+   moved. A warning card keeps its amber border and icon. `svg.` ties the older lucide-file-text
+   scale rule and, coming after it, wins the transition, so the colour eases too. */
+.archive-session-card:not(.is-selected):hover,
+:root:not([data-theme="dark"]) .archive-session-card:not(.is-selected):hover,
+:root[data-theme="dark"] .archive-session-card:not(.is-selected):hover {
+  background: color-mix(in srgb, var(--text-primary) 4%, var(--card-queued-bg));
+}
+
+:root[data-theme="dark"] .archive-session-card:not(.is-selected, .is-warning):hover {
+  border-color: var(--border-strong);
+}
+
+.archive-session-card svg.session-card-icon {
+  color: var(--text-muted);
+  transition: color var(--duration-state) var(--ease-out), transform var(--duration-base) var(--ease-spring-soft);
+}
+
+.archive-session-card:hover .session-card-icon,
+.archive-session-card:focus-visible .session-card-icon {
+  color: var(--text-secondary);
+}
+
+.archive-session-card .session-card-icon.is-warning {
+  color: var(--warning-text);
 }
 
 /* ═══ SEARCH & FILTER CONTROLS ═══ */
@@ -6033,6 +6322,35 @@ input::-webkit-contacts-auto-fill-button {
   display: flex;
   justify-content: center;
   margin-top: 8px;
+}
+
+.console-toggle-row.is-under-progress {
+  margin-top: 20px;
+}
+
+/* On hover the terminal icon waits for input: its prompt steps forward and its cursor blinks
+   twice. Like the other icon animations, only a straight shift, and touch screens skip it. Lucide's
+   terminal draws the cursor first and the prompt second; ConsoleToggle.dom.test.tsx checks the
+   class is still there. */
+.console-toggle svg > * {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  transition: transform var(--duration-slow) var(--ease-spring-soft);
+}
+
+@media (hover: hover) {
+  .console-toggle:hover .lucide-terminal > :last-child {
+    transform: translateX(1.5px);
+  }
+
+  .console-toggle:hover .lucide-terminal > :first-child {
+    animation: console-cursor-blink 960ms steps(1, end);
+  }
+}
+
+@keyframes console-cursor-blink {
+  0%, 50%, 100% { opacity: 1; }
+  25%, 75% { opacity: 0; }
 }
 
 /* KaTeX Math Node */

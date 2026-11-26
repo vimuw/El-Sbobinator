@@ -100,7 +100,12 @@ export function SortableFolderCard({
       {...listeners}
       onKeyDown={event => {
         if (event.target !== event.currentTarget) return;
-        if (event.key === 'Enter') { event.preventDefault(); onNavigate(); }
+        if (event.key === 'Enter') {
+          // dnd-kit drops a keyboard drag on this same Enter from its document listener.
+          if (isDragging) return;
+          event.preventDefault();
+          onNavigate();
+        }
         else listeners?.onKeyDown?.(event);
       }}
     >

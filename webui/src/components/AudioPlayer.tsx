@@ -8,6 +8,7 @@ import { usePhoneLayout } from '../hooks/usePhoneLayout';
 import { usePopoverPresence } from '../hooks/usePopoverPresence';
 import { formatSize } from '../utils';
 import { PlayerPillRing } from './PlayerPillRing';
+import { useChangedSinceMount } from '../hooks/useChangedSinceMount';
 
 /** Web: whether this browser keeps a copy of the lecture for the sbobina (otherwise it is picked each time). */
 export interface AudioKeepControl {
@@ -86,6 +87,21 @@ const restoredPosition = (time?: number, duration?: number) => {
   const length = duration !== undefined && Number.isFinite(duration) && duration > 0 ? duration : 0;
   return { time: length > 0 ? Math.min(Math.max(time ?? 0, 0), length) : 0, duration: length };
 };
+
+/**
+ * The play/pause icon of one view: the folded pill or the full player's button. Play and pause swap
+ * with a short pop (index.css, .icon-swap-in) only when the state changes while this view is on
+ * screen, so folding, unfolding or a phone/desktop layout change shows the icon still.
+ */
+function PlayStateIcon({ isPlaying, variant }: { isPlaying: boolean; variant: 'pill' | 'button' }) {
+  const swap = useChangedSinceMount(isPlaying) ? ' icon-swap-in' : '';
+  if (variant === 'pill') {
+    return isPlaying ? <AudioLines className={`h-4 w-4${swap}`} /> : <Play className={`h-4 w-4 fill-current${swap}`} />;
+  }
+  return isPlaying
+    ? <Pause className={`h-4 w-4${swap}`} strokeWidth={2.2} />
+    : <Play className={`h-4 w-4 fill-current${swap}`} strokeWidth={2.2} />;
+}
 
 export function AudioPlayer({ src, initialTime, initialDuration, initialPlaybackRate, initialVolume, onStateChange, onRelink, onRemoveAudio, keep }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -527,7 +543,7 @@ export function AudioPlayer({ src, initialTime, initialDuration, initialPlayback
           title="Mostra il player (trascinalo per spostarlo)"
         >
           <PlayerPillRing progress={progress} />
-          {isPlaying ? <AudioLines className="h-4 w-4" /> : <Play className="h-4 w-4 fill-current" />}
+          <PlayStateIcon isPlaying={isPlaying} variant="pill" />
         </button>
         {confirmRemoveModal}
       </div>
@@ -688,7 +704,7 @@ export function AudioPlayer({ src, initialTime, initialDuration, initialPlayback
       aria-label={isPlaying ? 'Metti in pausa' : 'Avvia riproduzione'}
       title={isPlaying ? 'Metti in pausa (F4)' : 'Avvia riproduzione (F4)'}
     >
-      {isPlaying ? <Pause className="h-4 w-4" strokeWidth={2.2} /> : <Play className="h-4 w-4 fill-current" strokeWidth={2.2} />}
+      <PlayStateIcon isPlaying={isPlaying} variant="button" />
     </button>
   );
   const backButton = (

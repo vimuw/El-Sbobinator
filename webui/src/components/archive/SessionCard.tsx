@@ -185,9 +185,19 @@ export function DraggableSessionCard({
     },
   ];
 
+  const open = () => onPreview(session.html_path, session.name, session.input_path, undefined, session.session_dir);
+
   return (
     <div
-      onClick={() => onPreview(session.html_path, session.name, session.input_path, undefined, session.session_dir)}
+      role="link"
+      tabIndex={0}
+      aria-label={session.name}
+      onClick={open}
+      onKeyDown={event => {
+        if (event.target !== event.currentTarget || event.key !== 'Enter') return;
+        event.preventDefault();
+        open();
+      }}
       className={`archive-session-card flex items-center justify-between gap-3 px-4 py-3 cursor-pointer group/card ${selected ? 'is-selected' : ''} ${hasRevisionWarnings && !selected ? 'is-warning' : ''}`.trim()}
       style={{
         ...(hasRevisionWarnings && !selected ? { borderColor: 'var(--warning-ring)' } : {}),
@@ -212,7 +222,7 @@ export function DraggableSessionCard({
             {selected && <Check className="w-3 h-3 stroke-[3]" />}
           </button>
         )}
-        <FileText className="w-4 h-4 shrink-0 transition-transform duration-200 group-hover/card:scale-105" style={{ color: hasRevisionWarnings ? 'var(--warning-text)' : 'var(--text-muted)' }} />
+        <FileText className={`session-card-icon w-4 h-4 shrink-0${hasRevisionWarnings ? ' is-warning' : ''}`} aria-hidden="true" />
 
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold truncate tracking-tight text-[var(--text-primary)]"><MiddleTruncate text={session.name} /></p>
@@ -366,6 +376,8 @@ export function SortableSessionCard({
     }
   };
 
+  const open = () => onPreview(session.html_path, session.name, session.input_path, undefined, session.session_dir);
+
   const kebabItems: KebabMenuItem[] = [
     ...(onRenameSession ? [{ label: 'Rinomina', icon: <Pencil className="w-3.5 h-3.5" />, onClick: () => onRenameSession(session) }] : []),
     ...(onMove ? [{ label: 'Sposta in…', icon: <Folder className="w-3.5 h-3.5" />, onClick: onMove }] : []),
@@ -389,7 +401,18 @@ export function SortableSessionCard({
       ref={setNodeRef}
       {...attributes}
       {...(!disabled ? listeners : {})}
-      onClick={() => onPreview(session.html_path, session.name, session.input_path, undefined, session.session_dir)}
+      onClick={open}
+      // Enter opens the sbobina, as on a folder card; Space still picks the card up to reorder it.
+      // Mid-drag, Enter is the drop: dnd-kit handles it from the document, so the card stays shut.
+      onKeyDown={event => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key === 'Enter') {
+          if (isDragging) return;
+          event.preventDefault();
+          open();
+        }
+        else if (!disabled) listeners?.onKeyDown?.(event);
+      }}
       className={`archive-session-card flex items-center justify-between gap-3 px-4 py-3 group/card ${selected ? 'is-selected' : ''} ${hasRevisionWarnings && !selected ? 'is-warning' : ''}`.trim()}
       style={{
         transform: CSS.Transform.toString(transform),
@@ -420,7 +443,7 @@ export function SortableSessionCard({
           </button>
         )}
         <div className="relative flex items-center justify-center shrink-0">
-          <FileText className="w-4 h-4 transition-transform duration-200 group-hover/card:scale-105" style={{ color: hasRevisionWarnings ? 'var(--warning-text)' : 'var(--text-muted)' }} />
+          <FileText className={`session-card-icon w-4 h-4${hasRevisionWarnings ? ' is-warning' : ''}`} aria-hidden="true" />
           <span
             className="folder-color-dot absolute -bottom-0.5 -right-1"
             style={{

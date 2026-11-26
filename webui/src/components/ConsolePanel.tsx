@@ -1,8 +1,28 @@
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { animate } from 'motion/react';
 import { Check, ChevronDown, Copy, X } from 'lucide-react';
 import type { AppStatus } from '../appState';
+import { DURATION, enterTransition } from '../motion';
 
 const COLLAPSED_LINES = 3;
+
+// The height the tail will have, read from the scrolling logs: their last few lines and the same
+// padding, in fractional pixels so the hand-over lands on the tail exactly. With no lines the
+// tail shows the last message instead, last measured at `fallback`; a panel that opened expanded
+// never measured it (0), so it is taken as one line of the logs' text.
+function tailHeight(logs: HTMLElement, fallback: number) {
+  const lines = logs.children;
+  const { paddingTop, paddingBottom, lineHeight, fontSize } = getComputedStyle(logs);
+  const padding = parseFloat(paddingTop) + parseFloat(paddingBottom);
+  if (lines.length === 0) {
+    if (fallback > 0) return fallback;
+    const line = parseFloat(lineHeight);
+    return padding + (Number.isFinite(line) ? line : parseFloat(fontSize) * 1.2);
+  }
+  const first = lines[Math.max(0, lines.length - COLLAPSED_LINES)].getBoundingClientRect();
+  const last = lines[lines.length - 1].getBoundingClientRect();
+  return padding + (last.bottom - first.top);
+}
 
 type LogTone = 'error' | 'warning' | 'success' | 'normal';
 
@@ -69,6 +89,56 @@ export const ConsolePanel = memo(function ConsolePanel({
     if (el) el.scrollTop = el.scrollHeight;
   }, [consoleLogs, isConsoleExpanded]);
 
+  // Expanding and collapsing ease one box, the scrolling logs, held at their last line: they
+  // start (or end) at the height of the tail, where they show what the tail shows in the same
+  // place, so the swap with the tail cannot be seen and the text never jumps. The logs stay
+  // mounted while they ease back, and give way to the tail once they have reached it.
+  const [scrollShown, setScrollShown] = useState(isConsoleExpanded);
+  if (isConsoleExpanded && !scrollShown) setScrollShown(true);
+  const tailRef = useRef<HTMLDivElement>(null);
+  const tailHeightRef = useRef(0);
+  useLayoutEffect(() => {
+    if (tailRef.current) tailHeightRef.current = tailRef.current.getBoundingClientRect().height;
+  });
+  const easedExpandedRef = useRef(isConsoleExpanded);
+  const easingRef = useRef<ReturnType<typeof animate> | null>(null);
+  useLayoutEffect(() => {
+    if (easedExpandedRef.current === isConsoleExpanded) return;
+    easedExpandedRef.current = isConsoleExpanded;
+    const el = consoleScrollRef.current;
+    if (!el) return;
+    easingRef.current?.stop();
+    // Mid-ease it carries on from where it is; at rest the logs are as tall as their class says.
+    const current = el.style.height ? el.getBoundingClientRect().height : null;
+    el.style.height = '';
+    const expandedHeight = el.getBoundingClientRect().height;
+    const from = current ?? (isConsoleExpanded ? tailHeightRef.current : expandedHeight);
+    const to = isConsoleExpanded ? expandedHeight : tailHeight(el, tailHeightRef.current);
+    const holdAt = (height: number) => {
+      el.style.height = `${height}px`;
+      el.scrollTop = el.scrollHeight;
+    };
+    el.style.overflowY = 'hidden';
+    holdAt(from);
+    const easing = animate(from, to, { ...enterTransition(DURATION.slow), onUpdate: holdAt });
+    easingRef.current = easing;
+    void easing.finished.then(() => {
+      if (easingRef.current !== easing) return;
+      easingRef.current = null;
+      // Collapsed, the logs stay held at the tail's height until the tail replaces them: let go
+      // first, they were back at full height for the frame before React swapped them, and the
+      // panel jumped down and up again.
+      if (!isConsoleExpanded) {
+        setScrollShown(false);
+        return;
+      }
+      el.style.height = '';
+      el.style.overflowY = '';
+      el.scrollTop = el.scrollHeight;
+    });
+  }, [isConsoleExpanded]);
+  useEffect(() => () => easingRef.current?.stop(), []);
+
   return (
     <div className="console-shell console-shell-subtle">
       <div className="px-5 py-3 flex items-center justify-between" style={{ background: 'var(--console-header)', borderBottom: '1px solid var(--console-border, var(--border-subtle))' }}>
@@ -113,10 +183,10 @@ export const ConsolePanel = memo(function ConsolePanel({
           )}
         </div>
       </div>
-      {isConsoleExpanded ? (
+      {scrollShown ? (
         <div
           ref={consoleScrollRef}
-          className="console-scroll p-4 overflow-y-auto font-mono text-xs space-y-1 h-52 select-text"
+          className="console-scroll console-lines relative px-4 py-3 overflow-y-auto font-mono text-xs space-y-1 h-52 select-text"
           style={{ color: 'var(--console-text)', background: 'var(--console-bg)', whiteSpace: 'pre-wrap' }}
           onMouseEnter={() => { isMouseInConsoleRef.current = true; }}
           onMouseLeave={() => { isMouseInConsoleRef.current = false; }}
@@ -125,7 +195,7 @@ export const ConsolePanel = memo(function ConsolePanel({
         </div>
       ) : (
         // Collapsed it still reads as a terminal: the last few lines, not a summary sentence.
-        <div className="console-tail px-4 py-3 font-mono text-xs space-y-1" style={{ color: 'var(--console-text)', background: 'var(--console-bg)', whiteSpace: 'pre-wrap' }}>
+        <div ref={tailRef} className="console-tail console-lines px-4 py-3 overflow-hidden font-mono text-xs space-y-1" style={{ color: 'var(--console-text)', background: 'var(--console-bg)', whiteSpace: 'pre-wrap' }}>
           {consoleLogs.length > 0
             ? consoleLogs.slice(-COLLAPSED_LINES).map((log, i) => <LogLine key={consoleLogs.length - COLLAPSED_LINES + i} log={log} />)
             : <div>{lastConsoleMessage}</div>}

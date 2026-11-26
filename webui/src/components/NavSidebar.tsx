@@ -1,10 +1,11 @@
 import { memo, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { motion } from 'motion/react';
-import { Archive, Bell, Layers, MessageSquareWarning, Moon, Settings, Sun } from 'lucide-react';
+import { Archive, Bell, Layers, MessageSquareWarning, Settings } from 'lucide-react';
 import type { AppStatus } from '../appState';
 import { BrandLogo } from './BrandLogo';
 import { useReportProblem } from './useReportProblem';
 import { SidebarAccount } from './SidebarAccount';
+import { ThemeToggleIcon } from './ThemeToggleIcon';
 import { SidebarBadge, SidebarTooltip, type SidebarBadgeTone } from './sidebarParts';
 export type ActivePage = 'queue' | 'archive';
 
@@ -103,7 +104,7 @@ export const NavSidebar = memo(function NavSidebar({
       {/* Utility buttons */}
       <div className="px-1.5 pb-3.5 flex flex-col items-center gap-1.5" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 8 }}>
         <UtilityButton
-          icon={themeMode === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          icon={<ThemeToggleIcon themeMode={themeMode} size={18} />}
           label={themeMode === 'dark' ? 'Tema chiaro' : 'Tema scuro'}
           active={false}
           onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
@@ -181,7 +182,7 @@ function NavItem({
           boxShadow: 'none',
         }}
       >
-        <span className="inline-flex items-center justify-center transition-transform duration-200 group-hover/nav:scale-105" style={{ position: 'relative', color: active ? 'var(--sidebar-active-text)' : 'var(--text-muted)', lineHeight: 0 }}>
+        <span className="inline-flex items-center justify-center" style={{ position: 'relative', color: active ? 'var(--sidebar-active-text)' : 'var(--text-muted)', lineHeight: 0 }}>
           {icon}
           {isProcessing && <SidebarBadge tone="processing" />}
         </span>
@@ -221,7 +222,7 @@ function UtilityButton({
           cursor: 'pointer',
         }}
       >
-        <span className="inline-flex items-center justify-center transition-transform duration-200 group-hover/util:scale-105" style={{ color: active ? 'var(--sidebar-active-text)' : 'var(--text-muted)', lineHeight: 0 }}>
+        <span className="inline-flex items-center justify-center" style={{ color: active ? 'var(--sidebar-active-text)' : 'var(--text-muted)', lineHeight: 0 }}>
           {icon}
         </span>
       </button>

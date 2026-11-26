@@ -77,12 +77,12 @@ export function SortMenu({ sort, onSortChange, options = SORT_OPTIONS }: SortMen
         ref={buttonRef}
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="filter-chip w-9 p-0 flex items-center justify-center transition-colors group/sort"
+        className={`filter-chip sort-menu-button w-9 p-0 flex items-center justify-center transition-colors${open ? ' is-open' : ''}`}
         style={open ? { color: 'var(--accent-text)', borderColor: 'var(--accent-text)', background: 'var(--accent-subtle)' } : undefined}
         title={`Ordinamento: ${currentOption?.label ?? ''}`}
         aria-label="Cambia ordinamento"
       >
-        <ArrowUpDown className={`w-4 h-4 transition duration-200 ${open ? 'scale-110 opacity-100' : 'opacity-80 group-hover/sort:opacity-100 group-hover/sort:scale-110'}`} />
+        <ArrowUpDown className="w-4 h-4" />
       </button>
 
       {createPortal(

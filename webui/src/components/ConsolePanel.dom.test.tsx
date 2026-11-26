@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ConsolePanel } from './ConsolePanel';
 
@@ -35,6 +35,85 @@ describe('ConsolePanel', () => {
     expect(container.querySelector('.console-scroll')).toBeNull();
   });
 
+  // Collapsing used to swap the logs for the tail at once, so the panel dropped in one frame and
+  // the text jumped. The scrolling logs now ease down to the tail's height, held at their last
+  // line, and only then give way to the tail, which shows the same lines in the same place.
+  it('eases the logs back to the tail before swapping, held at their last line', async () => {
+    const logs = Array.from({ length: 12 }, (_, i) => `[12:00:${String(i).padStart(2, '0')}] riga ${i}`);
+    const { container, rerender } = render(<ConsolePanel consoleLogs={logs} lastConsoleMessage="" appState="idle" isConsoleExpanded />);
+    const scroll = container.querySelector('.console-scroll') as HTMLElement;
+    Object.defineProperty(scroll, 'scrollHeight', { configurable: true, value: 400 });
+
+    rerender(<ConsolePanel consoleLogs={logs} lastConsoleMessage="" appState="idle" isConsoleExpanded={false} />);
+    expect(container.querySelector('.console-scroll')).toBe(scroll);
+    expect(container.querySelector('.console-tail')).toBeNull();
+    expect(scroll.style.height).not.toBe('');
+    expect(scroll.scrollTop).toBe(400);
+
+    await waitFor(() => expect(container.querySelector('.console-tail')).not.toBeNull());
+    expect(container.querySelector('.console-scroll')).toBeNull();
+    const tail = container.querySelector('.console-tail') as HTMLElement;
+    expect(Array.from(tail.children, line => line.textContent)).toEqual(logs.slice(-3));
+    // Both reserve the same scrollbar room, so lines wrap alike in either view.
+    expect(tail.classList.contains('console-lines')).toBe(true);
+    expect(scroll.classList.contains('console-lines')).toBe(true);
+  });
+
+  // Once eased down, the logs let go of their height before the tail replaced them, so for one
+  // frame they were back at full height (208 px for 81) and the panel jumped down and up again.
+  it('keeps the logs at the tail height until the tail replaces them', async () => {
+    const logs = Array.from({ length: 12 }, (_, i) => `[12:00:${String(i).padStart(2, '0')}] riga ${i}`);
+    const { container, rerender } = render(<ConsolePanel consoleLogs={logs} lastConsoleMessage="" appState="idle" isConsoleExpanded />);
+    const scroll = container.querySelector('.console-scroll') as HTMLElement;
+    const heights: string[] = [];
+    const watch = new MutationObserver(() => { if (scroll.isConnected) heights.push(scroll.style.height); });
+    watch.observe(scroll, { attributes: true, attributeFilter: ['style'] });
+    try {
+      rerender(<ConsolePanel consoleLogs={logs} lastConsoleMessage="" appState="idle" isConsoleExpanded={false} />);
+      await waitFor(() => expect(container.querySelector('.console-tail')).not.toBeNull());
+      expect(heights.length).toBeGreaterThan(0);
+      expect(heights).not.toContain('');
+    } finally {
+      watch.disconnect();
+    }
+  });
+
+  // Opened already expanded (the choice outlives the console), the panel never showed its tail,
+  // so with no log lines the logs eased all the way to 0 px and the last message popped in after.
+  // They ease to one line of it instead.
+  it('collapses a console opened expanded with no lines to one line, not to nothing', async () => {
+    const { container, rerender } = render(<ConsolePanel consoleLogs={[]} lastConsoleMessage="msg" appState="idle" isConsoleExpanded />);
+    const scroll = container.querySelector('.console-scroll') as HTMLElement;
+    // jsdom has no layout: the logs are 208 px tall at rest, 12 px padding and 16 px lines.
+    vi.spyOn(scroll, 'getBoundingClientRect').mockImplementation(() => ({ height: scroll.style.height ? parseFloat(scroll.style.height) : 208 }) as DOMRect);
+    const computed = window.getComputedStyle;
+    vi.spyOn(window, 'getComputedStyle').mockImplementation((el, pseudo) => (
+      el === scroll ? { paddingTop: '12px', paddingBottom: '12px', lineHeight: '16px', fontSize: '12px' } as CSSStyleDeclaration : computed(el, pseudo)
+    ));
+    const heights: number[] = [];
+    const watch = new MutationObserver(() => { if (scroll.style.height) heights.push(parseFloat(scroll.style.height)); });
+    watch.observe(scroll, { attributes: true, attributeFilter: ['style'] });
+    try {
+      rerender(<ConsolePanel consoleLogs={[]} lastConsoleMessage="msg" appState="idle" isConsoleExpanded={false} />);
+      expect(await screen.findByText('msg')).toBeTruthy();
+      expect(heights.length).toBeGreaterThan(1);
+      expect(Math.min(...heights)).toBeGreaterThanOrEqual(39);
+    } finally {
+      watch.disconnect();
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('starts expanding from the tail, with the logs already in place', () => {
+    const logs = ['[12:00:00] uno', '[12:00:01] due'];
+    const { container, rerender } = render(<ConsolePanel consoleLogs={logs} lastConsoleMessage="" appState="idle" />);
+    rerender(<ConsolePanel consoleLogs={logs} lastConsoleMessage="" appState="idle" isConsoleExpanded />);
+    const scroll = container.querySelector('.console-scroll') as HTMLElement;
+    expect(Array.from(scroll.children, line => line.textContent)).toEqual(logs);
+    expect(scroll.style.height).not.toBe('');
+    expect(container.querySelector('.console-tail')).toBeNull();
+  });
+
   it('shows Console heading', () => {
     render(<ConsolePanel consoleLogs={[]} lastConsoleMessage="" appState="idle" />);
     expect(screen.getByText('Console')).toBeTruthy();
@@ -57,11 +136,12 @@ describe('ConsolePanel', () => {
     expect(screen.getByTitle('Copia tutto')).toBeTruthy();
   });
 
-  it('collapses back when chevron is clicked again', () => {
+  it('collapses back when chevron is clicked again', async () => {
     render(<ConsolePanel consoleLogs={[]} lastConsoleMessage="msg" appState="idle" />);
     fireEvent.click(screen.getByTitle('Espandi'));
     fireEvent.click(screen.getByTitle('Riduci'));
-    expect(screen.getByText('msg')).toBeTruthy();
+    // The tail comes back once the logs have eased down to it.
+    expect(await screen.findByText('msg')).toBeTruthy();
   });
 
   it('uses processing pulse when appState is processing', () => {

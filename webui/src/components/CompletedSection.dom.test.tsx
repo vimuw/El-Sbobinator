@@ -42,7 +42,11 @@ describe('CompletedSection', () => {
   it('links to the archive without a count', () => {
     const onOpenArchive = vi.fn();
     render(<CompletedSection {...baseProps} doneFiles={[makeFile()]} onOpenArchive={onOpenArchive} />);
-    fireEvent.click(screen.getByRole('button', { name: "Apri l'Archivio" }));
+    const link = screen.getByRole('button', { name: "Apri l'Archivio" });
+    // Its arrow slides right on hover (index.css, .queue-text-button .lucide-arrow-right).
+    expect(link.classList.contains('queue-text-button')).toBe(true);
+    expect(link.querySelector('svg.lucide-arrow-right')).not.toBeNull();
+    fireEvent.click(link);
     expect(onOpenArchive).toHaveBeenCalledTimes(1);
   });
 

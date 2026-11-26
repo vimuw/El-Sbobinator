@@ -71,6 +71,16 @@ describe('SidebarAccount', () => {
     expect(within(menu).getAllByRole('button').map(button => button.textContent)).toEqual(['Collega Google Drive']);
   });
 
+  it('never grows its cloud on hover, so the float plays at the size of the icon itself', async () => {
+    setup(createFakeDrive());
+    render(<SidebarAccount />);
+    const button = await screen.findByTestId('sidebar-account');
+    const scaled = [button, ...Array.from(button.querySelectorAll('*'))]
+      .flatMap((el) => Array.from(el.classList))
+      .filter((token) => /(^|:)scale-/.test(token));
+    expect(scaled).toEqual([]);
+  });
+
   it('not linked: a crossed-out cloud with no dot that invites to link Drive, from the tap of its menu', async () => {
     const drive = createFakeDrive();
     const { login } = setup(drive);
