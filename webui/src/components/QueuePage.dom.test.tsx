@@ -349,6 +349,222 @@ describe('QueuePage Component', () => {
       expect(localStorage.getItem(STORAGE_KEYS.SHOW_CONSOLE)).toBe('false');
     });
 
+    it('fades the toggle into the console and back in one slot instead of swapping them at once', async () => {
+      localStorage.setItem(STORAGE_KEYS.CONSOLE_HINT_V1, 'done');
+      const { rerender } = render(idle());
+      const slot = screen.getByTestId('console-slot');
+      expect(slot.contains(screen.getByRole('button', { name: 'Mostra console' }))).toBe(true);
+
+      rerender(idle({ console: { ...defaultProps.console, showConsole: true } }));
+      // The toggle leaves first; the console comes in once it has gone, never both at once.
+      expect(screen.getByRole('button', { name: 'Mostra console' })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Chiudi console' })).toBeNull();
+      const close = await screen.findByRole('button', { name: 'Chiudi console' });
+      expect(slot.contains(close)).toBe(true);
+      expect(screen.queryByRole('button', { name: 'Mostra console' })).toBeNull();
+
+      rerender(idle());
+      expect(screen.getByRole('button', { name: 'Chiudi console' })).toBeTruthy();
+      expect(slot.contains(await screen.findByRole('button', { name: 'Mostra console' }))).toBe(true);
+      expect(screen.queryByRole('button', { name: 'Chiudi console' })).toBeNull();
+
+      // During a run the toggle sits under the progress and the slot is left empty.
+      await startRun(rerender);
+      await waitFor(() => expect(slot.querySelector('button')).toBeNull());
+    });
+
+    // A clip-path hid the folded part but kept it in the page's height, so a scrolled page jumped
+    // by what was left when the console finally went. It clips with overflow, and only then.
+    it('clips the console with overflow while it folds away, and not while it is open', async () => {
+      localStorage.setItem(STORAGE_KEYS.CONSOLE_HINT_V1, 'done');
+      const open = { console: { ...defaultProps.console, showConsole: true } };
+      const { rerender } = render(running(open));
+      const folding = (await screen.findByRole('button', { name: 'Chiudi console' })).closest('.console-shell')!.parentElement!.parentElement as HTMLElement;
+      expect(folding.style.overflow).toBe('');
+      expect(folding.className).not.toContain('clip-path');
+
+      rerender(running());
+      expect(screen.getByRole('button', { name: 'Chiudi console' })).toBeTruthy();
+      expect(folding.style.overflow).toBe('hidden');
+      await waitFor(() => expect(screen.queryByRole('button', { name: 'Chiudi console' })).toBeNull());
+    });
+
+    // After a reload with the console open (its state persists, and so do completed files) the
+    // toggle below the lists had never been shown, so its height was unknown: the first close
+    // folded the console to nothing, then the slot grew again for the toggle, and the footer dropped
+    // and came back. It folds to the toggle's height even then.
+    it('folds a console open since load to the height of the toggle that takes its place', async () => {
+      localStorage.setItem(STORAGE_KEYS.CONSOLE_HINT_V1, 'done');
+      const doneFile: FileItem = { ...queuedFile, id: 'd1', status: 'done', completedAt: 1, outputHtml: '/sessions/d1/sbobina.html', outputDir: '/sessions/d1' };
+      const page = (showConsole: boolean) => (
+        <QueuePage {...defaultProps} files={[doneFile]} console={{ ...defaultProps.console, showConsole }} />
+      );
+      // jsdom computes no layout: the toggle's wrapper is 56 px tall, the open console 240 px.
+      vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) {
+        return this.querySelector(':scope > .console-toggle-row') ? 56 : 0;
+      });
+      const computed = window.getComputedStyle;
+      let folding: Element | null = null;
+      vi.spyOn(window, 'getComputedStyle').mockImplementation((el, pseudo) => {
+        const style = computed(el, pseudo);
+        if (el !== folding) return style;
+        return new Proxy(style, {
+          get: (target, key) => {
+            if (key === 'height') return '240px';
+            const value = Reflect.get(target, key, target) as unknown;
+            return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value;
+          },
+        });
+      });
+      try {
+        const { rerender } = render(page(true));
+        folding = (await screen.findByRole('button', { name: 'Chiudi console' })).closest('.console-shell')!.parentElement!.parentElement;
+        // The copy measured meanwhile is neither seen nor reachable.
+        expect(screen.queryByRole('button', { name: 'Mostra console' })).toBeNull();
+        const heights: string[] = [];
+        const watch = new MutationObserver(() => heights.push((folding as HTMLElement).style.height));
+        watch.observe(folding!, { attributes: true, attributeFilter: ['style'] });
+
+        rerender(page(false));
+        await waitFor(() => expect(screen.queryByRole('button', { name: 'Chiudi console' })).toBeNull(), { timeout: 2000 });
+        watch.disconnect();
+        expect(heights.at(-1)).toBe('56px');
+        expect(screen.getByTestId('console-slot').contains(screen.getByRole('button', { name: 'Mostra console' }))).toBe(true);
+      } finally {
+        vi.restoreAllMocks();
+      }
+    });
+
+    // Re-opened before it had folded away, the console re-entered with the height read as the fold
+    // began, a browser's computed px, fixed on it, so logs expanded later spilled out of it. It goes
+    // back to its own height.
+    it('lets a console re-opened while it folds away grow with its content again', async () => {
+      localStorage.setItem(STORAGE_KEYS.CONSOLE_HINT_V1, 'done');
+      const open = { console: { ...defaultProps.console, showConsole: true } };
+      const { rerender } = render(running(open));
+      const folding = (await screen.findByRole('button', { name: 'Chiudi console' })).closest('.console-shell')!.parentElement!.parentElement as HTMLElement;
+      // jsdom computes no layout: report the open console's height in px, as a browser does.
+      const computed = window.getComputedStyle;
+      vi.spyOn(window, 'getComputedStyle').mockImplementation((el, pseudo) => {
+        const style = computed(el, pseudo);
+        if (el !== folding) return style;
+        return new Proxy(style, {
+          get: (target, key) => {
+            if (key === 'height') return '240px';
+            const value = Reflect.get(target, key, target) as unknown;
+            return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value;
+          },
+        });
+      });
+      try {
+        rerender(running());
+        await act(() => new Promise<void>(resolve => setTimeout(resolve, 60)));
+        expect(folding.style.overflow).toBe('hidden');
+        rerender(running(open));
+        expect(screen.getByRole('button', { name: 'Chiudi console' }).closest('.console-shell')!.parentElement!.parentElement).toBe(folding);
+        await waitFor(() => expect(folding.style.overflow).toBe(''));
+        await act(() => new Promise<void>(resolve => setTimeout(resolve, 400)));
+        expect(folding.style.opacity).toBe('1');
+        expect(['', 'auto']).toContain(folding.style.height);
+      } finally {
+        vi.restoreAllMocks();
+      }
+    });
+
+    // Re-opened mid-fold, the console dropped its clip at once while its height was still easing
+    // back from the folded px, so its lower part drew past its box over the footer links. It keeps
+    // clipping until it is open again, then lets the panel's shadow show.
+    it('keeps clipping a console re-opened mid-fold until it has grown back', async () => {
+      localStorage.setItem(STORAGE_KEYS.CONSOLE_HINT_V1, 'done');
+      const open = { console: { ...defaultProps.console, showConsole: true } };
+      const { rerender } = render(running(open));
+      const folding = (await screen.findByRole('button', { name: 'Chiudi console' })).closest('.console-shell')!.parentElement!.parentElement as HTMLElement;
+      // jsdom computes no layout: report the open console's height in px, as a browser does.
+      const computed = window.getComputedStyle;
+      vi.spyOn(window, 'getComputedStyle').mockImplementation((el, pseudo) => {
+        const style = computed(el, pseudo);
+        if (el !== folding) return style;
+        return new Proxy(style, {
+          get: (target, key) => {
+            if (key === 'height') return '240px';
+            const value = Reflect.get(target, key, target) as unknown;
+            return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value;
+          },
+        });
+      });
+      try {
+        rerender(running());
+        await act(() => new Promise<void>(resolve => setTimeout(resolve, 60)));
+        expect(folding.style.overflow).toBe('hidden');
+
+        const states: { height: string; overflow: string }[] = [];
+        const watch = new MutationObserver(() => states.push({ height: folding.style.height, overflow: folding.style.overflow }));
+        watch.observe(folding, { attributes: true, attributeFilter: ['style'] });
+        rerender(running(open));
+        expect(folding.style.overflow).toBe('hidden');
+        await waitFor(() => expect(folding.style.overflow).toBe(''), { timeout: 2000 });
+        watch.disconnect();
+
+        // While its height is a px value it is still growing back, and stays clipped throughout.
+        const growing = states.filter(s => s.height.endsWith('px'));
+        expect(growing.length).toBeGreaterThan(0);
+        expect(growing.filter(s => s.overflow !== 'hidden')).toEqual([]);
+        expect(['', 'auto']).toContain(folding.style.height);
+      } finally {
+        vi.restoreAllMocks();
+      }
+    });
+
+    // Scrolled once the slot had grown, the console unfolded below the screen unseen and the page
+    // moved only afterwards. The page now follows the slot's growing edge frame by frame.
+    it('keeps the console opened from under the progress in view while it unfolds', async () => {
+      localStorage.setItem(STORAGE_KEYS.CONSOLE_HINT_V1, 'done');
+      // A 600 px page whose console slot ends `grown` px below the column's top, which sits at 400.
+      let grown = 0;
+      const rect = (top: number, bottom: number) => ({ top, bottom, left: 0, right: 0, width: 0, height: bottom - top, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+      vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+        const scrolled = document.querySelector('main')?.scrollTop ?? 0;
+        if (this.tagName === 'MAIN') return rect(0, 600);
+        if (this.classList.contains('console-slot')) return rect(400 - scrolled, 400 + grown - scrolled);
+        if (this.classList.contains('console-shell')) return rect(432 - scrolled, 400 + grown - scrolled);
+        return rect(0, 0);
+      });
+      const frame = () => act(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+      try {
+        function Page() {
+          const [showConsole, setShowConsole] = React.useState(false);
+          return running({ console: { ...defaultProps.console, showConsole, setShowConsole } });
+        }
+        render(<Page />);
+        await screen.findByTestId('processing-banner-slot');
+        const page = screen.getByRole('main');
+        fireEvent.click(screen.getByRole('button', { name: 'Mostra console' }));
+        await screen.findByRole('button', { name: 'Chiudi console' });
+
+        // Still on screen: the page stays put.
+        grown = 150;
+        await frame();
+        await frame();
+        expect(page.scrollTop).toBe(0);
+        // Past the bottom edge: the page follows it as it grows.
+        grown = 260;
+        await frame();
+        await frame();
+        expect(page.scrollTop).toBe(60);
+        grown = 300;
+        await frame();
+        await frame();
+        expect(page.scrollTop).toBe(100);
+        // Taller than the room left, it stops with the console's top at the top of the page.
+        grown = 900;
+        await frame();
+        await frame();
+        expect(page.scrollTop).toBe(432);
+      } finally {
+        vi.restoreAllMocks();
+      }
+    });
+
     it('leaves the toggle out while the hint is up, so the run never offers the console twice', async () => {
       const { rerender } = render(idle());
       await startRun(rerender);

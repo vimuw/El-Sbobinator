@@ -2288,6 +2288,13 @@ button {
   scrollbar-color: var(--border-strong) transparent;
 }
 
+/* The collapsed tail and the scrolling logs keep the same room for a scrollbar, used or not, so
+   their lines wrap alike and stay put when one gives way to the other. */
+.console-lines {
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
+}
+
 .app-scroll {
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;

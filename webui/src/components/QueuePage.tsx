@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { motion, AnimatePresence, useIsPresent } from 'motion/react';
 import { type DragEndEvent, type SensorDescriptor, type SensorOptions } from '@dnd-kit/core';
 import { Loader2 } from 'lucide-react';
 import { AppFooterLinks } from './AppFooterLinks';
@@ -17,7 +17,7 @@ import { WelcomeDashboard } from './WelcomeDashboard';
 import { QueueSection } from './QueueSection';
 import { CompletedSection } from './CompletedSection';
 import { AutoHeight } from './AutoHeight';
-import { fade, fadeUp } from '../motion';
+import { fade, fadeUp, quickFade, unfold } from '../motion';
 import { ConsolePanel } from './ConsolePanel';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { settleRevisionRetry } from '../hooks/useRevisionRetry';
@@ -266,8 +266,11 @@ export function QueuePage({
 
   const consoleHint = useConsoleHint(appState === 'processing', appState === 'idle' && batchTotal > 0, showConsole);
   // Opened from under the progress (the hint or the toggle), the console at the bottom of the
-  // column is brought into view.
+  // column is kept in view while it unfolds: the page follows its slot's growing edge frame by
+  // frame, so it opens on screen rather than below it, until the slot settles. Scrolled once at
+  // the end instead, the console grew unseen and the page moved only afterwards.
   const revealConsoleRef = useRef(false);
+  const followConsoleFrameRef = useRef(0);
   const setConsoleOpen = useCallback((open: boolean, reveal = false) => {
     revealConsoleRef.current = open && reveal;
     setShowConsole(open);
@@ -275,11 +278,41 @@ export function QueuePage({
   }, [setShowConsole]);
   const openConsoleFromHint = useCallback(() => setConsoleOpen(true, true), [setConsoleOpen]);
   const closeConsole = useCallback(() => setConsoleOpen(false), [setConsoleOpen]);
+  // Closing, the console folds to the height of the toggle that takes its place below the lists
+  // (measured when last shown), or away entirely during a run, when nothing does. Open since the
+  // page loaded (its state persists), the console carries a hidden copy of the toggle to measure
+  // until the real one has been shown: else it folded to nothing and the slot grew again for it.
+  const consoleToggleBelow = !showProcessingBanner && !isConsoleDisabled;
+  const [consoleToggleHeight, setConsoleToggleHeight] = useState(0);
+  const measureToggleInConsole = consoleToggleBelow && consoleToggleHeight === 0;
+  const measureConsoleToggle = useCallback((el: HTMLDivElement | null) => {
+    if (el) setConsoleToggleHeight(el.offsetHeight);
+  }, []);
+  const consoleFoldTo = consoleToggleBelow ? consoleToggleHeight : 0;
+  const stopFollowingConsole = useCallback(() => {
+    cancelAnimationFrame(followConsoleFrameRef.current);
+    followConsoleFrameRef.current = 0;
+  }, []);
   useEffect(() => {
     if (!showConsole || !revealConsoleRef.current) return;
     revealConsoleRef.current = false;
-    document.querySelector('.console-shell')?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
-  }, [showConsole]);
+    const follow = () => {
+      keepConsoleSlotInView();
+      followConsoleFrameRef.current = requestAnimationFrame(follow);
+    };
+    followConsoleFrameRef.current = requestAnimationFrame(follow);
+    // In case the slot never reports settling (nothing to grow), the page stops following anyway.
+    const giveUp = window.setTimeout(stopFollowingConsole, 1500);
+    return () => {
+      window.clearTimeout(giveUp);
+      stopFollowingConsole();
+    };
+  }, [showConsole, stopFollowingConsole]);
+  const consoleSlotSettled = useCallback(() => {
+    if (!followConsoleFrameRef.current) return;
+    keepConsoleSlotInView();
+    stopFollowingConsole();
+  }, [stopFollowingConsole]);
 
   useEffect(() => {
     if (isConsoleDisabled && showConsole) {
@@ -436,23 +469,81 @@ export function QueuePage({
           </>
         )}
 
-        {showConsole && uiMode !== 'setup' && uiMode !== 'loading' && (
-          <ConsolePanel
-            consoleLogs={consoleLogs}
-            lastConsoleMessage={lastConsoleMessage}
-            appState={appState}
-            isConsoleExpanded={isConsoleExpanded}
-            setIsConsoleExpanded={setIsConsoleExpanded}
-            onClose={closeConsole}
-          />
-        )}
-        {/* After a run the logs stay reachable where the console goes; during one the toggle sits
-            under the progress instead. */}
-        {!showConsole && !showProcessingBanner && !isConsoleDisabled && uiMode !== 'setup' && uiMode !== 'loading' && (
-          <ConsoleToggle open={false} onToggle={() => setConsoleOpen(true)} />
+        {/* The console and, after a run, the toggle that stands in for it share one slot. Opening,
+            the toggle fades out, then the slot grows to the console as it fades in; closing, the
+            console folds back up, then the toggle comes back. The slot follows the console as it
+            folds or as its logs expand and collapse, so it eases only the swap. During a run the
+            toggle sits under the progress instead, and the empty slot takes no room: its negative
+            margin cancels the column gap that its children carry as padding. */}
+        {uiMode !== 'setup' && uiMode !== 'loading' && (
+          <AutoHeight className="console-slot -mt-8" testId="console-slot" onSettled={consoleSlotSettled} followInnerResizes>
+            <AnimatePresence mode="wait" initial={false} custom={consoleFoldTo}>
+              {showConsole ? (
+                <FoldingConsole key="console-panel" foldTo={consoleFoldTo}>
+                  {measureToggleInConsole && (
+                    <div ref={measureConsoleToggle} className="pt-8 invisible pointer-events-none absolute inset-x-0 top-0" aria-hidden="true" inert data-testid="console-toggle-probe">
+                      <ConsoleToggle open={false} onToggle={() => {}} />
+                    </div>
+                  )}
+                  <div className="pt-8">
+                    <ConsolePanel
+                      consoleLogs={consoleLogs}
+                      lastConsoleMessage={lastConsoleMessage}
+                      appState={appState}
+                      isConsoleExpanded={isConsoleExpanded}
+                      setIsConsoleExpanded={setIsConsoleExpanded}
+                      onClose={closeConsole}
+                    />
+                  </div>
+                </FoldingConsole>
+              ) : consoleToggleBelow ? (
+                <motion.div key="console-toggle" ref={measureConsoleToggle} className="pt-8" {...quickFade}>
+                  <ConsoleToggle open={false} onToggle={() => setConsoleOpen(true)} />
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+          </AutoHeight>
         )}
       </div>
       <AppFooterLinks />
     </motion.main>
   );
+}
+
+// The console leaving folds back up. It clips only while folding, and when re-opened mid-fold
+// until it has grown back open: then what is folded away neither shows over the footer nor keeps
+// the page long (a clip-path did, and the page jumped once the console was gone); at rest it clips
+// nothing and the panel's shadow shows. It is the positioned box of the hidden toggle copy, which
+// so takes the slot's width and adds nothing to the page's height.
+function FoldingConsole({ foldTo, children }: { foldTo: number; children: React.ReactNode }) {
+  const isPresent = useIsPresent();
+  const [folded, setFolded] = useState(false);
+  if (!isPresent && !folded) setFolded(true);
+  const settled = useCallback((definition: unknown) => {
+    if (definition === unfold.animate) setFolded(false);
+  }, []);
+  return (
+    <motion.div
+      className="relative"
+      custom={foldTo}
+      {...unfold}
+      onAnimationComplete={settled}
+      style={isPresent && !folded ? undefined : { overflow: 'hidden' }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+// Scrolls the page just enough to show the console slot's bottom edge, never past the console's
+// top.
+function keepConsoleSlotInView() {
+  const slot = document.querySelector<HTMLElement>('.console-slot');
+  const page = slot?.closest('main');
+  if (!slot || !page) return;
+  const view = page.getBoundingClientRect();
+  const box = slot.getBoundingClientRect();
+  const top = slot.querySelector('.console-shell')?.getBoundingClientRect().top ?? box.top;
+  const by = Math.min(box.bottom - view.bottom, top - view.top);
+  if (by > 0) page.scrollTop += by;
 }

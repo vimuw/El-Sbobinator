@@ -23,7 +23,7 @@ vi.mock('motion/react', () => ({
         motionCache.set(
           tag,
           React.forwardRef((props: Record<string, unknown>, ref: unknown) => {
-            const { initial: _i, animate: _a, exit: _e, transition: _t, layout: _l, variants: _v, layoutId: _li, whileTap: _wt, whileHover: _wh, onAnimationStart: _as, onAnimationComplete: _ac, ...rest } = props;
+            const { initial: _i, animate: _a, exit: _e, transition: _t, layout: _l, variants: _v, layoutId: _li, whileTap: _wt, whileHover: _wh, onAnimationStart: _as, onAnimationComplete: _ac, custom: _c, ...rest } = props;
             return React.createElement(tag, { ...rest, ref: ref as React.Ref<unknown> });
           })
         );
@@ -38,6 +38,9 @@ vi.mock('motion/react', () => ({
   useAnimation: () => ({ start: vi.fn(), stop: vi.fn() }),
   useAnimationControls: () => logoAnimationControls,
   useMotionValue: (v: unknown) => ({ get: () => v, set: vi.fn() }),
+  // The console's fold (QueuePage) and the eased heights (AutoHeight, ConsolePanel).
+  useIsPresent: () => true,
+  animate: () => ({ stop: vi.fn(), finished: Promise.resolve() }),
 }));
 
 vi.mock('./hooks/useApiReady');
