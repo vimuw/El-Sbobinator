@@ -6324,6 +6324,31 @@ svg.lucide-trash-2 > * {
   margin-top: 8px;
 }
 
+/* On hover the terminal icon waits for input: its prompt steps forward and its cursor blinks
+   twice. Like the other icon animations, only a straight shift, and touch screens skip it. Lucide's
+   terminal draws the cursor first and the prompt second; ConsoleToggle.dom.test.tsx checks the
+   class is still there. */
+.console-toggle svg > * {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  transition: transform var(--duration-slow) var(--ease-spring-soft);
+}
+
+@media (hover: hover) {
+  .console-toggle:hover .lucide-terminal > :last-child {
+    transform: translateX(1.5px);
+  }
+
+  .console-toggle:hover .lucide-terminal > :first-child {
+    animation: console-cursor-blink 960ms steps(1, end);
+  }
+}
+
+@keyframes console-cursor-blink {
+  0%, 50%, 100% { opacity: 1; }
+  25%, 75% { opacity: 0; }
+}
+
 /* KaTeX Math Node */
 .math-node-inline {
   display: inline-flex;
