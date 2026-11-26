@@ -3965,8 +3965,16 @@ input::-webkit-contacts-auto-fill-button {
     animation: sidebar-bell-clapper 620ms var(--ease-out);
   }
 
+  /* The bubble tilts on its tail while the "!" pulses in place: the mark never leaves the
+     bubble's middle, so it cannot touch the top edge the way the old upward hop did. */
+  .sidebar-nav-item:hover .lucide-message-square-warning {
+    transform-origin: 12% 88%;
+    animation: sidebar-warning-tilt 560ms var(--ease-out);
+  }
+
   .sidebar-nav-item:hover .lucide-message-square-warning > :not(:first-child) {
-    animation: sidebar-warning-hop 520ms var(--ease-out);
+    transform-origin: 12px 11px;
+    animation: sidebar-warning-pulse 560ms var(--ease-out);
   }
 
   .sidebar-nav-item:hover .sidebar-drive-cloud svg {
@@ -3993,10 +4001,17 @@ input::-webkit-contacts-auto-fill-button {
   75% { transform: translateX(-0.5px); }
 }
 
-@keyframes sidebar-warning-hop {
-  0%, 100% { transform: translateY(0); }
-  35% { transform: translateY(-2.5px); }
-  65% { transform: translateY(0.5px); }
+@keyframes sidebar-warning-tilt {
+  0%, 100% { transform: rotate(0); }
+  30% { transform: rotate(-7deg); }
+  60% { transform: rotate(3deg); }
+  82% { transform: rotate(-1deg); }
+}
+
+@keyframes sidebar-warning-pulse {
+  0%, 100% { transform: scale(1); }
+  35% { transform: scale(1.14); }
+  65% { transform: scale(0.94); }
 }
 
 /* ── Icon micro-animations outside the sidebar ─────────── */
