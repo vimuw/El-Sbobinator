@@ -3939,7 +3939,7 @@ input::-webkit-contacts-auto-fill-button {
 
 /* Each sidebar icon moves a part of itself on hover, once, and settles back when the pointer
    leaves: the top layer lifts off the stack, the archive opens its lid, the bell swings, the
-   warning mark hops, the cloud floats, the gear turns one tooth (6 lobes, 60deg, so it lands on
+   warning mark hops, the cloud bobs and replays its mark, the gear turns one tooth (6 lobes, 60deg, so it lands on
    the same pixels). Only translations and whole-step turns, which stay sharp at 18-20px. The
    selectors follow lucide's own classes; NavSidebar.dom.test.tsx checks they are still there.
    Touch screens skip it: a tap would leave the hover state stuck. */
@@ -3990,8 +3990,27 @@ input::-webkit-contacts-auto-fill-button {
     animation: sidebar-warning-pulse 560ms var(--ease-out);
   }
 
+  /* The Drive cloud bobs up and lands back, and its mark plays its state again: the tick draws
+     itself from its short stroke, the slash of the unlinked cloud crosses it out once more, the
+     "!" shakes. A round in progress keeps its rising arrow (sidebar-drive-rise) under the bob. */
   .sidebar-nav-item:hover .sidebar-drive-cloud svg {
-    transform: translateY(-1.5px);
+    animation: sidebar-drive-bob 680ms var(--ease-out);
+  }
+
+  /* The tick is about 11.3 units long; a negative offset reveals it from its end, the left. */
+  .sidebar-nav-item:hover .sidebar-drive-cloud.is-ok svg > :first-child {
+    stroke-dasharray: 12 12;
+    animation: sidebar-drive-tick 420ms var(--ease-out) 120ms backwards;
+  }
+
+  /* lucide's CloudOff draws the slash last, from the top left: about 28.3 units. */
+  .sidebar-nav-item:hover .sidebar-drive-cloud.is-off svg > :last-child {
+    stroke-dasharray: 29 29;
+    animation: sidebar-drive-slash 460ms var(--ease-out) 80ms backwards;
+  }
+
+  .sidebar-nav-item:hover .sidebar-drive-cloud:is(.is-reconnect, .is-error) .sidebar-drive-mark {
+    animation: sidebar-drive-shake 520ms var(--ease-out) 100ms;
   }
 
   .sidebar-nav-item:hover .lucide-settings > path {
@@ -4025,6 +4044,30 @@ input::-webkit-contacts-auto-fill-button {
   0%, 100% { transform: scale(1); }
   35% { transform: scale(1.14); }
   65% { transform: scale(0.94); }
+}
+
+@keyframes sidebar-drive-bob {
+  0%, 100% { transform: translateY(0); }
+  35% { transform: translateY(-2.5px); }
+  65% { transform: translateY(0.5px); }
+  85% { transform: translateY(-0.5px); }
+}
+
+@keyframes sidebar-drive-tick {
+  from { stroke-dashoffset: -12; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes sidebar-drive-slash {
+  from { stroke-dashoffset: 29; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes sidebar-drive-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-1px); }
+  45% { transform: translateX(1px); }
+  70% { transform: translateX(-0.5px); }
 }
 
 /* ── Icon micro-animations outside the sidebar ─────────── */
