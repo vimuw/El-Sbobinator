@@ -3950,6 +3950,12 @@ input::-webkit-contacts-auto-fill-button {
   transition: transform var(--duration-slow) var(--ease-spring-soft);
 }
 
+/* The lifted parts leave the 24x24 view box (the top layer's edge sits at y=1 and rises 2), and an
+   SVG clips at its box by default: the button around the icon has the room to show them whole. */
+.sidebar-nav-item svg {
+  overflow: visible;
+}
+
 @media (hover: hover) {
   .sidebar-nav-item:hover .lucide-layers > :first-child {
     transform: translateY(-2px);
