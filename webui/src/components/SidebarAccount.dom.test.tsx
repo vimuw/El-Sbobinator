@@ -81,6 +81,34 @@ describe('SidebarAccount', () => {
     expect(scaled).toEqual([]);
   });
 
+  it('on hover the cloud bobs and replays its mark like the other sidebar icons, only by shifts and strokes', async () => {
+    setup(createFakeDrive());
+    render(<SidebarAccount />);
+    // The unlinked cloud's rule picks lucide's slash as its last path.
+    const off = await screen.findByTestId('sidebar-drive-off');
+    expect(Array.from(off.querySelectorAll('path')).at(-1)?.getAttribute('d')).toBe('m2 2 20 20');
+
+    const css = readFileSync('src/index.css', 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const hover = css.slice(css.indexOf('.sidebar-nav-item:hover .sidebar-drive-cloud'));
+    const rule = (selector: string) => {
+      const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return hover.match(new RegExp(`${escaped} \\{([^}]*)\\}`))?.[1] ?? '';
+    };
+    // Once per hover (no infinite loop), no static lift that would snap back mid-air.
+    expect(rule('.sidebar-nav-item:hover .sidebar-drive-cloud svg')).toMatch(/animation: sidebar-drive-bob [^;]*;/);
+    expect(rule('.sidebar-nav-item:hover .sidebar-drive-cloud svg')).not.toContain('infinite');
+    expect(rule('.sidebar-nav-item:hover .sidebar-drive-cloud.is-ok svg > :first-child')).toContain('animation: sidebar-drive-tick');
+    expect(rule('.sidebar-nav-item:hover .sidebar-drive-cloud.is-off svg > :last-child')).toContain('animation: sidebar-drive-slash');
+    expect(rule('.sidebar-nav-item:hover .sidebar-drive-cloud:is(.is-reconnect, .is-error) .sidebar-drive-mark')).toContain('animation: sidebar-drive-shake');
+    // Sharp at 18px: straight shifts and stroke draws only, never a turn or a zoom.
+    for (const name of ['sidebar-drive-bob', 'sidebar-drive-tick', 'sidebar-drive-slash', 'sidebar-drive-shake']) {
+      const from = css.indexOf(`@keyframes ${name}`);
+      expect(from, name).toBeGreaterThan(-1);
+      const keyframes = css.slice(from, css.indexOf('}\n}', from));
+      expect(keyframes, name).not.toMatch(/rotate|scale/);
+    }
+  });
+
   it('not linked: a crossed-out cloud with no dot that invites to link Drive, from the tap of its menu', async () => {
     const drive = createFakeDrive();
     const { login } = setup(drive);

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CAPABILITIES, setHostCapabilities } from '../hostCapabilities';
@@ -110,6 +111,21 @@ describe('NavSidebar footer', () => {
       const sidebarButton = screen.getByRole('button', { name: button });
       expect(sidebarButton.classList.contains('sidebar-nav-item')).toBe(true);
       expect(sidebarButton.querySelector(`svg.${iconClass}`)).not.toBeNull();
+    }
+  });
+
+  it('lets the hover lifts leave the icon box instead of clipping them', () => {
+    renderSidebar();
+    const style = document.createElement('style');
+    style.textContent = readFileSync('src/index.css', 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/@import[^;]*;/g, '');
+    document.head.appendChild(style);
+    try {
+      for (const name of ['Dashboard', 'Archivio', 'Apri impostazioni']) {
+        const icon = screen.getByRole('button', { name }).querySelector('svg')!;
+        expect(getComputedStyle(icon).overflow, name).toBe('visible');
+      }
+    } finally {
+      style.remove();
     }
   });
 
